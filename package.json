@@ -1,0 +1,12 @@
+{
+  "name": "autodrill",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev": "pnpm --filter @autodrill/web dev",
+    "build": "pnpm --filter @autodrill/web build",
+    "lint": "pnpm --filter @autodrill/web lint",
+    "typecheck": "pnpm --filter @autodrill/web typecheck",
+    "test": "pnpm --filter @autodrill/web test"
+  }
+}

@@ -1,0 +1,28 @@
+.env
+.env.*
+*.key
+*.pem
+.DS_Store
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Rust and frontend build outputs.
+/target/
+**/target/
+apps/web/.next/
+coverage/
+**/coverage/
+.vitest/
+test-results/
+playwright-report/
+dist/
+*.tsbuildinfo
+
+# wasm-pack output is generated locally after the wasm target is installed.
+apps/web/public/wasm/pkg/*
+!apps/web/public/wasm/pkg/.gitignore
+apps/web/src/wasm/pkg/*
+!apps/web/src/wasm/pkg/.gitignore

@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+
+# These native helpers are part of the local build/test toolchain. They do not
+# run in the browser and are explicitly allowed so pnpm run commands remain
+# reproducible on a fresh checkout without a global approval prompt.
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver

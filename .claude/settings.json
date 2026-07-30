@@ -1,0 +1,15 @@
+{
+  "agent": "orchestrator",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ../../.agents/skills/initialize-repository/scripts/check_repository.py --repo-root ../.. --repository-identity-root . --provider claude --hook"
+          }
+        ]
+      }
+    ]
+  }
+}
