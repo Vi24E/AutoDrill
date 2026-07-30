@@ -1,3 +1,5 @@
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
+
 const DEVELOPMENT_OUTPUT_DIR = '.next-dev';
 const PRODUCTION_OUTPUT_DIR = '.next';
 
@@ -6,14 +8,18 @@ const PRODUCTION_OUTPUT_DIR = '.next';
  * production build. A `next build` must not replace chunks that an already
  * running `next dev` page is trying to load.
  */
-export function resolveDistDir(nodeEnv = process.env.NODE_ENV) {
-  return nodeEnv === 'development' ? DEVELOPMENT_OUTPUT_DIR : PRODUCTION_OUTPUT_DIR;
+export function resolveDistDir(phase) {
+  return phase === PHASE_DEVELOPMENT_SERVER ? DEVELOPMENT_OUTPUT_DIR : PRODUCTION_OUTPUT_DIR;
 }
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+/**
+ * Next calls a function-valued config with the current phase. Using that
+ * official phase signal avoids relying on a module-load NODE_ENV value that
+ * can be stale when dev and production commands overlap.
+ */
+const nextConfig = (phase) => ({
   reactStrictMode: true,
-  distDir: resolveDistDir(),
-};
+  distDir: resolveDistDir(phase),
+});
 
 export default nextConfig;

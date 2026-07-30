@@ -127,35 +127,101 @@ button:disabled { cursor: wait; opacity: .5; }
 .error-message { margin: 14px 0; padding: 11px 12px; border: 1px solid #7a2020; color: #7a2020; background: #fffafa; font-size: 13px; }
 .settings-screen .error-message { margin: 0 38px 15px; border-radius: 6px; }
 
-.worksheet-screen { width: min(980px, 100%); margin: 0 auto; }
-.ribbon { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 14px; align-items: center; margin-bottom: 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.worksheet-screen { width: min(980px, 100%); margin: 0 auto; padding-top: 62px; }
+.worksheet-input-open { padding-bottom: 242px; }
+.ribbon {
+  position: fixed;
+  z-index: 30;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 70px;
+  padding: 10px max(20px, calc((100vw - 980px) / 2 + 20px));
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 3px 16px rgba(0, 0, 0, .08);
+}
 .ribbon h1 { font-size: 18px; }
 .ribbon-meta { display: grid; gap: 2px; color: var(--muted); font-size: 11px; text-align: right; }
 .ribbon-meta strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
 .ribbon-button, .ribbon-icon, .ribbon-link { min-height: 36px; padding: 7px 12px; border: 1px solid var(--ink); border-radius: 2px; background: var(--paper); cursor: pointer; font-size: 13px; }
 .ribbon-link { padding-inline: 4px; border-color: transparent; text-decoration: underline; }
+.worksheet-toast {
+  position: fixed;
+  z-index: 40;
+  top: 82px;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 10px 18px;
+  border: 2px solid #e01010;
+  border-radius: 6px;
+  color: #9d0b0b;
+  background: #fff;
+  box-shadow: 0 5px 20px rgba(105, 0, 0, .2);
+  font-weight: 700;
+  translate: -50% 0;
+}
 .paper-wrap { display: flex; justify-content: center; }
 .paper { position: relative; width: min(720px, 100%); background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
 .problem-grid { position: relative; width: 100%; height: 100%; }
 .problem-divider { position: absolute; border-left: 1px solid #888; pointer-events: none; }
-.problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; padding: 0 2%; }
+.problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: hidden; padding: 0 2%; }
 .worksheet-footer { position: absolute; color: var(--muted); font-size: 7px; line-height: 1; white-space: nowrap; }
-.problem-number { flex: 0 0 15%; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.expression { white-space: nowrap; font-size: clamp(17px, 2.8vw, 23px); font-variant-numeric: tabular-nums; }
-.answer-box { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 34px; margin-left: 8px; border: 1px solid #4f4f4f; border-radius: 0; background: #fff; cursor: pointer; font-size: 20px; font-variant-numeric: tabular-nums; }
+.problem-number { flex: 0 0 15%; color: #484848; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.expression { flex: 0 0 auto; white-space: nowrap; font-size: clamp(17px, 2.8vw, 23px); font-variant-numeric: tabular-nums; }
+.answer-box {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 32px;
+  max-width: 100%;
+  height: 34px;
+  margin-left: 6px;
+  overflow: hidden;
+  padding: 2px 4px;
+  border: 1px solid #4f4f4f;
+  border-radius: 0;
+  background: #fff;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.answer-value { display: block; min-width: 0; max-width: 100%; overflow: hidden; line-height: 1; text-align: left; text-overflow: clip; }
 .answer-box-selected { border: 2px solid #111; }
 .answer-box-correct { border-color: #222; }
-.answer-box-wrong { border-color: #7a2020; }
-.result-mark { width: 18px; margin-left: 5px; font-size: 15px; }
+.answer-box-wrong { border: 3px solid #e01010; }
+.problem-cell-graded .answer-box { min-width: 25px; }
+.result-mark { flex: 0 0 18px; margin-left: 5px; font-size: 17px; }
+.correct-answer { flex: 0 0 auto; margin-left: 5px; color: #e01010; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .grade-summary { display: flex; gap: 8px; align-items: baseline; width: fit-content; margin: 0 auto 14px; padding: 7px 14px; border: 1px solid var(--ink); background: var(--paper); }
 .grade-summary strong { font-size: 18px; }
 .grade-summary span { color: var(--muted); font-size: 12px; }
 .worksheet-error { max-width: 720px; margin-inline: auto; }
-.input-panel { width: min(420px, 100%); margin: 18px auto 0; padding: 13px; border: 1px solid var(--line); background: var(--paper); }
-.ast-state { margin-bottom: 10px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; }
-.keypad { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
-.keypad button { min-height: 40px; border: 1px solid #999; border-radius: 2px; background: var(--soft); cursor: pointer; }
-.keypad .keypad-commit { grid-column: span 2; color: var(--paper); background: var(--ink); }
+.input-panel {
+  position: fixed;
+  z-index: 30;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 12px max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  border-top: 1px solid #aeb5b8;
+  background: rgba(244, 246, 247, .98);
+  box-shadow: 0 -5px 22px rgba(0, 0, 0, .12);
+}
+.input-panel-inner { display: grid; grid-template-columns: minmax(210px, 1.35fr) minmax(180px, 1fr); gap: 10px; width: min(470px, 100%); margin: 0 auto; }
+.keypad-numbers, .keypad-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.keypad-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.keypad-numbers button, .keypad-controls button { min-height: 42px; border: 1px solid #8d969a; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 650; }
+.keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
+.keypad-zero { grid-column: 1 / -1; }
+.keypad-controls .keypad-clear { color: #750a0a; border-color: #bd8f8f; background: #fff9f9; }
+.keypad-controls .keypad-commit { color: var(--paper); border-color: var(--ink); background: var(--ink); }
 
 @media (max-width: 680px) {
   .app-shell { padding: 22px 10px 34px; }
@@ -170,15 +236,22 @@ button:disabled { cursor: wait; opacity: .5; }
   .lobby-shape-square { left: -14px; }
   .lobby-shape-circle { right: -18px; }
   .lobby-shape-triangle { right: 4%; opacity: .14; }
-  .ribbon { grid-template-columns: 1fr auto auto; gap: 8px; }
+  .worksheet-screen { padding-top: 102px; }
+  .worksheet-input-open { padding-bottom: 228px; }
+  .ribbon { grid-template-columns: 1fr auto auto; gap: 8px; min-height: 102px; padding: 8px 10px; }
+  .worksheet-toast { top: 112px; }
   .ribbon-meta { grid-column: 2; grid-row: 1; }
   .ribbon-button { grid-column: 1; grid-row: 2; }
   .ribbon-icon { grid-column: 2; grid-row: 2; }
   .ribbon-link { grid-column: 3; grid-row: 2; }
   .problem-cell { padding-inline: 2%; }
-  .problem-number { font-size: 10px; }
+  .problem-number { flex-basis: 14%; font-size: 12px; }
   .expression { font-size: clamp(15px, 4.6vw, 20px); }
-  .answer-box { width: 34px; height: 29px; margin-left: 5px; font-size: 17px; }
+  .answer-box { min-width: 27px; height: 29px; margin-left: 4px; padding-inline: 2px; }
+  .correct-answer { margin-left: 3px; font-size: 13px; }
+  .input-panel-inner { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 7px; }
+  .keypad-numbers, .keypad-controls { gap: 5px; }
+  .keypad-numbers button, .keypad-controls button { min-height: 39px; }
 }
 
 @media (max-width: 430px) {
@@ -195,6 +268,7 @@ button:disabled { cursor: wait; opacity: .5; }
 @media print {
   body { background: #fff; }
   .app-shell { padding: 0; }
-  .ribbon, .input-panel, .grade-summary, .error-message { display: none !important; }
+  .ribbon, .input-panel, .grade-summary, .error-message, .worksheet-toast { display: none !important; }
+  .worksheet-screen { padding: 0; }
   .paper { width: 100%; min-height: 0; padding: 0; border: 0; box-shadow: none; }
 }

@@ -56,6 +56,13 @@ function mapBoundaryError(error: unknown): DrillEngineError {
       error,
     );
   }
+  if (kind === 'answer_ast_size_limit') {
+    return new DrillEngineError(
+      'answer_ast_size_limit',
+      'The answer AST exceeded its maximum size.',
+      error,
+    );
+  }
   if (error instanceof Error) return new DrillEngineError('invalid_dto', error.message, error);
   return new DrillEngineError('invalid_dto', 'The drill-wasm response was not valid.', error);
 }

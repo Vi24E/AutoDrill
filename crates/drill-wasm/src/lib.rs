@@ -576,8 +576,10 @@ fn parse_editor_state(value: &Value) -> Result<EditorState, ApiError> {
             });
         }
     }
-    serde_json::from_value::<EditorState>(value.clone())
-        .map_err(|error| invalid_request(&format!("invalid editor state: {error}")))
+    let state = serde_json::from_value::<EditorState>(value.clone())
+        .map_err(|error| invalid_request(&format!("invalid editor state: {error}")))?;
+    validate_answer_size(state.answer.clone())?;
+    Ok(state)
 }
 
 fn parse_editor_action(value: &Value) -> Result<EditorAction, ApiError> {
@@ -601,7 +603,7 @@ fn parse_editor_action(value: &Value) -> Result<EditorAction, ApiError> {
 
 fn parse_answer_node(value: &Value) -> Result<AnswerNode, ApiError> {
     if let Ok(answer) = serde_json::from_value::<AnswerNode>(value.clone()) {
-        return Ok(answer);
+        return validate_answer_size(answer);
     }
     let object = value
         .as_object()
@@ -620,7 +622,7 @@ fn parse_answer_node(value: &Value) -> Result<AnswerNode, ApiError> {
         let value = value
             .as_i64()
             .ok_or_else(|| invalid_request("integer answer value must be an integer"))?;
-        return Ok(AnswerNode::Integer(value));
+        return validate_answer_size(AnswerNode::Integer(value));
     }
     let digits = object
         .get("digits")
@@ -698,7 +700,18 @@ fn answer_from_digits(digits: &[u8]) -> Result<AnswerNode, ApiError> {
     let value = text
         .parse::<i64>()
         .map_err(|_| invalid_request("integer answer is outside the supported range"))?;
-    Ok(AnswerNode::Integer(value))
+    validate_answer_size(AnswerNode::Integer(value))
+}
+
+fn validate_answer_size(answer: AnswerNode) -> Result<AnswerNode, ApiError> {
+    if answer.is_within_size_limit() {
+        Ok(answer)
+    } else {
+        Err(invalid_request(&format!(
+            "answer AST size must not exceed {}",
+            drill_core::MAX_ANSWER_AST_SIZE
+        )))
+    }
 }
 
 fn deserialize_digits<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -814,15 +827,19 @@ fn generation_error(error: GenerationError) -> ApiError {
 }
 
 fn editor_error(error: EditorError) -> ApiError {
-    let code = match error {
-        EditorError::InvalidDigit => "editor_invalid_digit",
-        EditorError::IntegerOverflow => "editor_integer_overflow",
-        EditorError::NegativeDraft => "editor_negative_draft",
+    let (code, details) = match &error {
+        EditorError::InvalidDigit => ("editor_invalid_digit", None),
+        EditorError::AnswerSizeLimit { max_size } => (
+            "answer_ast_size_limit",
+            Some(json!({ "max_size": max_size })),
+        ),
+        EditorError::IntegerOverflow => ("editor_integer_overflow", None),
+        EditorError::NegativeDraft => ("editor_negative_draft", None),
     };
     ApiError {
         code: code.to_owned(),
         message: error.to_string(),
-        details: None,
+        details,
     }
 }
 
@@ -915,6 +932,49 @@ mod tests {
         let first_read_failure = BrowserClockState::try_new(100.0).unwrap();
         assert_eq!(first_read_failure.read(None), Duration::ZERO);
         assert_eq!(first_read_failure.read(Some(101.0)), Duration::MAX);
+    }
+
+    #[test]
+    fn editor_boundary_reports_answer_ast_size_limit() {
+        let request = json!({
+            "schema_version": 1,
+            "state": {
+                "schema_version": 1,
+                "node": {
+                    "kind": "integer",
+                    "digits": vec![1_u8; drill_core::MAX_ANSWER_AST_SIZE]
+                },
+                "cursor": drill_core::MAX_ANSWER_AST_SIZE,
+                "committed": false
+            },
+            "action": { "kind": "insert_digit", "digit": 2 }
+        });
+        let response: Value =
+            serde_json::from_str(&apply_editor_action(&request.to_string())).unwrap();
+        assert_eq!(response["ok"], false);
+        assert_eq!(response["error"]["code"], "answer_ast_size_limit");
+        assert_eq!(
+            response["error"]["details"]["max_size"],
+            drill_core::MAX_ANSWER_AST_SIZE
+        );
+
+        let oversized = json!({
+            "schema_version": 1,
+            "state": {
+                "schema_version": 1,
+                "node": {
+                    "kind": "integer",
+                    "digits": vec![1_u8; drill_core::MAX_ANSWER_AST_SIZE + 1]
+                },
+                "cursor": drill_core::MAX_ANSWER_AST_SIZE + 1,
+                "committed": false
+            },
+            "action": { "kind": "clear" }
+        });
+        let response: Value =
+            serde_json::from_str(&apply_editor_action(&oversized.to_string())).unwrap();
+        assert_eq!(response["ok"], false);
+        assert_eq!(response["error"]["code"], "invalid_request");
     }
 
     #[test]

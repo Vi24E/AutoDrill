@@ -122,17 +122,18 @@ export type EditorAction =
   | { kind: 'clear' }
   | { kind: 'commit' };
 
-export type GenerationErrorKind =
+export type DrillEngineErrorKind =
   | 'generation_timeout'
   | 'generation_attempt_limit'
+  | 'answer_ast_size_limit'
   | 'wasm_unavailable'
   | 'invalid_dto';
 
 export class DrillEngineError extends Error {
-  readonly kind: GenerationErrorKind;
+  readonly kind: DrillEngineErrorKind;
   readonly details?: unknown;
 
-  constructor(kind: GenerationErrorKind, message: string, details?: unknown) {
+  constructor(kind: DrillEngineErrorKind, message: string, details?: unknown) {
     super(message);
     this.name = 'DrillEngineError';
     this.kind = kind;

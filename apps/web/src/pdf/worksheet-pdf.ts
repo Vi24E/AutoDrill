@@ -40,6 +40,30 @@ export type PhysicalBounds = {
   top: number;
 };
 
+export type PdfProblemLineGeometry = {
+  expressionX: number;
+  answerBoxX: number;
+  answerBoxWidth: number;
+  answerGap: number;
+};
+
+/** Keep the printable answer box immediately after the rendered equals sign. */
+export function getPdfProblemLineGeometry(
+  cell: { x: number; width: number },
+  expressionWidth: number,
+): PdfProblemLineGeometry {
+  const expressionX = cell.x + 32;
+  const answerBoxWidth = 25;
+  const answerGap = 6;
+  const rightInset = 8;
+  return {
+    expressionX,
+    answerBoxX: Math.min(expressionX + expressionWidth + answerGap, cell.x + cell.width - answerBoxWidth - rightInset),
+    answerBoxWidth,
+    answerGap,
+  };
+}
+
 /**
  * Place a small footer so it is physically bottom-right on both pages. A
  * 180-degree page rotation mirrors the unrotated coordinates. The answer page
@@ -150,6 +174,8 @@ function drawProblemPage(
   for (const cell of layout.cells) {
     const position = getCellPosition(layout, cell);
     const baseline = position.y + position.height / 2 + 5;
+    const expression = `${cell.problem.prompt.left} + ${cell.problem.prompt.right} =`;
+    const line = getPdfProblemLineGeometry(position, font.widthOfTextAtSize(expression, 18));
     page.drawText(`${cell.index + 1}.`, {
       x: position.x + 8,
       y: baseline + 1,
@@ -157,17 +183,17 @@ function drawProblemPage(
       font,
       color: rgb(0.25, 0.25, 0.25),
     });
-    page.drawText(`${cell.problem.prompt.left} + ${cell.problem.prompt.right} =`, {
-      x: position.x + 32,
+    page.drawText(expression, {
+      x: line.expressionX,
       y: baseline,
       size: 18,
       font,
       color: rgb(0, 0, 0),
     });
     page.drawRectangle({
-      x: position.x + position.width - 56,
+      x: line.answerBoxX,
       y: baseline - 4,
-      width: 25,
+      width: line.answerBoxWidth,
       height: 25,
       borderWidth: 1,
       borderColor: rgb(0, 0, 0),

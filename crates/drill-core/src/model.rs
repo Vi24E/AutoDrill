@@ -13,6 +13,7 @@ pub const MIN_OPERAND: u8 = 1;
 pub const MAX_OPERAND: u8 = 9;
 pub const MIN_ANSWER: u8 = 1;
 pub const MAX_ANSWER: u8 = 18;
+pub const MAX_ANSWER_AST_SIZE: usize = 18;
 
 /// The typed answer AST currently supported by alpha 1.0.
 ///
@@ -46,6 +47,34 @@ impl AnswerNode {
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
     }
+
+    /// Return the structural size of this answer AST.
+    ///
+    /// Alpha integer nodes count one per decimal digit; the empty draft is
+    /// zero. Future composite nodes add one for the parent plus every child's
+    /// size, so `frac(num(12), num(42))` will have size five.
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Empty => 0,
+            Self::Integer(value) => decimal_digit_count(value.unsigned_abs()),
+        }
+    }
+
+    pub fn is_within_size_limit(&self) -> bool {
+        self.size() <= MAX_ANSWER_AST_SIZE
+    }
+}
+
+fn decimal_digit_count(mut value: u64) -> usize {
+    if value == 0 {
+        return 1;
+    }
+    let mut digits = 0;
+    while value > 0 {
+        value /= 10;
+        digits += 1;
+    }
+    digits
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

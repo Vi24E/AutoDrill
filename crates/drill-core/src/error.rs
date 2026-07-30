@@ -32,6 +32,8 @@ impl GenerationError {
 pub enum EditorError {
     #[error("digit must be between 0 and 9")]
     InvalidDigit,
+    #[error("answer AST size cannot exceed {max_size}")]
+    AnswerSizeLimit { max_size: usize },
     #[error("the integer draft is outside the supported range")]
     IntegerOverflow,
     #[error("editing a negative integer draft is not supported")]

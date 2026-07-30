@@ -7,6 +7,7 @@ import {
   generateWorksheetPdfBytes,
   getFooterPhysicalBounds,
   getFooterPosition,
+  getPdfProblemLineGeometry,
 } from '@/pdf/worksheet-pdf';
 import { fixtureWorksheet } from '@/test/fixtures';
 import type { WorksheetMetadata } from '@/domain/worksheet-metadata';
@@ -41,6 +42,13 @@ describe('shared worksheet layout and PDF', () => {
     expect(document.getPages()).toHaveLength(2);
     expect(document.getPages()[0]?.getSize().width).toBeCloseTo(595.28, 1);
     expect(document.getPages()[1]?.getRotation().angle).toBe(180);
+  });
+
+  it('places the printable answer box immediately after the equals sign', () => {
+    const line = getPdfProblemLineGeometry({ x: 42, width: 255 }, 71);
+    expect(line.answerBoxX).toBe(line.expressionX + 71 + line.answerGap);
+    expect(line.answerBoxX).toBeLessThan(42 + 255 - 56);
+    expect(line.answerBoxWidth).toBe(25);
   });
 
   it('keeps identical metadata in both footer models and maps the rotated footer to physical bottom-right', () => {

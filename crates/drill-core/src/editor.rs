@@ -1,5 +1,5 @@
 use crate::error::EditorError;
-use crate::model::{AnswerNode, EditorAction, EditorState};
+use crate::model::{AnswerNode, EditorAction, EditorState, MAX_ANSWER_AST_SIZE};
 
 /// Apply one typed editor action to an immutable state snapshot.
 pub fn apply_editor_action(
@@ -17,6 +17,13 @@ pub fn apply_editor_action(
             }
             let mut candidate = digits.clone();
             candidate.insert(next.cursor, char::from(b'0' + *digit));
+            if canonical_digit_count(&candidate) > MAX_ANSWER_AST_SIZE {
+                // The immutable input state remains untouched while callers
+                // receive a typed signal suitable for a size-limit notice.
+                return Err(EditorError::AnswerSizeLimit {
+                    max_size: MAX_ANSWER_AST_SIZE,
+                });
+            }
             let (answer, cursor) = answer_from_digits(&candidate, next.cursor + 1)?;
             next.answer = answer;
             next.cursor = cursor;
@@ -90,4 +97,13 @@ fn answer_from_digits(candidate: &str, cursor: usize) -> Result<(AnswerNode, usi
     let leading_zeroes = candidate.len() - normalized.len();
     let normalized_cursor = cursor.saturating_sub(leading_zeroes).min(normalized.len());
     Ok((AnswerNode::Integer(value), normalized_cursor))
+}
+
+fn canonical_digit_count(candidate: &str) -> usize {
+    let digits = candidate.trim_start_matches('0');
+    if digits.is_empty() {
+        1
+    } else {
+        digits.len()
+    }
 }

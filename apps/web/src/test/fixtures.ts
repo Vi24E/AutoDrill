@@ -3,6 +3,7 @@ import {
   ADDITION_GENERATOR_VERSION,
   ADDITION_LAYOUT,
   DRILL_SCHEMA_VERSION,
+  DrillEngineError,
   emptyEditorState,
   type DrillEngine,
   type DrillSettings,
@@ -55,7 +56,10 @@ export function fixtureWorksheet(): WorksheetDto {
 function applyFixtureEditor(state: EditorState, action: EditorAction): EditorState {
   const digits = [...state.node.digits];
   let cursor = state.cursor;
-  if (action.kind === 'insert_digit' && digits.length < 2) {
+  if (action.kind === 'insert_digit' && digits.length >= 18) {
+    throw new DrillEngineError('answer_ast_size_limit', 'fixture answer AST size limit', { max_size: 18 });
+  }
+  if (action.kind === 'insert_digit') {
     digits.splice(cursor, 0, action.digit);
     cursor += 1;
   } else if (action.kind === 'delete_backward' && cursor > 0) {

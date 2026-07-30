@@ -31,4 +31,18 @@ describe('versioned WASM adapter', () => {
     expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string)).toEqual(expect.objectContaining({ expected: worksheet.problems[0]?.canonical_answer, actual: { kind: 'integer', digits: [] } }));
     expect(result.correct_count).toBe(20);
   });
+
+  it('preserves the typed answer AST size error from the editor boundary', async () => {
+    const runtime = {
+      apply_editor_action: vi.fn().mockResolvedValue({
+        schema_version: 1,
+        ok: false,
+        error: { code: 'answer_ast_size_limit', details: { max_size: 18 } },
+      }),
+    };
+    const engine = createWasmDrillEngine(runtime);
+
+    await expect(engine.applyEditorAction(emptyEditorState(), { kind: 'insert_digit', digit: 1 }))
+      .rejects.toMatchObject({ kind: 'answer_ast_size_limit' });
+  });
 });

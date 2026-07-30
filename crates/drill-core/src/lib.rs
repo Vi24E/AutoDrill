@@ -22,7 +22,8 @@ pub use model::{
     AnswerNode, EditorAction, EditorState, EffortResult, EffortWeights, GenerateProblemRequest,
     GenerateWorksheetRequest, GradeResult, GradeStatus, LayoutMetadata, OperationCounts, Problem,
     Worksheet, CURRICULUM_PATH, DEFAULT_COLUMNS, DEFAULT_PROBLEM_COUNT, DEFAULT_ROWS,
-    GENERATOR_VERSION, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND, SCHEMA_VERSION, SKILL_ID,
+    GENERATOR_VERSION, MAX_ANSWER, MAX_ANSWER_AST_SIZE, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
+    SCHEMA_VERSION, SKILL_ID,
 };
 pub use normalize::normalize_answer;
 pub use rng::{seed_to_u64, DeterministicRng};
@@ -102,6 +103,16 @@ mod tests {
     }
 
     #[test]
+    fn integer_answer_ast_size_counts_decimal_digits() {
+        assert_eq!(AnswerNode::Empty.size(), 0);
+        assert_eq!(AnswerNode::Integer(0).size(), 1);
+        assert_eq!(AnswerNode::Integer(7).size(), 1);
+        let eighteen_digits = AnswerNode::Integer(999_999_999_999_999_999);
+        assert_eq!(eighteen_digits.size(), MAX_ANSWER_AST_SIZE);
+        assert!(eighteen_digits.is_within_size_limit());
+    }
+
+    #[test]
     fn operation_counts_and_effort_reflect_carry() {
         let problem = generate_problem("0").expect("generation succeeds");
         let expected = operation_counts_for(problem.left, problem.right);
@@ -128,6 +139,33 @@ mod tests {
         assert!(state.committed);
         let state = apply_editor_action(&state, &EditorAction::Clear).unwrap();
         assert_eq!(state, EditorState::empty());
+    }
+
+    #[test]
+    fn editor_rejects_nineteenth_digit_and_allows_reentry_after_delete() {
+        let mut state = EditorState::empty();
+        for _ in 0..MAX_ANSWER_AST_SIZE {
+            state = apply_editor_action(&state, &EditorAction::InsertDigit { digit: 1 }).unwrap();
+        }
+        assert_eq!(state.answer.size(), MAX_ANSWER_AST_SIZE);
+        assert_eq!(state.cursor, MAX_ANSWER_AST_SIZE);
+
+        let at_capacity = state.clone();
+        let error = apply_editor_action(&state, &EditorAction::InsertDigit { digit: 2 })
+            .expect_err("the nineteenth digit must be rejected");
+        assert_eq!(
+            error,
+            EditorError::AnswerSizeLimit {
+                max_size: MAX_ANSWER_AST_SIZE
+            }
+        );
+        assert_eq!(state, at_capacity);
+
+        state = apply_editor_action(&state, &EditorAction::Backspace).unwrap();
+        assert_eq!(state.answer.size(), MAX_ANSWER_AST_SIZE - 1);
+        state = apply_editor_action(&state, &EditorAction::InsertDigit { digit: 2 }).unwrap();
+        assert_eq!(state.answer.size(), MAX_ANSWER_AST_SIZE);
+        assert_eq!(state.cursor, MAX_ANSWER_AST_SIZE);
     }
 
     #[test]

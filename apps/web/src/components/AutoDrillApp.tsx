@@ -39,9 +39,32 @@ export type AutoDrillAppProps = {
 };
 
 function formatElapsed(startedAt: number | null, now: number): string {
-  if (!startedAt) return '00:00';
+  if (startedAt === null) return '00:00';
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function editorActionForKey(event: KeyboardEvent): EditorAction | null {
+  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return null;
+  if (event.key >= '0' && event.key <= '9') {
+    return { kind: 'insert_digit', digit: Number(event.key) };
+  }
+  if (event.key === 'Enter') return { kind: 'commit' };
+  if (event.key === 'Backspace') return { kind: 'delete_backward' };
+  if (event.key === 'Delete') return { kind: 'delete_forward' };
+  if (event.key === 'ArrowLeft') return { kind: 'move_left' };
+  if (event.key === 'ArrowRight') return { kind: 'move_right' };
+  return null;
+}
+
+function answerFontSize(digitCount: number): number {
+  if (digitCount <= 2) return 20;
+  return Math.max(6, 20 - (digitCount - 2) * 0.875);
+}
+
+function answerBoxWidth(digitCount: number): number {
+  const compactWidth = 42;
+  return compactWidth + Math.max(0, digitCount - 2) * 6;
 }
 
 export function AutoDrillApp({
@@ -58,13 +81,17 @@ export function AutoDrillApp({
   const [answers, setAnswers] = useState<Record<string, EditorState>>({});
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusyAction, setSettingsBusyAction] = useState<SettingsBusyAction>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const answersRef = useRef<Record<string, EditorState>>({});
+  const selectedIndexRef = useRef<number | null>(null);
   const actionQueueRef = useRef(Promise.resolve());
+  const noticeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Tests and embedders may inject a deterministic engine. The production
@@ -86,13 +113,36 @@ export function AutoDrillApp({
   }, [injectedEngine]);
 
   useEffect(() => {
-    if (!startedAt) return undefined;
+    if (startedAt === null || finishedAt !== null) return undefined;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [startedAt]);
+  }, [finishedAt, startedAt]);
+
+  const dismissNotice = useCallback(() => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = null;
+    setNotice(null);
+  }, []);
+
+  const showNotice = useCallback((message: string) => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+    setNotice(message);
+    noticeTimerRef.current = window.setTimeout(() => {
+      noticeTimerRef.current = null;
+      setNotice(null);
+    }, 4_000);
+  }, []);
+
+  useEffect(() => () => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+  }, []);
 
   const showEngineError = useCallback((value: unknown) => {
     if (value instanceof DrillEngineError) {
+      if (value.kind === 'answer_ast_size_limit') {
+        showNotice('式が大きすぎます！');
+        return;
+      }
       setError(
         value.kind === 'generation_timeout'
           ? '問題生成がタイムアウトしました。'
@@ -105,11 +155,12 @@ export function AutoDrillApp({
       return;
     }
     setError(value instanceof Error ? value.message : '処理に失敗しました。');
-  }, []);
+  }, [showNotice]);
 
   const generate = useCallback(async (printAfterGeneration: boolean) => {
     setError(null);
     setGradeResult(null);
+    dismissNotice();
     setBusy(true);
     setSettingsBusyAction(printAfterGeneration ? 'print' : 'generate');
     const pdfTarget = printAfterGeneration && typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
@@ -130,7 +181,9 @@ export function AutoDrillApp({
       // only after the learner clicks a problem row; commit then advances to
       // the next row and keeps the panel active there.
       setSelectedIndex(null);
+      selectedIndexRef.current = null;
       setStartedAt(printAfterGeneration ? null : Date.now());
+      setFinishedAt(null);
       setNow(Date.now());
       if (printAfterGeneration) await openWorksheetPdf(nextWorksheet, pdfTarget, metadata);
       setScreen(printAfterGeneration ? 'settings' : 'worksheet');
@@ -141,26 +194,31 @@ export function AutoDrillApp({
       setBusy(false);
       setSettingsBusyAction(null);
     }
-  }, [dateGenerator, engine, seedGenerator, settings, showEngineError]);
+  }, [dateGenerator, dismissNotice, engine, seedGenerator, settings, showEngineError]);
 
   const selectProblem = useCallback((index: number) => {
+    selectedIndexRef.current = index;
     setSelectedIndex(index);
     setError(null);
-  }, []);
+    dismissNotice();
+  }, [dismissNotice]);
 
-  const applyAction = useCallback((action: EditorAction, index = selectedIndex) => {
+  const applyAction = useCallback((action: EditorAction, requestedIndex?: number) => {
     const run = async () => {
+      const index = requestedIndex ?? selectedIndexRef.current;
       if (!worksheet || index === null || !worksheet.problems[index]) return;
       const problemId = worksheet.problems[index].problem_id;
       const current = answersRef.current[problemId] ?? emptyEditorState();
       setBusy(true);
       setError(null);
+      dismissNotice();
       try {
         const next = await engine.applyEditorAction(current, action);
         const nextAnswers = { ...answersRef.current, [problemId]: next };
         answersRef.current = nextAnswers;
         setAnswers(nextAnswers);
         if (action.kind === 'commit' && index < worksheet.problems.length - 1) {
+          selectedIndexRef.current = index + 1;
           setSelectedIndex(index + 1);
         }
       } catch (value) {
@@ -176,7 +234,7 @@ export function AutoDrillApp({
     const queued = actionQueueRef.current.then(run, run);
     actionQueueRef.current = queued.then(() => undefined, () => undefined);
     return queued;
-  }, [engine, selectedIndex, showEngineError, worksheet]);
+  }, [dismissNotice, engine, showEngineError, worksheet]);
 
   const drainActionQueue = useCallback(async () => {
     // Read the current tail before awaiting it. If an event enqueues another
@@ -192,32 +250,22 @@ export function AutoDrillApp({
   useEffect(() => {
     if (screen !== 'worksheet' || selectedIndex === null) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key >= '0' && event.key <= '9') {
-        event.preventDefault();
-        void applyAction({ kind: 'insert_digit', digit: Number(event.key) });
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        void applyAction({ kind: 'commit' });
-      } else if (event.key === 'Backspace') {
-        event.preventDefault();
-        void applyAction({ kind: 'delete_backward' });
-      } else if (event.key === 'Delete') {
-        event.preventDefault();
-        void applyAction({ kind: 'delete_forward' });
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        void applyAction({ kind: 'move_left' });
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        void applyAction({ kind: 'move_right' });
-      }
+      const action = editorActionForKey(event);
+      if (!action) return;
+      // Capture + preventDefault avoids Enter activating a focused keypad or
+      // ribbon button in addition to committing the selected answer.
+      event.preventDefault();
+      void applyAction(action);
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [applyAction, screen, selectedIndex]);
 
   const grade = useCallback(async () => {
     if (!worksheet) return;
+    const stoppedAt = finishedAt ?? Date.now();
+    setFinishedAt(stoppedAt);
+    setNow(stoppedAt);
     setBusy(true);
     setError(null);
     try {
@@ -237,15 +285,18 @@ export function AutoDrillApp({
     } finally {
       setBusy(false);
     }
-  }, [drainActionQueue, engine, showEngineError, worksheet]);
+  }, [drainActionQueue, engine, finishedAt, showEngineError, worksheet]);
 
   const backToTop = useCallback(() => {
     setScreen('settings');
     setSelectedIndex(null);
+    selectedIndexRef.current = null;
     setStartedAt(null);
+    setFinishedAt(null);
     setGradeResult(null);
     setError(null);
-  }, []);
+    dismissNotice();
+  }, [dismissNotice]);
 
   return (
     <main className="app-shell">
@@ -267,10 +318,11 @@ export function AutoDrillApp({
           worksheetMetadata={worksheetMetadata}
           answers={answers}
           selectedIndex={selectedIndex}
-          elapsed={formatElapsed(startedAt, now)}
+          elapsed={formatElapsed(startedAt, finishedAt ?? now)}
           gradeResult={gradeResult}
           busy={busy}
           error={error}
+          notice={notice}
           onSelect={selectProblem}
           onAction={(action) => void applyAction(action)}
           onGrade={() => void grade()}
@@ -428,6 +480,7 @@ type WorksheetScreenProps = {
   gradeResult: GradeResult | null;
   busy: boolean;
   error: string | null;
+  notice: string | null;
   onSelect: (index: number) => void;
   onAction: (action: EditorAction) => void;
   onGrade: () => void;
@@ -435,7 +488,7 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, busy, error, onSelect, onAction, onGrade, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, busy, error, notice, onSelect, onAction, onGrade, onPrint, onBack }: WorksheetScreenProps) {
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const selectedProblem = selectedIndex === null ? null : worksheet.problems[selectedIndex];
   const selectedState = selectedProblem ? answers[selectedProblem.problem_id] ?? emptyEditorState() : null;
@@ -454,17 +507,19 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
   };
 
   return (
-    <section className="worksheet-screen" aria-labelledby="worksheet-title">
+    <section className={`worksheet-screen ${selectedProblem ? 'worksheet-input-open' : ''}`} aria-labelledby="worksheet-title">
       <div className="ribbon">
         <div>
           <p className="ribbon-label">小学1年生</p>
           <h1 id="worksheet-title">1けたのたしざん(1)</h1>
         </div>
-        <div className="ribbon-meta"><span>回答時間</span><strong>{elapsed}</strong></div>
+        <div className="ribbon-meta"><span>回答時間</span><strong data-testid="elapsed-time">{elapsed}</strong></div>
         <button type="button" className="ribbon-button" onClick={onGrade} disabled={busy}>採点</button>
         <button type="button" className="ribbon-icon" onClick={onPrint} aria-label="印刷" disabled={busy}>印刷</button>
         <button type="button" className="ribbon-link" onClick={onBack}>TOPに戻る</button>
       </div>
+
+      {notice ? <div className="worksheet-toast" role="status" aria-live="polite" aria-atomic="true">{notice}</div> : null}
 
       {error ? <p className="error-message worksheet-error" role="alert">{error}</p> : null}
       {gradeResult ? <div className="grade-summary" role="status"><strong>{gradeResult.correct_count} / {gradeResult.total_count}</strong><span>正解</span></div> : null}
@@ -476,6 +531,7 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
             {sharedLayout.cells.map((cell) => {
               const { problem, index } = cell;
               const editor = answers[problem.problem_id] ?? emptyEditorState();
+              const answer = editorValue(editor) ?? '';
               const result = resultById.get(problem.problem_id);
               const position = getCellTopPosition(sharedLayout, cell);
               const cellStyle: CSSProperties = {
@@ -484,19 +540,32 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                 width: toPagePercent(position.width, A4_PAGE.width),
                 height: toPagePercent(position.height, A4_PAGE.height),
               };
+              const answerStyle: CSSProperties = {
+                width: answerBoxWidth(answer.length),
+                fontSize: answerFontSize(answer.length),
+                flexGrow: 0,
+                flexShrink: 1,
+              };
               return (
-                <div className="problem-cell" data-layout-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
+                <div className={`problem-cell ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
                   <span className="problem-number">{index + 1}.</span>
                   <span className="expression">{problemExpression(problem)}</span>
                   <button
                     type="button"
                     className={`answer-box ${selectedIndex === index ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`}
+                    data-answer-length={answer.length}
+                    style={answerStyle}
                     onClick={() => onSelect(index)}
-                    aria-label={`${index + 1}番の答え ${editorValue(editor) ?? '未入力'}`}
+                    aria-label={`${index + 1}番の答え ${answer || '未入力'}`}
                   >
-                    {editorValue(editor) ?? ''}
+                    <span className="answer-value">{answer}</span>
                   </button>
-                  {result ? <span className="result-mark" aria-label={result.correct ? '正解' : '不正解'}>{result.correct ? '○' : '×'}</span> : null}
+                  {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
+                  {result && !result.correct ? (
+                    <span className="correct-answer" aria-label={`正しい答え ${problem.canonical_answer.value}`}>
+                      {problem.canonical_answer.value}
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
@@ -511,15 +580,28 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
 
       {selectedProblem && selectedState ? (
         <div className="input-panel" aria-label="数字入力パネル">
-          <div className="ast-state" aria-live="polite">AST: integer({editorValue(selectedState) ?? 'empty'})</div>
-          <div className="keypad">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((digit) => <button type="button" key={digit} onClick={() => onAction({ kind: 'insert_digit', digit })} disabled={busy}>{digit}</button>)}
-            <button type="button" onClick={() => onAction({ kind: 'delete_backward' })} disabled={busy}>⌫</button>
-            <button type="button" onClick={() => onAction({ kind: 'delete_forward' })} disabled={busy}>削除</button>
-            <button type="button" onClick={() => onAction({ kind: 'move_left' })} disabled={busy}>←</button>
-            <button type="button" onClick={() => onAction({ kind: 'move_right' })} disabled={busy}>→</button>
-            <button type="button" onClick={() => onAction({ kind: 'clear' })} disabled={busy}>クリア</button>
-            <button type="button" className="keypad-commit" onClick={() => onAction({ kind: 'commit' })} disabled={busy}>確定</button>
+          <div className="input-panel-inner">
+            <div className="keypad-numbers" aria-label="数字キー">
+              {[7, 8, 9, 4, 5, 6, 1, 2, 3, 0].map((digit) => (
+                <button
+                  type="button"
+                  className={digit === 0 ? 'keypad-zero' : undefined}
+                  key={digit}
+                  onClick={() => onAction({ kind: 'insert_digit', digit })}
+                  disabled={busy}
+                >
+                  {digit}
+                </button>
+              ))}
+            </div>
+            <div className="keypad-controls" aria-label="編集キー">
+              <button type="button" onClick={() => onAction({ kind: 'delete_backward' })} disabled={busy} aria-label="一文字戻す">⌫</button>
+              <button type="button" onClick={() => onAction({ kind: 'delete_forward' })} disabled={busy} aria-label="一文字削除">Del</button>
+              <button type="button" onClick={() => onAction({ kind: 'move_left' })} disabled={busy} aria-label="カーソルを左へ">←</button>
+              <button type="button" onClick={() => onAction({ kind: 'move_right' })} disabled={busy} aria-label="カーソルを右へ">→</button>
+              <button type="button" className="keypad-clear" onClick={() => onAction({ kind: 'clear' })} disabled={busy}>クリア</button>
+              <button type="button" className="keypad-commit" onClick={() => onAction({ kind: 'commit' })} disabled={busy}>確定</button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AutoDrillApp } from '@/components/AutoDrillApp';
@@ -21,6 +21,19 @@ function delayedFixtureEngine() {
       return base.applyEditorAction(...args);
     },
   };
+}
+
+function deferredGradingEngine() {
+  const base = fixtureEngine();
+  let resolveGrade!: (result: Awaited<ReturnType<DrillEngine['gradeAnswer']>>) => void;
+  const pendingGrade = new Promise<Awaited<ReturnType<DrillEngine['gradeAnswer']>>>((resolve) => {
+    resolveGrade = resolve;
+  });
+  const engine: DrillEngine = {
+    ...base,
+    gradeAnswer: vi.fn(() => pendingGrade),
+  };
+  return { engine, resolveGrade };
 }
 
 function seedRecordingEngine() {
@@ -149,6 +162,42 @@ describe('AutoDrillApp', () => {
     expect(screen.getByLabelText('数字入力パネル')).toBeInTheDocument();
   });
 
+  it('renders the fixed keypad in standard calculator order with clear controls', async () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    const numberPad = screen.getByLabelText('数字キー');
+    expect(within(numberPad).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '7', '8', '9', '4', '5', '6', '1', '2', '3', '0',
+    ]);
+    expect(within(screen.getByLabelText('編集キー')).getByRole('button', { name: '一文字戻す' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('編集キー')).getByRole('button', { name: '一文字削除' })).toBeInTheDocument();
+    expect(screen.queryByText(/^AST:/)).not.toBeInTheDocument();
+  });
+
+  it('supports physical Backspace, Delete, and cursor movement without native button collisions', async () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: '2' });
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 12' })).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    fireEvent.keyDown(window, { key: 'Delete' });
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 1' })).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: '2' });
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 2' })).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 12' })).toBeInTheDocument());
+  });
+
   it('serializes rapid digits and Enter against a delayed engine', async () => {
     render(<AutoDrillApp engine={delayedFixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
@@ -165,6 +214,45 @@ describe('AutoDrillApp', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^2番の答え/ })).toHaveClass('answer-box-selected'), {
       timeout: 1000,
     });
+  });
+
+  it('routes a rapid digit after Enter to the newly selected problem', async () => {
+    render(<AutoDrillApp engine={delayedFixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+    fireEvent.keyDown(window, { key: '2' });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 1' })).toBeInTheDocument(), { timeout: 1000 });
+    await waitFor(() => expect(screen.getByRole('button', { name: '2番の答え 2' })).toHaveClass('answer-box-selected'), { timeout: 1000 });
+  });
+
+  it('keeps an 18-digit answer inside its box and shows a stable size-limit notice on the next digit', async () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    const emptyAnswer = screen.getByRole('button', { name: '1番の答え 未入力' });
+    expect(emptyAnswer).toHaveStyle({ width: '42px', flexGrow: '0', flexShrink: '1' });
+    fireEvent.click(emptyAnswer);
+
+    fireEvent.keyDown(window, { key: '1' });
+    fireEvent.keyDown(window, { key: '1' });
+    const twoDigits = await screen.findByRole('button', { name: '1番の答え 11' });
+    expect(twoDigits).toHaveStyle({ width: '42px', flexGrow: '0', flexShrink: '1' });
+
+    for (let index = 2; index < 19; index += 1) fireEvent.keyDown(window, { key: '1' });
+    const eighteenDigits = '1'.repeat(18);
+    const answer = await screen.findByRole('button', { name: `1番の答え ${eighteenDigits}` });
+    expect(answer).toHaveAttribute('data-answer-length', '18');
+    expect(answer).toHaveStyle({ width: '138px', fontSize: '6px', flexGrow: '0', flexShrink: '1' });
+    expect(await screen.findByText('式が大きすぎます！')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    await screen.findByRole('button', { name: `1番の答え ${'1'.repeat(17)}` });
+    await waitFor(() => expect(screen.queryByText('式が大きすぎます！')).not.toBeInTheDocument());
   });
 
   it('generates distinct automatic seeds for blank q1 generation and print', async () => {
@@ -251,6 +339,50 @@ describe('AutoDrillApp', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 / 20'), {
       timeout: 1000,
     });
+  });
+
+  it('freezes elapsed time when grading starts, including while grading is pending', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { engine, resolveGrade } = deferredGradingEngine();
+    try {
+      render(<AutoDrillApp engine={engine} />);
+      fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(screen.getByTestId('elapsed-time')).toHaveTextContent('00:03');
+
+      fireEvent.click(screen.getByRole('button', { name: '採点' }));
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(screen.getByTestId('elapsed-time')).toHaveTextContent('00:03');
+
+      resolveGrade({ schema_version: 1, items: [], correct_count: 0, total_count: 20 });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(screen.getByTestId('elapsed-time')).toHaveTextContent('00:03');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('marks wrong and unanswered boxes in red and shows each correct answer beside it', async () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+    fireEvent.keyDown(window, { key: '9' });
+    fireEvent.click(screen.getByRole('button', { name: '採点' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 / 20'));
+
+    expect(screen.getByRole('button', { name: '1番の答え 9' })).toHaveClass('answer-box-wrong');
+    expect(screen.getByRole('button', { name: '2番の答え 未入力' })).toHaveClass('answer-box-wrong');
+    expect(within(screen.getByTestId('problem-cell-0')).getByLabelText('正しい答え 2')).toHaveTextContent('2');
+    expect(within(screen.getByTestId('problem-cell-1')).getByLabelText('正しい答え 3')).toHaveTextContent('3');
   });
 
   it('sends the same worksheet object to q2 print', async () => {
