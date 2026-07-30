@@ -10,6 +10,7 @@
 ## 1. 現在の到達点
 
 - q1（設定）・q2（回答）・q3（別タブのPDFビューアー）の画面遷移をNext.jsで実装済み。
+- q1はゲームロビーを着想源にした中央カード、控えめなグリッド・幾何学背景、押下感のある操作ボタンで構成する。カリキュラム選択は型付きの木データから`学年 → 領域 → 単元`の3連動selectへ投影し、q2の白紙調ワークシートには装飾を持ち込まない。
 - alpha 1.0の一桁足し算は、1〜9の順序付き組から重複なしで20問を決定的に生成する。
 - q1だけにSeed入力欄を置き、空欄は押下ごとにcrypto優先の4文字自動Seed、非空欄は入力文字列そのものを使う。正しい手入力は許可文字（`1-9`、`a-z`、`A-Z`から`I`/`l`/`O`を除外）の1〜16文字で、同じ指定Seedは同じ20問を再現する。
 - 実際に使ったSeedとローカル生成日（`YYYY-MM-DD`）は`WorksheetMetadata`としてUIとPDFへ引き継ぎ、q2とq3の各問題ページ右下へ小さく表示する。q2にはSeed入力欄を表示しない。
@@ -27,7 +28,7 @@
 
 | 状態 | 入口 | 主な表示・操作 | 次の状態 |
 |---|---|---|---|
-| q1 設定 | 初期表示、q2のTOPに戻る | 学年・カリキュラム・難易度の将来拡張用select、Seed入力、問題生成、印刷 | 問題生成→q2、印刷→q3 |
+| q1 設定 | 初期表示、q2のTOPに戻る | 学年・領域・単元の3連動select、難易度placeholder、Seed入力、問題生成、印刷 | 問題生成→q2、印刷→q3 |
 | q2 回答 | q1の問題生成 | 20問、2列×10行、回答時間、生成日/Seedフッター、初期は非表示のkeypad/AST（欄クリックで表示）、採点、印刷、TOPに戻る | 印刷→q3、TOPに戻る→q1 |
 | q3 PDF | q1またはq2の印刷 | ブラウザが表示する実PDF（問題ページ＋180度回転した解答ページ） | ブラウザのタブ操作に委ねる |
 
@@ -41,6 +42,7 @@ AutoDrill/
 │   ├── src/app/                 # Next.jsのページ、global CSS
 │   ├── src/components/          # q1/q2とタイマー・入力イベント
 │   ├── src/domain/drill-engine.ts# TS側のversioned DTOとengine interface
+│   ├── src/domain/curriculum.ts  # 学年・領域・単元の型付きカリキュラム木
 │   ├── src/domain/wasm-adapter.ts# JSON envelopeの唯一の本番境界
 │   ├── src/domain/layout.ts      # A4の余白・上部予約領域と2×10の共有レイアウト（Web/PDF共用）
 │   ├── src/domain/seed.ts        # 許可alphabetの4文字自動Seedと注入可能なfallback
@@ -149,6 +151,8 @@ cargo test --workspace --all-targets
 pre-commit run --all-files
 ```
 
+`next dev`は`.next-dev`、`pnpm build`と`next start`は`.next`を出力先に使います。開発サーバーを起動したまま本番buildを実行しても、開発中タブが参照するchunkを上書きしません。
+
 WASMパッケージを生成する場合は、targetとmatching CLIが既に存在する環境で次を実行します。
 
 ```bash
@@ -165,25 +169,25 @@ WASMパッケージを生成する場合は、targetとmatching CLIが既に存�
 - 共通role/runtime検証: `verify_roles.py`で189項目、Codex commander・`gpt-5.6-luna`・effort `max`・実効permission `disabled`を検証。adapterのworkspace-write意図との差は警告として出るが、より制限の強い実効経路を採用。
 - `cargo test --workspace --all-targets`: drill-core 7 tests、drill-wasm 4 tests、計11 tests passed。
 - 実WASM時計修正: Rust/Cargo 1.97.1、`wasm32-unknown-unknown` target、`wasm-pack 0.13.1`、`wasm-bindgen 0.2.126`で`./scripts/build-wasm.sh`を実行して`apps/web/public/wasm/pkg/`を生成した。wasm32経路は`performance.now()`を使う`BrowserClock`へ切り替え、throw・non-finite値・時間の逆行・初回読み取り失敗をfailed latchし、いずれも生成側で`generation_timeout` envelopeへ変換する（Reviewer re-review accepted）。生成runtimeのブラウザロードとq1→q2生成成功を確認し、`std::time::Instant`由来の時計panicを再現しないことを確認した。生成物はGit管理外。
-- 手動実ブラウザ確認（localhost dev、生成WASM）: Seed空欄で自動Seed`XRSJ`を解決してq2へ進み、回答欄クリックで入力パネルが表示され、ハードウェアキー`10`+Enterで次問へ進むこと、実WASM採点で`1/20`を表示すること、TOPでq1へ戻ることを確認した。q1印刷では新しい自動Seed`uRp6`を解決し、q1を維持したまま別の`blob:http://localhost:3000/...` PDFタブを生成した。最後に明示Seed`Ab3Z`で再生成し、先頭問題が`1+1`、表示された日付/Seed metadataが一致し、初期パネル件数が0（非表示）であることを確認した。q2生成直後のパネル非表示と問題欄クリック後の表示も確認した。
+- 手動実ブラウザ確認（localhost dev、生成WASM）: Seed空欄で自動Seed`XRSJ`を解決してq2へ進み、回答欄クリックで入力パネルが表示され、ハードウェアキー`10`+Enterで次問へ進むこと、実WASM採点で`1/20`を表示すること、TOPでq1へ戻ることを確認した。q1印刷では新しい自動Seed`uRp6`を解決し、q1を維持したまま別の`blob:http://localhost:3000/...` PDFタブを生成した。最後に明示Seed`Ab3Z`で再生成し、先頭問題が`1+1`、表示された日付/Seed metadataが一致し、初期パネル件数が0（非表示）であることを確認した。q1刷新後も3連動selectの初期値、問題生成による20問のq2遷移、q2生成直後のパネル非表示、回答欄クリック後の画面テンキー表示、q2への装飾非混入を再確認した。
 - `pnpm lint`: ESLint passed（warning/errorなし）。
 - `pnpm typecheck`: TypeScript passed。
-- `pnpm test`: 4 test files、19 tests passed（q2生成直後の入力パネル非表示、欄クリック表示、TOP/再生成リセット、Enter後の継続、許可alphabetの自動Seed/rejection sampling/fallback、1/16文字手入力の透過、自動/指定Seed、q2再利用、生成メタデータ、共有A4レイアウト、遅延engineへの連続数字＋Enter／入力直後の採点、PDFフッターの180度物理右下、タイマーを含む）。
+- `pnpm test`: 5 test files、23 tests passed（3連動selectとq2での非表示、生成/印刷のbusy状態、q2生成直後の入力パネル非表示、欄クリック表示、TOP/再生成リセット、Enter後の継続、許可alphabetの自動Seed/rejection sampling/fallback、1/16文字手入力の透過、自動/指定Seed、q2再利用、生成メタデータ、共有A4レイアウト、遅延engineへの連続数字＋Enter／入力直後の採点、PDFフッターの180度物理右下、タイマー、Next.js開発/本番出力ディレクトリ分離を含む）。
 - `pnpm build`: Next.js static production build passed。
 - `pre-commit run --all-files`: managed-project hookは対象ファイルなしでskip（失敗なし）。
 
 ## 8. 未検証・既知の制約
 
+- q1ボタンが無反応に見えた事象は、`next dev`稼働中に`pnpm build`が共有`.next`を上書きし、既存タブのHTMLが参照する`/_next/static/css/app/layout.css`、`main-app.js`、`app-pages-internals.js`が404になってhydrationとWASMロードが失敗したことが原因だった。`apps/web/next.config.mjs`の`distDir`を開発`.next-dev`と本番`.next`へ分離し、`next build`/`next start`が開発成果物を触らないようにした。両方の出力先は`.gitignore`へ登録し、環境別の選択は決定的config testで固定している。
 - `load-generated.ts`は生成パッケージを動的にimportするseamです。生成物がない通常checkoutでは、q1にWASMパッケージ生成を促すエラーを表示します。現在の受入環境では生成済みruntimeのロードとq1→q2生成まで確認済みです。Web testsはfixture engineを明示注入して決定的UI回帰を検証し、製品のTypeScript fallbackで数学計算を行いません。
 - 実ブラウザでq2の印刷クリックからBlob PDFタブが作られることは手動確認済みです。一方、ブラウザのセキュリティポリシーによりPDFビューアー内容のスクリーンショット/直接検査はできなかったため、PDF本文の表示と印刷機での紙面向きは未確認です。PDF bytesのページ数・A4幅・解答ページ回転は`pdf-lib`テストで確認しています。q1→q3 popupも自動テストの範囲外です。
 - q2は共有モデルに基づく百分率配置を使うため、実ブラウザの異なるフォントや印刷CSSでの最終的な見た目は未確認です。座標モデルと入力直列化はDOMテストで検証しています。
 - 仕様どおりのSeed alphabetはASCIIかつ短いためPDFフッターは標準Helveticaで描画できます。許可外文字や17文字以上のSeedを入力した場合は、入力拒否・sanitize・エラー・ボタン無効化をまだ定めておらず、非WinAnsi文字ではPDF生成が失敗し得て、長Seedでは右下からoverflowし得ます。文字種/長さのUI挙動はUser確認待ちです。
-- alpha 1.0では難易度・学年・分野selectは将来拡張用placeholderで、実装上は固定の一桁足し算設定を使います。負数・分数・複数演算のASTは未対応です。
+- alpha 1.0では学年・領域・単元selectの木構造と初期値を実装済みですが、選べる枝は`小学1年生 → 数と計算 → 1けたのたしざん(1)`だけです。難易度selectも将来拡張用placeholderで、実装上は固定の一桁足し算設定を使います。負数・分数・複数演算のASTは未対応です。
 - 依存crateの全transitive license監査、実ブラウザでのWASM性能の広範な実機測定（生成成功とclock panic回避は確認済み）、配布用CSP/HTTP headerは未実施です。
 
 ## 9. 次の作業候補
 
-1. 生成済みpackageをpublic配下でNext.js dev/buildに読み込ませ、q2編集・Enter、採点、q1/q2印刷を実ブラウザで追加確認する。
-2. Rust出力JSONをfixtureではなく生成package経由でadapterへ渡す契約テストを追加し、Problem/Worksheet/Editor/Gradeの全フィールドを検査する。
-3. A4紙面の実ブラウザ印刷プレビューと180度解答ページの読み合わせを行い、必要なら共有layoutの寸法だけを修正する。
-4. 将来カリキュラム木を拡張するときは`skill_id`・`curriculum_path`・分野別layoutの公開契約を先に更新し、TypeScriptへ数学規則を複製しない。
+1. Rust出力JSONをfixtureではなく生成package経由でadapterへ渡す契約テストを追加し、Problem/Worksheet/Editor/Gradeの全フィールドを検査する。
+2. A4紙面の実ブラウザ印刷プレビューと180度解答ページの読み合わせを行い、必要なら共有layoutの寸法だけを修正する。
+3. 将来カリキュラム木を拡張するときは`skill_id`・`curriculum_path`・分野別layoutの公開契約を先に更新し、TypeScriptへ数学規則を複製しない。

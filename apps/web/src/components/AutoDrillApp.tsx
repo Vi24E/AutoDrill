@@ -1,14 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import {
-  ADDITION_CURRICULUM_PATH,
   ADDITION_LAYOUT,
   DEFAULT_ADDITION_SETTINGS,
   DrillEngineError,
   emptyEditorState,
-  formatCurriculumPath,
   editorValue,
   type DrillEngine,
   type DrillSettings,
@@ -17,6 +15,7 @@ import {
   type GradeResult,
   type WorksheetDto,
 } from '@/domain/drill-engine';
+import { CURRICULUM_TREE, findCurriculumSelection, type CurriculumUnit } from '@/domain/curriculum';
 import { problemExpression, openWorksheetPdf } from '@/pdf/worksheet-pdf';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
@@ -30,6 +29,7 @@ import {
 } from '@/domain/worksheet-metadata';
 
 type Screen = 'settings' | 'worksheet';
+type SettingsBusyAction = 'generate' | 'print' | null;
 
 export type AutoDrillAppProps = {
   engine?: DrillEngine;
@@ -62,6 +62,7 @@ export function AutoDrillApp({
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settingsBusyAction, setSettingsBusyAction] = useState<SettingsBusyAction>(null);
   const answersRef = useRef<Record<string, EditorState>>({});
   const actionQueueRef = useRef(Promise.resolve());
 
@@ -90,8 +91,6 @@ export function AutoDrillApp({
     return () => window.clearInterval(timer);
   }, [startedAt]);
 
-  const curriculumLabel = useMemo(() => formatCurriculumPath(settings.curriculum_path), [settings.curriculum_path]);
-
   const showEngineError = useCallback((value: unknown) => {
     if (value instanceof DrillEngineError) {
       setError(
@@ -112,6 +111,7 @@ export function AutoDrillApp({
     setError(null);
     setGradeResult(null);
     setBusy(true);
+    setSettingsBusyAction(printAfterGeneration ? 'print' : 'generate');
     const pdfTarget = printAfterGeneration && typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
     try {
       const seed = settings.seed === '' ? seedGenerator() : settings.seed;
@@ -139,6 +139,7 @@ export function AutoDrillApp({
       showEngineError(value);
     } finally {
       setBusy(false);
+      setSettingsBusyAction(null);
     }
   }, [dateGenerator, engine, seedGenerator, settings, showEngineError]);
 
@@ -251,8 +252,8 @@ export function AutoDrillApp({
       {screen === 'settings' ? (
         <SettingsScreen
           settings={settings}
-          curriculumLabel={curriculumLabel}
           busy={busy}
+          busyAction={settingsBusyAction}
           error={error}
           hasWorksheet={Boolean(worksheet)}
           worksheetMetadata={worksheetMetadata}
@@ -285,8 +286,8 @@ export function AutoDrillApp({
 
 type SettingsScreenProps = {
   settings: DrillSettings;
-  curriculumLabel: string;
   busy: boolean;
+  busyAction: SettingsBusyAction;
   error: string | null;
   hasWorksheet: boolean;
   worksheetMetadata: WorksheetMetadata | null;
@@ -295,61 +296,125 @@ type SettingsScreenProps = {
   onPrint: () => void;
 };
 
-function SettingsScreen({ settings, curriculumLabel, busy, error, hasWorksheet, worksheetMetadata, onSettingsChange, onGenerate, onPrint }: SettingsScreenProps) {
+function SettingsScreen({ settings, busy, busyAction, error, hasWorksheet, worksheetMetadata, onSettingsChange, onGenerate, onPrint }: SettingsScreenProps) {
+  const selection = findCurriculumSelection(settings.skill_id);
+  const selectUnit = (unit: CurriculumUnit) => {
+    onSettingsChange({
+      ...settings,
+      skill_id: unit.skillId,
+      curriculum_path: unit.curriculumPath,
+    });
+  };
+
+  const selectGrade = (gradeId: string) => {
+    const grade = CURRICULUM_TREE.find((candidate) => candidate.id === gradeId) ?? CURRICULUM_TREE[0];
+    selectUnit(grade.areas[0].units[0]);
+  };
+
+  const selectArea = (areaId: string) => {
+    const area = selection.grade.areas.find((candidate) => candidate.id === areaId) ?? selection.grade.areas[0];
+    selectUnit(area.units[0]);
+  };
+
+  const selectCurriculumUnit = (unitId: string) => {
+    const unit = selection.area.units.find((candidate) => candidate.id === unitId) ?? selection.area.units[0];
+    selectUnit(unit);
+  };
+
   return (
     <section className="settings-screen" aria-labelledby="settings-title">
-      <header className="page-heading">
-        <p className="eyebrow">AutoDrill alpha 1.0</p>
-        <h1 id="settings-title">計算ドリルをつくる</h1>
-        <p className="description">白黒のプリントで、今日の20問に取り組みます。</p>
-      </header>
+      <div className="lobby-decoration" aria-hidden="true">
+        <span className="lobby-shape lobby-shape-square" />
+        <span className="lobby-shape lobby-shape-circle" />
+        <span className="lobby-shape lobby-shape-triangle" />
+      </div>
 
-      <div className="settings-card">
-        <label className="field-label" htmlFor="grade-select">学年</label>
-        <select id="grade-select" className="select-field" value="grade-1" onChange={() => undefined}>
-          <option value="grade-1">小学1年生</option>
-        </select>
+      <div className="lobby-panel" aria-busy={busy}>
+        <header className="page-heading">
+          <p className="eyebrow"><span aria-hidden="true" /> AutoDrill alpha 1.0</p>
+          <h1 id="settings-title">計算ドリルをつくる</h1>
+          <p className="description">今日のステージを選んで、20問のドリルを始めよう。</p>
+        </header>
 
-        <label className="field-label" htmlFor="curriculum-select">カリキュラム</label>
-        <select id="curriculum-select" className="select-field" value={settings.skill_id} onChange={() => undefined}>
-          <option value={settings.skill_id}>{curriculumLabel}</option>
-        </select>
-        <p className="field-note">階層: {ADDITION_CURRICULUM_PATH.map((segment) => segment.label).join(' › ')}</p>
+        <div className="settings-card">
+          <div className="curriculum-fields" aria-label="出題範囲">
+            <div className="field-group">
+              <label className="field-label" htmlFor="grade-select">学年</label>
+              <select id="grade-select" className="select-field" value={selection.grade.id} onChange={(event) => selectGrade(event.target.value)}>
+                {CURRICULUM_TREE.map((grade) => <option value={grade.id} key={grade.id}>{grade.label}</option>)}
+              </select>
+            </div>
 
-        <label className="field-label" htmlFor="difficulty-select">難易度</label>
-        <select id="difficulty-select" className="select-field" value="default" onChange={() => undefined}>
-          <option value="default">標準（準備中）</option>
-        </select>
+            <div className="field-group">
+              <label className="field-label" htmlFor="area-select">領域</label>
+              <select id="area-select" className="select-field" value={selection.area.id} onChange={(event) => selectArea(event.target.value)}>
+                {selection.grade.areas.map((area) => <option value={area.id} key={area.id}>{area.label}</option>)}
+              </select>
+            </div>
 
-        <div className="fixed-count" aria-label="問題数20問">
-          <span>問題数</span>
-          <strong>20問</strong>
+            <div className="field-group field-group-unit">
+              <label className="field-label" htmlFor="unit-select">単元</label>
+              <select id="unit-select" className="select-field" value={selection.unit.id} onChange={(event) => selectCurriculumUnit(event.target.value)}>
+                {selection.area.units.map((unit) => <option value={unit.id} key={unit.id}>{unit.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="settings-options">
+            <div className="field-group">
+              <label className="field-label" htmlFor="difficulty-select">難易度</label>
+              <select id="difficulty-select" className="select-field" value="default" onChange={() => undefined}>
+                <option value="default">標準（準備中）</option>
+              </select>
+            </div>
+
+            <div className="fixed-count" aria-label="問題数20問">
+              <span>問題数</span>
+              <strong>20<span>問</span></strong>
+            </div>
+          </div>
+
+          <div className="seed-field">
+            <label className="field-label" htmlFor="seed-input">Seed <span>任意</span></label>
+            <input
+              id="seed-input"
+              className="text-field"
+              aria-label="Seed"
+              value={settings.seed}
+              onChange={(event) => onSettingsChange({ ...settings, seed: event.target.value })}
+              placeholder="空欄なら毎回自動生成"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="field-note">同じSeedで同じ問題を再現できます。空欄なら毎回新しく生成します。</p>
+          </div>
         </div>
-        <label className="field-label" htmlFor="seed-input">Seed</label>
-        <input
-          id="seed-input"
-          className="text-field"
-          value={settings.seed}
-          onChange={(event) => onSettingsChange({ ...settings, seed: event.target.value })}
-          placeholder="空欄なら毎回自動生成"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <p className="field-note">空欄なら「問題生成」または「印刷」のたびに新しいSeedを使います。</p>
-      </div>
 
-      {error ? <p className="error-message" role="alert">{error}</p> : null}
-      {hasWorksheet && worksheetMetadata ? (
-        <p className="muted-message" data-testid="last-worksheet-metadata">
-          前回: {formatWorksheetFooter(worksheetMetadata)}
+        {error ? <p className="error-message" role="alert">{error}</p> : null}
+        {hasWorksheet && worksheetMetadata ? (
+          <p className="muted-message" data-testid="last-worksheet-metadata">
+            前回: {formatWorksheetFooter(worksheetMetadata)}
+          </p>
+        ) : null}
+
+        <div className="settings-actions">
+          <button type="button" className="primary-button" disabled={busy} onClick={onGenerate}>
+            <span className="button-icon" aria-hidden="true">▶</span>
+            {busyAction === 'generate' ? '問題を生成中…' : '問題生成'}
+          </button>
+          <button type="button" className="secondary-button" disabled={busy} onClick={onPrint}>
+            <span className="button-icon" aria-hidden="true">▣</span>
+            {busyAction === 'print' ? 'PDFを準備中…' : '印刷'}
+          </button>
+        </div>
+        <p className="wasm-note" aria-live="polite">
+          {busyAction === 'generate'
+            ? '問題を生成しています。しばらくお待ちください。'
+            : busyAction === 'print'
+              ? '印刷用PDFを準備しています。しばらくお待ちください。'
+              : '問題の生成・入力状態・採点は Rust/WASM が担当します。'}
         </p>
-      ) : null}
-
-      <div className="settings-actions">
-        <button type="button" className="primary-button" disabled={busy} onClick={onGenerate}>問題生成</button>
-        <button type="button" className="secondary-button" disabled={busy} onClick={onPrint}>印刷</button>
       </div>
-      <p className="wasm-note">問題の生成・入力状態・採点は Rust/WASM が担当します。</p>
     </section>
   );
 }

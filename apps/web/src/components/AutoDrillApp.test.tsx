@@ -5,7 +5,7 @@ import { AutoDrillApp } from '@/components/AutoDrillApp';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
 import { fixtureEngine, fixtureSettings, fixtureWorksheet } from '@/test/fixtures';
-import type { DrillEngine } from '@/domain/drill-engine';
+import type { DrillEngine, WorksheetDto } from '@/domain/drill-engine';
 
 vi.mock('@/pdf/worksheet-pdf', async () => {
   const actual = await vi.importActual<typeof import('@/pdf/worksheet-pdf')>('@/pdf/worksheet-pdf');
@@ -36,7 +36,63 @@ function seedRecordingEngine() {
   return { engine, seeds };
 }
 
+function deferredGenerationEngine() {
+  const base = fixtureEngine();
+  let resolveGeneration!: (worksheet: WorksheetDto) => void;
+  const pendingWorksheet = new Promise<WorksheetDto>((resolve) => {
+    resolveGeneration = resolve;
+  });
+  const engine: DrillEngine = {
+    ...base,
+    generateWorksheet: vi.fn(() => pendingWorksheet),
+  };
+  return { engine, resolveGeneration };
+}
+
 describe('AutoDrillApp', () => {
+  it('projects the curriculum hierarchy into three linked q1 selects only', async () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveValue('jp-grade-1');
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveDisplayValue('小学1年生');
+    expect(screen.getByRole('combobox', { name: '領域' })).toHaveDisplayValue('数と計算');
+    expect(screen.getByRole('combobox', { name: '単元' })).toHaveDisplayValue('1けたのたしざん(1)');
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('標準（準備中）');
+
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '領域' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '単元' })).not.toBeInTheDocument();
+  });
+
+  it('disables q1 actions and announces problem generation while it is pending', async () => {
+    const { engine, resolveGeneration } = deferredGenerationEngine();
+    render(<AutoDrillApp engine={engine} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    expect(screen.getByRole('button', { name: '問題を生成中…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '印刷' })).toBeDisabled();
+    expect(screen.getByText('問題を生成しています。しばらくお待ちください。')).toBeInTheDocument();
+
+    resolveGeneration(fixtureWorksheet());
+    expect(await screen.findByRole('heading', { name: '1けたのたしざん(1)' })).toBeInTheDocument();
+  });
+
+  it('disables q1 actions and announces PDF preparation while it is pending', async () => {
+    const { engine, resolveGeneration } = deferredGenerationEngine();
+    vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window);
+    render(<AutoDrillApp engine={engine} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '印刷' }));
+    expect(screen.getByRole('button', { name: 'PDFを準備中…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '問題生成' })).toBeDisabled();
+    expect(screen.getByText('印刷用PDFを準備しています。しばらくお待ちください。')).toBeInTheDocument();
+
+    resolveGeneration(fixtureWorksheet());
+    await waitFor(() => expect(screen.getByRole('button', { name: '印刷' })).toBeEnabled());
+  });
+
   it('transitions from q1 generation to the q2 worksheet', async () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
