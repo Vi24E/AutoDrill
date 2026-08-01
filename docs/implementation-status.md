@@ -1,206 +1,191 @@
-# AutoDrill alpha 1.0 実装状況
+# AutoDrill alpha 1.1 実装状況
 
-更新日: 2026-07-30
+更新日: 2026-08-02
 
-この文書は、現在の作業ツリーを後続の開発者が再現・再開するための実装記録です。
-製品の外部仕様はリポジトリ直下の [`goal.txt`](../goal.txt) を正典とし、Web/PDFの
-境界メモは [`web-pdf.md`](web-pdf.md) にまとめています。この文書は実装と検証の
-状態を記録するもので、未検証のWASMブラウザ動作を成功扱いにしません。
+この文書は、現在の作業ツリーを後続の開発者が再現・調査・拡張するための実装記録です。製品仕様の正典はリポジトリ直下の[`goal.txt`](../goal.txt)、学習内容とeffort定義は[`curriculum.md`](../curriculum.md)です。公開境界の詳細は[`problem-schema.md`](problem-schema.md)、[`answer-ast.md`](answer-ast.md)、[`effort-model.md`](effort-model.md)、Web/PDFの責務は[`web-pdf.md`](web-pdf.md)を参照してください。
 
 ## 1. 現在の到達点
 
-- q1（設定）・q2（回答）・q3（別タブのPDFビューアー）の画面遷移をNext.jsで実装済み。
-- q1はゲームロビーを着想源にした中央カード、控えめなグリッド・幾何学背景、押下感のある操作ボタンで構成する。説明サブタイトルは置かず、右上に既定ONの「ふりがな」チェックボックスを置く。カリキュラム選択は型付きの木データから`学年 → 領域 → 単元`の3連動selectへ投影し、q2の白紙調ワークシートには装飾を持ち込まない。
-- alpha 1.0の一桁足し算は、1〜9の順序付き組から重複なしで20問を決定的に生成する。
-- q1だけにSeed入力欄を置き、空欄は押下ごとにcrypto優先の4文字自動Seed、非空欄は入力文字列そのものを使う。正しい手入力は許可文字（`1-9`、`a-z`、`A-Z`から`I`/`l`/`O`を除外）の1〜16文字で、同じ指定Seedは同じ20問を再現する。
-- 実際に使ったSeedとローカル生成日（`YYYY-MM-DD`）は`WorksheetMetadata`としてUIとPDFへ引き継ぎ、q2とq3の各問題ページ右下へ小さく表示する。q2にはSeed入力欄を表示しない。
-- q2は`src/domain/layout.ts`の共有A4レイアウト（余白・上部/下部予約領域・2列×10行）をCSSの百分率座標へ変換し、左列を1〜10、右列を11〜20の縦順で表示する。上部リボンと、回答欄クリック後にだけ現れる通常10キー順の入力パネルをviewportへ固定する。Enter/確定後は同列で必ず1行分スクロールし、10→11では右列先頭を固定リボン直下へ戻す。
-- 数字キー、物理キーボードの数字、Backspace/Delete/左右矢印、Enter（確定して次問へ）を受け付ける。
-- WASMの非同期編集呼出しはFIFOキューと最新の回答refで直列化し、連続した数字入力とEnterの順序を保持する。
-- 採点開始時は表示時間を押下時刻で凍結し、同じFIFOキューを排出してから最新の回答refを読む。誤答・未回答は`#e01010`の太枠と正答を表示する。
-- 選択中の回答は`integer` ASTの桁配列と実カーソル位置を表示する。文字サイズ下限は11pxで、18桁まで回答枠を右へ広げる。採点は全20問をRust/WASMへ1問ずつ委譲する。
-- 採点後は、回答を保持してタイマーを再開する「問題に戻る」、同一問題・Seedで回答と時間を初期化する「もう一回問題を解く」、同一分野を新しい自動Seedで生成する「別の問題を解く」を表示する。
-- ふりがなON時はq1/q2の可視漢字をsemantic `ruby`/`rt`で表示し、OFF時は元の本文だけを表示する。設定は`autodrill:furigana-enabled`として`localStorage`へ保存し、q2・TOP往復と再読込後も保持する。保存領域が利用不能でも既定ONとメモリ内切替は機能する。
-- 回答ASTはRustの`AnswerNode::size()`を唯一の構造サイズ契約とし、整数は十進数字1文字をsize 1、空回答を0として数える。alpha 1.0の上限は18で、19桁目の入力は状態を変えず`answer_ast_size_limit`としてWebへ返す。
-- q1の「印刷」とq2の印刷アイコンは同じ`openWorksheetPdf`パイプラインを使う。q1では非同期処理前に空タブを開き、ポップアップ阻止を避ける。
-- PDFは問題ページと解答ページの2ページを生成し、解答ページを180度回転する。
-- Rust nativeテスト、Web lint/typecheck/test/buildは現行ソースで成功している。
-- Rust native crateに加え、`wasm32-unknown-unknown`向け生成とブラウザでの実WASMロードを検証済み。WASMの時計はwasm32では`performance.now()`由来の`BrowserClock`、nativeでは`SystemClock`を使い分ける。
+alpha 1.0のq1設定、q2回答・採点、q3別タブPDFを維持しながら、alpha 1.1のカリキュラム選択、難易度生成、共通問題形式、共通解答AST、努力量計算、単元URLを実装しました。
 
-## 2. 画面・状態と責務
+- q1上部に`おすすめ`（既定）と`学年から選ぶ`の切替を持つ。
+- `おすすめ`は`ジャンル → テーマ`の2段階、`学年から選ぶ`は`学年 → ジャンル → テーマ`の3段階select。
+- 学年は小学1年生から中学3年生までで、slugは`grade-1`から`grade-9`。中1・中2・中3は`grade-7`・`grade-8`・`grade-9`。
+- 実装済みテーマはnumeric theme ID 1の`一桁の足し算`。おすすめと学年選択は同じregistry object・generatorを参照する。
+- 各学年の未実装枝は`Dummy1`で表し、選択中は生成・印刷を無効化して`このテーマはまだ利用できません`と表示する。DummyはURL、metadata、sitemapへ出さない。
+- 難易度1〜5を実装し、既定3。UI、生成request、問題セットIDは同じ値を使う。
+- 一桁足し算は候補5n件、2n種類の多様性条件、effort order statistic、最終重複排除、決定的shuffleで固定20問を生成する。
+- 共通`AnswerNode`、標準解法`SolutionGraph`、固定27成分`OperationVector`、分離された重みlayerをRust coreに実装した。
+- 問題セットIDは`{schema_version}-{numeric_theme_id}-{generator_revision}-{seed}-{difficulty}`。例は`2-1-2-Ab3Z-3`。
+- 実装済み単元URLは`/drills/grade-1/one-digit-addition`。`/`はTOPのまま。
+- Rust/WASM境界はschema version 2。TypeScript側に数学規則のfallbackを置かない。
 
-| 状態 | 入口 | 主な表示・操作 | 次の状態 |
+## 2. 画面と遷移
+
+| 状態 | URL/入口 | 表示・操作 | 遷移 |
 |---|---|---|---|
-| q1 設定 | 初期表示、q2のTOPに戻る | ふりがなON/OFF、学年・領域・単元の3連動select、難易度placeholder、Seed入力、問題生成、印刷 | 問題生成→q2、印刷→q3 |
-| q2 回答 | q1の問題生成 | 左1〜10/右11〜20、固定リボン、回答時間、生成日/Seedフッター、初期は非表示の固定10キー（欄クリックで表示）、カーソル、採点、印刷、TOPに戻る | 採点後3操作、印刷→q3、TOPに戻る→q1 |
-| q3 PDF | q1またはq2の印刷 | ブラウザが表示する実PDF（問題ページ＋180度回転した解答ページ） | ブラウザのタブ操作に委ねる |
+| q1 設定 | `/`または実装済み単元URL | ふりがな、選択モード、カリキュラムselect、難易度、Seed、問題生成、印刷 | 生成→q2、印刷→q3 |
+| q2 回答 | q1で生成 | 2列×10行、固定リボン、固定10キー、物理キー、タイマー、採点、印刷 | 印刷→q3、TOP→q1 |
+| q2 採点後 | q2で採点 | 誤答赤枠、赤字正答、問題に戻る、同一問題再挑戦、別Seed生成 | 各操作に応じq2へ |
+| q3 印刷 | q1またはq2の印刷 | Blob URLの2ページPDF | ブラウザのタブ操作 |
 
-製品仕様上の「生成・編集・正規化・採点・努力量計算」はRustが所有します。React/TypeScriptは画面状態、入力イベントの順序付け、表示、PDF描画だけを担当し、正しさや生成規則を再実装しません。
+q2は共有A4 geometryを使い、左列を1〜10、右列を11〜20の縦順で表示します。回答欄選択時だけ画面下の10キーを表示し、リボンと10キーはviewport固定です。物理数字、Backspace、Delete、左右矢印、Enterを受け付け、Enterは確定して次問へ移動し、同列の1行分を自動スクロールします。
 
-## 3. ディレクトリとモジュール
+回答は18 AST-sizeまでです。選択中は実カーソルを表示し、11pxを下限に回答枠を右方向へ広げます。上限を超える入力は状態を変更せず、リボン付近へ`式が大きすぎます！`を表示します。
+
+採点ボタンは入力FIFOを排出してから最新回答を読み、タイマーを停止します。数学的に正解でも表記に冗長性がある場合は、正解扱いのまま問題横へ`約分`、`冗長なマイナス`、`余計な小数点`のwarningを複数表示できます。`問題に戻る`は回答を保持してタイマーを再開、`もう一回問題を解く`は同じ問題セットで回答と時間を初期化、`別の問題を解く`は同じテーマ・難易度の新しい自動Seedを生成します。
+
+## 3. カリキュラムregistry
+
+Webの正規registryは`apps/web/src/domain/curriculum.ts`です。
+
+- `CURRICULUM_TREE`: 9学年のcanonical tree。
+- `RECOMMENDED_GENRES`: canonical treeへの参照だけを持つ部分集合。
+- `IMPLEMENTED_THEMES`: metadata、static params、sitemapへ公開してよいテーマだけ。
+- `ONE_DIGIT_ADDITION_THEME`: theme ID 1、revision 2、20問、2列×10行、単元URLを所有。
+- Dummy theme: `implemented:false`、`route/search/layout/problemCount`は`null`。
+
+Rustの生成registryは`crates/drill-core/src/registry.rs`です。numeric theme IDとgenerator revisionから、skill ID、curriculum path、問題数、列・行、テーマ別重みoverrideを復元します。問題数はrequestや問題セットIDに重複保存しません。
+
+## 4. 問題生成と再現
+
+`crates/drill-core/src/generator.rs`の`ProblemGenerator`が共通interfaceです。現行registryには`OneDigitAdditionGenerator` revision 2だけがあります。
+
+一桁足し算の生成手順は次の通りです。
+
+1. n=20に対し、左右1〜9の順序付き組を重複ありで5n=100件生成する。
+2. 異なる式が2n=40種類未満ならpool全体を捨て、新しい100件を生成する。
+3. `effort → 順序付き式 → 生成ordinal`で決定的にsortする。
+4. k問目の残りpool `[1,5n-k+1]`から独立な一様乱数を5個生成する。
+5. 難易度iは5個のi番目に小さい値が指す候補を選ぶ。
+6. 最終採用済み式と重複した場合は、poolを変えず同じkで再抽選する。
+7. 採用時だけpoolから候補を除き、20問後に同じRNG streamでFisher-Yates shuffleする。
+
+既定deadlineは100ms、attempt上限は10,000です。候補生成、pool再生成、重複再抽選は同じbudgetを消費し、`generation_timeout`と`generation_attempt_limit`を別エラーで返します。
+
+Seedは1〜16文字で、`1-9`、`a-z`、`A-Z`から`I`、`l`、`O`を除いた集合です。q1空欄時だけWebが同じalphabetの4文字Seedを生成します。ID `2-1-2-Ab3Z-3`はschema 2、theme 1、revision 2、Seed `Ab3Z`、難易度3へ可逆decodeでき、保存済みrevisionから同じ20問を再生成できます。
+
+## 5. 共通問題・解答境界
+
+Worksheetは次を持ちます。
+
+- schema versionとproblem-set ID
+- decode済み`ProblemSetIdentity`
+- registry由来のskill ID、curriculum path、layout
+- 20個の`Problem`
+
+Problemはschema version、通し番号、numeric theme ID、typed prompt、answer schema、canonical AnswerNode、SolutionGraph、27成分OperationVector、解決済みeffortを持ちます。
+
+`AnswerNode`は次のvariantを定義済みです。
+
+- empty
+- integer
+- exact decimal（十進coefficientとscale）
+- fraction
+- mixed fraction
+- root
+- negative
+- plus-minus
+- tuple
+- variable
+
+数学値はbinary floating-pointへ変換しません。Rust内部のinteger/coefficient/answer-schema limitは`i64`、BigNum magnitudeは`u64`ですが、JSON/WASMではcanonical decimal stringとしてserializeします。例えば18桁`999999999999999999`は文字列のままWebへ渡り、JavaScript `number`を経由しません。Floatを許可するのは`log10`で得るoperation quantityと最終effortだけです。採点時は整数・有限小数・分数・帯分数・negativeを既約有理数へexact変換するため、`2/4 = 0.5 = 1/2`、`4.0 = 4`として比較します。
+
+`AnswerNode::size()`が全variant共通の構造サイズ契約です。integerは十進桁数、compositeは親1と全childの合計で、`frac(num(12),num(42))`は5です。入力/display treeと採点用normalized treeは`AnswerRepresentation`で分離できます。
+
+## 6. Effortモデル
+
+`crates/drill-core/src/effort.rs`は次を分離します。
+
+1. typed operationをnodeに持つ標準解法graph
+2. 未使用成分も0として保持する固定27成分operation vector
+3. base weight
+4. grade、theme、masteryの倍率layer
+
+解決値は`base × grade × theme × mastery`です。alpha 1.1の各layerは1.0ですが、theme registryのoverrideだけを変更して同じgraph/vectorを再評価できます。
+
+一桁足し算graphは`BigNum(left+right)`と`BasePlus`を持ち、和が10以上なら`Increment`と`OverheadCarryPlus`を別nodeで加えます。BigNumはoperandでなく正解ASTから導出します。分数41/57はBigNum(41)+BigNum(57)、小数0.57はBigNum(57)です。
+
+`OverheadNegative`は負数operandを含む演算ごとに1回です。唯一の一般例外は、正のa,bに対する`a + (-b)`で、aとbの大小関係を問わず0回です。operand順序は区別し、`(-b)+a`と`a-(-b)`には1回加えます。単独の負数literalは演算ではないため、`-0.57`はBigNum(57)だけです。
+
+全27成分と重みは[`effort-model.md`](effort-model.md)に固定しています。特にTransposition=2、Carry Plus/Minus/Mult=0.5です。
+
+## 7. Web/WASM/PDF境界
+
+`apps/web/src/domain/wasm-adapter.ts`が唯一の本番JSON境界です。schema、identityとIDの一致、theme/revision、20問layout、問題ID一意性、typed prompt/answer、27成分vector、exact decimal stringをfail-closedで検証します。
+
+公開WASM exportは次の7個です。
+
+| export | 役割 |
+|---|---|
+| `generate_problem` | registryから1問生成 |
+| `generate_worksheet` | 難易度付き20問生成 |
+| `regenerate_problem_set` | 可逆IDから再生成 |
+| `apply_editor_action` | AnswerNodeとcursorを編集 |
+| `normalize_answer` | canonical treeを返す |
+| `grade_answer` | typed AnswerNodeを採点 |
+| `calculate_effort` | graph/vector/重みからeffort算出 |
+
+Webは画面状態、入力FIFO、タイマー、表示、PDF描画だけを担当します。生成規則、正規化、採点、effort計算をTypeScriptへ複製しません。
+
+PDFは`apps/web/src/domain/layout.ts`のA4 geometryをq2と共有します。1ページ目は問題と空枠、2ページ目は解答で180度回転し、両ページ右下に小さく生成日とSeedを記録します。q1/q2は同じ`openWorksheetPdf`を使い、q1は非同期生成前に空タブを開いてpopup blockを避けます。
+
+## 8. 主なファイル
 
 ```text
-AutoDrill/
-├── apps/web/
-│   ├── src/app/                 # Next.jsのページ、global CSS
-│   ├── src/components/          # q1/q2、RubyText、タイマー・入力イベント
-│   ├── src/domain/drill-engine.ts# TS側のversioned DTOとengine interface
-│   ├── src/domain/curriculum.ts  # 学年・領域・単元の型付きカリキュラム木
-│   ├── src/domain/wasm-adapter.ts# JSON envelopeの唯一の本番境界
-│   ├── src/domain/layout.ts      # A4の余白・上部予約領域と2×10の共有レイアウト（Web/PDF共用）
-│   ├── src/domain/seed.ts        # 許可alphabetの4文字自動Seedと注入可能なfallback
-│   ├── src/domain/worksheet-metadata.ts # 生成日/実SeedのUI・PDFメタデータ
-│   ├── src/pdf/worksheet-pdf.ts  # pdf-libによる2ページ生成・Blob遷移
-│   ├── src/wasm/load-generated.ts # 生成済みwasm-pack web packageの動的import seam
-│   └── public/wasm/pkg/          # build時だけ生成するGit管理外のWASM成果物
-├── crates/drill-core/src/
-│   ├── generator.rs              # seed、重複、100ms、試行上限、Worksheet
-│   ├── model.rs                  # AnswerNode、Problem、Worksheet、DTO向け型
-│   ├── editor.rs                 # editor actionとInteger ASTの更新
-│   ├── normalize.rs              # canonical answer拡張点
-│   ├── grade.rs                  # correct/incorrect/unanswered
-│   ├── effort.rs                 # operation_countsとeffort
-│   ├── error.rs                  # typed generation/editor errors
-│   └── rng.rs                    # seedからの再現可能SplitMix64
-├── crates/drill-wasm/src/lib.rs  # wasm-bindgen関数、JSON DTO、envelope変換
-├── scripts/build-wasm.sh         # target/toolingを自動変更しないWASM生成script
-├── docs/web-pdf.md               # Web/PDF境界、依存、ライセンス
-├── goal.txt                      # 製品仕様の正典
-└── AGENTS.md / README.md         # 開発・検証コマンドと運用注意
+apps/web/src/domain/curriculum.ts       # 9学年、recommended subset、Dummy、route metadata
+apps/web/src/domain/drill-engine.ts     # schema-v2 TypeScript DTO/interface
+apps/web/src/domain/wasm-adapter.ts     # strict JSON/WASM adapter
+apps/web/src/components/AutoDrillApp.tsx# q1/q2 UIと状態遷移
+apps/web/src/pdf/worksheet-pdf.ts       # 共有layoutから2ページPDF
+crates/drill-core/src/answer.rs         # typed exact AnswerNodeとsize
+crates/drill-core/src/exact.rs          # i64/u64 canonical decimal JSON serde
+crates/drill-core/src/generator.rs      # registry generatorと5n difficulty sampling
+crates/drill-core/src/identity.rs       # Seed、difficulty、可逆problem-set ID
+crates/drill-core/src/registry.rs       # revision付きtheme/generator登録
+crates/drill-core/src/effort.rs         # graph、27-vector、weights、negative/carry semantics
+crates/drill-wasm/src/lib.rs            # 薄いwasm-bindgen JSON envelope
 ```
 
-## 4. Rust/WASM APIとDTO
+## 9. 検証証拠（2026-08-02）
 
-### 共通 envelope
+- repository bridge: healthy。
+- Rust: `cargo fmt --all -- --check`、`cargo check --workspace --all-targets`、Clippy warning-as-error、`cargo test --workspace --all-targets`成功。core 20件、WASM 5件。
+- Web: lint、typecheck、62 tests、production build成功。
+- Next output分離: clean状態からdev serverを起動し、production build中に44回assetを継続取得し、build後のproduction server配信まで成功。
+- static build: `/`、`/drills/grade-1/one-digit-addition`、`/sitemap.xml`を生成。Dummy routeは生成しない。
+- actual wasm-bindgen/Node: `2-1-2-Ab3Z-3`、20式一意、canonical answer/answer schema/BigNumのdecimal string、18桁`999999999999999999`の完全往復を確認。約分・通常/分数内の冗長なマイナス・余計な小数点warningも生成済みWASM実体で確認。
+- 実ブラウザ/q1: おすすめ2段select、学年3段select、grade-1〜9、中1=`grade-7`、Dummy選択時の警告と生成・印刷無効、難易度1〜5・既定3を確認。
+- 実ブラウザ/q2: 左1〜10・右11〜20、初期10キー非表示、選択後の固定10キー、物理数字入力、Enterで次問と83pxスクロール、固定リボンを確認。
+- 実ブラウザ/採点: 20誤答枠、20正答表示、3つの採点後操作、タイマー停止を確認。
+- 実ブラウザ/q3: q2印刷が別Blob PDFタブを開くことを確認。ブラウザ安全制限によりBlob内容の取得・撮影は拒否されたため、今回の最新差分ではPDF bytes/geometryの自動テスト4件を受入証拠とした。alpha 1.0時点では同一layoutの2ページをPoppler描画し目視確認済み。
 
-すべての公開関数は、JSON文字列を受け取り、次の形のJSON文字列を返します。
+## 10. 既知の制約と次の拡張点
 
-```json
-{
-  "schema_version": 1,
-  "ok": true,
-  "data": {},
-  "error": null
-}
-```
+- 実装済みgeneratorは一桁足し算だけ。ほかの学年・テーマは意図的にDummy。
+- `IMPLEMENTED_THEMES`追加時は、Web registry、Rust revision registry、URL metadata/sitemap、property testを同時に更新する。
+- 旧generator revisionを永続的に再現するには、revision実装を削除せずregistryへ残す。
+- `NEXT_PUBLIC_SITE_URL`未指定時、sitemap originは開発用`http://localhost:3000`。配布時は正規URLを指定する。
+- PDFは標準Helveticaで数字・ASCII footerだけを描画する。日本語タイトルはWebリボンに留める。
+- 実プリンター固有の余白、両面印刷向き、別ブラウザ・別OSフォントは未検証。
+- 配布用CSP/HTTP headerとtransitive依存licenseの全監査は未実施。
 
-失敗時は`ok:false`、`data:null`、`error:{code,message,details?}`です。schema versionが異なる、JSONが壊れている、DTOの型が合わない場合は`invalid_request`または`unsupported_schema_version`になります。
-
-### 必須export
-
-`crates/drill-wasm`のwasm-bindgen exportは次の6個です。
-
-| export | 入力の要点 | 成功データ |
-|---|---|---|
-| `generate_problem` | `{schema_version,seed}` | 一つのProblem DTO |
-| `generate_worksheet` | `{schema_version,seed,problem_count?,timeout_ms?,max_attempts?}` | 固定メタデータを含むWorksheet DTO |
-| `apply_editor_action` | `{schema_version,state,action}` | `EditorState` |
-| `normalize_answer` | `{schema_version,answer}`（raw answerの互換入力も受付） | canonical answer |
-| `grade_answer` | `{schema_version,expected,actual}` | `{schema_version,status,is_correct,expected,actual}` |
-| `calculate_effort` | `{schema_version,problem,weights?}` | `{value,operation_counts}` |
-
-Problem DTOの意味上のフィールドは`problem_id`、`prompt:{kind,left,right}`、`answer_schema`、`canonical_answer`、`operation_counts`です。alpha 1.0では`prompt.kind`と`answer_schema.kind`は`addition`/`integer`、答えの範囲は1〜18です。Worksheet DTOは`skill_id`、`curriculum_path`、`generator_version`、文字列seed、`layout:{problem_count:20,columns:2,rows:10}`、20個のProblem DTOを持ちます。
-
-Rust Worksheet DTOの`seed`は生成器へ渡した文字列を保持します。Web側はこれに加えて`WorksheetMetadata`（`generated_date`と同じ実Seed）を生成時に作り、DTOを変更せずq2表示とq1/q2共通のPDF呼出しへ渡します。q1のSeed入力が空なら許可alphabetから4文字自動Seedを解決してからRustへ渡すため、fixture/runtimeが返すseedが異なってもUIとフッターは実際の使用値を示します。正しい手入力の1〜16文字はそのまま渡します。17文字以上・許可外文字の入力拒否、sanitize、エラー表示、ボタン無効化は仕様未決定のため未実装です。
-
-EditorStateのWeb境界表現は次の通りです。
-
-```json
-{
-  "schema_version": 1,
-  "node": {"kind": "integer", "digits": [1, 2]},
-  "cursor": 2,
-  "committed": false
-}
-```
-
-`grade_answer`には期待値として`problem.canonical_answer`、実値として`editorState.node`だけを渡します。Web adapterは20問分の呼出順序と集計だけを担当します。
-
-### 生成エラー
-
-生成開始から既定100msを超えた場合と、既定最大10,000回の試行を使い切った場合を別形式で返します。
-
-| 状況 | `error.code` | `details` |
-|---|---|---|
-| タイムアウト | `generation_timeout` | `{timeout_ms}` |
-| 試行上限 | `generation_attempt_limit` | `{attempts,max_attempts}` |
-| 81問を超える要求 | `invalid_problem_count` | `{requested}` |
-
-TypeScriptの`DrillEngineError.kind`も`generation_timeout`と`generation_attempt_limit`を区別し、画面文言を分けています。
-
-### 回答AST sizeと編集エラー
-
-`MAX_ANSWER_AST_SIZE`は18です。現在の整数ASTでは十進桁数がそのままsizeになり、将来の複合ノードは親ノード1と子ノードのsizeを合算します。したがって将来の`frac(num(12), num(42))`は5として扱う契約です。18桁の整数へさらに数字を挿入すると、Rust editorは入力前のimmutable stateを変更せず、WASM envelopeで`answer_ast_size_limit`と`details:{max_size:18}`を返します。外部から直接渡されたsize超過stateは通常の編集操作ではないため`invalid_request`です。
-
-## 5. PDF戦略と依存・ライセンス
-
-`src/domain/layout.ts`がA4（595.28×841.89pt）の余白・上部予約領域と2列×10行のセル座標を列優先（左列の全行、右列の全行）で計算し、Web表示はそのtop-origin座標をページ比率へ変換、PDFは同じセルをbottom-originへ変換して描画します。したがってq2の順序・行位置・中央区切り・紙面寸法に独立したCSS grid定義はありません。狭いviewportでは720pxの紙面を横スクロールさせ、18桁・11px下限と式の寸法を壊さないようにします。入力イベントは`AutoDrillApp`内のFIFO action queueで直列化し、遅延するWASMでも回答桁と確定の順序を維持します。採点もqueueのtailをawaitしてから`answersRef.current`をスナップショットするため、入力直後の採点がReactの古いstateを参照しません。`seed.ts`はWeb Crypto `getRandomValues`を優先し、58文字alphabetのrejection samplingで4文字を作り、テスト注入可能なdistinct fallbackも同じalphabet/長さを守ります。`WorksheetMetadata`はRust DTOを変更せず、q1で解決した実Seedとローカル生成日をq2表示・q1再訪時の前回表示・PDFへ渡します。紙面には中央の縦区切りだけを描き、問題ページの右下へフッターを描きます。解答ページは180度回転後も物理右下かつ正立で読めるよう、回転ページでは上端の未回転座標へフッターを置き、文字自体を180度逆回転してから描きます。`pdf-lib`でクライアント内にPDF bytesを生成し、Blob URLをq3タブへ設定します。問題ページには問題番号と空の回答枠、解答ページには問題番号と答えを描き、後者を`180°`回転します。PDFは標準Helveticaだけを使うため、実行時のフォント取得やネットワークサービスはありません。
-
-主要依存は次のライセンスです（正確な推移依存一覧はpnpm lockfileと各パッケージのlicense metadataを参照）。
-
-- Next.js、React、Vitest、Testing Library: MIT
-- TypeScript: Apache-2.0
-- `pdf-lib`: MIT
-- `@fontsource/noto-sans-jp`: SIL Open Font License 1.1
-- Rust cratesのworkspace license宣言: MIT（`Cargo.toml`）。依存crateの個別条件はCargo metadataで確認する。
-
-## 6. 再現コマンド
+## 11. 再現コマンド
 
 ```bash
 ../../scripts/init-project.sh --check AutoDrill
 pnpm install --frozen-lockfile
-pnpm dev
+./scripts/build-wasm.sh
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm verify:next-output
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-targets
 pre-commit run --all-files
+pnpm dev
 ```
 
-`next dev`は`.next-dev`、`pnpm build`と`next start`は`.next`を出力先に使います。開発サーバーを起動したまま本番buildを実行しても、開発中タブが参照するchunkを上書きしません。
-`pnpm verify:next-output`は生成済みNext出力を一時退避したclean状態から、dev配信、build中のasset継続監視、build後の未訪問route（HTTP 404を含む）、`next start`のproduction配信までを一括検証し、終了時に元の出力を復元します。実行中の本プロジェクトのNext.jsサーバーや使用中の出力を検出した場合は、退避前に安全に失敗します。既存のNext開発サーバーを停止してから実行してください。検証portは既定3100/3101で、必要なら`AUTODRILL_VERIFY_DEV_PORT`と`AUTODRILL_VERIFY_PROD_PORT`で変更できます。
-
-WASMパッケージを生成する場合は、targetとmatching CLIが既に存在する環境で次を実行します。
-
-```bash
-./scripts/build-wasm.sh
-```
-
-このscriptは`rustup target add`、`cargo install`、`wasm-pack`の自動installを行いません。生成物は`apps/web/public/wasm/pkg/`へ置かれ、クライアント側で`load-generated.ts`を通じて自動ロードされます。生成物が無い場合は、q1のエラー欄にWASMパッケージ生成を促す日本語メッセージを表示します。
-
-## 7. 検証証拠（2026-07-30）
-
-この統合作業で確認できた結果は次の通りです。
-
-- `../../scripts/init-project.sh --check AutoDrill`: `managed project: healthy`。
-- 共通role/runtime検証: `verify_roles.py`で189項目、Codex commander・`gpt-5.6-luna`・effort `max`・実効permission `disabled`を検証。adapterのworkspace-write意図との差は警告として出るが、より制限の強い実効経路を採用。
-- `cargo test --workspace --all-targets`: drill-core 9 tests、drill-wasm 5 tests、計14 tests passed。AST size 0/1/18、19桁目の型付き拒否、削除後の再入力、WASM error code/detailsを含む。`cargo fmt --all --check`と全targetのClippy（warningをerror扱い）もpassed。
-- 実WASM時計修正: Rust/Cargo 1.97.1、`wasm32-unknown-unknown` target、`wasm-pack 0.13.1`、`wasm-bindgen 0.2.126`で`./scripts/build-wasm.sh`を実行して`apps/web/public/wasm/pkg/`を生成した。wasm32経路は`performance.now()`を使う`BrowserClock`へ切り替え、throw・non-finite値・時間の逆行・初回読み取り失敗をfailed latchし、いずれも生成側で`generation_timeout` envelopeへ変換する（Reviewer re-review accepted）。生成runtimeのブラウザロードとq1→q2生成成功を確認し、`std::time::Instant`由来の時計panicを再現しないことを確認した。生成物はGit管理外。
-- 手動実ブラウザ確認（localhost dev、生成WASM）: q1→q2生成、回答欄クリック後の固定10キー、物理数字キー入力とEnterでの次問移動を確認した。18桁入力は式へ侵入せず右へ伸び、19桁目は状態を変えずリボン付近に`式が大きすぎます！`を表示した。最終20問目へスクロールしても上下の固定UIを操作できた。採点押下後に`00:27`が1秒以上変化しないこと、誤答・未回答枠が赤い太枠になり右隣へ赤い正答を表示することを確認した。q1/q2印刷は同じBlob PDF処理を使用する。
-- `pnpm lint`: ESLint passed（warning/errorなし）。
-- `pnpm typecheck`: TypeScript passed。
-- `pnpm test`: 5 test files、42 tests passed（3連動select、ふりがな既定ON/OFF・q2/TOP・再読込保持、縦順配置、固定10キー表示条件と画面Del不在、物理編集キー、実カーソル、1行スクロールと10→11、遅延engineのEnter直後入力先、18桁11px表示/19桁目通知、採点時刻凍結、採点後3操作、誤答枠/正答、PDF回答枠位置、Seed、共有A4レイアウト、PDF回転・フッター、Next phase別出力を含む）。
-- `pnpm build`: Next.js static production build passed。
-- phase-safe出力分離: fresh `next dev`でHTML参照assetを確認し、production build前後とも`layout.css`、`webpack.js`、`main-app.js`、`app-pages-internals.js`、`app/page.js`がHTTP 200だった。build後の再読込でもq1の問題生成がq2へ遷移した。
-- `pnpm verify:next-output`: clean出力からdevを起動し、production build実行中に既存dev assetを41回継続取得、build後の未訪問routeがHTTP 404であることとその参照asset、`next start`のproduction HTMLと全参照assetを確認した。事前に既存サーバーを検出して退避前に失敗すること、成功後に`.next`/`.next-dev`が同一inodeで復元されることも確認した。
-- 最新実ブラウザ受入（Chrome）: q1サブタイトル不在、右上ふりがな既定ON、OFF時`ruby` 0件と`localStorage=false`、再読込後OFF復元、q2で左1〜10/右11〜20、初期10キー非表示、回答欄クリック後表示、画面Del不在、物理`1`/`2`/左矢印のカーソル`1|2`、Enterで83px（実紙面1行）スクロールを確認した。採点後はタイマーが1秒以上不変、10キー非表示、20誤答枠/20正答と3操作を確認。「問題に戻る」は回答`12`を保持してタイマーを再開、「もう一回」は同一seedで回答/時間を初期化、「別の問題」はseedを`zGYB`から`jc1a`へ更新して初期化した。
-- PDF visual QA: 最新Blob bytesをA4・2ページとして`pdfinfo`で検査し、Popplerで両ページをPNG化した。問題ページは左1〜10/右11〜20、回答枠が等号の6pt後へ揃い、解答ページは180度回転、中央区切り・番号・フッターに欠けや重なりがないことを目視確認した。
-- `pre-commit run --all-files`: managed-project hookは対象ファイルなしでskip（失敗なし）。
-
-## 8. 未検証・既知の制約
-
-- q1ボタンが無反応に見えた事象は、`next dev`稼働中に`pnpm build`が共有`.next`を上書きし、既存タブのHTMLが参照する`/_next/static/css/app/layout.css`、`main-app.js`、`app-pages-internals.js`が404になってhydrationとWASMロードが失敗したことが原因だった。`apps/web/next.config.mjs`をphase引数を受けるNext config関数にし、公式の`PHASE_DEVELOPMENT_SERVER`と一致する場合だけ開発`.next-dev`、それ以外（production build/server）は`.next`へ分離した。`next build`/`next start`が開発成果物を触らないようにし、両方の出力先は`.gitignore`へ登録、phase定数の選択は決定的config testで固定している。
-- `load-generated.ts`は生成パッケージを動的にimportするseamです。生成物がない通常checkoutでは、q1にWASMパッケージ生成を促すエラーを表示します。現在の受入環境では生成済みruntimeのロードとq1→q2生成まで確認済みです。Web testsはfixture engineを明示注入して決定的UI回帰を検証し、製品のTypeScript fallbackで数学計算を行いません。
-- q1/q2からBlob PDFタブが作られること、最新PDF bytesのA4 2ページ・問題ページ・180度解答ページは確認済みです。実プリンター固有の余白補正と両面印刷時の用紙向きは未確認です。
-- q2は共有モデルに基づく百分率配置を使い、受入ブラウザでは固定UI・最終行・採点表示まで確認済みです。別ブラウザ・別OSフォントでの見た目は未確認です。
-- 仕様どおりのSeed alphabetはASCIIかつ短いためPDFフッターは標準Helveticaで描画できます。許可外文字や17文字以上のSeedを入力した場合は、入力拒否・sanitize・エラー・ボタン無効化をまだ定めておらず、非WinAnsi文字ではPDF生成が失敗し得て、長Seedでは右下からoverflowし得ます。文字種/長さのUI挙動はUser確認待ちです。
-- alpha 1.0では学年・領域・単元selectの木構造と初期値を実装済みですが、選べる枝は`小学1年生 → 数と計算 → 1けたのたしざん(1)`だけです。難易度selectも将来拡張用placeholderで、実装上は固定の一桁足し算設定を使います。負数・分数・複数演算のASTは未対応です。
-- 依存crateの全transitive license監査、実ブラウザでのWASM性能の広範な実機測定（生成成功とclock panic回避は確認済み）、配布用CSP/HTTP headerは未実施です。
-
-## 9. 次の作業候補
-
-1. Rust出力JSONをfixtureではなく生成package経由でadapterへ渡す契約テストを追加し、Problem/Worksheet/Editor/Gradeの全フィールドを検査する。
-2. 実プリンターまたはOS印刷ダイアログで両面印刷時の用紙向きを確認し、必要なら共有layoutの寸法だけを修正する。
-3. 将来カリキュラム木を拡張するときは`skill_id`・`curriculum_path`・分野別layoutの公開契約を先に更新し、TypeScriptへ数学規則を複製しない。
+`./scripts/build-wasm.sh`はRust targetやCLIを自動installしません。生成物はGit管理外の`apps/web/public/wasm/pkg/`へ置かれます。`next dev`は`.next-dev`、production build/startは`.next`を使い、同時実行でassetを上書きしません。

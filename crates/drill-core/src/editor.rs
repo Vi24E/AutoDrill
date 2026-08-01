@@ -1,5 +1,6 @@
+use crate::answer::AnswerNode;
 use crate::error::EditorError;
-use crate::model::{AnswerNode, EditorAction, EditorState, MAX_ANSWER_AST_SIZE};
+use crate::model::{EditorAction, EditorState, MAX_ANSWER_AST_SIZE};
 
 /// Apply one typed editor action to an immutable state snapshot.
 pub fn apply_editor_action(
@@ -74,6 +75,7 @@ fn digits_for(answer: &AnswerNode) -> Result<String, EditorError> {
         AnswerNode::Empty => Ok(String::new()),
         AnswerNode::Integer(value) if *value >= 0 => Ok(value.to_string()),
         AnswerNode::Integer(_) => Err(EditorError::NegativeDraft),
+        _ => Err(EditorError::UnsupportedDraftNode),
     }
 }
 

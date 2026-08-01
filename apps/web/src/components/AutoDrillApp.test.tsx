@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AutoDrillApp } from '@/components/AutoDrillApp';
+import { createWebDrillSettings, ONE_DIGIT_ADDITION_THEME } from '@/domain/curriculum';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
 import { fixtureEngine, fixtureSettings, fixtureWorksheet } from '@/test/fixtures';
@@ -34,6 +35,25 @@ function deferredGradingEngine() {
     gradeAnswer: vi.fn(() => pendingGrade),
   };
   return { engine, resolveGrade };
+}
+
+function warningFixtureEngine(): DrillEngine {
+  const base = fixtureEngine();
+  return {
+    ...base,
+    async gradeAnswer(request) {
+      const result = await base.gradeAnswer(request);
+      return {
+        ...result,
+        items: result.items.map((item, index) => index === 0 ? {
+          ...item,
+          correct: true,
+          warnings: ['fraction_not_reduced', 'redundant_negative', 'redundant_decimal'] as const,
+        } : item),
+        correct_count: result.correct_count + 1,
+      };
+    },
+  };
 }
 
 function seedRecordingEngine() {
@@ -120,20 +140,76 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('heading', { name: '計算ドリルをつくる' })).toHaveTextContent('計算ドリルをつくる');
   });
 
-  it('projects the curriculum hierarchy into three linked q1 selects only', async () => {
+  it('defaults to the recommended two-select mode and can open the three-select grade mode', async () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
 
-    expect(screen.getByRole('combobox', { name: '学年' })).toHaveValue('jp-grade-1');
+    expect(screen.getByRole('button', { name: 'おすすめ' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '学年から選ぶ' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('足し算と引き算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('3: ふつう');
+
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    expect(screen.getByRole('button', { name: '学年から選ぶ' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveValue('grade-1');
     expect(screen.getByRole('combobox', { name: '学年' })).toHaveDisplayValue('小学1年生');
-    expect(screen.getByRole('combobox', { name: '領域' })).toHaveDisplayValue('数と計算');
-    expect(screen.getByRole('combobox', { name: '単元' })).toHaveDisplayValue('1けたのたしざん(1)');
-    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('標準（準備中）');
+    expect(within(screen.getByRole('combobox', { name: '学年' })).getAllByRole('option')).toHaveLength(9);
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('足し算と引き算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
 
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
     expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: '領域' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: '単元' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'ジャンル' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'テーマ' })).not.toBeInTheDocument();
+  });
+
+  it('selects Dummy structure by grade and disables unavailable actions', () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    fireEvent.change(screen.getByRole('combobox', { name: '学年' }), { target: { value: 'grade-2' } });
+
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveDisplayValue('小学2年生');
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('Dummy1');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('Dummy1');
+    expect(screen.getByRole('button', { name: '問題生成' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '印刷' })).toBeDisabled();
+    expect(screen.getByLabelText('このテーマはまだ利用できません')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'おすすめ' }));
+    expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
+    expect(screen.getByRole('button', { name: '問題生成' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '印刷' })).toBeEnabled();
+  });
+
+  it('stores difficulty changes in the explicit Web settings seam', async () => {
+    const onWebSettingsChange = vi.fn();
+    render(<AutoDrillApp engine={fixtureEngine()} onWebSettingsChange={onWebSettingsChange} />);
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('3: ふつう');
+
+    fireEvent.change(screen.getByRole('combobox', { name: '難易度' }), { target: { value: '4' } });
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('4: むずかしい');
+    await waitFor(() => expect(onWebSettingsChange).toHaveBeenLastCalledWith({
+      schema_version: 2,
+      numeric_theme_id: 1,
+      themeKey: 'jp.grade1.addition.one_digit',
+      difficulty: 4,
+      seed: '',
+    }));
+  });
+
+  it('preselects the implemented unit from route-provided Web settings', () => {
+    render(
+      <AutoDrillApp
+        engine={fixtureEngine()}
+        initialWebSettings={createWebDrillSettings(ONE_DIGIT_ADDITION_THEME, 5)}
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('足し算と引き算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('5: とてもむずかしい');
   });
 
   it('disables q1 actions and announces problem generation while it is pending', async () => {
@@ -503,6 +579,18 @@ describe('AutoDrillApp', () => {
     });
   });
 
+  it('shows representation warnings on mathematically correct answers', async () => {
+    const { container } = render(<AutoDrillApp engine={warningFixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: '採点' }));
+
+    const warnings = await screen.findByLabelText('注意 約分、冗長なマイナス、余計な小数点');
+    expect(warnings).toBeInTheDocument();
+    expect(warnings.querySelectorAll('ruby')).toHaveLength(4);
+    expectVisibleKanjiToUseRuby(container);
+  });
+
   it('freezes elapsed time when grading starts, including while grading is pending', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
@@ -521,7 +609,7 @@ describe('AutoDrillApp', () => {
       act(() => vi.advanceTimersByTime(5_000));
       expect(screen.getByTestId('elapsed-time')).toHaveTextContent('00:03');
 
-      resolveGrade({ schema_version: 1, items: [], correct_count: 0, total_count: 20 });
+      resolveGrade({ schema_version: 2, items: [], correct_count: 0, total_count: 20 });
       await act(async () => {
         await Promise.resolve();
         await Promise.resolve();

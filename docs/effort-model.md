@@ -1,0 +1,47 @@
+# Effort model v2
+
+Effortは標準解法graph、denseなoperation vector、重みを分離する。同じgraph/vectorを保持したまま重みだけを差し替えて再評価できる。
+
+`SolutionGraph.steps`の各nodeはtyped `Operation`とdependency IDを持つ。Vector化ではgraph nodeを一度だけ数え、複数nodeから参照されるdependencyを再帰的に重複加算しない。一桁の足し算graphは答えの正確な`BigNum(left + right)`と`BasePlus`を持ち、繰り上がり時には`Increment`と`OverheadCarryPlus`を別nodeとして追加する。被演算子を個別のBigNumとして二重計上しない。
+
+## Dense vector order and base weights
+
+`OperationVector`と`OperationWeights`は次の固定27成分を同じ順で持つ。未使用成分も0として残る。
+
+| index | operation | base weight |
+|---:|---|---:|
+| 0 | Identity | 1 |
+| 1 | Count | 0.2 |
+| 2 | Increment | 1 |
+| 3 | Decrement | 1 |
+| 4 | BasePlus | 3 |
+| 5 | BaseMinus | 3.1 |
+| 6 | BaseTimes | 3.5 |
+| 7 | BaseDivide | 4 |
+| 8 | BigNum | 1 |
+| 9 | Round | 1 |
+| 10 | TimeTen | 0.2 |
+| 11 | OverheadPF | 2 |
+| 12 | OverheadGCD | 4 |
+| 13 | OverheadLCM | 4 |
+| 14 | OverheadNegative | 1.5 |
+| 15 | OverheadCarryPlus | 0.5 |
+| 16 | OverheadCarryMinus | 0.5 |
+| 17 | OverheadCarryMult | 0.5 |
+| 18 | Transposition | 2 |
+| 19 | OverheadLinear | 2 |
+| 20 | OverheadDistribution | 2 |
+| 21 | OverheadEqSystem | 4 |
+| 22 | OverheadFactorPerfectSquare | 3 |
+| 23 | OverheadFactorDifferenceOfSquares | 2 |
+| 24 | OverheadFactorGeneral | 5 |
+| 25 | OverheadQuadratic | 6 |
+| 26 | BaseRoot | 3 |
+
+Parameterized operationはvector側に重みが掛かるquantityを蓄積する。Count(n)はn、BigNum(n)は正確な整数magnitudeから計算した安全な`log10(n)`（n=0は0）、TimeTen(n)は`n+5`（`0.2(n+5)=1+0.2n`）、Distribution(n)はnである。数学値そのものは整数/ASTに残り、Floatは最終log10とscalar effortだけに使う。BigNum magnitudeはJSON/WASM境界ではcanonical unsigned decimal stringとして保持する。
+
+## Weight composition
+
+`WeightProfile`はgrade、theme、masteryの3つの倍率layerを持ち、`resolved = base × grade × theme × mastery`として成分ごとに合成する。Alpha 1.1は全layerをidentity 1.0とする。Registryの`operation_weight_overrides`はtheme layerだけを上書きするため、将来のテーマ調整でもgraphやvectorを複製しない。
+
+`OverheadNegative`は負号表示のcostではなく、負のoperandを含む演算ごとに1回加える。唯一の一般形の例外は、正の`a`、`b`に対する構造的な`a + (-b)`で、`a > b`、`a = b`、`a < b`のいずれでも`a - b`への読み替えとして0回とする。順序を区別するため`(-b) + a`は1回、`a - (-b)`も正の加算へ書き換えても1回、その他の負のoperandを含む演算も1回である。単独の`-0.57`は演算ではないため0で、BigNum(57)だけを数える。

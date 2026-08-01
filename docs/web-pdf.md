@@ -1,6 +1,12 @@
-# Web / PDF boundary (alpha 1.0)
+# Web / PDF boundary (alpha 1.1)
 
-The web app is a Next.js 14 client under `apps/web`. The interactive client has
+The web app is a Next.js 14 client under `apps/web`. q1 supports a default
+recommended `genre → theme` selection and a `grade → genre → theme` selection
+for grades 1 through 9. Recommended themes reference the canonical grade tree;
+unimplemented Dummy themes disable generation and printing and never receive a
+route or sitemap entry. Difficulty 1 through 5 is sent unchanged to Rust.
+
+The interactive client has
 three observable states: settings (q1), the answer worksheet (q2), and a
 separate browser PDF tab (q3). q1 generation enters q2; q1 print generates and
 opens q3; q2 print uses the same `openWorksheetPdf` pipeline; and TOPに戻る
@@ -16,9 +22,10 @@ non-empty value is one to sixteen characters from that alphabet and is passed
 unchanged. q1 generation and q1 print each resolve a new blank-field seed,
 while q2 print reuses the worksheet already in state. The exact resolved seed
 and the local `YYYY-MM-DD` generation date are held in `WorksheetMetadata`; q2
-has no seed input and displays this metadata in its paper footer. Behavior for
-invalid characters or 17+ characters is intentionally undecided: the UI does
-not currently reject, sanitize, error, or disable the buttons.
+has no seed input and displays this metadata in its paper footer. The Rust
+identity boundary rejects invalid characters and 17+ characters with a typed
+invalid request. Detailed q1 validation presentation remains a future UI
+refinement.
 
 ## WASM adapter
 
@@ -30,8 +37,14 @@ for direct callers; it is not substituted for worksheet generation. The adapter 
 `{schema_version, ok, data, error}` and
 maps `generation_timeout` and `generation_attempt_limit` to distinct errors.
 Worksheet grading is only sequencing: one `grade_answer` request per problem
-with `{expected: problem.canonical_answer, actual: editorState.node}`. It does
+with `{expected: problem.canonical_answer, actual: editorState.answer}`. It does
 not reimplement generation, normalization, effort, or correctness rules.
+
+All schema-v2 mathematical `i64`/`u64` payloads that may exceed JavaScript's
+safe integer range cross JSON as canonical decimal strings. This includes
+AnswerNode integer/coefficient values, integer answer-schema bounds, and
+BigNum magnitudes. The adapter validates format and range without converting
+them to JavaScript `number`; only scalar effort/vector quantities use numbers.
 
 The runtime is intentionally injected as `window.__AUTODRILL_WASM__`. The
 `src/wasm/load-generated.ts` seam loads the ignored package emitted under

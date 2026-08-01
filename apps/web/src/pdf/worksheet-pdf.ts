@@ -1,7 +1,7 @@
 import { degrees, PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 import { A4_PAGE, buildSharedWorksheetLayout, getCellPosition } from '@/domain/layout';
-import type { ProblemDto, WorksheetDto } from '@/domain/drill-engine';
+import { integerAnswerValue, type ProblemDto, type WorksheetDto } from '@/domain/drill-engine';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
 
 export type PdfPageModel = {
@@ -15,7 +15,7 @@ export type PdfPageModel = {
     number: string;
     problem_id: string;
     expression: string;
-    answer?: number;
+    answer?: string;
   }[];
 };
 
@@ -119,7 +119,7 @@ export function buildPdfPageModel(worksheet: WorksheetDto, metadata?: WorksheetM
     number: `${index + 1}.`,
     problem_id: problem.problem_id,
     expression: `${problem.prompt.left} + ${problem.prompt.right} =`,
-    answer: problem.canonical_answer.value,
+    answer: integerAnswerValue(problem.canonical_answer) ?? undefined,
   }));
   return [
     {
@@ -228,7 +228,7 @@ function drawAnswerPage(
       font,
       color: rgb(0.25, 0.25, 0.25),
     });
-    page.drawText(`${cell.problem.prompt.left} + ${cell.problem.prompt.right} = ${cell.problem.canonical_answer.value}`, {
+    page.drawText(`${cell.problem.prompt.left} + ${cell.problem.prompt.right} = ${integerAnswerValue(cell.problem.canonical_answer) ?? ''}`, {
       x: position.x + 24,
       y: baseline,
       size: 17,

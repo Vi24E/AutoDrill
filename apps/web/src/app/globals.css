@@ -81,7 +81,19 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .settings-screen h1 { color: #20343b; font-size: clamp(29px, 5vw, 40px); font-weight: 800; letter-spacing: .025em; }
 .description { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
 .settings-card { display: grid; gap: 24px; padding: 28px 38px 24px; }
-.curriculum-fields { display: grid; grid-template-columns: .85fr .9fr 1.35fr; gap: 14px; }
+.selection-mode-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.selection-mode-tabs button {
+  min-height: 50px;
+  border: 1px solid #9aabb0;
+  border-radius: 7px;
+  color: #40565e;
+  background: #f4f7f8;
+  cursor: pointer;
+  font-weight: 750;
+}
+.selection-mode-tabs button[aria-pressed='true'] { border-color: var(--lobby-cyan-dark); color: #fff; background: var(--lobby-cyan-dark); }
+.curriculum-fields { display: grid; grid-template-columns: .85fr 1fr 1.3fr; gap: 14px; }
+.curriculum-fields-recommended { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .settings-options { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; }
 .field-group { display: grid; align-content: start; gap: 7px; min-width: 0; }
 .field-label { color: #40565e; font-size: 12px; font-weight: 750; letter-spacing: .045em; }
@@ -156,6 +168,7 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 button:disabled { cursor: wait; opacity: .5; }
 .wasm-note { min-height: 42px; padding: 15px 38px 18px; text-align: center; }
 .settings-screen .muted-message { margin: 0 38px 15px; padding: 10px 12px; border-radius: 6px; background: #f0f4f5; text-align: center; }
+.unavailable-message { margin: 0 38px 15px; padding: 10px 12px; border-radius: 6px; color: #674f10; background: #fff8db; font-size: 13px; text-align: center; }
 .error-message { margin: 14px 0; padding: 11px 12px; border: 1px solid #7a2020; color: #7a2020; background: #fffafa; font-size: 13px; }
 .settings-screen .error-message { margin: 0 38px 15px; border-radius: 6px; }
 
@@ -234,6 +247,8 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-cell-graded .answer-box { min-width: 25px; }
 .result-mark { flex: 0 0 18px; margin-left: 5px; font-size: 17px; }
 .correct-answer { flex: 0 0 auto; margin-left: 5px; color: #e01010; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.grade-warnings { position: absolute; bottom: 2px; left: 17%; display: flex; gap: 5px; color: #8a5a00; font-size: 9px; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.grade-warnings > span + span::before { content: "・"; margin-right: 5px; }
 .grade-result-panel { display: grid; gap: 10px; justify-items: center; margin: 0 auto 14px; }
 .grade-summary { display: flex; gap: 8px; align-items: baseline; width: fit-content; margin: 0; padding: 7px 14px; border: 1px solid var(--ink); background: var(--paper); }
 .grade-summary strong { font-size: 18px; }
@@ -267,11 +282,12 @@ button:disabled { cursor: wait; opacity: .5; }
   .settings-screen .page-heading { padding: 28px 20px 21px; }
   .settings-card { gap: 20px; padding: 22px 20px; }
   .curriculum-fields { grid-template-columns: 1fr 1fr; }
-  .field-group-unit { grid-column: 1 / -1; }
+  .field-group-theme { grid-column: 1 / -1; }
+  .curriculum-fields-recommended .field-group-theme { grid-column: auto; }
   .settings-options { grid-template-columns: minmax(0, 1fr) 120px; }
   .settings-actions { grid-template-columns: 1fr; padding: 0 20px; }
   .wasm-note { padding-inline: 20px; }
-  .settings-screen .muted-message, .settings-screen .error-message { margin-inline: 20px; }
+  .settings-screen .muted-message, .settings-screen .error-message, .unavailable-message { margin-inline: 20px; }
   .lobby-shape-square { left: -14px; }
   .lobby-shape-circle { right: -18px; }
   .lobby-shape-triangle { right: 4%; opacity: .14; }
@@ -295,7 +311,7 @@ button:disabled { cursor: wait; opacity: .5; }
 
 @media (max-width: 430px) {
   .curriculum-fields, .settings-options { grid-template-columns: 1fr; }
-  .field-group-unit { grid-column: auto; }
+  .field-group-theme { grid-column: auto; }
   .fixed-count { margin-top: 0; }
 }
 

@@ -1,11 +1,165 @@
-use crate::model::AnswerNode;
+use crate::answer::AnswerNode;
 
-/// Return the canonical form used by grading.  Integer nodes are already
-/// canonical; keeping this as a function establishes the extension point for
-/// fractions, units, and other answer kinds in later curricula.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ExactRational {
+    numerator: i128,
+    denominator: i128,
+}
+
+impl ExactRational {
+    fn new(numerator: i128, denominator: i128) -> Option<Self> {
+        if denominator == 0 {
+            return None;
+        }
+        let (numerator, denominator) = if denominator < 0 {
+            (numerator.checked_neg()?, denominator.checked_neg()?)
+        } else {
+            (numerator, denominator)
+        };
+        if numerator == 0 {
+            return Some(Self {
+                numerator: 0,
+                denominator: 1,
+            });
+        }
+        let divisor = gcd(numerator.unsigned_abs(), denominator as u128) as i128;
+        Some(Self {
+            numerator: numerator / divisor,
+            denominator: denominator / divisor,
+        })
+    }
+
+    fn add(self, other: Self) -> Option<Self> {
+        let left = self.numerator.checked_mul(other.denominator)?;
+        let right = other.numerator.checked_mul(self.denominator)?;
+        Self::new(
+            left.checked_add(right)?,
+            self.denominator.checked_mul(other.denominator)?,
+        )
+    }
+
+    fn divide(self, other: Self) -> Option<Self> {
+        if other.numerator == 0 {
+            return None;
+        }
+        Self::new(
+            self.numerator.checked_mul(other.denominator)?,
+            self.denominator.checked_mul(other.numerator)?,
+        )
+    }
+
+    fn negate(self) -> Option<Self> {
+        Self::new(self.numerator.checked_neg()?, self.denominator)
+    }
+
+    fn into_answer(self) -> Option<AnswerNode> {
+        let numerator = i64::try_from(self.numerator).ok()?;
+        let denominator = i64::try_from(self.denominator).ok()?;
+        if denominator == 1 {
+            Some(AnswerNode::Integer(numerator))
+        } else {
+            Some(AnswerNode::Fraction {
+                numerator: Box::new(AnswerNode::Integer(numerator)),
+                denominator: Box::new(AnswerNode::Integer(denominator)),
+            })
+        }
+    }
+}
+
+/// Return a canonical tree while preserving the caller's display tree outside
+/// this function. Exact numeric nodes normalize to a reduced rational value;
+/// normalization never passes mathematical values through binary float.
 pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
+    if let Some(normalized) = exact_rational(answer).and_then(ExactRational::into_answer) {
+        return normalized;
+    }
+
     match answer {
         AnswerNode::Empty => AnswerNode::Empty,
         AnswerNode::Integer(value) => AnswerNode::Integer(*value),
+        AnswerNode::ExactDecimal { coefficient, scale } => {
+            // This fallback is reached only when an external scale is too
+            // large for the bounded exact conversion. Still remove decimal
+            // trailing zeroes without using Float.
+            let mut coefficient = *coefficient;
+            let mut scale = *scale;
+            while scale > 0 && coefficient % 10 == 0 {
+                coefficient /= 10;
+                scale -= 1;
+            }
+            if scale == 0 {
+                AnswerNode::Integer(coefficient)
+            } else {
+                AnswerNode::ExactDecimal { coefficient, scale }
+            }
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => AnswerNode::Fraction {
+            numerator: Box::new(normalize_answer(numerator)),
+            denominator: Box::new(normalize_answer(denominator)),
+        },
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => AnswerNode::MixedFraction {
+            whole: Box::new(normalize_answer(whole)),
+            numerator: Box::new(normalize_answer(numerator)),
+            denominator: Box::new(normalize_answer(denominator)),
+        },
+        AnswerNode::Root { radicand, index } => AnswerNode::Root {
+            radicand: Box::new(normalize_answer(radicand)),
+            index: index.as_deref().map(normalize_answer).map(Box::new),
+        },
+        AnswerNode::Negative(value) => match normalize_answer(value) {
+            AnswerNode::Integer(value) => value.checked_neg().map_or_else(
+                || AnswerNode::Negative(Box::new(AnswerNode::Integer(value))),
+                AnswerNode::Integer,
+            ),
+            AnswerNode::Negative(inner) => *inner,
+            value => AnswerNode::Negative(Box::new(value)),
+        },
+        AnswerNode::PlusMinus(value) => AnswerNode::PlusMinus(Box::new(normalize_answer(value))),
+        AnswerNode::Tuple(values) => {
+            AnswerNode::Tuple(values.iter().map(normalize_answer).collect())
+        }
+        AnswerNode::Variable(name) => AnswerNode::Variable(name.clone()),
     }
+}
+
+fn exact_rational(answer: &AnswerNode) -> Option<ExactRational> {
+    match answer {
+        AnswerNode::Integer(value) => ExactRational::new(i128::from(*value), 1),
+        AnswerNode::ExactDecimal { coefficient, scale } => {
+            let denominator = 10_i128.checked_pow(*scale)?;
+            ExactRational::new(i128::from(*coefficient), denominator)
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => exact_rational(numerator)?.divide(exact_rational(denominator)?),
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => exact_rational(whole)?
+            .add(exact_rational(numerator)?.divide(exact_rational(denominator)?)?),
+        AnswerNode::Negative(value) => exact_rational(value)?.negate(),
+        AnswerNode::Empty
+        | AnswerNode::Root { .. }
+        | AnswerNode::PlusMinus(_)
+        | AnswerNode::Tuple(_)
+        | AnswerNode::Variable(_) => None,
+    }
+}
+
+fn gcd(mut left: u128, mut right: u128) -> u128 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
 }

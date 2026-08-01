@@ -3,19 +3,33 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import {
-  ADDITION_LAYOUT,
   DEFAULT_ADDITION_SETTINGS,
   DrillEngineError,
   emptyEditorState,
   editorValue,
+  integerAnswerValue,
   type DrillEngine,
   type DrillSettings,
   type EditorAction,
   type EditorState,
   type GradeResult,
+  type GradeWarningCode,
   type WorksheetDto,
 } from '@/domain/drill-engine';
-import { CURRICULUM_TREE, findCurriculumSelection, type CurriculumUnit } from '@/domain/curriculum';
+import {
+  CURRICULUM_TREE,
+  DEFAULT_WEB_DRILL_SETTINGS,
+  DIFFICULTY_OPTIONS,
+  ONE_DIGIT_ADDITION_THEME,
+  RECOMMENDED_GENRES,
+  createWebDrillSettings,
+  findCurriculumSelection,
+  findTheme,
+  type CurriculumMode,
+  type CurriculumTheme,
+  type DifficultyLevel,
+  type WebDrillSettings,
+} from '@/domain/curriculum';
 import { RubyText, type RubyPart } from '@/components/RubyText';
 import { problemExpression, openWorksheetPdf } from '@/pdf/worksheet-pdf';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
@@ -37,13 +51,21 @@ const FuriganaContext = createContext(true);
 const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '計算ドリルをつくる': [["計算", "けいさん"], 'ドリルをつくる'],
   '出題範囲': [["出題", "しゅつだい"], ["範囲", "はんい"]],
+  '学年から選ぶ': [["学年", "がくねん"], 'から', ["選", "えら"], 'ぶ'],
   '学年': [["学年", "がくねん"]],
   '小学1年生': [["小学", "しょうがく"], '1', ["年生", "ねんせい"]],
-  '領域': [["領域", "りょういき"]],
-  '数と計算': [["数", "かず"], 'と', ["計算", "けいさん"]],
-  '単元': [["単元", "たんげん"]],
+  '小学2年生': [["小学", "しょうがく"], '2', ["年生", "ねんせい"]],
+  '小学3年生': [["小学", "しょうがく"], '3', ["年生", "ねんせい"]],
+  '小学4年生': [["小学", "しょうがく"], '4', ["年生", "ねんせい"]],
+  '小学5年生': [["小学", "しょうがく"], '5', ["年生", "ねんせい"]],
+  '小学6年生': [["小学", "しょうがく"], '6', ["年生", "ねんせい"]],
+  '中学1年生': [["中学", "ちゅうがく"], '1', ["年生", "ねんせい"]],
+  '中学2年生': [["中学", "ちゅうがく"], '2', ["年生", "ねんせい"]],
+  '中学3年生': [["中学", "ちゅうがく"], '3', ["年生", "ねんせい"]],
+  '足し算と引き算': [["足", "た"], 'し', ["算", "ざん"], 'と', ["引", "ひ"], 'き', ["算", "ざん"]],
+  '一桁の足し算': [["一桁", "ひとけた"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
   '難易度': [["難易度", "なんいど"]],
-  '標準（準備中）': [["標準", "ひょうじゅん"], '（', ["準備中", "じゅんびちゅう"], '）'],
+  'このテーマはまだ利用できません': ['このテーマはまだ', ["利用", "りよう"], 'できません'],
   '問題数': [["問題数", "もんだいすう"]],
   '問': [["問", "もん"]],
   '任意': [["任意", "にんい"]],
@@ -61,6 +83,9 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '採点': [["採点", "さいてん"]],
   'TOPに戻る': ['TOPに', ["戻", "もど"], 'る'],
   '正解': [["正解", "せいかい"]],
+  '約分': [["約分", "やくぶん"]],
+  '冗長なマイナス': [["冗長", "じょうちょう"], 'なマイナス'],
+  '余計な小数点': [["余計", "よけい"], 'な', ["小数点", "しょうすうてん"]],
   '採点後の操作': [["採点後", "さいてんご"], 'の', ["操作", "そうさ"]],
   '問題に戻る': [["問題", "もんだい"], 'に', ["戻", "もど"], 'る'],
   'もう一回問題を解く': ['もう', ["一回", "いっかい"], ["問題", "もんだい"], 'を', ["解", "と"], 'く'],
@@ -72,6 +97,12 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   'Rust/WASMの実行環境を読み込めません。WASMパッケージを生成してから再試行してください。': ['Rust/WASMの', ["実行環境", "じっこうかんきょう"], 'を', ["読", "よ"], 'み', ["込", "こ"], 'めません。WASMパッケージを', ["生成", "せいせい"], 'してから', ["再試行", "さいしこう"], 'してください。'],
   'Rust/WASMの実行環境を読み込めません。WASMパッケージを生成してから再読み込みしてください。': ['Rust/WASMの', ["実行環境", "じっこうかんきょう"], 'を', ["読", "よ"], 'み', ["込", "こ"], 'めません。WASMパッケージを', ["生成", "せいせい"], 'してから', ["再読み込み", "さいよみこみ"], 'してください。'],
   '処理に失敗しました。': [["処理", "しょり"], 'に', ["失敗", "しっぱい"], 'しました。'],
+};
+
+const GRADE_WARNING_LABELS: Readonly<Record<GradeWarningCode, string>> = {
+  fraction_not_reduced: '約分',
+  redundant_negative: '冗長なマイナス',
+  redundant_decimal: '余計な小数点',
 };
 
 if (process.env.NODE_ENV !== 'production') {
@@ -90,6 +121,8 @@ function RubyMessage({ text }: { text: string }) {
 export type AutoDrillAppProps = {
   engine?: DrillEngine;
   initialSettings?: DrillSettings;
+  initialWebSettings?: WebDrillSettings;
+  onWebSettingsChange?: (settings: WebDrillSettings) => void;
   seedGenerator?: () => string;
   dateGenerator?: WorksheetDateGenerator;
 };
@@ -165,12 +198,22 @@ function scheduleProblemScroll(currentIndex: number, nextIndex: number) {
 export function AutoDrillApp({
   engine: injectedEngine,
   initialSettings = DEFAULT_ADDITION_SETTINGS,
+  initialWebSettings = DEFAULT_WEB_DRILL_SETTINGS,
+  onWebSettingsChange,
   seedGenerator = generateAutomaticSeed,
   dateGenerator = () => new Date(),
 }: AutoDrillAppProps) {
   const engine = injectedEngine ?? createWasmDrillEngine();
   const [screen, setScreen] = useState<Screen>('settings');
-  const [settings, setSettings] = useState<DrillSettings>(initialSettings);
+  const [settings, setSettings] = useState<DrillSettings>(() => ({
+    ...initialSettings,
+    // Route-provided Web settings are the canonical selection for the first
+    // q1 request. Preserve an explicit engine fixture seed when the route
+    // leaves the user-facing seed blank.
+    numeric_theme_id: initialWebSettings.numeric_theme_id,
+    difficulty: initialWebSettings.difficulty,
+    seed: initialWebSettings.seed === '' ? initialSettings.seed : initialWebSettings.seed,
+  }));
   const [worksheet, setWorksheet] = useState<WorksheetDto | null>(null);
   const [worksheetMetadata, setWorksheetMetadata] = useState<WorksheetMetadata | null>(null);
   const [answers, setAnswers] = useState<Record<string, EditorState>>({});
@@ -183,6 +226,11 @@ export function AutoDrillApp({
   const [busy, setBusy] = useState(false);
   const [settingsBusyAction, setSettingsBusyAction] = useState<SettingsBusyAction>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [curriculumMode, setCurriculumMode] = useState<CurriculumMode>('recommended');
+  const [webSettings, setWebSettings] = useState<WebDrillSettings>(() => {
+    const theme = findTheme(initialWebSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
+    return createWebDrillSettings(theme, initialWebSettings.difficulty, initialWebSettings.seed);
+  });
   // Default ON keeps the server and first client render identical. The saved
   // browser preference is applied only after hydration.
   const [furiganaEnabled, setFuriganaEnabled] = useState(true);
@@ -191,6 +239,11 @@ export function AutoDrillApp({
   const inputEnabledRef = useRef(false);
   const actionQueueRef = useRef(Promise.resolve());
   const noticeTimerRef = useRef<number | null>(null);
+  const selectedTheme = findTheme(webSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
+
+  useEffect(() => {
+    onWebSettingsChange?.(webSettings);
+  }, [onWebSettingsChange, webSettings]);
 
   useEffect(() => {
     try {
@@ -256,6 +309,32 @@ export function AutoDrillApp({
     if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
   }, []);
 
+  const changeTheme = useCallback((theme: CurriculumTheme) => {
+    setWebSettings((current) => createWebDrillSettings(theme, current.difficulty, current.seed));
+    if (theme.implemented) {
+      setSettings((current) => ({
+        ...current,
+        numeric_theme_id: theme.numeric_theme_id,
+      }));
+    }
+    setError(null);
+  }, []);
+
+  const changeCurriculumMode = useCallback((mode: CurriculumMode) => {
+    setCurriculumMode(mode);
+    if (mode === 'recommended') changeTheme(ONE_DIGIT_ADDITION_THEME);
+  }, [changeTheme]);
+
+  const changeDifficulty = useCallback((difficulty: DifficultyLevel) => {
+    setWebSettings((current) => ({ ...current, difficulty }));
+    setSettings((current) => ({ ...current, difficulty }));
+  }, []);
+
+  const changeSettings = useCallback((next: DrillSettings) => {
+    setSettings(next);
+    setWebSettings((current) => ({ ...current, seed: next.seed }));
+  }, []);
+
   const installWorksheet = useCallback((nextWorksheet: WorksheetDto, metadata: WorksheetMetadata) => {
     const nextAnswers = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, emptyEditorState()]));
     answersRef.current = nextAnswers;
@@ -293,6 +372,10 @@ export function AutoDrillApp({
   }, [showNotice]);
 
   const generate = useCallback(async (printAfterGeneration: boolean) => {
+    if (!selectedTheme.implemented) {
+      setError('このテーマはまだ利用できません');
+      return;
+    }
     setError(null);
     setGradeResult(null);
     dismissNotice();
@@ -302,7 +385,7 @@ export function AutoDrillApp({
     try {
       const seed = settings.seed === '' ? seedGenerator() : settings.seed;
       const metadata = createWorksheetMetadata(seed, dateGenerator());
-      const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed, layout: ADDITION_LAYOUT });
+      const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
       // The Rust DTO remains the source of the problems. The spread adds the
       // exact seed used by this UI invocation when a fixture/runtime returns a
       // stale or normalized seed string.
@@ -323,7 +406,7 @@ export function AutoDrillApp({
       setBusy(false);
       setSettingsBusyAction(null);
     }
-  }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, settings, showEngineError]);
+  }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, selectedTheme, settings, showEngineError]);
 
   const selectProblem = useCallback((index: number) => {
     inputEnabledRef.current = true;
@@ -408,7 +491,7 @@ export function AutoDrillApp({
       await drainActionQueue();
       const latestAnswers = answersRef.current;
       const result = await engine.gradeAnswer({
-        schema_version: 1,
+        schema_version: 2,
         worksheet,
         answers: worksheet.problems.map((problem) => ({
           problem_id: problem.problem_id,
@@ -452,7 +535,7 @@ export function AutoDrillApp({
     try {
       const seed = seedGenerator();
       const metadata = createWorksheetMetadata(seed, dateGenerator());
-      const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed, layout: ADDITION_LAYOUT });
+      const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
       installWorksheet({ ...generatedWorksheet, seed }, metadata);
     } catch (value) {
       showEngineError(value);
@@ -484,8 +567,13 @@ export function AutoDrillApp({
             error={error}
             hasWorksheet={Boolean(worksheet)}
             worksheetMetadata={worksheetMetadata}
+            curriculumMode={curriculumMode}
+            webSettings={webSettings}
             furiganaEnabled={furiganaEnabled}
-            onSettingsChange={setSettings}
+            onSettingsChange={changeSettings}
+            onCurriculumModeChange={changeCurriculumMode}
+            onThemeChange={changeTheme}
+            onDifficultyChange={changeDifficulty}
             onFuriganaChange={changeFurigana}
             onGenerate={() => void generate(false)}
             onPrint={() => void generate(true)}
@@ -525,37 +613,57 @@ type SettingsScreenProps = {
   error: string | null;
   hasWorksheet: boolean;
   worksheetMetadata: WorksheetMetadata | null;
+  curriculumMode: CurriculumMode;
+  webSettings: WebDrillSettings;
   furiganaEnabled: boolean;
   onSettingsChange: (settings: DrillSettings) => void;
+  onCurriculumModeChange: (mode: CurriculumMode) => void;
+  onThemeChange: (theme: CurriculumTheme) => void;
+  onDifficultyChange: (difficulty: DifficultyLevel) => void;
   onFuriganaChange: (enabled: boolean) => void;
   onGenerate: () => void;
   onPrint: () => void;
 };
 
-function SettingsScreen({ settings, busy, busyAction, error, hasWorksheet, worksheetMetadata, furiganaEnabled, onSettingsChange, onFuriganaChange, onGenerate, onPrint }: SettingsScreenProps) {
-  const selection = findCurriculumSelection(settings.skill_id);
-  const selectUnit = (unit: CurriculumUnit) => {
-    onSettingsChange({
-      ...settings,
-      skill_id: unit.skillId,
-      curriculum_path: unit.curriculumPath,
-    });
+function SettingsScreen({
+  settings,
+  busy,
+  busyAction,
+  error,
+  hasWorksheet,
+  worksheetMetadata,
+  curriculumMode,
+  webSettings,
+  furiganaEnabled,
+  onSettingsChange,
+  onCurriculumModeChange,
+  onThemeChange,
+  onDifficultyChange,
+  onFuriganaChange,
+  onGenerate,
+  onPrint,
+}: SettingsScreenProps) {
+  const selection = findCurriculumSelection(webSettings.themeKey);
+  const genres = curriculumMode === 'recommended' ? RECOMMENDED_GENRES : selection.grade.genres;
+  const difficulty = DIFFICULTY_OPTIONS.find((option) => option.value === webSettings.difficulty) ?? DIFFICULTY_OPTIONS[2];
+  const unavailable = !selection.theme.implemented;
+
+  const selectGrade = (gradeSlug: string) => {
+    const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === gradeSlug) ?? CURRICULUM_TREE[0]!;
+    onThemeChange(grade.genres[0]!.themes[0]!);
   };
 
-  const selectGrade = (gradeId: string) => {
-    const grade = CURRICULUM_TREE.find((candidate) => candidate.id === gradeId) ?? CURRICULUM_TREE[0];
-    selectUnit(grade.areas[0].units[0]);
+  const selectGenre = (genreKey: string) => {
+    const genre = genres.find((candidate) => candidate.genreKey === genreKey) ?? genres[0]!;
+    onThemeChange(genre.themes[0]!);
   };
 
-  const selectArea = (areaId: string) => {
-    const area = selection.grade.areas.find((candidate) => candidate.id === areaId) ?? selection.grade.areas[0];
-    selectUnit(area.units[0]);
+  const selectTheme = (themeKey: string) => {
+    const genre = genres.find((candidate) => candidate.genreKey === selection.genre.genreKey) ?? genres[0]!;
+    const theme = genre.themes.find((candidate) => candidate.themeKey === themeKey) ?? genre.themes[0]!;
+    onThemeChange(theme);
   };
 
-  const selectCurriculumUnit = (unitId: string) => {
-    const unit = selection.area.units.find((candidate) => candidate.id === unitId) ?? selection.area.units[0];
-    selectUnit(unit);
-  };
   const statusText = busyAction === 'generate'
     ? '問題を生成しています。しばらくお待ちください。'
     : busyAction === 'print'
@@ -576,39 +684,47 @@ function SettingsScreen({ settings, busy, busyAction, error, hasWorksheet, works
             <input type="checkbox" checked={furiganaEnabled} onChange={(event) => onFuriganaChange(event.target.checked)} />
             <span>ふりがな</span>
           </label>
-          <p className="eyebrow"><span aria-hidden="true" /> AutoDrill alpha 1.0</p>
+          <p className="eyebrow"><span aria-hidden="true" /> AutoDrill alpha 1.1</p>
           <h1 id="settings-title" aria-label="計算ドリルをつくる"><RubyMessage text="計算ドリルをつくる" /></h1>
         </header>
 
         <div className="settings-card">
-          <div className="curriculum-fields" aria-label="出題範囲">
+          <div className="selection-mode-tabs" aria-label="選び方">
+            <button type="button" aria-pressed={curriculumMode === 'recommended'} onClick={() => onCurriculumModeChange('recommended')}>おすすめ</button>
+            <button type="button" aria-label="学年から選ぶ" aria-pressed={curriculumMode === 'grade'} onClick={() => onCurriculumModeChange('grade')}><RubyMessage text="学年から選ぶ" /></button>
+          </div>
+
+          <div className={`curriculum-fields ${curriculumMode === 'recommended' ? 'curriculum-fields-recommended' : ''}`} aria-label="出題範囲">
+            {curriculumMode === 'grade' ? (
+              <div className="field-group">
+                <label className="field-label" htmlFor="grade-select"><RubyMessage text="学年" /></label>
+                <div className="ruby-select">
+                  <select id="grade-select" className="select-field" aria-label="学年" value={selection.grade.slug} onChange={(event) => selectGrade(event.target.value)}>
+                    {CURRICULUM_TREE.map((grade) => <option value={grade.slug} key={grade.slug}>{grade.label}</option>)}
+                  </select>
+                  <span className="ruby-select-display" aria-hidden="true"><RubyMessage text={selection.grade.label} /></span>
+                </div>
+              </div>
+            ) : null}
             <div className="field-group">
-              <label className="field-label" htmlFor="grade-select"><RubyMessage text="学年" /></label>
+              <label className="field-label" htmlFor="genre-select">ジャンル</label>
               <div className="ruby-select">
-                <select id="grade-select" className="select-field" aria-label="学年" value={selection.grade.id} onChange={(event) => selectGrade(event.target.value)}>
-                  {CURRICULUM_TREE.map((grade) => <option value={grade.id} key={grade.id}>{grade.label}</option>)}
+                <select id="genre-select" className="select-field" aria-label="ジャンル" value={selection.genre.genreKey} onChange={(event) => selectGenre(event.target.value)}>
+                  {genres.map((genre) => <option value={genre.genreKey} key={genre.genreKey}>{genre.label}</option>)}
                 </select>
-                <span className="ruby-select-display" aria-hidden="true"><RubyMessage text={selection.grade.label} /></span>
+                <span className="ruby-select-display" aria-hidden="true"><RubyMessage text={selection.genre.label} /></span>
               </div>
             </div>
 
-            <div className="field-group">
-              <label className="field-label" htmlFor="area-select"><RubyMessage text="領域" /></label>
+            <div className="field-group field-group-theme">
+              <label className="field-label" htmlFor="theme-select">テーマ</label>
               <div className="ruby-select">
-                <select id="area-select" className="select-field" aria-label="領域" value={selection.area.id} onChange={(event) => selectArea(event.target.value)}>
-                  {selection.grade.areas.map((area) => <option value={area.id} key={area.id}>{area.label}</option>)}
+                <select id="theme-select" className="select-field" aria-label="テーマ" value={selection.theme.themeKey} onChange={(event) => selectTheme(event.target.value)}>
+                  {(genres.find((genre) => genre.genreKey === selection.genre.genreKey) ?? genres[0]!).themes.map((theme) => (
+                    <option value={theme.themeKey} key={theme.themeKey}>{theme.label}</option>
+                  ))}
                 </select>
-                <span className="ruby-select-display" aria-hidden="true"><RubyMessage text={selection.area.label} /></span>
-              </div>
-            </div>
-
-            <div className="field-group field-group-unit">
-              <label className="field-label" htmlFor="unit-select"><RubyMessage text="単元" /></label>
-              <div className="ruby-select">
-                <select id="unit-select" className="select-field" aria-label="単元" value={selection.unit.id} onChange={(event) => selectCurriculumUnit(event.target.value)}>
-                  {selection.area.units.map((unit) => <option value={unit.id} key={unit.id}>{unit.label}</option>)}
-                </select>
-                <span className="ruby-select-display" aria-hidden="true">{selection.unit.label}</span>
+                <span className="ruby-select-display" aria-hidden="true"><RubyMessage text={selection.theme.label} /></span>
               </div>
             </div>
           </div>
@@ -617,10 +733,19 @@ function SettingsScreen({ settings, busy, busyAction, error, hasWorksheet, works
             <div className="field-group">
               <label className="field-label" htmlFor="difficulty-select"><RubyMessage text="難易度" /></label>
               <div className="ruby-select">
-                <select id="difficulty-select" className="select-field" aria-label="難易度" value="default" onChange={() => undefined}>
-                  <option value="default">標準（準備中）</option>
+                <select
+                  id="difficulty-select"
+                  className="select-field"
+                  aria-label="難易度"
+                  value={webSettings.difficulty}
+                  onChange={(event) => {
+                    const next = DIFFICULTY_OPTIONS.find((option) => String(option.value) === event.target.value);
+                    if (next) onDifficultyChange(next.value);
+                  }}
+                >
+                  {DIFFICULTY_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
                 </select>
-                <span className="ruby-select-display" aria-hidden="true"><RubyMessage text="標準（準備中）" /></span>
+                <span className="ruby-select-display" aria-hidden="true">{difficulty.label}</span>
               </div>
             </div>
 
@@ -649,6 +774,7 @@ function SettingsScreen({ settings, busy, busyAction, error, hasWorksheet, works
           </div>
         </div>
 
+        {unavailable ? <p className="unavailable-message" role="status" aria-label="このテーマはまだ利用できません"><RubyMessage text="このテーマはまだ利用できません" /></p> : null}
         {error ? <p className="error-message" role="alert" aria-label={error}><RubyMessage text={error} /></p> : null}
         {hasWorksheet && worksheetMetadata ? (
           <p className="muted-message" data-testid="last-worksheet-metadata">
@@ -657,11 +783,11 @@ function SettingsScreen({ settings, busy, busyAction, error, hasWorksheet, works
         ) : null}
 
         <div className="settings-actions">
-          <button type="button" className="primary-button" aria-label={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} disabled={busy} onClick={onGenerate}>
+          <button type="button" className="primary-button" aria-label={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} disabled={busy || unavailable} onClick={onGenerate}>
             <span className="button-icon" aria-hidden="true">▶</span>
             <RubyMessage text={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} />
           </button>
-          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷'} disabled={busy} onClick={onPrint}>
+          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷'} disabled={busy || unavailable} onClick={onPrint}>
             <span className="button-icon" aria-hidden="true">▣</span>
             <RubyMessage text={busyAction === 'print' ? 'PDFを準備中…' : '印刷'} />
           </button>
@@ -788,8 +914,15 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                   </button>
                   {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
                   {result && !result.correct ? (
-                    <span className="correct-answer" aria-label={`正しい答え ${problem.canonical_answer.value}`}>
-                      {problem.canonical_answer.value}
+                    <span className="correct-answer" aria-label={`正しい答え ${integerAnswerValue(problem.canonical_answer) ?? ''}`}>
+                      {integerAnswerValue(problem.canonical_answer) ?? ''}
+                    </span>
+                  ) : null}
+                  {result?.correct && result.warnings.length > 0 ? (
+                    <span className="grade-warnings" aria-label={`注意 ${result.warnings.map((warning) => GRADE_WARNING_LABELS[warning]).join('、')}`}>
+                      {result.warnings.map((warning) => (
+                        <span key={warning}><RubyMessage text={GRADE_WARNING_LABELS[warning]} /></span>
+                      ))}
                     </span>
                   ) : null}
                 </div>
