@@ -21,6 +21,8 @@ describe('shared worksheet layout and PDF', () => {
     const pages = buildPdfPageModel(worksheet);
     expect(layout.cells).toHaveLength(20);
     expect(layout.cells[0]).toMatchObject({ column: 0, row: 0 });
+    expect(layout.cells[9]).toMatchObject({ column: 0, row: 9 });
+    expect(layout.cells[10]).toMatchObject({ column: 1, row: 0 });
     expect(layout.cells[19]).toMatchObject({ column: 1, row: 9 });
     const firstPosition = getCellPosition(layout, layout.cells[0]!);
     const lastPosition = getCellPosition(layout, layout.cells[19]!);

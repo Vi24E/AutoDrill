@@ -10,15 +10,17 @@
 ## 1. 現在の到達点
 
 - q1（設定）・q2（回答）・q3（別タブのPDFビューアー）の画面遷移をNext.jsで実装済み。
-- q1はゲームロビーを着想源にした中央カード、控えめなグリッド・幾何学背景、押下感のある操作ボタンで構成する。カリキュラム選択は型付きの木データから`学年 → 領域 → 単元`の3連動selectへ投影し、q2の白紙調ワークシートには装飾を持ち込まない。
+- q1はゲームロビーを着想源にした中央カード、控えめなグリッド・幾何学背景、押下感のある操作ボタンで構成する。説明サブタイトルは置かず、右上に既定ONの「ふりがな」チェックボックスを置く。カリキュラム選択は型付きの木データから`学年 → 領域 → 単元`の3連動selectへ投影し、q2の白紙調ワークシートには装飾を持ち込まない。
 - alpha 1.0の一桁足し算は、1〜9の順序付き組から重複なしで20問を決定的に生成する。
 - q1だけにSeed入力欄を置き、空欄は押下ごとにcrypto優先の4文字自動Seed、非空欄は入力文字列そのものを使う。正しい手入力は許可文字（`1-9`、`a-z`、`A-Z`から`I`/`l`/`O`を除外）の1〜16文字で、同じ指定Seedは同じ20問を再現する。
 - 実際に使ったSeedとローカル生成日（`YYYY-MM-DD`）は`WorksheetMetadata`としてUIとPDFへ引き継ぎ、q2とq3の各問題ページ右下へ小さく表示する。q2にはSeed入力欄を表示しない。
-- q2は`src/domain/layout.ts`の共有A4レイアウト（余白・上部/下部予約領域・2列×10行）をCSSの百分率座標へ変換して表示する。上部リボンと、回答欄クリック後に現れる通常10キー順の入力パネルをviewportへ固定する。Enter確定後は次問を選択してパネルを継続し、最終行も固定パネルの上までスクロールできる。
+- q2は`src/domain/layout.ts`の共有A4レイアウト（余白・上部/下部予約領域・2列×10行）をCSSの百分率座標へ変換し、左列を1〜10、右列を11〜20の縦順で表示する。上部リボンと、回答欄クリック後にだけ現れる通常10キー順の入力パネルをviewportへ固定する。Enter/確定後は同列で必ず1行分スクロールし、10→11では右列先頭を固定リボン直下へ戻す。
 - 数字キー、物理キーボードの数字、Backspace/Delete/左右矢印、Enter（確定して次問へ）を受け付ける。
 - WASMの非同期編集呼出しはFIFOキューと最新の回答refで直列化し、連続した数字入力とEnterの順序を保持する。
 - 採点開始時は表示時間を押下時刻で凍結し、同じFIFOキューを排出してから最新の回答refを読む。誤答・未回答は`#e01010`の太枠と正答を表示する。
-- 選択中の回答は`integer` ASTの桁配列として表示し、採点は全20問をRust/WASMへ1問ずつ委譲する。
+- 選択中の回答は`integer` ASTの桁配列と実カーソル位置を表示する。文字サイズ下限は11pxで、18桁まで回答枠を右へ広げる。採点は全20問をRust/WASMへ1問ずつ委譲する。
+- 採点後は、回答を保持してタイマーを再開する「問題に戻る」、同一問題・Seedで回答と時間を初期化する「もう一回問題を解く」、同一分野を新しい自動Seedで生成する「別の問題を解く」を表示する。
+- ふりがなON時はq1/q2の可視漢字をsemantic `ruby`/`rt`で表示し、OFF時は元の本文だけを表示する。設定は`autodrill:furigana-enabled`として`localStorage`へ保存し、q2・TOP往復と再読込後も保持する。保存領域が利用不能でも既定ONとメモリ内切替は機能する。
 - 回答ASTはRustの`AnswerNode::size()`を唯一の構造サイズ契約とし、整数は十進数字1文字をsize 1、空回答を0として数える。alpha 1.0の上限は18で、19桁目の入力は状態を変えず`answer_ast_size_limit`としてWebへ返す。
 - q1の「印刷」とq2の印刷アイコンは同じ`openWorksheetPdf`パイプラインを使う。q1では非同期処理前に空タブを開き、ポップアップ阻止を避ける。
 - PDFは問題ページと解答ページの2ページを生成し、解答ページを180度回転する。
@@ -29,8 +31,8 @@
 
 | 状態 | 入口 | 主な表示・操作 | 次の状態 |
 |---|---|---|---|
-| q1 設定 | 初期表示、q2のTOPに戻る | 学年・領域・単元の3連動select、難易度placeholder、Seed入力、問題生成、印刷 | 問題生成→q2、印刷→q3 |
-| q2 回答 | q1の問題生成 | 20問、2列×10行、固定リボン、回答時間、生成日/Seedフッター、初期は非表示の固定10キー（欄クリックで表示）、採点、印刷、TOPに戻る | 印刷→q3、TOPに戻る→q1 |
+| q1 設定 | 初期表示、q2のTOPに戻る | ふりがなON/OFF、学年・領域・単元の3連動select、難易度placeholder、Seed入力、問題生成、印刷 | 問題生成→q2、印刷→q3 |
+| q2 回答 | q1の問題生成 | 左1〜10/右11〜20、固定リボン、回答時間、生成日/Seedフッター、初期は非表示の固定10キー（欄クリックで表示）、カーソル、採点、印刷、TOPに戻る | 採点後3操作、印刷→q3、TOPに戻る→q1 |
 | q3 PDF | q1またはq2の印刷 | ブラウザが表示する実PDF（問題ページ＋180度回転した解答ページ） | ブラウザのタブ操作に委ねる |
 
 製品仕様上の「生成・編集・正規化・採点・努力量計算」はRustが所有します。React/TypeScriptは画面状態、入力イベントの順序付け、表示、PDF描画だけを担当し、正しさや生成規則を再実装しません。
@@ -41,7 +43,7 @@
 AutoDrill/
 ├── apps/web/
 │   ├── src/app/                 # Next.jsのページ、global CSS
-│   ├── src/components/          # q1/q2とタイマー・入力イベント
+│   ├── src/components/          # q1/q2、RubyText、タイマー・入力イベント
 │   ├── src/domain/drill-engine.ts# TS側のversioned DTOとengine interface
 │   ├── src/domain/curriculum.ts  # 学年・領域・単元の型付きカリキュラム木
 │   ├── src/domain/wasm-adapter.ts# JSON envelopeの唯一の本番境界
@@ -132,7 +134,7 @@ TypeScriptの`DrillEngineError.kind`も`generation_timeout`と`generation_attemp
 
 ## 5. PDF戦略と依存・ライセンス
 
-`src/domain/layout.ts`がA4（595.28×841.89pt）の余白・上部予約領域と2列×10行のセル座標を計算し、Web表示はそのtop-origin座標をページ比率へ変換、PDFは同じセルをbottom-originへ変換して描画します。したがってq2の順序・行位置・中央区切り・紙面寸法に独立したCSS grid定義はありません。入力イベントは`AutoDrillApp`内のFIFO action queueで直列化し、遅延するWASMでも回答桁と確定の順序を維持します。採点もqueueのtailをawaitしてから`answersRef.current`をスナップショットするため、入力直後の採点がReactの古いstateを参照しません。`seed.ts`はWeb Crypto `getRandomValues`を優先し、58文字alphabetのrejection samplingで4文字を作り、テスト注入可能なdistinct fallbackも同じalphabet/長さを守ります。`WorksheetMetadata`はRust DTOを変更せず、q1で解決した実Seedとローカル生成日をq2表示・q1再訪時の前回表示・PDFへ渡します。紙面には中央の縦区切りだけを描き、問題ページの右下へフッターを描きます。解答ページは180度回転後も物理右下かつ正立で読めるよう、回転ページでは上端の未回転座標へフッターを置き、文字自体を180度逆回転してから描きます。`pdf-lib`でクライアント内にPDF bytesを生成し、Blob URLをq3タブへ設定します。問題ページには問題番号と空の回答枠、解答ページには問題番号と答えを描き、後者を`180°`回転します。PDFは標準Helveticaだけを使うため、実行時のフォント取得やネットワークサービスはありません。
+`src/domain/layout.ts`がA4（595.28×841.89pt）の余白・上部予約領域と2列×10行のセル座標を列優先（左列の全行、右列の全行）で計算し、Web表示はそのtop-origin座標をページ比率へ変換、PDFは同じセルをbottom-originへ変換して描画します。したがってq2の順序・行位置・中央区切り・紙面寸法に独立したCSS grid定義はありません。狭いviewportでは720pxの紙面を横スクロールさせ、18桁・11px下限と式の寸法を壊さないようにします。入力イベントは`AutoDrillApp`内のFIFO action queueで直列化し、遅延するWASMでも回答桁と確定の順序を維持します。採点もqueueのtailをawaitしてから`answersRef.current`をスナップショットするため、入力直後の採点がReactの古いstateを参照しません。`seed.ts`はWeb Crypto `getRandomValues`を優先し、58文字alphabetのrejection samplingで4文字を作り、テスト注入可能なdistinct fallbackも同じalphabet/長さを守ります。`WorksheetMetadata`はRust DTOを変更せず、q1で解決した実Seedとローカル生成日をq2表示・q1再訪時の前回表示・PDFへ渡します。紙面には中央の縦区切りだけを描き、問題ページの右下へフッターを描きます。解答ページは180度回転後も物理右下かつ正立で読めるよう、回転ページでは上端の未回転座標へフッターを置き、文字自体を180度逆回転してから描きます。`pdf-lib`でクライアント内にPDF bytesを生成し、Blob URLをq3タブへ設定します。問題ページには問題番号と空の回答枠、解答ページには問題番号と答えを描き、後者を`180°`回転します。PDFは標準Helveticaだけを使うため、実行時のフォント取得やネットワークサービスはありません。
 
 主要依存は次のライセンスです（正確な推移依存一覧はpnpm lockfileと各パッケージのlicense metadataを参照）。
 
@@ -152,11 +154,13 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm verify:next-output
 cargo test --workspace --all-targets
 pre-commit run --all-files
 ```
 
 `next dev`は`.next-dev`、`pnpm build`と`next start`は`.next`を出力先に使います。開発サーバーを起動したまま本番buildを実行しても、開発中タブが参照するchunkを上書きしません。
+`pnpm verify:next-output`は生成済みNext出力を一時退避したclean状態から、dev配信、build中のasset継続監視、build後の未訪問route（HTTP 404を含む）、`next start`のproduction配信までを一括検証し、終了時に元の出力を復元します。実行中の本プロジェクトのNext.jsサーバーや使用中の出力を検出した場合は、退避前に安全に失敗します。既存のNext開発サーバーを停止してから実行してください。検証portは既定3100/3101で、必要なら`AUTODRILL_VERIFY_DEV_PORT`と`AUTODRILL_VERIFY_PROD_PORT`で変更できます。
 
 WASMパッケージを生成する場合は、targetとmatching CLIが既に存在する環境で次を実行します。
 
@@ -177,10 +181,12 @@ WASMパッケージを生成する場合は、targetとmatching CLIが既に存�
 - 手動実ブラウザ確認（localhost dev、生成WASM）: q1→q2生成、回答欄クリック後の固定10キー、物理数字キー入力とEnterでの次問移動を確認した。18桁入力は式へ侵入せず右へ伸び、19桁目は状態を変えずリボン付近に`式が大きすぎます！`を表示した。最終20問目へスクロールしても上下の固定UIを操作できた。採点押下後に`00:27`が1秒以上変化しないこと、誤答・未回答枠が赤い太枠になり右隣へ赤い正答を表示することを確認した。q1/q2印刷は同じBlob PDF処理を使用する。
 - `pnpm lint`: ESLint passed（warning/errorなし）。
 - `pnpm typecheck`: TypeScript passed。
-- `pnpm test`: 5 test files、32 tests passed（3連動select、固定10キー順、物理編集キー、遅延engineのEnter直後入力先、18桁表示/19桁目通知、採点時刻凍結、誤答枠/正答、PDF回答枠位置、Seed、共有A4レイアウト、PDF回転・フッター、Next phase別出力を含む）。
+- `pnpm test`: 5 test files、42 tests passed（3連動select、ふりがな既定ON/OFF・q2/TOP・再読込保持、縦順配置、固定10キー表示条件と画面Del不在、物理編集キー、実カーソル、1行スクロールと10→11、遅延engineのEnter直後入力先、18桁11px表示/19桁目通知、採点時刻凍結、採点後3操作、誤答枠/正答、PDF回答枠位置、Seed、共有A4レイアウト、PDF回転・フッター、Next phase別出力を含む）。
 - `pnpm build`: Next.js static production build passed。
 - phase-safe出力分離: fresh `next dev`でHTML参照assetを確認し、production build前後とも`layout.css`、`webpack.js`、`main-app.js`、`app-pages-internals.js`、`app/page.js`がHTTP 200だった。build後の再読込でもq1の問題生成がq2へ遷移した。
-- PDF visual QA: 最新bytesをA4・2ページとして`pdfinfo`で検査し、Popplerで両ページをPNG化した。問題ページは回答枠が等号の6pt後へ揃い、解答ページは180度回転、中央区切り・番号・フッターに欠けや重なりがないことを目視確認した。
+- `pnpm verify:next-output`: clean出力からdevを起動し、production build実行中に既存dev assetを41回継続取得、build後の未訪問routeがHTTP 404であることとその参照asset、`next start`のproduction HTMLと全参照assetを確認した。事前に既存サーバーを検出して退避前に失敗すること、成功後に`.next`/`.next-dev`が同一inodeで復元されることも確認した。
+- 最新実ブラウザ受入（Chrome）: q1サブタイトル不在、右上ふりがな既定ON、OFF時`ruby` 0件と`localStorage=false`、再読込後OFF復元、q2で左1〜10/右11〜20、初期10キー非表示、回答欄クリック後表示、画面Del不在、物理`1`/`2`/左矢印のカーソル`1|2`、Enterで83px（実紙面1行）スクロールを確認した。採点後はタイマーが1秒以上不変、10キー非表示、20誤答枠/20正答と3操作を確認。「問題に戻る」は回答`12`を保持してタイマーを再開、「もう一回」は同一seedで回答/時間を初期化、「別の問題」はseedを`zGYB`から`jc1a`へ更新して初期化した。
+- PDF visual QA: 最新Blob bytesをA4・2ページとして`pdfinfo`で検査し、Popplerで両ページをPNG化した。問題ページは左1〜10/右11〜20、回答枠が等号の6pt後へ揃い、解答ページは180度回転、中央区切り・番号・フッターに欠けや重なりがないことを目視確認した。
 - `pre-commit run --all-files`: managed-project hookは対象ファイルなしでskip（失敗なし）。
 
 ## 8. 未検証・既知の制約

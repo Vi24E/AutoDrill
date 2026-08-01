@@ -18,6 +18,8 @@ body {
 button, select { font: inherit; }
 button { color: inherit; }
 button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+ruby { ruby-position: over; }
+rt { font-size: .52em; font-weight: 500; letter-spacing: 0; }
 
 .app-shell { min-height: 100vh; padding: 40px 20px 56px; }
 .settings-screen {
@@ -58,7 +60,20 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); ou
   background: rgba(255, 255, 255, .96);
   box-shadow: 0 22px 60px rgba(35, 54, 60, .16), 0 2px 0 rgba(255, 255, 255, .8) inset;
 }
-.settings-screen .page-heading { margin: 0; padding: 34px 38px 25px; border-bottom: 1px solid #dce3e5; text-align: center; }
+.settings-screen .page-heading { position: relative; margin: 0; padding: 34px 38px 25px; border-bottom: 1px solid #dce3e5; text-align: center; }
+.furigana-toggle {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  color: #40565e;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.furigana-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--lobby-cyan-dark); }
 .eyebrow, .ribbon-label { margin: 0 0 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; }
 .settings-screen .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: #557078; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .settings-screen .eyebrow span { width: 8px; height: 8px; border-radius: 50%; background: var(--lobby-cyan); box-shadow: 0 0 0 4px rgba(8, 169, 196, .13); }
@@ -82,6 +97,23 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
 .select-field:hover, .text-field:hover { border-color: #6f858c; background: #fff; }
+.ruby-select, .ruby-input { position: relative; }
+.ruby-select .select-field { color: transparent; }
+.ruby-select .select-field option { color: #20343b; }
+.ruby-select-display, .ruby-input-placeholder {
+  position: absolute;
+  top: 50%;
+  right: 34px;
+  left: 13px;
+  overflow: hidden;
+  color: #20343b;
+  line-height: 1.25;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  translate: 0 -50%;
+  white-space: nowrap;
+}
+.ruby-input-placeholder { right: 12px; color: #777; }
 .settings-screen :is(button, select, input):focus-visible { outline: 3px solid rgba(8, 169, 196, .32); outline-offset: 2px; border-color: var(--lobby-cyan-dark); }
 .field-note, .wasm-note, .muted-message { margin: 0; color: var(--muted); font-size: 12px; }
 .seed-field { display: grid; gap: 7px; }
@@ -166,8 +198,8 @@ button:disabled { cursor: wait; opacity: .5; }
   font-weight: 700;
   translate: -50% 0;
 }
-.paper-wrap { display: flex; justify-content: center; }
-.paper { position: relative; width: min(720px, 100%); background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
+.paper-wrap { display: flex; justify-content: center; overflow-x: auto; }
+.paper { position: relative; width: 720px; min-width: 720px; background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
 .problem-grid { position: relative; width: 100%; height: 100%; }
 .problem-divider { position: absolute; border-left: 1px solid #888; pointer-events: none; }
 .problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: hidden; padding: 0 2%; }
@@ -193,15 +225,22 @@ button:disabled { cursor: wait; opacity: .5; }
   white-space: nowrap;
 }
 .answer-value { display: block; min-width: 0; max-width: 100%; overflow: hidden; line-height: 1; text-align: left; text-overflow: clip; }
+.answer-caret { display: inline-block; width: 2px; height: 1.05em; margin-inline: 1px; background: #111; vertical-align: -.12em; animation: answer-caret-blink 1s steps(1, end) infinite; }
+@keyframes answer-caret-blink { 50% { opacity: 0; } }
 .answer-box-selected { border: 2px solid #111; }
+.answer-box:disabled { cursor: default; opacity: 1; }
 .answer-box-correct { border-color: #222; }
 .answer-box-wrong { border: 3px solid #e01010; }
 .problem-cell-graded .answer-box { min-width: 25px; }
 .result-mark { flex: 0 0 18px; margin-left: 5px; font-size: 17px; }
 .correct-answer { flex: 0 0 auto; margin-left: 5px; color: #e01010; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.grade-summary { display: flex; gap: 8px; align-items: baseline; width: fit-content; margin: 0 auto 14px; padding: 7px 14px; border: 1px solid var(--ink); background: var(--paper); }
+.grade-result-panel { display: grid; gap: 10px; justify-items: center; margin: 0 auto 14px; }
+.grade-summary { display: flex; gap: 8px; align-items: baseline; width: fit-content; margin: 0; padding: 7px 14px; border: 1px solid var(--ink); background: var(--paper); }
 .grade-summary strong { font-size: 18px; }
 .grade-summary span { color: var(--muted); font-size: 12px; }
+.grade-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+.grade-actions button { min-height: 38px; padding: 7px 12px; border: 1px solid #777; border-radius: 3px; background: var(--paper); cursor: pointer; }
+.grade-actions button:first-child { color: var(--paper); border-color: var(--ink); background: var(--ink); }
 .worksheet-error { max-width: 720px; margin-inline: auto; }
 .input-panel {
   position: fixed;
@@ -221,7 +260,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
 .keypad-zero { grid-column: 1 / -1; }
 .keypad-controls .keypad-clear { color: #750a0a; border-color: #bd8f8f; background: #fff9f9; }
-.keypad-controls .keypad-commit { color: var(--paper); border-color: var(--ink); background: var(--ink); }
+.keypad-controls .keypad-commit { grid-column: 1 / -1; color: var(--paper); border-color: var(--ink); background: var(--ink); }
 
 @media (max-width: 680px) {
   .app-shell { padding: 22px 10px 34px; }
@@ -262,13 +301,14 @@ button:disabled { cursor: wait; opacity: .5; }
 
 @media (prefers-reduced-motion: reduce) {
   .lobby-shape { animation: none; }
+  .answer-caret { animation: none; }
   .settings-screen :is(button, select, input) { scroll-behavior: auto; transition: none; }
 }
 
 @media print {
   body { background: #fff; }
   .app-shell { padding: 0; }
-  .ribbon, .input-panel, .grade-summary, .error-message, .worksheet-toast { display: none !important; }
+  .ribbon, .input-panel, .grade-result-panel, .error-message, .worksheet-toast { display: none !important; }
   .worksheet-screen { padding: 0; }
-  .paper { width: 100%; min-height: 0; padding: 0; border: 0; box-shadow: none; }
+  .paper { width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; box-shadow: none; }
 }

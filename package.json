@@ -7,6 +7,7 @@
     "build": "pnpm --filter @autodrill/web build",
     "lint": "pnpm --filter @autodrill/web lint",
     "typecheck": "pnpm --filter @autodrill/web typecheck",
-    "test": "pnpm --filter @autodrill/web test"
+    "test": "pnpm --filter @autodrill/web test",
+    "verify:next-output": "./scripts/verify-next-output-isolation.sh"
   }
 }

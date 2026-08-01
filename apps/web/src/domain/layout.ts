@@ -29,8 +29,10 @@ export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorks
   const cells = worksheet.problems.map((problem, index) => ({
     index,
     problem,
-    column: index % columns,
-    row: Math.floor(index / columns),
+    // Worksheets are read vertically: 1–10 down the left column, then
+    // 11–20 down the right. Web and PDF consume this same placement model.
+    column: Math.floor(index / rows),
+    row: index % rows,
   }));
 
   return {
