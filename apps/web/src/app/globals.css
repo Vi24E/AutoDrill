@@ -8,6 +8,7 @@
 }
 
 * { box-sizing: border-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; padding: 0; border: 0; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 html, body { min-height: 100%; }
 body {
   margin: 0;
@@ -81,24 +82,39 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .settings-screen h1 { color: #20343b; font-size: clamp(29px, 5vw, 40px); font-weight: 800; letter-spacing: .025em; }
 .description { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
 .settings-card { display: grid; gap: 24px; padding: 28px 38px 24px; }
-.selection-mode-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.selection-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #aab8bc;
+  border-radius: 11px;
+  background: #e4eaec;
+  box-shadow: 0 1px 2px rgba(45, 65, 72, .12) inset;
+}
 .selection-mode-tabs button {
-  min-height: 50px;
-  border: 1px solid #9aabb0;
+  min-height: 44px;
+  border: 0;
   border-radius: 7px;
   color: #40565e;
-  background: #f4f7f8;
+  background: transparent;
   cursor: pointer;
   font-weight: 750;
+  transition: color .16s ease, background-color .16s ease, box-shadow .16s ease;
 }
-.selection-mode-tabs button[aria-pressed='true'] { border-color: var(--lobby-cyan-dark); color: #fff; background: var(--lobby-cyan-dark); }
+.selection-mode-tabs button:not([aria-pressed='true']):hover { color: #20343b; background: rgba(255, 255, 255, .58); }
+.selection-mode-tabs button[aria-pressed='true'] {
+  color: #fff;
+  background: var(--lobby-cyan-dark);
+  box-shadow: 0 2px 5px rgba(24, 70, 80, .24), 0 -2px 0 rgba(0, 0, 0, .12) inset;
+}
 .curriculum-fields { display: grid; grid-template-columns: .85fr 1fr 1.3fr; gap: 14px; }
 .curriculum-fields-recommended { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .settings-options { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; }
 .field-group { display: grid; align-content: start; gap: 7px; min-width: 0; }
 .field-label { color: #40565e; font-size: 12px; font-weight: 750; letter-spacing: .045em; }
 .field-label > span { margin-left: 5px; color: #75868c; font-size: 10px; font-weight: 500; }
-.select-field, .text-field {
+.text-field {
   width: 100%;
   min-height: 48px;
   padding: 9px 12px;
@@ -108,24 +124,72 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
   background: #fbfcfc;
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
 }
-.select-field:hover, .text-field:hover { border-color: #6f858c; background: #fff; }
-.ruby-select, .ruby-input { position: relative; }
-.ruby-select .select-field { color: transparent; }
-.ruby-select .select-field option { color: #20343b; }
-.ruby-select-display, .ruby-input-placeholder {
+.text-field:hover { border-color: #6f858c; background: #fff; }
+.ruby-input { position: relative; }
+.ruby-input-placeholder {
   position: absolute;
   top: 50%;
-  right: 34px;
+  right: 12px;
   left: 13px;
   overflow: hidden;
-  color: #20343b;
+  color: #777;
   line-height: 1.25;
   pointer-events: none;
   text-overflow: ellipsis;
   translate: 0 -50%;
   white-space: nowrap;
 }
-.ruby-input-placeholder { right: 12px; color: #777; }
+.custom-select { position: relative; min-width: 0; }
+.custom-select-trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 9px 12px 8px 13px;
+  border: 1px solid #aebbc0;
+  border-radius: 7px;
+  color: #20343b;
+  background: #fbfcfc;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+.custom-select-trigger:hover { border-color: #6f858c; background: #fff; }
+.custom-select-trigger[aria-expanded='true'] { border-color: var(--lobby-cyan-dark); box-shadow: 0 0 0 2px rgba(8, 169, 196, .12); }
+.custom-select-value { overflow: hidden; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-chevron { width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; transition: rotate .16s ease; }
+.custom-select-trigger[aria-expanded='true'] .custom-select-chevron { rotate: 180deg; }
+.custom-select-listbox {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #9eacb1;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(23, 47, 54, .18);
+}
+.custom-select-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  padding: 8px 9px 7px;
+  border-radius: 5px;
+  color: #20343b;
+  cursor: pointer;
+  line-height: 1.35;
+}
+.custom-select-option-active { background: #edf8fa; }
+.custom-select-option[aria-selected='true'] { font-weight: 750; }
+.custom-select-check { color: var(--lobby-cyan-dark); font-size: 13px; text-align: center; }
 .settings-screen :is(button, select, input):focus-visible { outline: 3px solid rgba(8, 169, 196, .32); outline-offset: 2px; border-color: var(--lobby-cyan-dark); }
 .field-note, .wasm-note, .muted-message { margin: 0; color: var(--muted); font-size: 12px; }
 .seed-field { display: grid; gap: 7px; }
@@ -215,20 +279,31 @@ button:disabled { cursor: wait; opacity: .5; }
 .paper { position: relative; width: 720px; min-width: 720px; background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
 .problem-grid { position: relative; width: 100%; height: 100%; }
 .problem-divider { position: absolute; border-left: 1px solid #888; pointer-events: none; }
-.problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: hidden; padding: 0 2%; }
+.problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: visible; padding: 0 2%; }
+.worksheet-instruction { position: absolute; top: 5.3%; right: 7%; left: 7%; margin: 0; font-size: 15px; line-height: 1.35; }
+.problem-answer-area { display: inline-flex; min-width: 0; align-items: center; }
+.answer-prefix-label { margin-right: 5px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+.problem-cell-linear-equation { display: block; padding: 0; }
+.problem-cell-linear-equation .problem-number { position: absolute; top: 14%; left: 4%; width: auto; }
+.problem-cell-linear-equation .expression { position: absolute; top: 11%; left: 15%; max-width: 80%; font-size: 17px; }
+.problem-cell-linear-equation .problem-answer-area { position: absolute; right: 6%; bottom: 11%; }
+.problem-cell-linear-equation .answer-box { margin-left: 0; }
+.problem-cell-linear-equation .grade-warnings { right: 0; bottom: -20px; left: auto; }
 .worksheet-footer { position: absolute; color: var(--muted); font-size: 7px; line-height: 1; white-space: nowrap; }
 .problem-number { flex: 0 0 15%; color: #484848; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .expression { flex: 0 0 auto; white-space: nowrap; font-size: clamp(17px, 2.8vw, 23px); font-variant-numeric: tabular-nums; }
+.problem-math-expression { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
+.problem-math-expression :is(mtext, mn, mi, mo) { font-family: 'Noto Sans JP', system-ui, sans-serif; }
 .answer-box {
   display: inline-flex;
   flex: 0 1 auto;
   align-items: center;
   justify-content: flex-start;
-  min-width: 32px;
+  min-width: 42px;
   max-width: 100%;
-  height: 34px;
+  min-height: 34px;
   margin-left: 6px;
-  overflow: hidden;
+  overflow: visible;
   padding: 2px 4px;
   border: 1px solid #4f4f4f;
   border-radius: 0;
@@ -237,9 +312,28 @@ button:disabled { cursor: wait; opacity: .5; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.answer-value { display: block; min-width: 0; max-width: 100%; overflow: hidden; line-height: 1; text-align: left; text-overflow: clip; }
-.answer-caret { display: inline-block; width: 2px; height: 1.05em; margin-inline: 1px; background: #111; vertical-align: -.12em; animation: answer-caret-blink 1s steps(1, end) infinite; }
+.answer-value { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; overflow: visible; line-height: 1; text-align: left; }
+
+.answer-render-probe {
+  position: fixed;
+  z-index: -1;
+  top: 0;
+  left: -10000px;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+.answer-render-probe .answer-value { max-width: none; }
 @keyframes answer-caret-blink { 50% { opacity: 0; } }
+.answer-box-structured { min-height: 46px; padding-block: 3px; }
+.answer-math { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
+.answer-math :is(mtext, mn, mi, mo) { font-family: 'Noto Sans JP', system-ui, sans-serif; }
+.answer-math { math-style: normal; }
+.answer-math mfrac > * { math-depth: 0; math-style: normal; }
+.answer-math-slot { cursor: text; }
+.answer-math-slot-empty { color: #777; }
+.answer-math-slot-active { color: #111; }
+.answer-math-caret { color: #111; font-family: 'Noto Sans JP', system-ui, sans-serif; font-size: .78em; animation: answer-caret-blink 1s steps(1, end) infinite; }
 .answer-box-selected { border: 2px solid #111; }
 .answer-box:disabled { cursor: default; opacity: 1; }
 .answer-box-correct { border-color: #222; }
@@ -247,7 +341,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-cell-graded .answer-box { min-width: 25px; }
 .result-mark { flex: 0 0 18px; margin-left: 5px; font-size: 17px; }
 .correct-answer { flex: 0 0 auto; margin-left: 5px; color: #e01010; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.grade-warnings { position: absolute; bottom: 2px; left: 17%; display: flex; gap: 5px; color: #8a5a00; font-size: 9px; font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.grade-warnings { position: absolute; bottom: 2px; left: 17%; display: flex; gap: 5px; padding: 2px 4px; color: #704800; border: 1px solid #d8bd68; border-radius: 2px; background: #fff8d8; font-size: 10px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
 .grade-warnings > span + span::before { content: "・"; margin-right: 5px; }
 .grade-result-panel { display: grid; gap: 10px; justify-items: center; margin: 0 auto 14px; }
 .grade-summary { display: flex; gap: 8px; align-items: baseline; width: fit-content; margin: 0; padding: 7px 14px; border: 1px solid var(--ink); background: var(--paper); }
@@ -268,12 +362,21 @@ button:disabled { cursor: wait; opacity: .5; }
   background: rgba(244, 246, 247, .98);
   box-shadow: 0 -5px 22px rgba(0, 0, 0, .12);
 }
-.input-panel-inner { display: grid; grid-template-columns: minmax(210px, 1.35fr) minmax(180px, 1fr); gap: 10px; width: min(470px, 100%); margin: 0 auto; }
-.keypad-numbers, .keypad-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.input-panel-inner { display: grid; grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); gap: 10px; width: min(780px, 100%); margin: 0 auto; }
+.formula-keypad, .keypad-numbers, .keypad-controls { display: grid; gap: 6px; }
+.formula-keypad { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.keypad-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .keypad-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.keypad-numbers button, .keypad-controls button { min-height: 42px; border: 1px solid #8d969a; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 650; }
-.keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
-.keypad-zero { grid-column: 1 / -1; }
+.formula-keypad button, .keypad-numbers button, .keypad-controls button { min-height: 42px; border: 1px solid #8d969a; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 650; }
+.formula-keypad button { display: grid; gap: 1px; min-height: 58px; place-items: center; padding: 4px 3px 3px; color: #243d45; background: #fafdfe; }
+.formula-keypad button:hover:not(:disabled), .keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
+.formula-key-symbol { display: flex; min-height: 31px; align-items: center; justify-content: center; }
+.math-template-icon { display: inline-block; margin: 0; font-size: 24px; line-height: 1; vertical-align: middle; }
+.math-template-icon :is(mtext, mn, mi, mo) { font-family: 'Noto Sans JP', system-ui, sans-serif; }
+.math-template-slot { font-family: inherit; font-size: .78em; }
+.formula-key-label { color: #53676e; font-family: 'Noto Sans JP', system-ui, sans-serif; font-size: 9px; font-weight: 700; line-height: 1; }
+.keypad-zero { grid-column: span 2; }
+.keypad-decimal { font-family: Georgia, 'Times New Roman', serif; font-size: 22px; line-height: 1; }
 .keypad-controls .keypad-clear { color: #750a0a; border-color: #bd8f8f; background: #fff9f9; }
 .keypad-controls .keypad-commit { grid-column: 1 / -1; color: var(--paper); border-color: var(--ink); background: var(--ink); }
 
@@ -292,7 +395,7 @@ button:disabled { cursor: wait; opacity: .5; }
   .lobby-shape-circle { right: -18px; }
   .lobby-shape-triangle { right: 4%; opacity: .14; }
   .worksheet-screen { padding-top: 102px; }
-  .worksheet-input-open { padding-bottom: 228px; }
+  .worksheet-input-open { padding-bottom: 300px; }
   .ribbon { grid-template-columns: 1fr auto auto; gap: 8px; min-height: 102px; padding: 8px 10px; }
   .worksheet-toast { top: 112px; }
   .ribbon-meta { grid-column: 2; grid-row: 1; }
@@ -302,10 +405,12 @@ button:disabled { cursor: wait; opacity: .5; }
   .problem-cell { padding-inline: 2%; }
   .problem-number { flex-basis: 14%; font-size: 12px; }
   .expression { font-size: clamp(15px, 4.6vw, 20px); }
-  .answer-box { min-width: 27px; height: 29px; margin-left: 4px; padding-inline: 2px; }
+  .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 2px; }
   .correct-answer { margin-left: 3px; font-size: 13px; }
   .input-panel-inner { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 7px; }
-  .keypad-numbers, .keypad-controls { gap: 5px; }
+  .formula-keypad { grid-column: 1 / -1; grid-template-columns: repeat(6, minmax(70px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
+  .formula-keypad, .keypad-numbers, .keypad-controls { gap: 5px; }
+  .formula-keypad button { min-height: 52px; }
   .keypad-numbers button, .keypad-controls button { min-height: 39px; }
 }
 
@@ -317,7 +422,7 @@ button:disabled { cursor: wait; opacity: .5; }
 
 @media (prefers-reduced-motion: reduce) {
   .lobby-shape { animation: none; }
-  .answer-caret { animation: none; }
+  .answer-math-caret { animation: none; }
   .settings-screen :is(button, select, input) { scroll-behavior: auto; transition: none; }
 }
 

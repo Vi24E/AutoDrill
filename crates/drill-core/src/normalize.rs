@@ -52,6 +52,18 @@ impl ExactRational {
         Self::new(self.numerator.checked_neg()?, self.denominator)
     }
 
+    fn square_root(self) -> Option<Self> {
+        if self.numerator < 0 {
+            return None;
+        }
+        let numerator = exact_square_root(self.numerator as u128)?;
+        let denominator = exact_square_root(self.denominator as u128)?;
+        Self::new(
+            i128::try_from(numerator).ok()?,
+            i128::try_from(denominator).ok()?,
+        )
+    }
+
     fn into_answer(self) -> Option<AnswerNode> {
         let numerator = i64::try_from(self.numerator).ok()?;
         let denominator = i64::try_from(self.denominator).ok()?;
@@ -80,9 +92,14 @@ pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
         AnswerNode::ExactDecimal { coefficient, scale } => {
             // This fallback is reached only when an external scale is too
             // large for the bounded exact conversion. Still remove decimal
-            // trailing zeroes without using Float.
+            // trailing zeroes without using Float. A zero coefficient is
+            // canonical zero immediately; otherwise the loop is bounded by
+            // the coefficient's at-most-19 decimal digits, not by `scale`.
             let mut coefficient = *coefficient;
             let mut scale = *scale;
+            if coefficient == 0 {
+                return AnswerNode::Integer(0);
+            }
             while scale > 0 && coefficient % 10 == 0 {
                 coefficient /= 10;
                 scale -= 1;
@@ -93,6 +110,7 @@ pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
                 AnswerNode::ExactDecimal { coefficient, scale }
             }
         }
+        AnswerNode::NanError(raw) => AnswerNode::NanError(raw.clone()),
         AnswerNode::Fraction {
             numerator,
             denominator,
@@ -147,12 +165,32 @@ fn exact_rational(answer: &AnswerNode) -> Option<ExactRational> {
         } => exact_rational(whole)?
             .add(exact_rational(numerator)?.divide(exact_rational(denominator)?)?),
         AnswerNode::Negative(value) => exact_rational(value)?.negate(),
+        AnswerNode::Root {
+            radicand,
+            index: None,
+        } => exact_rational(radicand)?.square_root(),
         AnswerNode::Empty
+        | AnswerNode::NanError(_)
         | AnswerNode::Root { .. }
         | AnswerNode::PlusMinus(_)
         | AnswerNode::Tuple(_)
         | AnswerNode::Variable(_) => None,
     }
+}
+
+fn exact_square_root(value: u128) -> Option<u128> {
+    if value < 2 {
+        return Some(value);
+    }
+    let mut x = value;
+    let mut next = value / 2 + 1;
+    while next < x {
+        x = next;
+        next = (x + value / x) / 2;
+    }
+    x.checked_mul(x)
+        .filter(|square| *square == value)
+        .map(|_| x)
 }
 
 fn gcd(mut left: u128, mut right: u128) -> u128 {

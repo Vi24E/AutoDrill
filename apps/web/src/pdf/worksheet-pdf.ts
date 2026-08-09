@@ -1,7 +1,8 @@
 import { degrees, PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 import { A4_PAGE, buildSharedWorksheetLayout, getCellPosition } from '@/domain/layout';
-import { integerAnswerValue, type ProblemDto, type WorksheetDto } from '@/domain/drill-engine';
+import { answerNodeText, type WorksheetDto } from '@/domain/drill-engine';
+import { problemExpression, problemExpressionTokens, type ProblemMathToken } from '@/domain/problem-format';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
 
 export type PdfPageModel = {
@@ -46,6 +47,85 @@ export type PdfProblemLineGeometry = {
   answerBoxWidth: number;
   answerGap: number;
 };
+
+type PdfPage = ReturnType<PDFDocument['addPage']>;
+type PdfFont = Awaited<ReturnType<PDFDocument['embedFont']>>;
+
+function mathTokenWidth(token: ProblemMathToken, font: PdfFont, fontSize: number): number {
+  if (token.kind === 'text') return font.widthOfTextAtSize(token.text, fontSize);
+  if (token.kind === 'minus') return fontSize * 0.72;
+  const fractionSize = fontSize * 0.68;
+  return Math.max(
+    font.widthOfTextAtSize(String(token.numerator), fractionSize),
+    font.widthOfTextAtSize(String(token.denominator), fractionSize),
+  ) + 4;
+}
+
+export function getPdfMathExpressionWidth(
+  problem: WorksheetDto['problems'][number],
+  font: PdfFont,
+  fontSize: number,
+): number {
+  return problemExpressionTokens(problem).reduce((width, token) => width + mathTokenWidth(token, font, fontSize), 0);
+}
+
+function drawProblemMathExpression(
+  page: PdfPage,
+  problem: WorksheetDto['problems'][number],
+  x: number,
+  baseline: number,
+  font: PdfFont,
+  fontSize: number,
+): void {
+  let cursor = x;
+  for (const token of problemExpressionTokens(problem)) {
+    if (token.kind === 'text') {
+      page.drawText(token.text, { x: cursor, y: baseline, size: fontSize, font, color: rgb(0, 0, 0) });
+      cursor += mathTokenWidth(token, font, fontSize);
+      continue;
+    }
+    if (token.kind === 'minus') {
+      const width = mathTokenWidth(token, font, fontSize);
+      const y = baseline + fontSize * 0.31;
+      page.drawLine({
+        start: { x: cursor + 1, y },
+        end: { x: cursor + width - 1, y },
+        thickness: 1.15,
+        color: rgb(0, 0, 0),
+      });
+      cursor += width;
+      continue;
+    }
+    const fractionSize = fontSize * 0.68;
+    const numerator = String(token.numerator);
+    const denominator = String(token.denominator);
+    const width = mathTokenWidth(token, font, fontSize);
+    const numeratorWidth = font.widthOfTextAtSize(numerator, fractionSize);
+    const denominatorWidth = font.widthOfTextAtSize(denominator, fractionSize);
+    const lineY = baseline + fontSize * 0.28;
+    page.drawText(numerator, {
+      x: cursor + (width - numeratorWidth) / 2,
+      y: lineY + 2.2,
+      size: fractionSize,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    page.drawLine({
+      start: { x: cursor + 1, y: lineY },
+      end: { x: cursor + width - 1, y: lineY },
+      thickness: 0.8,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(denominator, {
+      x: cursor + (width - denominatorWidth) / 2,
+      y: lineY - fractionSize - 1.4,
+      size: fractionSize,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    cursor += width;
+  }
+}
 
 /** Keep the printable answer box immediately after the rendered equals sign. */
 export function getPdfProblemLineGeometry(
@@ -118,8 +198,8 @@ export function buildPdfPageModel(worksheet: WorksheetDto, metadata?: WorksheetM
   const cells = layout.cells.map(({ problem }, index) => ({
     number: `${index + 1}.`,
     problem_id: problem.problem_id,
-    expression: `${problem.prompt.left} + ${problem.prompt.right} =`,
-    answer: integerAnswerValue(problem.canonical_answer) ?? undefined,
+    expression: problemExpression(problem),
+    answer: answerNodeText(problem.canonical_answer) || undefined,
   }));
   return [
     {
@@ -173,32 +253,64 @@ function drawProblemPage(
 
   for (const cell of layout.cells) {
     const position = getCellPosition(layout, cell);
-    const baseline = position.y + position.height / 2 + 5;
-    const expression = `${cell.problem.prompt.left} + ${cell.problem.prompt.right} =`;
-    const line = getPdfProblemLineGeometry(position, font.widthOfTextAtSize(expression, 18));
-    page.drawText(`${cell.index + 1}.`, {
-      x: position.x + 8,
-      y: baseline + 1,
-      size: 10,
-      font,
-      color: rgb(0.25, 0.25, 0.25),
-    });
-    page.drawText(expression, {
-      x: line.expressionX,
-      y: baseline,
-      size: 18,
-      font,
-      color: rgb(0, 0, 0),
-    });
-    page.drawRectangle({
-      x: line.answerBoxX,
-      y: baseline - 4,
-      width: line.answerBoxWidth,
-      height: 25,
-      borderWidth: 1,
-      borderColor: rgb(0, 0, 0),
-      color: rgb(1, 1, 1),
-    });
+    const expression = problemExpression(cell.problem);
+    if (cell.problem.prompt.kind === 'linear_equation') {
+      const expressionBaseline = position.y + position.height - 28;
+      const answerBaseline = position.y + 15;
+      const boxWidth = 36;
+      const boxHeight = 24;
+      const boxX = position.x + position.width - boxWidth - 12;
+      page.drawText(`${cell.index + 1}.`, {
+        x: position.x + 8,
+        y: expressionBaseline + 1,
+        size: 10,
+        font,
+        color: rgb(0.25, 0.25, 0.25),
+      });
+      drawProblemMathExpression(page, cell.problem, position.x + 30, expressionBaseline, font, 15);
+      page.drawText('x =', {
+        x: boxX - 23,
+        y: answerBaseline + 4,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawRectangle({
+        x: boxX,
+        y: answerBaseline,
+        width: boxWidth,
+        height: boxHeight,
+        borderWidth: 1,
+        borderColor: rgb(0, 0, 0),
+        color: rgb(1, 1, 1),
+      });
+    } else {
+      const baseline = position.y + position.height / 2 + 5;
+      const line = getPdfProblemLineGeometry(position, font.widthOfTextAtSize(expression, 18));
+      page.drawText(`${cell.index + 1}.`, {
+        x: position.x + 8,
+        y: baseline + 1,
+        size: 10,
+        font,
+        color: rgb(0.25, 0.25, 0.25),
+      });
+      page.drawText(expression, {
+        x: line.expressionX,
+        y: baseline,
+        size: 18,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawRectangle({
+        x: line.answerBoxX,
+        y: baseline - 4,
+        width: line.answerBoxWidth,
+        height: 25,
+        borderWidth: 1,
+        borderColor: rgb(0, 0, 0),
+        color: rgb(1, 1, 1),
+      });
+    }
   }
   if (metadata) drawFooter(page, font, metadata, false);
 }
@@ -220,21 +332,42 @@ function drawAnswerPage(
 
   for (const cell of layout.cells) {
     const position = getCellPosition(layout, cell);
-    const baseline = position.y + position.height / 2 + 5;
-    page.drawText(`${cell.index + 1}.`, {
-      x: position.x + 8,
-      y: baseline + 1,
-      size: 10,
-      font,
-      color: rgb(0.25, 0.25, 0.25),
-    });
-    page.drawText(`${cell.problem.prompt.left} + ${cell.problem.prompt.right} = ${integerAnswerValue(cell.problem.canonical_answer) ?? ''}`, {
-      x: position.x + 24,
-      y: baseline,
-      size: 17,
-      font,
-      color: rgb(0, 0, 0),
-    });
+    const expression = problemExpression(cell.problem);
+    const answer = answerNodeText(cell.problem.canonical_answer);
+    if (cell.problem.prompt.kind === 'linear_equation') {
+      const expressionBaseline = position.y + position.height - 28;
+      page.drawText(`${cell.index + 1}.`, {
+        x: position.x + 8,
+        y: expressionBaseline + 1,
+        size: 10,
+        font,
+        color: rgb(0.25, 0.25, 0.25),
+      });
+      drawProblemMathExpression(page, cell.problem, position.x + 30, expressionBaseline, font, 15);
+      page.drawText(`x = ${answer}`, {
+        x: position.x + position.width - 78,
+        y: position.y + 20,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+    } else {
+      const baseline = position.y + position.height / 2 + 5;
+      page.drawText(`${cell.index + 1}.`, {
+        x: position.x + 8,
+        y: baseline + 1,
+        size: 10,
+        font,
+        color: rgb(0.25, 0.25, 0.25),
+      });
+      page.drawText(`${expression} ${answer}`, {
+        x: position.x + 24,
+        y: baseline,
+        size: 17,
+        font,
+        color: rgb(0, 0, 0),
+      });
+    }
   }
   if (metadata) drawFooter(page, font, metadata, true);
 }
@@ -282,8 +415,4 @@ export async function openWorksheetPdf(
     opened.close();
     throw error;
   }
-}
-
-export function problemExpression(problem: ProblemDto): string {
-  return `${problem.prompt.left} + ${problem.prompt.right} =`;
 }

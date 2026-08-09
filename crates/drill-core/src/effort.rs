@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::answer::AnswerNode;
-use crate::model::Problem;
+use crate::model::{Problem, RationalCoefficient};
 
 pub const OPERATION_KIND_COUNT: usize = 27;
 
@@ -431,6 +431,131 @@ pub fn big_num_operations(answer: &AnswerNode) -> Vec<Operation> {
         .into_iter()
         .map(|magnitude| Operation::BigNum { magnitude })
         .collect()
+}
+
+/// Standard effort model for `ax + b = cx + d`: transpose to `Ax = B`,
+/// compute `A = a - c` and `B = d - b`, then divide `B / A`.  The graph
+/// records only the operations prescribed by curriculum.md; exact rational
+/// values remain outside Float.
+pub fn linear_equation_graph(
+    a: RationalCoefficient,
+    b: RationalCoefficient,
+    c: RationalCoefficient,
+    d: RationalCoefficient,
+    answer: &AnswerNode,
+) -> SolutionGraph {
+    let coefficient = a.subtract(c).expect("bounded rational subtraction");
+    debug_assert!(!coefficient.is_zero());
+    let constant = d.subtract(b).expect("bounded rational subtraction");
+
+    let mut operations = vec![Operation::OverheadLinear];
+    if !c.is_zero() {
+        operations.push(Operation::Transposition);
+        operations.extend(rational_subtraction_operations(a, c, coefficient));
+    }
+    if !b.is_zero() {
+        operations.push(Operation::Transposition);
+        operations.extend(rational_subtraction_operations(d, b, constant));
+    }
+
+    if coefficient.numerator == coefficient.denominator {
+        operations.push(Operation::Identity);
+    } else {
+        operations.push(Operation::BaseDivide);
+        if coefficient.numerator < 0 || constant.numerator < 0 {
+            operations.push(Operation::OverheadNegative);
+        }
+        let solved = constant
+            .divide(coefficient)
+            .expect("nonzero linear coefficient");
+        if solved.denominator > 1 && rational_division_requires_reduction(constant, coefficient) {
+            operations.push(Operation::OverheadGcd);
+        }
+    }
+    operations.extend(big_num_operations(answer));
+
+    let mut steps = Vec::with_capacity(operations.len());
+    for (index, operation) in operations.into_iter().enumerate() {
+        let id = index as u32;
+        let depends_on = if id == 0 { vec![] } else { vec![id - 1] };
+        steps.push(step(id, operation, depends_on));
+    }
+    SolutionGraph { steps }
+}
+
+fn rational_subtraction_operations(
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+    result: RationalCoefficient,
+) -> Vec<Operation> {
+    let mut operations = Vec::new();
+    if left.denominator != right.denominator {
+        operations.push(Operation::OverheadLcm);
+        operations.push(Operation::BaseTimes);
+        operations.push(Operation::BaseTimes);
+    }
+    operations.push(Operation::BaseMinus);
+    if left.numerator < 0 || right.numerator < 0 {
+        operations.push(Operation::OverheadNegative);
+    }
+    if result.denominator > 1 && rational_subtraction_requires_reduction(left, right) {
+        operations.push(Operation::OverheadGcd);
+    }
+    operations
+}
+
+fn rational_division_requires_reduction(
+    dividend: RationalCoefficient,
+    divisor: RationalCoefficient,
+) -> bool {
+    let Some(reduced) = dividend.divide(divisor) else {
+        return false;
+    };
+    if reduced.denominator == 1 {
+        return false;
+    }
+    let Some(raw_numerator) = dividend.numerator.checked_mul(divisor.denominator) else {
+        return false;
+    };
+    let Some(raw_denominator) = dividend.denominator.checked_mul(divisor.numerator) else {
+        return false;
+    };
+    raw_denominator != 0
+        && gcd_u64(raw_numerator.unsigned_abs(), raw_denominator.unsigned_abs()) > 1
+}
+
+fn rational_subtraction_requires_reduction(
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+) -> bool {
+    let denominator_gcd = gcd_u64(left.denominator as u64, right.denominator as u64);
+    let left_scale = right.denominator / denominator_gcd as i64;
+    let right_scale = left.denominator / denominator_gcd as i64;
+    let Some(left_numerator) = left.numerator.checked_mul(left_scale) else {
+        return false;
+    };
+    let Some(right_numerator) = right.numerator.checked_mul(right_scale) else {
+        return false;
+    };
+    let Some(raw_numerator) = left_numerator.checked_sub(right_numerator) else {
+        return false;
+    };
+    let Some(common_denominator) = left.denominator.checked_mul(left_scale) else {
+        return false;
+    };
+    let Some(reduced) = left.subtract(right) else {
+        return false;
+    };
+    reduced.denominator > 1 && gcd_u64(raw_numerator.unsigned_abs(), common_denominator as u64) > 1
+}
+
+fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
 }
 
 pub fn one_digit_addition_graph(left: u8, right: u8) -> SolutionGraph {

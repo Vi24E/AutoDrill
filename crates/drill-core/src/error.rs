@@ -31,6 +31,9 @@ impl GenerationError {
             Self::UnsupportedSchemaVersion { .. } => "unsupported_schema_version",
             Self::UnknownTheme { .. } => "unknown_theme",
             Self::UnknownGeneratorRevision { .. } => "unknown_generator_revision",
+            Self::InvalidIdentity(IdentityError::UnsupportedSchemaVersion { .. }) => {
+                "unsupported_schema_version"
+            }
             Self::InvalidIdentity(_) => "invalid_problem_set_identity",
         }
     }
@@ -54,4 +57,14 @@ pub enum EditorError {
     NegativeDraft,
     #[error("the editor only supports integer draft nodes")]
     UnsupportedDraftNode,
+    #[error("the editor path does not select an editable slot")]
+    InvalidPath,
+    #[error("the decimal draft is invalid")]
+    InvalidDecimalDraft,
+    #[error("the editor structure {structure:?} is not allowed by the input interface")]
+    StructureNotAllowed {
+        structure: crate::model::EditorStructure,
+    },
+    #[error("the answer violates the input interface capability")]
+    InputInterfaceViolation,
 }

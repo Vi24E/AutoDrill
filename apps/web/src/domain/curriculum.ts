@@ -1,12 +1,14 @@
 import {
-  ADDITION_CURRICULUM_PATH,
-  ADDITION_LAYOUT,
-  ADDITION_SKILL_ID,
   DRILL_SCHEMA_VERSION,
   type DifficultyLevel,
-  type CurriculumPathSegment,
-  type WorksheetLayout,
 } from '@/domain/drill-engine';
+import {
+  LINEAR_EQUATION_1_DEFINITION,
+  LINEAR_EQUATION_2_DEFINITION,
+  ONE_DIGIT_ADDITION_DEFINITION,
+  THEME_DEFINITIONS,
+  type ThemeDefinition,
+} from '@/domain/theme-registry';
 
 export type { DifficultyLevel } from '@/domain/drill-engine';
 
@@ -22,37 +24,16 @@ export const DIFFICULTY_OPTIONS = [
   { value: 5, label: '5: とてもむずかしい' },
 ] as const satisfies readonly { value: DifficultyLevel; label: string }[];
 
-export type UnitRoute = {
-  gradeSlug: GradeSlug;
-  themeSlug: string;
-  pathname: `/drills/${GradeSlug}/${string}`;
+export type UnitRoute = ThemeDefinition['route'];
+
+export type ImplementedCurriculumTheme = ThemeDefinition & {
+  implemented: true;
 };
 
-type ThemeBase = {
+export type UnimplementedCurriculumTheme = {
   numeric_theme_id: number;
   themeKey: string;
   label: string;
-};
-
-export type ImplementedCurriculumTheme = ThemeBase & {
-  implemented: true;
-  numeric_theme_id: 1;
-  themeKey: 'jp.grade1.addition.one_digit';
-  generator_revision: 2;
-  problemCount: 20;
-  layout: WorksheetLayout;
-  route: UnitRoute;
-  search: {
-    title: string;
-    description: string;
-  };
-  compatibility: {
-    skillId: typeof ADDITION_SKILL_ID;
-    curriculumPath: readonly CurriculumPathSegment[];
-  };
-};
-
-export type UnimplementedCurriculumTheme = ThemeBase & {
   implemented: false;
   generator_revision: null;
   problemCount: null;
@@ -90,34 +71,23 @@ export type WebDrillSettings = {
   seed: string;
 };
 
-export const ONE_DIGIT_ADDITION_THEME: ImplementedCurriculumTheme = {
-  numeric_theme_id: 1,
-  themeKey: 'jp.grade1.addition.one_digit',
-  label: '一桁の足し算',
-  implemented: true,
-  generator_revision: 2,
-  problemCount: ADDITION_LAYOUT.problem_count,
-  layout: ADDITION_LAYOUT,
-  route: {
-    gradeSlug: 'grade-1',
-    themeSlug: 'one-digit-addition',
-    pathname: '/drills/grade-1/one-digit-addition',
-  },
-  search: {
-    title: '一桁の足し算 | AutoDrill',
-    description: '小学1年生向けの一桁の足し算ドリルです。',
-  },
-  compatibility: {
-    skillId: ADDITION_SKILL_ID,
-    curriculumPath: ADDITION_CURRICULUM_PATH,
-  },
-};
+function implemented(definition: ThemeDefinition): ImplementedCurriculumTheme {
+  return { ...definition, implemented: true };
+}
 
-export const ADDITION_AND_SUBTRACTION_GENRE: CurriculumGenre = {
-  genreKey: 'addition-and-subtraction',
-  label: '足し算と引き算',
-  themes: [ONE_DIGIT_ADDITION_THEME],
-};
+export const IMPLEMENTED_THEMES: readonly ImplementedCurriculumTheme[] = THEME_DEFINITIONS.map(implemented);
+
+export const ONE_DIGIT_ADDITION_THEME = IMPLEMENTED_THEMES.find(
+  (theme) => theme.numeric_theme_id === ONE_DIGIT_ADDITION_DEFINITION.numeric_theme_id,
+)!;
+
+export const LINEAR_EQUATION_1_THEME = IMPLEMENTED_THEMES.find(
+  (theme) => theme.numeric_theme_id === LINEAR_EQUATION_1_DEFINITION.numeric_theme_id,
+)!;
+
+export const LINEAR_EQUATION_2_THEME = IMPLEMENTED_THEMES.find(
+  (theme) => theme.numeric_theme_id === LINEAR_EQUATION_2_DEFINITION.numeric_theme_id,
+)!;
 
 const GRADE_LABELS = [
   '小学1年生',
@@ -151,21 +121,52 @@ function createDummyGenre(grade: GradeNumber): CurriculumGenre {
   };
 }
 
+function implementedGenresForGrade(gradeSlug: GradeSlug): CurriculumGenre[] {
+  const themes = IMPLEMENTED_THEMES.filter((theme) => theme.grade.slug === gradeSlug);
+  const groups = new Map<string, CurriculumGenre>();
+  for (const theme of themes) {
+    const key = theme.gradeGenre.genreKey;
+    const existing = groups.get(key);
+    if (existing) {
+      groups.set(key, { ...existing, themes: [...existing.themes, theme] });
+    } else {
+      groups.set(key, { genreKey: key, label: theme.gradeGenre.label, themes: [theme] });
+    }
+  }
+  return [...groups.values()];
+}
+
 export const CURRICULUM_TREE: readonly CurriculumGrade[] = GRADE_LABELS.map((label, index) => {
   const grade = (index + 1) as GradeNumber;
+  const slug = `grade-${grade}` as GradeSlug;
   return {
-    slug: `grade-${grade}` as GradeSlug,
+    slug,
     label,
-    genres: grade === 1
-      ? [ADDITION_AND_SUBTRACTION_GENRE, createDummyGenre(grade)]
-      : [createDummyGenre(grade)],
+    genres: [...implementedGenresForGrade(slug), createDummyGenre(grade)],
   };
 });
 
-/** Recommended is a reference-only subset of the canonical grade tree. */
-export const RECOMMENDED_GENRES: readonly CurriculumGenre[] = [CURRICULUM_TREE[0]!.genres[0]!];
+export const ADDITION_AND_SUBTRACTION_GENRE: CurriculumGenre = CURRICULUM_TREE[0]!.genres.find(
+  (genre) => genre.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre.genreKey,
+)!;
 
-export const IMPLEMENTED_THEMES: readonly ImplementedCurriculumTheme[] = [ONE_DIGIT_ADDITION_THEME];
+function buildRecommendedGenres(): CurriculumGenre[] {
+  const groups = new Map<string, CurriculumGenre>();
+  for (const theme of IMPLEMENTED_THEMES) {
+    if (!theme.recommendedGenre) continue;
+    const { genreKey, label } = theme.recommendedGenre;
+    const existing = groups.get(genreKey);
+    if (existing) {
+      groups.set(genreKey, { ...existing, themes: [...existing.themes, theme] });
+    } else {
+      groups.set(genreKey, { genreKey, label, themes: [theme] });
+    }
+  }
+  return [...groups.values()];
+}
+
+/** Recommended is a presentation grouping that references canonical theme objects. */
+export const RECOMMENDED_GENRES: readonly CurriculumGenre[] = buildRecommendedGenres();
 
 export const DEFAULT_WEB_DRILL_SETTINGS: WebDrillSettings = {
   schema_version: DRILL_SCHEMA_VERSION,
@@ -197,19 +198,20 @@ export function findCurriculumSelection(themeKey: string): CurriculumSelection {
     }
   }
 
-  const grade = CURRICULUM_TREE[0]!;
-  const genre = grade.genres[0]!;
-  return { grade, genre, theme: genre.themes[0]! };
+  const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === ONE_DIGIT_ADDITION_THEME.grade.slug)!;
+  const genre = grade.genres.find((candidate) => candidate.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre.genreKey)!;
+  return { grade, genre, theme: ONE_DIGIT_ADDITION_THEME };
 }
 
 export function findTheme(themeKey: string): CurriculumTheme | undefined {
-  for (const grade of CURRICULUM_TREE) {
-    for (const genre of grade.genres) {
-      const theme = genre.themes.find((candidate) => candidate.themeKey === themeKey);
-      if (theme) return theme;
-    }
-  }
-  return undefined;
+  return IMPLEMENTED_THEMES.find((theme) => theme.themeKey === themeKey)
+    ?? CURRICULUM_TREE.flatMap((grade) => grade.genres)
+      .flatMap((genre) => genre.themes)
+      .find((theme) => theme.themeKey === themeKey);
+}
+
+export function findImplementedThemeByNumericId(numericThemeId: number): ImplementedCurriculumTheme | undefined {
+  return IMPLEMENTED_THEMES.find((theme) => theme.numeric_theme_id === numericThemeId);
 }
 
 export function findImplementedThemeByRoute(

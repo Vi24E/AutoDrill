@@ -1,5 +1,6 @@
 import {
   ADDITION_CURRICULUM_PATH,
+  ADDITION_GENERATOR_REVISION,
   ADDITION_LAYOUT,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
@@ -14,6 +15,7 @@ import {
   type ProblemDto,
   type WorksheetDto,
 } from '@/domain/drill-engine';
+import { ALL_MATH_STRUCTURES, LINEAR_EQUATION_1_DEFINITION, LINEAR_EQUATION_2_DEFINITION } from '@/domain/theme-registry';
 
 const FIXTURE_SEED = 'fixtureSeed';
 const FIXTURE_THEME_ID = 1;
@@ -38,9 +40,8 @@ export function fixtureWorksheet(): WorksheetDto {
       id: index + 1,
       problem_id: String(index + 1),
       numeric_theme_id: FIXTURE_THEME_ID,
-      left,
-      right,
       prompt: { kind: 'addition', left, right },
+      input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
       answer_schema: { kind: 'integer', min: '1', max: '18' },
       canonical_answer: answer,
       solution_graph: { steps: [] },
@@ -50,11 +51,11 @@ export function fixtureWorksheet(): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: '2-1-2-fixtureSeed-3',
+    problem_set_id: `3-1-${ADDITION_GENERATOR_REVISION}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: FIXTURE_THEME_ID,
-      generator_revision: 2,
+      generator_revision: ADDITION_GENERATOR_REVISION,
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
@@ -66,11 +67,69 @@ export function fixtureWorksheet(): WorksheetDto {
   };
 }
 
+export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
+  const definition = themeId === 2 ? LINEAR_EQUATION_1_DEFINITION : LINEAR_EQUATION_2_DEFINITION;
+  const problems: ProblemDto[] = Array.from({ length: 16 }, (_, index) => {
+    const solution = themeId === 2 ? (index % 11) - 5 : null;
+    const canonicalAnswer: AnswerNode = themeId === 2
+      ? { type: 'integer', value: String(solution) }
+      : { type: 'fraction', value: { numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '2' } } };
+    const a = { numerator: 2, denominator: 1 };
+    const b = { numerator: 0, denominator: 1 };
+    const c = themeId === 2 ? { numerator: 1, denominator: 1 } : { numerator: 0, denominator: 1 };
+    const d = themeId === 2
+      ? { numerator: solution!, denominator: 1 }
+      : { numerator: 1, denominator: 1 };
+    return {
+      schema_version: DRILL_SCHEMA_VERSION,
+      id: index + 1,
+      problem_id: String(index + 1),
+      numeric_theme_id: themeId,
+      prompt: {
+        kind: 'linear_equation',
+        a,
+        b,
+        c,
+        d,
+        left_negative_constant_as_subtraction: false,
+        right_negative_constant_as_subtraction: false,
+      },
+      input_interface: {
+        type: 'structured_math',
+        allowed_structures: ALL_MATH_STRUCTURES,
+      },
+      answer_schema: themeId === 2
+        ? { kind: 'integer', min: '-15', max: '15' }
+        : { kind: 'rational', max_abs_numerator: 20, max_denominator: 12, require_reduced_fraction_form: true },
+      canonical_answer: canonicalAnswer,
+      solution_graph: { steps: [] },
+      operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+      effort: 0,
+    };
+  });
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    problem_set_id: `3-${themeId}-${definition.generator_revision}-fixtureSeed-3`,
+    identity: {
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: themeId,
+      generator_revision: definition.generator_revision,
+      seed: FIXTURE_SEED,
+      difficulty: FIXTURE_DIFFICULTY,
+    },
+    skill_id: definition.compatibility.skillId,
+    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
 function answerDigits(answer: AnswerNode): string {
   return answer.type === 'integer' ? String(answer.value) : '';
 }
 
-function applyFixtureEditor(state: EditorState, action: EditorAction): EditorState {
+function applyFixtureEditor(state: EditorState, action: EditorAction, _inputInterface: ProblemDto['input_interface']): EditorState {
   const digits = [...answerDigits(state.answer)];
   let cursor = Math.min(state.cursor, digits.length);
   if (action.kind === 'insert_digit' && digits.length >= 18) {
@@ -98,6 +157,7 @@ function applyFixtureEditor(state: EditorState, action: EditorAction): EditorSta
       ? { type: 'integer', value: normalized }
       : { type: 'empty' },
     cursor: Math.min(cursor, normalized.length),
+    active_path: state.active_path,
     committed: action.kind === 'commit',
   };
 }
@@ -107,8 +167,8 @@ export function fixtureEngine(worksheet = fixtureWorksheet()): DrillEngine {
     async generateWorksheet() {
       return worksheet;
     },
-    async applyEditorAction(state, action) {
-      return applyFixtureEditor(state, action);
+    async applyEditorAction(state, action, inputInterface) {
+      return applyFixtureEditor(state, action, inputInterface);
     },
     async gradeAnswer(request: GradeRequest): Promise<GradeResult> {
       const items = request.worksheet.problems.map((problem) => {

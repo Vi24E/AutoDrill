@@ -9,7 +9,7 @@ import {
   getFooterPosition,
   getPdfProblemLineGeometry,
 } from '@/pdf/worksheet-pdf';
-import { fixtureWorksheet } from '@/test/fixtures';
+import { fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
 import type { WorksheetMetadata } from '@/domain/worksheet-metadata';
 
 describe('shared worksheet layout and PDF', () => {
@@ -36,6 +36,27 @@ describe('shared worksheet layout and PDF', () => {
     expect(pages[0]?.cells[0]?.number).toBe('1.');
     expect(pages[0]?.cells[19]?.number).toBe('20.');
     expect(pages[1]?.cells[0]?.number).toBe('1.');
+  });
+
+  it('derives the 2 x 8 linear-equation PDF model from the same registry layout', () => {
+    const worksheet = linearFixtureWorksheet(2);
+    const layout = buildSharedWorksheetLayout(worksheet);
+    const pages = buildPdfPageModel(worksheet);
+    expect(layout.cells).toHaveLength(16);
+    expect(layout.cells[7]).toMatchObject({ column: 0, row: 7 });
+    expect(layout.cells[8]).toMatchObject({ column: 1, row: 0 });
+    expect(layout.cells[15]).toMatchObject({ column: 1, row: 7 });
+    expect(pages[0]?.cells).toHaveLength(16);
+    expect(pages[0]?.cells[0]?.expression).toBe('2x = x + (−5)');
+    expect(pages[0]?.cells[0]?.answer).toBeUndefined();
+    expect(pages[1]?.cells[0]?.answer).toBe('-5');
+  });
+
+  it('creates an actual two-page linear-equation PDF', async () => {
+    const bytes = await generateWorksheetPdfBytes(linearFixtureWorksheet(2), metadata);
+    const document = await PDFDocument.load(bytes);
+    expect(document.getPages()).toHaveLength(2);
+    expect(document.getPages()[1]?.getRotation().angle).toBe(180);
   });
 
   it('creates two actual A4 PDF pages and rotates the answer page', async () => {

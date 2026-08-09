@@ -9,15 +9,17 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('implemented unit route', () => {
-  it('pre-renders and preselects only the implemented unit', () => {
+  it('pre-renders and preselects every implemented unit from the registry', () => {
     expect(dynamicParams).toBe(false);
     expect(generateStaticParams()).toEqual([
       { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' },
+      { gradeSlug: 'grade-7', themeSlug: 'linear-equation-1' },
+      { gradeSlug: 'grade-7', themeSlug: 'linear-equation-2' },
     ]);
 
     const page = UnitPage({ params: { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' } });
     expect(page.props.initialWebSettings).toEqual({
-      schema_version: 2,
+      schema_version: 3,
       numeric_theme_id: 1,
       themeKey: 'jp.grade1.addition.one_digit',
       difficulty: 3,
@@ -25,6 +27,15 @@ describe('implemented unit route', () => {
     });
     expect(generateMetadata({ params: { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' } })).toMatchObject({
       title: '一桁の足し算 | AutoDrill',
+    });
+
+    const linear1 = UnitPage({ params: { gradeSlug: 'grade-7', themeSlug: 'linear-equation-1' } });
+    expect(linear1.props.initialWebSettings).toMatchObject({
+      numeric_theme_id: 2,
+      themeKey: 'jp.grade7.equation.linear.1',
+    });
+    expect(generateMetadata({ params: { gradeSlug: 'grade-7', themeSlug: 'linear-equation-2' } })).toMatchObject({
+      title: '一次方程式(2) | AutoDrill',
     });
   });
 

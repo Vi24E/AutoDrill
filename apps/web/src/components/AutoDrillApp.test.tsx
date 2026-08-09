@@ -2,10 +2,10 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AutoDrillApp } from '@/components/AutoDrillApp';
-import { createWebDrillSettings, ONE_DIGIT_ADDITION_THEME } from '@/domain/curriculum';
+import { createWebDrillSettings, LINEAR_EQUATION_1_THEME, ONE_DIGIT_ADDITION_THEME } from '@/domain/curriculum';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
-import { fixtureEngine, fixtureSettings, fixtureWorksheet } from '@/test/fixtures';
+import { fixtureEngine, fixtureSettings, fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
 import type { DrillEngine, WorksheetDto } from '@/domain/drill-engine';
 
 vi.mock('@/pdf/worksheet-pdf', async () => {
@@ -48,10 +48,75 @@ function warningFixtureEngine(): DrillEngine {
         items: result.items.map((item, index) => index === 0 ? {
           ...item,
           correct: true,
-          warnings: ['fraction_not_reduced', 'redundant_negative', 'redundant_decimal'] as const,
+          warnings: ['fraction_not_reduced', 'redundant_negative', 'redundant_decimal', 'integer_form_required'] as const,
         } : item),
         correct_count: result.correct_count + 1,
       };
+    },
+  };
+}
+
+function simpleNumericFixtureEngine(allowNegative: boolean): DrillEngine {
+  const worksheet = fixtureWorksheet();
+  worksheet.problems = worksheet.problems.map((problem) => ({
+    ...problem,
+    input_interface: { type: 'simple_numeric', allow_decimal: true, allow_negative: allowNegative },
+  }));
+  return fixtureEngine(worksheet);
+}
+
+function structuredFixtureEngine(): DrillEngine {
+  const worksheet = fixtureWorksheet();
+  worksheet.problems = worksheet.problems.map((problem) => ({
+    ...problem,
+    input_interface: {
+      type: 'structured_math',
+      allowed_structures: ['fraction', 'mixed_fraction', 'decimal', 'root', 'negative', 'plus_minus', 'tuple'] as const,
+    },
+  }));
+  const base = fixtureEngine(worksheet);
+  return {
+    ...base,
+    async applyEditorAction(state, action, inputInterface) {
+      if (action.kind === 'insert_structure' && action.structure === 'fraction') {
+        return {
+          answer: {
+            type: 'fraction',
+            value: { numerator: { type: 'empty' }, denominator: { type: 'empty' } },
+          },
+          active_path: [0],
+          cursor: 0,
+          committed: false,
+        };
+      }
+      if (action.kind === 'insert_structure' && action.structure === 'root') {
+        return {
+          answer: {
+            type: 'root',
+            value: { radicand: { type: 'empty' }, index: null },
+          },
+          active_path: [0],
+          cursor: 0,
+          committed: false,
+        };
+      }
+      if (action.kind === 'select_slot') {
+        return { ...state, active_path: [...action.path], cursor: action.cursor };
+      }
+      if (action.kind === 'insert_digit' && state.answer.type === 'fraction') {
+        const numerator = state.active_path[0] === 0
+          ? { type: 'integer' as const, value: String(action.digit) }
+          : state.answer.value.numerator;
+        const denominator = state.active_path[0] === 1
+          ? { type: 'integer' as const, value: String(action.digit) }
+          : state.answer.value.denominator;
+        return {
+          ...state,
+          answer: { type: 'fraction', value: { numerator, denominator } },
+          cursor: 1,
+        };
+      }
+      return base.applyEditorAction(state, action, inputInterface);
     },
   };
 }
@@ -87,9 +152,7 @@ function expectVisibleKanjiToUseRuby(container: HTMLElement) {
     Array.from(element.childNodes)
       .filter((node): node is Text => node.nodeType === Node.TEXT_NODE)
       .filter((node) => /\p{Script=Han}/u.test(node.textContent ?? ''))
-      // Native select options cannot contain ruby. Their closed values are
-      // represented by the semantic ruby overlay covered by this same scan.
-      .filter((node) => element.tagName !== 'OPTION' && !element.closest('ruby'))
+      .filter((node) => !element.closest('ruby'))
       .map((node) => node.textContent?.trim()),
   );
   expect(offenders).toEqual([]);
@@ -140,59 +203,75 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('heading', { name: '計算ドリルをつくる' })).toHaveTextContent('計算ドリルをつくる');
   });
 
-  it('defaults to the recommended two-select mode and can open the three-select grade mode', async () => {
-    render(<AutoDrillApp engine={fixtureEngine()} />);
+  it('keeps addition and equations in Recommended and uses ruby inside custom dropdown options', async () => {
+    const { container } = render(<AutoDrillApp engine={fixtureEngine()} />);
 
     expect(screen.getByRole('button', { name: 'おすすめ' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: '学年から選ぶ' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('足し算と引き算');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
-    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('3: ふつう');
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '足し算と引き算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算');
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', '3: ふつう');
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
+    const recommendedOptions = within(screen.getByRole('listbox', { name: 'ジャンルの選択肢' })).getAllByRole('option');
+    expect(recommendedOptions.map((option) => option.getAttribute('aria-label'))).toEqual(['足し算と引き算', '方程式']);
+    expect(screen.getByRole('option', { name: '足し算と引き算' }).querySelectorAll('rt').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('option', { name: '方程式' }));
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '方程式');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一次方程式(1)');
 
     fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
-    expect(screen.getByRole('button', { name: '学年から選ぶ' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('combobox', { name: '学年' })).toHaveValue('grade-1');
-    expect(screen.getByRole('combobox', { name: '学年' })).toHaveDisplayValue('小学1年生');
-    expect(within(screen.getByRole('combobox', { name: '学年' })).getAllByRole('option')).toHaveLength(9);
-    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('足し算と引き算');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-value', 'grade-7');
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-selected-label', '中学1年生');
+    fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
+    expect(within(screen.getByRole('listbox', { name: '学年の選択肢' })).getAllByRole('option')).toHaveLength(9);
+    expect(screen.getByRole('option', { name: '中学1年生' }).querySelector('rt')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '学年' }), { key: 'Escape' });
+    expect(screen.queryByRole('listbox', { name: '学年の選択肢' })).not.toBeInTheDocument();
 
+    expectVisibleKanjiToUseRuby(container);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
-    expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'ジャンル' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'テーマ' })).not.toBeInTheDocument();
+  });
+
+  it('removes ruby from custom dropdown options when furigana is off', () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'ふりがな' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
+    expect(screen.getByRole('option', { name: '足し算と引き算' }).querySelector('rt')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '方程式' }).querySelector('rt')).not.toBeInTheDocument();
   });
 
   it('selects Dummy structure by grade and disables unavailable actions', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
-    fireEvent.change(screen.getByRole('combobox', { name: '学年' }), { target: { value: 'grade-2' } });
+    fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
+    fireEvent.click(screen.getByRole('option', { name: '小学2年生' }));
 
-    expect(screen.getByRole('combobox', { name: '学年' })).toHaveDisplayValue('小学2年生');
-    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('Dummy1');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('Dummy1');
+    expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-selected-label', '小学2年生');
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', 'Dummy1');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', 'Dummy1');
     expect(screen.getByRole('button', { name: '問題生成' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '印刷' })).toBeDisabled();
     expect(screen.getByLabelText('このテーマはまだ利用できません')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'おすすめ' }));
     expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '足し算と引き算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算');
     expect(screen.getByRole('button', { name: '問題生成' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '印刷' })).toBeEnabled();
   });
 
-  it('stores difficulty changes in the explicit Web settings seam', async () => {
+  it('stores difficulty changes through the custom difficulty dropdown', async () => {
     const onWebSettingsChange = vi.fn();
     render(<AutoDrillApp engine={fixtureEngine()} onWebSettingsChange={onWebSettingsChange} />);
-    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('3: ふつう');
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', '3: ふつう');
 
-    fireEvent.change(screen.getByRole('combobox', { name: '難易度' }), { target: { value: '4' } });
-    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('4: むずかしい');
+    fireEvent.click(screen.getByRole('combobox', { name: '難易度' }));
+    fireEvent.click(screen.getByRole('option', { name: '4: むずかしい' }));
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', '4: むずかしい');
     await waitFor(() => expect(onWebSettingsChange).toHaveBeenLastCalledWith({
-      schema_version: 2,
+      schema_version: 3,
       numeric_theme_id: 1,
       themeKey: 'jp.grade1.addition.one_digit',
       difficulty: 4,
@@ -200,16 +279,16 @@ describe('AutoDrillApp', () => {
     }));
   });
 
-  it('preselects the implemented unit from route-provided Web settings', () => {
+  it('preselects an implemented unit from route-provided Web settings', () => {
     render(
       <AutoDrillApp
         engine={fixtureEngine()}
         initialWebSettings={createWebDrillSettings(ONE_DIGIT_ADDITION_THEME, 5)}
       />,
     );
-    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveDisplayValue('足し算と引き算');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveDisplayValue('一桁の足し算');
-    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveDisplayValue('5: とてもむずかしい');
+    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '足し算と引き算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算');
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', '5: とてもむずかしい');
   });
 
   it('disables q1 actions and announces problem generation while it is pending', async () => {
@@ -243,10 +322,37 @@ describe('AutoDrillApp', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     expect(await screen.findByRole('heading', { name: '1けたのたしざん(1)' })).toBeInTheDocument();
-    expect(screen.getByLabelText('20問の一桁足し算ワークシート')).toBeInTheDocument();
-    expect(screen.queryByLabelText('数字入力パネル')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('20問の1けたのたしざん(1)ワークシート')).toBeInTheDocument();
+    expect(screen.queryByLabelText('数式入力パネル')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
-    expect(screen.getByLabelText('数字入力パネル')).toBeInTheDocument();
+    expect(screen.getByLabelText('数式入力パネル')).toBeInTheDocument();
+  });
+
+  it('renders the 16-problem linear-equation worksheet with x = answer slots and the full rich keyboard', async () => {
+    const worksheet = linearFixtureWorksheet(2);
+    render(
+      <AutoDrillApp
+        engine={fixtureEngine(worksheet)}
+        initialWebSettings={createWebDrillSettings(LINEAR_EQUATION_1_THEME)}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    expect(await screen.findByRole('heading', { name: '一次方程式(1)' })).toBeInTheDocument();
+    expect(screen.getByLabelText('16問の一次方程式(1)ワークシート')).toBeInTheDocument();
+    expect(screen.getByText('次の一次方程式を解きなさい。ただし、答えが整数でない場合は約分によって最も簡単な形の仮分数で答えなさい。')).toBeInTheDocument();
+
+    const firstCell = screen.getByTestId('problem-cell-0');
+    expect(firstCell).toHaveClass('problem-cell-linear-equation');
+    expect(firstCell.querySelector('.problem-math-expression')).toHaveTextContent('2x = x + (−5)');
+    expect(within(firstCell).getByText('x =')).toBeTruthy();
+
+    fireEvent.click(within(firstCell).getByRole('button', { name: /^1番の答え/ }));
+    const formulaPad = screen.getByLabelText('数式テンプレート');
+    expect(within(formulaPad).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      '分数', '帯分数', '平方根', 'マイナス', 'プラスマイナス', '複数解',
+    ]);
+    expect(within(screen.getByLabelText('数字キー')).getByRole('button', { name: '小数点' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('編集キー')).getAllByRole('button').slice(0, 2).map((button) => button.textContent)).toEqual(['←', '→']);
   });
 
   it('derives q2 cell positions and order from the shared A4 layout', async () => {
@@ -283,12 +389,12 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
     fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
-    expect(screen.getByLabelText('数字入力パネル')).toBeInTheDocument();
+    expect(screen.getByLabelText('数式入力パネル')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'TOPに戻る' }));
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
-    expect(screen.queryByLabelText('数字入力パネル')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('数式入力パネル')).not.toBeInTheDocument();
   });
 
   it('supports keypad input, physical Enter, and next-problem focus', async () => {
@@ -301,7 +407,7 @@ describe('AutoDrillApp', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /1番の答え 1/ })).toBeInTheDocument());
     fireEvent.keyDown(window, { key: 'Enter' });
     await waitFor(() => expect(screen.getByRole('button', { name: /^2番の答え/ })).toHaveClass('answer-box-selected'));
-    expect(screen.getByLabelText('数字入力パネル')).toBeInTheDocument();
+    expect(screen.getByLabelText('数式入力パネル')).toBeInTheDocument();
   });
 
   it('renders the fixed keypad in standard calculator order with clear controls', async () => {
@@ -314,9 +420,157 @@ describe('AutoDrillApp', () => {
     expect(within(numberPad).getAllByRole('button').map((button) => button.textContent)).toEqual([
       '7', '8', '9', '4', '5', '6', '1', '2', '3', '0',
     ]);
-    expect(within(screen.getByLabelText('編集キー')).getByRole('button', { name: '一文字戻す' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('編集キー')).queryByRole('button', { name: '一文字削除' })).not.toBeInTheDocument();
+    expect(within(numberPad).queryByRole('button', { name: '小数点' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('数式テンプレート')).not.toBeInTheDocument();
+    const editControls = within(screen.getByLabelText('編集キー'));
+    expect(editControls.getByRole('button', { name: '一文字戻す' })).toBeInTheDocument();
+    expect(editControls.queryByRole('button', { name: '一文字削除' })).not.toBeInTheDocument();
+    expect(editControls.getAllByRole('button').slice(0, 2).map((button) => button.getAttribute('aria-label'))).toEqual([
+      'カーソルを左へ', 'カーソルを右へ',
+    ]);
     expect(screen.queryByText(/^AST:/)).not.toBeInTheDocument();
+  });
+
+  it('projects an allowed simple-numeric negative control and shares its action with physical minus', async () => {
+    const base = simpleNumericFixtureEngine(true);
+    const applyEditorAction = vi.fn(base.applyEditorAction);
+    render(<AutoDrillApp engine={{ ...base, applyEditorAction }} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    expect(screen.getByRole('button', { name: 'マイナス' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '小数点' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'マイナス' }));
+    await waitFor(() => expect(applyEditorAction).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(window, { key: '-' });
+    await waitFor(() => expect(applyEditorAction).toHaveBeenCalledTimes(2));
+    expect(applyEditorAction.mock.calls[0]?.[1]).toEqual({ kind: 'insert_structure', structure: 'negative' });
+    expect(applyEditorAction.mock.calls[1]?.[1]).toEqual(applyEditorAction.mock.calls[0]?.[1]);
+  });
+
+  it('hides the negative control and ignores physical minus when simple-numeric negatives are disallowed', async () => {
+    const base = simpleNumericFixtureEngine(false);
+    const applyEditorAction = vi.fn(base.applyEditorAction);
+    render(<AutoDrillApp engine={{ ...base, applyEditorAction }} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    expect(screen.queryByRole('button', { name: 'マイナス' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '小数点' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '-' });
+    expect(applyEditorAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps nan_error text visible and editable without treating it as a number', async () => {
+    const base = fixtureEngine();
+    const engine: DrillEngine = {
+      ...base,
+      async applyEditorAction(state, action, inputInterface) {
+        if (action.kind === 'insert_digit') {
+          return {
+            ...state,
+            answer: { type: 'nan_error', value: '1e+' },
+            cursor: 3,
+            committed: false,
+          };
+        }
+        if (action.kind === 'select_slot') {
+          return { ...state, active_path: [...action.path], cursor: action.cursor };
+        }
+        return base.applyEditorAction(state, action, inputInterface);
+      },
+    };
+    render(<AutoDrillApp engine={engine} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+    fireEvent.keyDown(window, { key: '1' });
+
+    const malformed = await screen.findByRole('button', { name: '1番の答え 1e+' });
+    expect(malformed).toHaveClass('answer-box-selected');
+    expect(malformed.querySelector('[data-slot-path=""]')).toHaveTextContent('1e+');
+    fireEvent.click(malformed.querySelector('[data-slot-path=""]')!);
+    fireEvent.click(screen.getByRole('button', { name: '採点' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 / 20'));
+    expect(screen.getByRole('button', { name: '1番の答え 1e+' })).toHaveClass('answer-box-wrong');
+  });
+
+  it('shows visual math templates to the left of the number pad and renders editable fraction slots', async () => {
+    const { container } = render(<AutoDrillApp engine={structuredFixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    const templates = screen.getByLabelText('数式テンプレート');
+    expect(within(templates).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      '分数', '帯分数', '平方根', 'マイナス', 'プラスマイナス', '複数解',
+    ]);
+
+    expect(templates.querySelectorAll('math.math-template-icon')).toHaveLength(6);
+    expect(templates.querySelectorAll('.math-template-slot').length).toBeGreaterThanOrEqual(8);
+    expect(templates.querySelector('math.math-template-icon mfrac')).not.toBeNull();
+    expect(templates.querySelector('math.math-template-icon msqrt')).not.toBeNull();
+
+    fireEvent.click(within(templates).getByRole('button', { name: '分数' }));
+    await waitFor(() => expect(container.querySelector('math.answer-math mfrac')).not.toBeNull());
+    expect(screen.getByRole('status', { name: /入力位置 分子/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '7' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 7/' })).toBeInTheDocument());
+    const caretPad = container.querySelector('math.answer-math mpadded');
+    expect(caretPad?.getAttribute('width')).toBe('0');
+    expect(caretPad?.getAttribute('height')).toBe('0');
+    expect(caretPad?.getAttribute('depth')).toBe('0');
+    fireEvent.click(container.querySelector('[data-slot-path="1"]')!);
+    await waitFor(() => expect(screen.getByRole('status', { name: /入力位置 分母/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '1番の答え 7/2' })).toBeInTheDocument());
+    expectVisibleKanjiToUseRuby(container);
+  });
+
+  it('renders square roots entirely through native MathML', async () => {
+    const { container } = render(<AutoDrillApp engine={structuredFixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+    fireEvent.click(screen.getByRole('button', { name: '平方根' }));
+
+    await waitFor(() => expect(container.querySelector('math.answer-math > msqrt')).not.toBeNull());
+    expect(container.querySelector('math.answer-math svg')).toBeNull();
+    expect(container.querySelector('.answer-radicand')).toBeNull();
+  });
+
+  it('removes an empty structured template when Backspace is pressed', async () => {
+    const { container } = render(<AutoDrillApp engine={structuredFixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+    fireEvent.click(screen.getByRole('button', { name: '分数' }));
+    await waitFor(() => expect(container.querySelector('math.answer-math mfrac')).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    await waitFor(() => expect(container.querySelector('math.answer-math mfrac')).toBeNull());
+    expect(screen.getByRole('button', { name: '1番の答え 未入力' })).toBeInTheDocument();
+  });
+
+  it('maps physical decimal, fraction, negative, plus-minus, and tuple keys to AST actions', async () => {
+    const base = structuredFixtureEngine();
+    const applyEditorAction = vi.fn(base.applyEditorAction);
+    render(<AutoDrillApp engine={{ ...base, applyEditorAction }} />);
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    fireEvent.click(screen.getByRole('button', { name: /^1番の答え/ }));
+
+    for (const key of ['.', '/', '-', '+', ',']) fireEvent.keyDown(window, { key });
+    await waitFor(() => expect(applyEditorAction).toHaveBeenCalledTimes(5));
+    expect(applyEditorAction.mock.calls.map(([, action]) => action)).toEqual([
+      { kind: 'insert_structure', structure: 'decimal' },
+      { kind: 'insert_structure', structure: 'fraction' },
+      { kind: 'insert_structure', structure: 'negative' },
+      { kind: 'insert_structure', structure: 'plus_minus' },
+      { kind: 'insert_structure', structure: 'tuple' },
+    ]);
   });
 
   it('supports physical Backspace, Delete, and cursor movement without native button collisions', async () => {
@@ -352,7 +606,7 @@ describe('AutoDrillApp', () => {
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
     await waitFor(() => {
       expect(screen.getByTestId('answer-before-caret-0')).toHaveTextContent('1');
-      expect(screen.getByTestId('answer-caret-0')).toBeInTheDocument();
+      expect(screen.getByTestId('answer-caret-0')).toBeTruthy();
       expect(screen.getByTestId('answer-after-caret-0')).toHaveTextContent('2');
     });
     fireEvent.keyDown(window, { key: '9' });
@@ -473,19 +727,19 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
     const emptyAnswer = screen.getByRole('button', { name: '1番の答え 未入力' });
-    expect(emptyAnswer).toHaveStyle({ width: '42px', flexGrow: '0', flexShrink: '1' });
+    expect(emptyAnswer).toHaveStyle({ width: 'max-content', flexGrow: '0', flexShrink: '0' });
     fireEvent.click(emptyAnswer);
 
     fireEvent.keyDown(window, { key: '1' });
     fireEvent.keyDown(window, { key: '1' });
     const twoDigits = await screen.findByRole('button', { name: '1番の答え 11' });
-    expect(twoDigits).toHaveStyle({ width: '42px', flexGrow: '0', flexShrink: '1' });
+    expect(twoDigits).toHaveStyle({ width: 'max-content', flexGrow: '0', flexShrink: '0' });
 
     for (let index = 2; index < 19; index += 1) fireEvent.keyDown(window, { key: '1' });
     const eighteenDigits = '1'.repeat(18);
     const answer = await screen.findByRole('button', { name: `1番の答え ${eighteenDigits}` });
     expect(answer).toHaveAttribute('data-answer-length', '18');
-    expect(answer).toHaveStyle({ width: '140px', fontSize: '11px', flexGrow: '0', flexShrink: '1' });
+    expect(answer).toHaveStyle({ width: 'max-content', fontSize: '11px', flexGrow: '0', flexShrink: '0' });
     expect(await screen.findByLabelText('式が大きすぎます！')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Backspace' });
@@ -585,9 +839,9 @@ describe('AutoDrillApp', () => {
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
     fireEvent.click(screen.getByRole('button', { name: '採点' }));
 
-    const warnings = await screen.findByLabelText('注意 約分、冗長なマイナス、余計な小数点');
+    const warnings = await screen.findByLabelText('注意 約分、冗長なマイナス、余計な小数点、整数で答えましょう');
     expect(warnings).toBeInTheDocument();
-    expect(warnings.querySelectorAll('ruby')).toHaveLength(4);
+    expect(warnings.querySelectorAll('ruby')).toHaveLength(6);
     expectVisibleKanjiToUseRuby(container);
   });
 
@@ -609,7 +863,7 @@ describe('AutoDrillApp', () => {
       act(() => vi.advanceTimersByTime(5_000));
       expect(screen.getByTestId('elapsed-time')).toHaveTextContent('00:03');
 
-      resolveGrade({ schema_version: 2, items: [], correct_count: 0, total_count: 20 });
+      resolveGrade({ schema_version: 3, items: [], correct_count: 0, total_count: 20 });
       await act(async () => {
         await Promise.resolve();
         await Promise.resolve();
@@ -706,7 +960,7 @@ describe('AutoDrillApp', () => {
   it('renders every visible q1 and q2 kanji string with semantic ruby', async () => {
     const { container } = render(<AutoDrillApp engine={fixtureEngine()} />);
     expectVisibleKanjiToUseRuby(container);
-    expect(container.querySelector('.ruby-select-display ruby')).toBeInTheDocument();
+    expect(container.querySelector('.custom-select-value ruby')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
