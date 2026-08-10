@@ -150,7 +150,7 @@ describe('versioned WASM adapter', () => {
     const result = await engine.gradeAnswer({
       schema_version: 3,
       worksheet,
-      answers: worksheet.problems.map((problem) => ({ problem_id: problem.problem_id, editor_state: emptyEditorState() })),
+      answers: worksheet.problems.map((problem) => ({ problem_id: problem.problem_id, answer: { type: 'empty' } })),
     });
 
     expect(JSON.parse(applyEditorAction.mock.calls[0]?.[0] as string)).toEqual({
@@ -168,6 +168,55 @@ describe('versioned WASM adapter', () => {
     });
     expect(result).toMatchObject({ schema_version: 3, correct_count: 20, total_count: 20 });
     expect(result.items[0]?.warnings).toEqual(['fraction_not_reduced']);
+  });
+
+  it('maps MathLive LaTeX through the explicit Rust AnswerNode adapter boundary', async () => {
+    const parseMathLiveAnswer = vi.fn().mockResolvedValue(envelope({
+      type: 'fraction',
+      value: { numerator: { type: 'integer', value: '7' }, denominator: { type: 'integer', value: '2' } },
+    }));
+    const engine = createWasmDrillEngine({ parse_mathlive_answer: parseMathLiveAnswer });
+
+    await expect(engine.parseMathLiveAnswer('\\frac{7}{2}', structuredInputInterface)).resolves.toEqual({
+      type: 'fraction',
+      value: { numerator: { type: 'integer', value: '7' }, denominator: { type: 'integer', value: '2' } },
+    });
+    expect(JSON.parse(parseMathLiveAnswer.mock.calls[0]?.[0] as string)).toEqual({
+      schema_version: 3,
+      input_interface: structuredInputInterface,
+      latex: '\\frac{7}{2}',
+    });
+  });
+
+  it('grades MathLive structural answers without requiring legacy editor path state', async () => {
+    const worksheet = linearFixtureWorksheet(3);
+    const submitted = {
+      type: 'fraction' as const,
+      value: {
+        numerator: { type: 'integer' as const, value: '11' },
+        denominator: { type: 'integer' as const, value: '1' },
+      },
+    };
+    const gradeAnswer = vi.fn().mockImplementation(async (requestJson: string) => {
+      const request = JSON.parse(requestJson) as { expected: unknown; actual: { type: string } };
+      return envelope({
+        status: request.actual.type === 'empty' ? 'unanswered' : 'incorrect',
+        is_correct: false,
+        expected: request.expected,
+        actual: request.actual,
+        warnings: [],
+      });
+    });
+    const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
+
+    const result = await engine.gradeAnswer({
+      schema_version: DRILL_SCHEMA_VERSION,
+      worksheet,
+      answers: [{ problem_id: worksheet.problems[0]!.problem_id, answer: submitted }],
+    });
+
+    expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string).actual).toEqual(submitted);
+    expect(result.items[0]).toMatchObject({ answer: '11/1', correct: false });
   });
 
   it('maps structured templates and slot paths through the versioned editor boundary', async () => {
@@ -300,7 +349,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     })).rejects.toMatchObject({ kind: 'invalid_dto' });
   });
@@ -321,7 +370,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     });
 
@@ -344,7 +393,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     });
     expect(result.items[0]).toMatchObject({ correct: false, warnings: ['redundant_decimal'] });
@@ -366,7 +415,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     });
 
@@ -395,7 +444,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     })).rejects.toMatchObject({ kind: 'invalid_dto' });
   });
@@ -464,7 +513,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     });
 
@@ -496,7 +545,7 @@ describe('versioned WASM adapter', () => {
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
-        editor_state: emptyEditorState(),
+        answer: { type: 'empty' },
       })),
     });
     expect(graded.items[0]).toMatchObject({ answer: '1e+', correct: false, warnings: [] });

@@ -1,25 +1,17 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { flushSync } from 'react-dom';
-import { createRoot } from 'react-dom/client';
 
 import {
   DEFAULT_DRILL_SETTINGS,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
-  emptyEditorState,
-  editorValue,
   answerNodeText,
   inputCapabilities,
-  isEditorActionAllowed,
-  type AnswerInputInterface,
   type AnswerInputStructure,
-  type AnswerNode,
   type DrillEngine,
   type DrillSettings,
-  type EditorAction,
-  type EditorState,
+  type AnswerNode,
   type GradeResult,
   type GradeWarningCode,
   type WorksheetDto,
@@ -42,8 +34,10 @@ import {
 import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
 import { MathTemplateIcon } from '@/components/MathTemplateIcon';
+import { MathLiveAnswerInput, MathLiveStatic, deleteEmptyMathLiveStructureBackward, type AutoDrillMathfield } from '@/components/MathLiveMath';
 import { openWorksheetPdf } from '@/pdf/worksheet-pdf';
 import { ProblemExpression } from '@/components/ProblemExpression';
+import { answerNodeLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
@@ -56,6 +50,7 @@ import {
 } from '@/domain/worksheet-metadata';
 
 type Screen = 'settings' | 'worksheet';
+type WorksheetPhase = 'editing' | 'grading' | 'graded' | 'replacing';
 type SettingsBusyAction = 'generate' | 'print' | null;
 const FURIGANA_STORAGE_KEY = 'autodrill:furigana-enabled';
 const FuriganaContext = createContext(true);
@@ -84,18 +79,32 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '中学2年生': [["中学", "ちゅうがく"], '2', ["年生", "ねんせい"]],
   '中学3年生': [["中学", "ちゅうがく"], '3', ["年生", "ねんせい"]],
   '足し算と引き算': [["足", "た"], 'し', ["算", "ざん"], 'と', ["引", "ひ"], 'き', ["算", "ざん"]],
+  '掛け算と割り算': [["掛", "か"], 'け', ["算", "ざん"], 'と', ["割", "わ"], 'り', ["算", "ざん"]],
+  '負の数': [["負", "ふ"], 'の', ["数", "すう"]],
+  '正の数・負の数': [["正", "せい"], 'の', ["数", "すう"], '・', ["負", "ふ"], 'の', ["数", "すう"]],
   '一桁の足し算': [["一桁", "ひとけた"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
+  '一桁の引き算': [["一桁", "ひとけた"], 'の', ["引", "ひ"], 'き', ["算", "ざん"]],
+  '二桁の足し算': [["二桁", "ふたけた"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
+  '九九': [["九九", "くく"]],
+  '分数の足し算': [["分数", "ぶんすう"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
+  '分数の引き算': [["分数", "ぶんすう"], 'の', ["引", "ひ"], 'き', ["算", "ざん"]],
+  '分数の掛け算': [["分数", "ぶんすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"]],
+  '負の数の計算(1)': [["負", "ふ"], 'の', ["数", "すう"], 'の', ["計算", "けいさん"], '(1)'],
+  '負の数の計算(2)': [["負", "ふ"], 'の', ["数", "すう"], 'の', ["計算", "けいさん"], '(2)'],
   '難易度': [["難易度", "なんいど"]],
   'このテーマはまだ利用できません': ['このテーマはまだ', ["利用", "りよう"], 'できません'],
   '問題数': [["問題数", "もんだいすう"]],
   '問': [["問", "もん"]],
   '任意': [["任意", "にんい"]],
+  '詳細設定': [["詳細設定", "しょうさいせってい"]],
+  '同じSeedでは同じ問題が生成されます。': [["同", "おな"], 'じSeedでは', ["同", "おな"], 'じ', ["問題", "もんだい"], 'が', ["生成", "せいせい"], 'されます。'],
   '空欄なら毎回自動生成': [["空欄", "くうらん"], 'なら', ["毎回", "まいかい"], ["自動生成", "じどうせいせい"]],
   '同じSeedで同じ問題を再現できます。空欄なら毎回新しく生成します。': [["同", "おな"], 'じSeedで', ["同", "おな"], 'じ', ["問題", "もんだい"], 'を', ["再現", "さいげん"], 'できます。', ["空欄", "くうらん"], 'なら', ["毎回", "まいかい"], ["新", "あたら"], 'しく', ["生成", "せいせい"], 'します。'],
   '前回': [["前回", "ぜんかい"]],
   '問題生成': [["問題生成", "もんだいせいせい"]],
   '問題を生成中…': [["問題", "もんだい"], 'を', ["生成中", "せいせいちゅう"], '…'],
   '印刷': [["印刷", "いんさつ"]],
+  '印刷 (pdfで出力)': [["印刷", "いんさつ"], ' (pdfで', ["出力", "しゅつりょく"], ')'],
   'PDFを準備中…': ['PDFを', ["準備中", "じゅんびちゅう"], '…'],
   '問題を生成しています。しばらくお待ちください。': [["問題", "もんだい"], 'を', ["生成", "せいせい"], 'しています。しばらくお', ["待", "ま"], 'ちください。'],
   '印刷用PDFを準備しています。しばらくお待ちください。': [["印刷用", "いんさつよう"], 'PDFを', ["準備", "じゅんび"], 'しています。しばらくお', ["待", "ま"], 'ちください。'],
@@ -139,6 +148,16 @@ const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal'>
   tuple: '複数解',
 };
 
+type MathInputCommand =
+  | { kind: 'insert_digit'; digit: number }
+  | { kind: 'insert_structure'; structure: AnswerInputStructure }
+  | { kind: 'move_left' }
+  | { kind: 'move_right' }
+  | { kind: 'delete_backward' }
+  | { kind: 'delete_forward' }
+  | { kind: 'clear' }
+  | { kind: 'commit' };
+
 if (process.env.NODE_ENV !== 'production') {
   for (const [text, parts] of Object.entries(RUBY_TEXT)) {
     const baseText = parts.map((part) => typeof part === 'string' ? part : part[0]).join('');
@@ -167,317 +186,88 @@ function formatElapsed(startedAt: number | null, now: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function editorActionForKey(event: KeyboardEvent, inputInterface: AnswerInputInterface): EditorAction | null {
-  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return null;
-  let action: EditorAction | null = null;
-  if (event.key >= '0' && event.key <= '9') {
-    action = { kind: 'insert_digit', digit: Number(event.key) };
-  }
-  else if (event.key === 'Enter') action = { kind: 'commit' };
-  else if (event.key === 'Backspace') action = { kind: 'delete_backward' };
-  else if (event.key === 'Delete') action = { kind: 'delete_forward' };
-  else if (event.key === 'ArrowLeft') action = { kind: 'move_left' };
-  else if (event.key === 'ArrowRight') action = { kind: 'move_right' };
-  else if (event.key === '.') action = { kind: 'insert_structure', structure: 'decimal' };
-  else if (event.key === '/') action = { kind: 'insert_structure', structure: 'fraction' };
-  else if (event.key === '-') action = { kind: 'insert_structure', structure: 'negative' };
-  else if (event.key === '+') action = { kind: 'insert_structure', structure: 'plus_minus' };
-  else if (event.key === ',') action = { kind: 'insert_structure', structure: 'tuple' };
-  return action && isEditorActionAllowed(inputInterface, action) ? action : null;
-}
-
-function answerFontSize(digitCount: number): number {
-  if (digitCount <= 2) return 20;
-  return Math.max(11, 20 - (digitCount - 2) * 0.5625);
-}
-
-function answerNodeSize(answer: AnswerNode): number {
-  switch (answer.type) {
-    case 'empty': return 0;
-    case 'integer': return answer.value.replace('-', '').length;
-    case 'exact_decimal': return Math.max(answer.value.coefficient.replace('-', '').length, answer.value.scale + 1);
-    case 'nan_error': return Math.max(1, [...answer.value].length);
-    case 'fraction': return 1 + answerNodeSize(answer.value.numerator) + answerNodeSize(answer.value.denominator);
-    case 'mixed_fraction': return 1 + answerNodeSize(answer.value.whole) + answerNodeSize(answer.value.numerator) + answerNodeSize(answer.value.denominator);
-    case 'root': return 1 + answerNodeSize(answer.value.radicand) + (answer.value.index ? answerNodeSize(answer.value.index) : 0);
-    case 'negative':
-    case 'plus_minus': return 1 + answerNodeSize(answer.value);
-    case 'tuple': return 1 + answer.value.reduce((total, item) => total + answerNodeSize(item), 0);
-    case 'variable': return Math.max(1, [...answer.value].length);
-  }
-}
-
-function pathsEqual(left: readonly number[], right: readonly number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function answerSlotLabel(answer: AnswerNode, path: readonly number[]): string {
-  let node = answer;
-  const labels: string[] = [];
-  for (const index of path) {
-    switch (node.type) {
-      case 'fraction':
-        if (index === 0) { labels.push('分子'); node = node.value.numerator; }
-        else if (index === 1) { labels.push('分母'); node = node.value.denominator; }
-        else return '答え';
-        break;
-      case 'mixed_fraction':
-        if (index === 0) { labels.push('整数部分'); node = node.value.whole; }
-        else if (index === 1) { labels.push('分子'); node = node.value.numerator; }
-        else if (index === 2) { labels.push('分母'); node = node.value.denominator; }
-        else return '答え';
-        break;
-      case 'root':
-        if (index === 0) { labels.push('ルートの中'); node = node.value.radicand; }
-        else if (index === 1 && node.value.index) { labels.push('指数'); node = node.value.index; }
-        else return '答え';
-        break;
-      case 'negative':
-      case 'plus_minus':
-        if (index !== 0) return '答え';
-        node = node.value;
-        break;
-      case 'tuple':
-        if (!node.value[index]) return '答え';
-        labels.push(`${index + 1}個目の解`);
-        node = node.value[index];
-        break;
-      case 'empty':
-      case 'integer':
-      case 'exact_decimal':
-      case 'nan_error':
-      case 'variable': return '答え';
-    }
-  }
-  return labels.length > 0 ? labels.join('の') : '答え';
-}
-
-type MathMlEditorContext = {
-  state: EditorState;
-  selected: boolean;
-  testIdPrefix: number;
-  onSelectSlot: (path: readonly number[], cursor: number) => void;
-};
-
-type MathMlAnswerNodeProps = {
-  node: AnswerNode;
-  path: readonly number[];
-  editor?: MathMlEditorContext;
-};
-
-/**
- * Recursive AnswerNode renderer for the Web worksheet. Mathematical layout is
- * delegated entirely to native MathML; CSS only marks editing state.
- */
-function MathMlAnswerNode({ node, path, editor }: MathMlAnswerNodeProps) {
-  const child = (value: AnswerNode, index: number) => (
-    <MathMlAnswerNode node={value} path={[...path, index]} editor={editor} />
-  );
-
-  if (node.type === 'empty' || node.type === 'integer' || node.type === 'exact_decimal' || node.type === 'nan_error') {
-    const text = answerNodeText(node);
-    if (!editor) return <mtext>{text}</mtext>;
-
-    const active = editor.selected && pathsEqual(path, editor.state.active_path);
-    const characters = [...text];
-    const cursor = Math.min(editor.state.cursor, characters.length);
-    return (
-      <mrow
-        className={`answer-math-slot ${active ? 'answer-math-slot-active' : ''} ${text === '' ? 'answer-math-slot-empty' : ''}`}
-        data-slot-path={path.join('.')}
-        onClick={(event) => {
-          event.stopPropagation();
-          editor.onSelectSlot(path, characters.length);
-        }}
-      >
-        {active ? (
-          <>
-            <mtext data-testid={`answer-before-caret-${editor.testIdPrefix}`}>{characters.slice(0, cursor).join('')}</mtext>
-            <mpadded width="0" height="0" depth="0"><mtext className="answer-math-caret" data-testid={`answer-caret-${editor.testIdPrefix}`}>│</mtext></mpadded>
-            <mtext data-testid={`answer-after-caret-${editor.testIdPrefix}`}>{characters.slice(cursor).join('')}</mtext>
-          </>
-        ) : <mtext>{text || (path.length === 0 ? '' : '□')}</mtext>}
-      </mrow>
-    );
-  }
-
-  switch (node.type) {
-    case 'fraction':
-      return <mfrac>{child(node.value.numerator, 0)}{child(node.value.denominator, 1)}</mfrac>;
-    case 'mixed_fraction':
-      return <mrow>{child(node.value.whole, 0)}<mfrac>{child(node.value.numerator, 1)}{child(node.value.denominator, 2)}</mfrac></mrow>;
-    case 'root':
-      return node.value.index
-        ? <mroot>{child(node.value.radicand, 0)}{child(node.value.index, 1)}</mroot>
-        : <msqrt>{child(node.value.radicand, 0)}</msqrt>;
-    case 'negative':
-      return <mrow><mo>−</mo>{child(node.value, 0)}</mrow>;
-    case 'plus_minus':
-      return <mrow><mo>±</mo>{child(node.value, 0)}</mrow>;
-    case 'tuple':
-      return <mrow>{node.value.map((value, index) => <mrow key={index}>{index > 0 ? <mo>,</mo> : null}{child(value, index)}</mrow>)}</mrow>;
-    case 'variable':
-      return <mi>{node.value}</mi>;
-  }
-}
-
-type StructuredAnswerProps = {
-  node: AnswerNode;
-  path: readonly number[];
-  state: EditorState;
-  selected: boolean;
-  testIdPrefix: number;
-  onSelectSlot: (path: readonly number[], cursor: number) => void;
-};
-
-function StructuredAnswer({ node, path, state, selected, testIdPrefix, onSelectSlot }: StructuredAnswerProps) {
-  return (
-    <math className="answer-math" aria-label={answerNodeText(node)}>
-      <MathMlAnswerNode
-        node={node}
-        path={path}
-        editor={{ state, selected, testIdPrefix, onSelectSlot }}
-      />
-    </math>
-  );
-}
-
-function StaticMathAnswer({ node }: { node: AnswerNode }) {
-  return (
-    <math className="answer-math" aria-label={answerNodeText(node)}>
-      <MathMlAnswerNode node={node} path={[]} />
-    </math>
-  );
-}
-
-
-type RenderedAnswerSize = {
-  width: number;
-  height: number;
-};
-
-const FALLBACK_MAX_RENDERED_ANSWER_WIDTH = 180;
-const FALLBACK_MAX_RENDERED_ANSWER_HEIGHT = 80;
 const MIN_RENDERED_ANSWER_WIDTH_LIMIT = 96;
 const MIN_RENDERED_ANSWER_HEIGHT_LIMIT = 56;
 
-function measureRenderedAnswer(state: EditorState): RenderedAnswerSize | null {
-  if (typeof document === 'undefined' || !document.body) return null;
-  const probe = document.createElement('div');
-  probe.className = 'answer-render-probe';
-  probe.style.fontSize = `${answerFontSize(answerNodeSize(state.answer))}px`;
-  document.body.appendChild(probe);
-  const root = createRoot(probe);
-  try {
-    flushSync(() => {
-      root.render(
-        <span className="answer-value">
-          <StructuredAnswer
-            node={state.answer}
-            path={[]}
-            state={state}
-            selected={false}
-            testIdPrefix={-1}
-            onSelectSlot={() => undefined}
-          />
-        </span>,
-      );
-    });
-    const value = probe.firstElementChild as HTMLElement | null;
-    if (!value) return null;
-    const rect = value.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
-    return { width: rect.width, height: rect.height };
-  } finally {
-    flushSync(() => root.unmount());
-    probe.remove();
-  }
-}
-
-function renderedAnswerFitsProblem(state: EditorState, problemIndex: number): boolean {
-  const measured = measureRenderedAnswer(state);
-  // jsdom and non-layout renderers report zero-sized boxes. Runtime browser
-  // enforcement remains authoritative because only it has real CSS geometry.
-  if (!measured) return true;
+function mathfieldFitsProblem(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
+  // The visible answer box is an AutoDrill frame around the natural-size
+  // MathLive field. Enforce growth limits against the frame, not only the
+  // inner renderer, so border/padding remain part of the actual footprint.
+  const rendered = mathfield.closest<HTMLElement>('.answer-box') ?? mathfield;
+  const rect = rendered.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return true;
   const cell = document.querySelector<HTMLElement>(`[data-problem-index="${problemIndex}"]`);
   const cellRect = cell?.getBoundingClientRect();
   const maxWidth = cellRect && cellRect.width > 0
     ? Math.max(MIN_RENDERED_ANSWER_WIDTH_LIMIT, cellRect.width * 0.56)
-    : FALLBACK_MAX_RENDERED_ANSWER_WIDTH;
+    : 180;
   const maxHeight = cellRect && cellRect.height > 0
     ? Math.max(MIN_RENDERED_ANSWER_HEIGHT_LIMIT, cellRect.height * 0.72)
-    : FALLBACK_MAX_RENDERED_ANSWER_HEIGHT;
-  return measured.width <= maxWidth && measured.height <= maxHeight;
-}
-
-function actionCanGrowRenderedAnswer(action: EditorAction): boolean {
-  return action.kind === 'insert_digit' || action.kind === 'insert_structure';
+    : 80;
+  return rect.width <= maxWidth && rect.height <= maxHeight;
 }
 
 type WorksheetAnswerFieldProps = {
   problem: WorksheetDto['problems'][number];
   index: number;
-  editor: EditorState;
+  answer: AnswerNode;
   isSelected: boolean;
   result: GradeResult['items'][number] | undefined;
   gradeResult: GradeResult | null;
+  inputLocked: boolean;
   answerPrefix: string | null;
   onSelect: (index: number) => void;
-  onAction: (action: EditorAction) => void;
+  onRegisterMathfield: (index: number, mathfield: AutoDrillMathfield | null) => void;
+  onMathInput: (index: number, mathfield: AutoDrillMathfield, latex: string) => void;
+  onCommit: (index: number) => void;
 };
 
 function WorksheetAnswerField({
   problem,
   index,
-  editor,
+  answer,
   isSelected,
   result,
   gradeResult,
+  inputLocked,
   answerPrefix,
   onSelect,
-  onAction,
+  onRegisterMathfield,
+  onMathInput,
+  onCommit,
 }: WorksheetAnswerFieldProps) {
-  const answer = editorValue(editor) ?? '';
-  const astSize = answerNodeSize(editor.answer);
-  const structured = !['empty', 'integer', 'exact_decimal'].includes(editor.answer.type);
-  const answerStyle: CSSProperties = {
-    width: 'max-content',
-    fontSize: answerFontSize(astSize),
-    flexGrow: 0,
-    flexShrink: 0,
-  };
+  const answerText = answerNodeText(answer);
   const canonicalAnswer = answerNodeText(problem.canonical_answer);
 
   return (
     <span className="problem-answer-area">
-      {answerPrefix ? <math className="answer-prefix-label" aria-label={answerPrefix}><mtext>{answerPrefix}</mtext></math> : null}
-      <button
-        type="button"
-        className={`answer-box ${structured ? 'answer-box-structured' : ''} ${isSelected ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`}
-        data-answer-length={astSize}
-        style={answerStyle}
-        onClick={() => onSelect(index)}
-        disabled={Boolean(gradeResult)}
-        aria-label={`${index + 1}番の答え ${answer || '未入力'}`}
-      >
-        <span className="answer-value" aria-hidden="true">
-          <StructuredAnswer
-            node={editor.answer}
-            path={[]}
-            state={editor}
-            selected={isSelected}
-            testIdPrefix={index}
-            onSelectSlot={(path, cursor) => {
-              onSelect(index);
-              onAction({ kind: 'select_slot', path, cursor });
-            }}
-          />
-        </span>
-      </button>
+      {answerPrefix ? (
+        <MathLiveStatic
+          className="answer-prefix-label"
+          latex={answerPrefix.replaceAll(' ', '\\,')}
+          ariaLabel={answerPrefix}
+        />
+      ) : null}
+      <MathLiveAnswerInput
+        key={`${problem.problem_id}:${gradeResult ? 'graded' : 'editing'}`}
+        initialLatex={answerNodeLatex(answer)}
+        frameClassName={`answer-box ${isSelected ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`}
+        ariaLabel={`${index + 1}番の答え ${answerText || '未入力'}`}
+        selected={isSelected}
+        readOnly={inputLocked}
+        onSelect={() => onSelect(index)}
+        onInputLatex={(mathfield, latex) => onMathInput(index, mathfield, latex)}
+        onCommit={() => onCommit(index)}
+        onRegister={(mathfield) => onRegisterMathfield(index, mathfield)}
+      />
       {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
       {result && !result.correct ? (
         <span className="correct-answer" aria-label={`正しい答え ${canonicalAnswer}`}>
-          <StaticMathAnswer node={problem.canonical_answer} />
+          <MathLiveStatic
+            className="canonical-answer-math"
+            latex={answerNodeLatex(problem.canonical_answer)}
+            ariaLabel={canonicalAnswer}
+          />
         </span>
       ) : null}
       {result && result.warnings.length > 0 ? (
@@ -550,12 +340,13 @@ export function AutoDrillApp({
   }));
   const [worksheet, setWorksheet] = useState<WorksheetDto | null>(null);
   const [worksheetMetadata, setWorksheetMetadata] = useState<WorksheetMetadata | null>(null);
-  const [answers, setAnswers] = useState<Record<string, EditorState>>({});
+  const [answers, setAnswers] = useState<Record<string, AnswerNode>>({});
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
+  const [worksheetPhase, setWorksheetPhase] = useState<WorksheetPhase>('editing');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusyAction, setSettingsBusyAction] = useState<SettingsBusyAction>(null);
@@ -571,12 +362,19 @@ export function AutoDrillApp({
   // Default ON keeps the server and first client render identical. The saved
   // browser preference is applied only after hydration.
   const [furiganaEnabled, setFuriganaEnabled] = useState(true);
-  const answersRef = useRef<Record<string, EditorState>>({});
+  const answersRef = useRef<Record<string, AnswerNode>>({});
   const selectedIndexRef = useRef<number | null>(null);
   const inputEnabledRef = useRef(false);
+  const worksheetPhaseRef = useRef<WorksheetPhase>('editing');
   const actionQueueRef = useRef(Promise.resolve());
+  const mathfieldRefs = useRef(new Map<number, AutoDrillMathfield>());
   const noticeTimerRef = useRef<number | null>(null);
   const selectedTheme = findTheme(webSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
+
+  const transitionWorksheetPhase = useCallback((next: WorksheetPhase) => {
+    worksheetPhaseRef.current = next;
+    setWorksheetPhase(next);
+  }, []);
 
   useEffect(() => {
     onWebSettingsChange?.(webSettings);
@@ -676,12 +474,13 @@ export function AutoDrillApp({
   }, []);
 
   const installWorksheet = useCallback((nextWorksheet: WorksheetDto, metadata: WorksheetMetadata) => {
-    const nextAnswers = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, emptyEditorState()]));
+    const nextAnswers = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, { type: 'empty' } satisfies AnswerNode]));
     answersRef.current = nextAnswers;
     setWorksheet(nextWorksheet);
     setWorksheetMetadata(metadata);
     setAnswers(nextAnswers);
     setGradeResult(null);
+    transitionWorksheetPhase('editing');
     setSelectedIndex(null);
     selectedIndexRef.current = null;
     inputEnabledRef.current = false;
@@ -689,7 +488,7 @@ export function AutoDrillApp({
     setStartedAt(timerStart);
     setFinishedAt(null);
     setNow(timerStart);
-  }, []);
+  }, [transitionWorksheetPhase]);
 
   const showEngineError = useCallback((value: unknown) => {
     if (value instanceof DrillEngineError) {
@@ -749,6 +548,7 @@ export function AutoDrillApp({
   }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, selectedTheme, settings, showEngineError]);
 
   const selectProblem = useCallback((index: number) => {
+    if (worksheetPhaseRef.current !== 'editing') return;
     inputEnabledRef.current = true;
     selectedIndexRef.current = index;
     setSelectedIndex(index);
@@ -760,51 +560,102 @@ export function AutoDrillApp({
     dismissNotice();
   }, [dismissNotice]);
 
-  const applyAction = useCallback((action: EditorAction, requestedIndex?: number) => {
+  const registerMathfield = useCallback((index: number, mathfield: AutoDrillMathfield | null) => {
+    if (mathfield) mathfieldRefs.current.set(index, mathfield);
+    else mathfieldRefs.current.delete(index);
+  }, []);
+
+  const updateMathLiveAnswer = useCallback((index: number, mathfield: AutoDrillMathfield, latex: string) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current || !worksheet.problems[index]) return Promise.resolve();
+    const problem = worksheet.problems[index];
+    const problemId = problem.problem_id;
+
     const run = async () => {
-      const index = requestedIndex ?? selectedIndexRef.current;
-      if (!worksheet || index === null || !worksheet.problems[index]) return;
-      const problem = worksheet.problems[index];
-      if (!isEditorActionAllowed(problem.input_interface, action)) return;
-      const problemId = problem.problem_id;
-      const current = answersRef.current[problemId] ?? emptyEditorState();
-      setBusy(true);
-      setError(null);
-      dismissNotice();
+      const previous = answersRef.current[problemId] ?? ({ type: 'empty' } satisfies AnswerNode);
+
+      if (!mathfieldFitsProblem(mathfield, index)) {
+        mathfield.setValue(answerNodeLatex(previous), { silenceNotifications: true });
+        setNotice('式が大きすぎます！');
+        return;
+      }
+
       try {
-        const next = await engine.applyEditorAction(current, action, problem.input_interface);
-        if (actionCanGrowRenderedAnswer(action) && !renderedAnswerFitsProblem(next, index)) {
-          return;
-        }
-        const nextAnswers = { ...answersRef.current, [problemId]: next };
+        const answer = await engine.parseMathLiveAnswer(latex, problem.input_interface);
+        const nextAnswers = { ...answersRef.current, [problemId]: answer };
         answersRef.current = nextAnswers;
         setAnswers(nextAnswers);
-        if (action.kind === 'commit' && index < worksheet.problems.length - 1) {
-          selectedIndexRef.current = index + 1;
-          if (inputEnabledRef.current) {
-            setSelectedIndex(index + 1);
-            scheduleProblemScroll(index, index + 1);
-          }
-        }
+        setError(null);
+        dismissNotice();
       } catch (value) {
-        showEngineError(value);
-      } finally {
-        setBusy(false);
+        mathfield.setValue(answerNodeLatex(previous), { silenceNotifications: true });
+        if (value instanceof DrillEngineError && value.kind === 'answer_ast_size_limit') {
+          showEngineError(value);
+        }
       }
     };
 
-    // Hardware/keypad events can arrive before the previous WASM promise
-    // resolves. A single FIFO chain keeps each action on the latest editor
-    // snapshot and preserves digit-then-commit ordering.
     const queued = actionQueueRef.current.then(run, run);
     actionQueueRef.current = queued.then(() => undefined, () => undefined);
     return queued;
   }, [dismissNotice, engine, showEngineError, worksheet]);
 
+  const commitMathfield = useCallback((index: number) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing' || !worksheet.problems[index]) return Promise.resolve();
+    if (index < worksheet.problems.length - 1 && inputEnabledRef.current) {
+      selectedIndexRef.current = index + 1;
+      setSelectedIndex(index + 1);
+      scheduleProblemScroll(index, index + 1);
+    }
+
+    return actionQueueRef.current;
+  }, [worksheet]);
+
+  const applyMathCommand = useCallback((command: MathInputCommand) => {
+    const index = selectedIndexRef.current;
+    if (index === null || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current) return;
+    const mathfield = mathfieldRefs.current.get(index);
+    if (!mathfield) return;
+    mathfield.focus();
+
+    switch (command.kind) {
+      case 'insert_digit':
+        mathfield.insert(String(command.digit), { selectionMode: 'after' });
+        break;
+      case 'insert_structure':
+        if (command.structure === 'decimal') {
+          mathfield.insert('.', { selectionMode: 'after' });
+        } else {
+          mathfield.insert(mathTemplateInsertLatex(command.structure), { selectionMode: 'placeholder' });
+        }
+        break;
+      case 'move_left':
+        mathfield.executeCommand('moveToPreviousChar');
+        break;
+      case 'move_right':
+        mathfield.executeCommand('moveToNextChar');
+        break;
+      case 'delete_backward':
+        if (deleteEmptyMathLiveStructureBackward(mathfield)) {
+          // The helper performs a programmatic MathLive deletion, which does not
+          // emit input here. Synchronize the resulting field value explicitly.
+          void updateMathLiveAnswer(index, mathfield, mathfield.value);
+        } else {
+          mathfield.executeCommand('deleteBackward');
+        }
+        break;
+      case 'delete_forward':
+        mathfield.executeCommand('deleteForward');
+        break;
+      case 'clear':
+        mathfield.executeCommand('deleteAll');
+        break;
+      case 'commit':
+        void commitMathfield(index);
+        break;
+    }
+  }, [commitMathfield, updateMathLiveAnswer]);
+
   const drainActionQueue = useCallback(async () => {
-    // Read the current tail before awaiting it. If an event enqueues another
-    // action while the tail settles, loop once more so grading observes the
-    // final committed editor state rather than an intermediate snapshot.
     while (true) {
       const pending = actionQueueRef.current;
       await pending;
@@ -812,74 +663,87 @@ export function AutoDrillApp({
     }
   }, []);
 
-  useEffect(() => {
-    if (screen !== 'worksheet' || selectedIndex === null) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!inputEnabledRef.current) return;
-      const problem = worksheet?.problems[selectedIndex];
-      if (!problem) return;
-      const action = editorActionForKey(event, problem.input_interface);
-      if (!action) return;
-      // Capture + preventDefault avoids Enter activating a focused keypad or
-      // ribbon button in addition to committing the selected answer.
-      event.preventDefault();
-      void applyAction(action);
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [applyAction, screen, selectedIndex, worksheet]);
-
   const grade = useCallback(async () => {
-    if (!worksheet) return;
+    if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
+
+    // Lock synchronously before the first await. This closes the same-tick
+    // double-click/keyboard window that React state alone cannot close.
+    transitionWorksheetPhase('grading');
+    inputEnabledRef.current = false;
+    selectedIndexRef.current = null;
+    setSelectedIndex(null);
+    for (const mathfield of mathfieldRefs.current.values()) {
+      mathfield.readOnly = true;
+      mathfield.blur();
+    }
+
     const stoppedAt = finishedAt ?? Date.now();
     setFinishedAt(stoppedAt);
     setNow(stoppedAt);
-    inputEnabledRef.current = false;
-    setSelectedIndex(null);
     setBusy(true);
     setError(null);
     try {
       await drainActionQueue();
       const latestAnswers = answersRef.current;
       const result = await engine.gradeAnswer({
-            schema_version: DRILL_SCHEMA_VERSION,
+        schema_version: DRILL_SCHEMA_VERSION,
         worksheet,
         answers: worksheet.problems.map((problem) => ({
           problem_id: problem.problem_id,
-          editor_state: latestAnswers[problem.problem_id] ?? emptyEditorState(),
+          answer: latestAnswers[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode),
         })),
       });
       setGradeResult(result);
+      transitionWorksheetPhase('graded');
     } catch (value) {
+      // A failed grade attempt returns to the only editable state. Preserve the
+      // elapsed time at the instant grading started instead of charging the
+      // user for a failed engine request.
+      const resumedAt = Date.now();
+      if (startedAt !== null) {
+        const frozenElapsed = Math.max(0, stoppedAt - startedAt);
+        setStartedAt(resumedAt - frozenElapsed);
+      }
+      setFinishedAt(null);
+      setNow(resumedAt);
+      transitionWorksheetPhase('editing');
+      for (const mathfield of mathfieldRefs.current.values()) mathfield.readOnly = false;
       showEngineError(value);
     } finally {
       selectedIndexRef.current = null;
       setBusy(false);
     }
-  }, [drainActionQueue, engine, finishedAt, showEngineError, worksheet]);
+  }, [drainActionQueue, engine, finishedAt, showEngineError, startedAt, transitionWorksheetPhase, worksheet]);
 
   const returnToProblems = useCallback(() => {
+    if (worksheetPhaseRef.current !== 'graded') return;
     const resumedAt = Date.now();
     const frozenElapsed = startedAt === null || finishedAt === null ? 0 : Math.max(0, finishedAt - startedAt);
     setStartedAt(resumedAt - frozenElapsed);
     setFinishedAt(null);
     setNow(resumedAt);
     setGradeResult(null);
+    transitionWorksheetPhase('editing');
     setSelectedIndex(null);
     selectedIndexRef.current = null;
     inputEnabledRef.current = false;
     setError(null);
     dismissNotice();
-  }, [dismissNotice, finishedAt, startedAt]);
+  }, [dismissNotice, finishedAt, startedAt, transitionWorksheetPhase]);
 
   const retryWorksheet = useCallback(() => {
-    if (!worksheet || !worksheetMetadata) return;
+    if (worksheetPhaseRef.current !== 'graded' || !worksheet || !worksheetMetadata) return;
     installWorksheet(worksheet, worksheetMetadata);
     setError(null);
     dismissNotice();
   }, [dismissNotice, installWorksheet, worksheet, worksheetMetadata]);
 
   const generateDifferentWorksheet = useCallback(async () => {
+    if (worksheetPhaseRef.current !== 'graded') return;
+    // Replacing is a worksheet phase, not just a generic loading flag. Lock it
+    // synchronously so stale result-panel actions cannot launch a second
+    // replacement before React has painted disabled buttons.
+    transitionWorksheetPhase('replacing');
     setBusy(true);
     setError(null);
     dismissNotice();
@@ -889,13 +753,15 @@ export function AutoDrillApp({
       const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
       installWorksheet({ ...generatedWorksheet, seed }, metadata);
     } catch (value) {
+      transitionWorksheetPhase('graded');
       showEngineError(value);
     } finally {
       setBusy(false);
     }
-  }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, settings, showEngineError]);
+  }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, settings, showEngineError, transitionWorksheetPhase]);
 
   const backToTop = useCallback(() => {
+    if (worksheetPhaseRef.current === 'grading' || worksheetPhaseRef.current === 'replacing') return;
     setScreen('settings');
     setSelectedIndex(null);
     selectedIndexRef.current = null;
@@ -903,9 +769,10 @@ export function AutoDrillApp({
     setStartedAt(null);
     setFinishedAt(null);
     setGradeResult(null);
+    transitionWorksheetPhase('editing');
     setError(null);
     dismissNotice();
-  }, [dismissNotice]);
+  }, [dismissNotice, transitionWorksheetPhase]);
 
   return (
     <FuriganaContext.Provider value={furiganaEnabled}>
@@ -937,11 +804,15 @@ export function AutoDrillApp({
             selectedIndex={selectedIndex}
             elapsed={formatElapsed(startedAt, finishedAt ?? now)}
             gradeResult={gradeResult}
+            worksheetPhase={worksheetPhase}
             busy={busy}
             error={error}
             notice={notice}
             onSelect={selectProblem}
-            onAction={(action) => void applyAction(action)}
+            onCommand={applyMathCommand}
+            onRegisterMathfield={registerMathfield}
+            onMathInput={(index, mathfield, latex) => void updateMathLiveAnswer(index, mathfield, latex)}
+            onCommit={(index) => void commitMathfield(index)}
             onGrade={() => void grade()}
             onReturnToProblems={returnToProblems}
             onRetryWorksheet={retryWorksheet}
@@ -1017,11 +888,11 @@ function SettingsScreen({
     onThemeChange(theme);
   };
 
-  const statusText = busyAction === 'generate'
+  const busyStatusText = busyAction === 'generate'
     ? '問題を生成しています。しばらくお待ちください。'
     : busyAction === 'print'
       ? '印刷用PDFを準備しています。しばらくお待ちください。'
-      : '問題の生成・入力状態・採点は Rust/WASM が担当します。';
+      : null;
 
   return (
     <section className="settings-screen" aria-labelledby="settings-title">
@@ -1037,7 +908,6 @@ function SettingsScreen({
             <input type="checkbox" checked={furiganaEnabled} onChange={(event) => onFuriganaChange(event.target.checked)} />
             <span>ふりがな</span>
           </label>
-          <p className="eyebrow"><span aria-hidden="true" /> AutoDrill alpha 1.1</p>
           <h1 id="settings-title" aria-label="計算ドリルをつくる"><RubyMessage text="計算ドリルをつくる" /></h1>
         </header>
 
@@ -1108,23 +978,32 @@ function SettingsScreen({
             </div>
           </div>
 
-          <div className="seed-field">
-            <label className="field-label" htmlFor="seed-input">Seed <span><RubyMessage text="任意" /></span></label>
-            <div className="ruby-input">
-              <input
-                id="seed-input"
-                className="text-field"
-                aria-label="Seed"
-                aria-placeholder="空欄なら毎回自動生成"
-                value={settings.seed}
-                onChange={(event) => onSettingsChange({ ...settings, seed: event.target.value })}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              {settings.seed === '' ? <span className="ruby-input-placeholder" aria-hidden="true"><RubyMessage text="空欄なら毎回自動生成" /></span> : null}
+          <details className="advanced-settings">
+            <summary>
+              <RubyMessage text="詳細設定" />
+              <svg className="advanced-settings-chevron" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" /></svg>
+            </summary>
+            <div className="advanced-settings-body">
+              <div className="seed-field">
+                <label className="field-label seed-label" htmlFor="seed-input">
+                  Seed <span>(<RubyMessage text="同じSeedでは同じ問題が生成されます。" />)</span>
+                </label>
+                <div className="ruby-input">
+                  <input
+                    id="seed-input"
+                    className="text-field"
+                    aria-label="Seed"
+                    aria-placeholder="空欄なら毎回自動生成"
+                    value={settings.seed}
+                    onChange={(event) => onSettingsChange({ ...settings, seed: event.target.value })}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  {settings.seed === '' ? <span className="ruby-input-placeholder" aria-hidden="true"><RubyMessage text="空欄なら毎回自動生成" /></span> : null}
+                </div>
+              </div>
             </div>
-            <p className="field-note" aria-label="同じSeedで同じ問題を再現できます。空欄なら毎回新しく生成します。"><RubyMessage text="同じSeedで同じ問題を再現できます。空欄なら毎回新しく生成します。" /></p>
-          </div>
+          </details>
         </div>
 
         {unavailable ? <p className="unavailable-message" role="status" aria-label="このテーマはまだ利用できません"><RubyMessage text="このテーマはまだ利用できません" /></p> : null}
@@ -1140,15 +1019,22 @@ function SettingsScreen({
             <span className="button-icon" aria-hidden="true">▶</span>
             <RubyMessage text={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} />
           </button>
-          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷'} disabled={busy || unavailable} onClick={onPrint}>
-            <span className="button-icon" aria-hidden="true">▣</span>
-            <RubyMessage text={busyAction === 'print' ? 'PDFを準備中…' : '印刷'} />
+          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷 (pdfで出力)'} disabled={busy || unavailable} onClick={onPrint}>
+            <svg className="share-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15V3" />
+              <path d="m8 7 4-4 4 4" />
+              <path d="M5 11v9h14v-9" />
+            </svg>
+            <RubyMessage text={busyAction === 'print' ? 'PDFを準備中…' : '印刷 (pdfで出力)'} />
           </button>
         </div>
-        <p className="wasm-note" aria-label={statusText} aria-live="polite">
-          <RubyMessage text={statusText} />
-        </p>
+        {busyStatusText ? (
+          <p className="sr-only" aria-label={busyStatusText} aria-live="polite">
+            <RubyMessage text={busyStatusText} />
+          </p>
+        ) : null}
       </div>
+      <p className="settings-version" aria-label="AutoDrill alpha 1.1">AutoDrill alpha 1.1</p>
     </section>
   );
 }
@@ -1156,15 +1042,19 @@ function SettingsScreen({
 type WorksheetScreenProps = {
   worksheet: WorksheetDto;
   worksheetMetadata: WorksheetMetadata | null;
-  answers: Record<string, EditorState>;
+  answers: Record<string, AnswerNode>;
   selectedIndex: number | null;
   elapsed: string;
   gradeResult: GradeResult | null;
+  worksheetPhase: WorksheetPhase;
   busy: boolean;
   error: string | null;
   notice: string | null;
   onSelect: (index: number) => void;
-  onAction: (action: EditorAction) => void;
+  onCommand: (command: MathInputCommand) => void;
+  onRegisterMathfield: (index: number, mathfield: AutoDrillMathfield | null) => void;
+  onMathInput: (index: number, mathfield: AutoDrillMathfield, latex: string) => void;
+  onCommit: (index: number) => void;
   onGrade: () => void;
   onReturnToProblems: () => void;
   onRetryWorksheet: () => void;
@@ -1173,11 +1063,10 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, busy, error, notice, onSelect, onAction, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
-  const selectedProblem = selectedIndex === null ? null : worksheet.problems[selectedIndex];
-  const selectedState = selectedProblem ? answers[selectedProblem.problem_id] ?? emptyEditorState() : null;
+  const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
   const selectedCapabilities = selectedProblem ? inputCapabilities(selectedProblem.input_interface) : null;
   const visibleStructures = selectedCapabilities?.allowed_structures.filter(
     (structure): structure is Exclude<AnswerInputStructure, 'decimal'> => structure !== 'decimal',
@@ -1185,7 +1074,6 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
   if (selectedCapabilities?.allow_negative && !visibleStructures.includes('negative')) {
     visibleStructures.push('negative');
   }
-  const selectedSlotLabel = selectedState ? answerSlotLabel(selectedState.answer, selectedState.active_path) : null;
   const resultById = new Map((gradeResult?.items ?? []).map((item) => [item.problem_id, item]));
   const toPagePercent = (value: number, total: number) => `${(value / total) * 100}%`;
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
@@ -1208,9 +1096,9 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
           <h1 id="worksheet-title">{worksheetTheme.worksheet.title}</h1>
         </div>
         <div className="ribbon-meta"><span><RubyMessage text="回答時間" /></span><strong data-testid="elapsed-time">{elapsed}</strong></div>
-        <button type="button" className="ribbon-button" aria-label="採点" onClick={onGrade} disabled={busy}><RubyMessage text="採点" /></button>
+        <button type="button" className="ribbon-button" aria-label="採点" aria-pressed={worksheetPhase !== 'editing'} data-grade-state={worksheetPhase} onClick={onGrade} disabled={busy || worksheetPhase !== 'editing'}><RubyMessage text="採点" /></button>
         <button type="button" className="ribbon-icon" onClick={onPrint} aria-label="印刷" disabled={busy}><RubyMessage text="印刷" /></button>
-        <button type="button" className="ribbon-link" aria-label="TOPに戻る" onClick={onBack}><RubyMessage text="TOPに戻る" /></button>
+        <button type="button" className="ribbon-link" aria-label="TOPに戻る" onClick={onBack} disabled={busy || worksheetPhase === 'grading' || worksheetPhase === 'replacing'}><RubyMessage text="TOPに戻る" /></button>
       </div>
 
       {notice ? <div className="worksheet-toast" role="status" aria-label={notice} aria-live="polite" aria-atomic="true"><RubyMessage text={notice} /></div> : null}
@@ -1236,7 +1124,7 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
             <div className="problem-divider" data-testid="problem-divider" style={dividerStyle} />
             {sharedLayout.cells.map((cell) => {
               const { problem, index } = cell;
-              const editor = answers[problem.problem_id] ?? emptyEditorState();
+              const answer = answers[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
               const isSelected = selectedIndex === index;
               const result = resultById.get(problem.problem_id);
               const position = getCellTopPosition(sharedLayout, cell);
@@ -1254,13 +1142,16 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                   <WorksheetAnswerField
                     problem={problem}
                     index={index}
-                    editor={editor}
+                    answer={answer}
                     isSelected={isSelected}
                     result={result}
                     gradeResult={gradeResult}
+                    inputLocked={worksheetPhase !== 'editing'}
                     answerPrefix={worksheetTheme.worksheet.answerPrefix}
                     onSelect={onSelect}
-                    onAction={onAction}
+                    onRegisterMathfield={onRegisterMathfield}
+                    onMathInput={onMathInput}
+                    onCommit={onCommit}
                   />
                 </div>
               );
@@ -1274,14 +1165,8 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
         </article>
       </div>
 
-      {selectedProblem && selectedState ? (
+      {selectedProblem ? (
         <div className="input-panel" aria-label="数式入力パネル">
-          <div
-            className="sr-only"
-            role="status"
-            aria-live="polite"
-            aria-label={`入力位置 ${selectedSlotLabel ?? '答え'}。左右矢印キーで入力欄を移動できます`}
-          />
           <div className="input-panel-inner">
             {visibleStructures.length > 0 ? (
               <div className="formula-keypad" aria-label="数式テンプレート">
@@ -1291,7 +1176,7 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                     <button
                       type="button"
                       key={structure}
-                      onClick={() => onAction({ kind: 'insert_structure', structure })}
+                      onClick={() => onCommand({ kind: 'insert_structure', structure })}
                       disabled={busy}
                       aria-label={label}
                       title={label}
@@ -1309,7 +1194,7 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                   type="button"
                   className={digit === 0 ? 'keypad-zero' : undefined}
                   key={digit}
-                  onClick={() => onAction({ kind: 'insert_digit', digit })}
+                  onClick={() => onCommand({ kind: 'insert_digit', digit })}
                   disabled={busy}
                 >
                   {digit}
@@ -1319,7 +1204,7 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                 <button
                   type="button"
                   className="keypad-decimal"
-                  onClick={() => onAction({ kind: 'insert_structure', structure: 'decimal' })}
+                  onClick={() => onCommand({ kind: 'insert_structure', structure: 'decimal' })}
                   disabled={busy}
                   aria-label="小数点"
                 >
@@ -1328,11 +1213,11 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
               ) : null}
             </div>
             <div className="keypad-controls" aria-label="編集キー">
-              <button type="button" onClick={() => onAction({ kind: 'move_left' })} disabled={busy} aria-label="カーソルを左へ">←</button>
-              <button type="button" onClick={() => onAction({ kind: 'move_right' })} disabled={busy} aria-label="カーソルを右へ">→</button>
-              <button type="button" onClick={() => onAction({ kind: 'delete_backward' })} disabled={busy} aria-label="一文字戻す">⌫</button>
-              <button type="button" className="keypad-clear" onClick={() => onAction({ kind: 'clear' })} disabled={busy}>クリア</button>
-              <button type="button" className="keypad-commit" aria-label="確定" onClick={() => onAction({ kind: 'commit' })} disabled={busy}><RubyMessage text="確定" /></button>
+              <button type="button" onClick={() => onCommand({ kind: 'move_left' })} disabled={busy} aria-label="カーソルを左へ">←</button>
+              <button type="button" onClick={() => onCommand({ kind: 'move_right' })} disabled={busy} aria-label="カーソルを右へ">→</button>
+              <button type="button" onClick={() => onCommand({ kind: 'delete_backward' })} disabled={busy} aria-label="一文字戻す">⌫</button>
+              <button type="button" className="keypad-clear" onClick={() => onCommand({ kind: 'clear' })} disabled={busy}>クリア</button>
+              <button type="button" className="keypad-commit" aria-label="確定" onClick={() => onCommand({ kind: 'commit' })} disabled={busy}><RubyMessage text="確定" /></button>
             </div>
           </div>
         </div>

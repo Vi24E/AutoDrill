@@ -11,30 +11,32 @@ alpha 1.0のq1設定、q2回答・採点、q3別タブPDFを維持しながら�
 - q1上部に`おすすめ`（既定）と`学年から選ぶ`の切替を持つ。
 - `おすすめ`は`ジャンル → テーマ`の2段階、`学年から選ぶ`は`学年 → ジャンル → テーマ`の3段階select。
 - 学年は小学1年生から中学3年生までで、slugは`grade-1`から`grade-9`。中1・中2・中3は`grade-7`・`grade-8`・`grade-9`。
-- 実装済みテーマはnumeric theme ID 1の`一桁の足し算`、ID 2の`一次方程式(1)`、ID 3の`一次方程式(2)`。おすすめと学年選択は同じregistry object・generatorを参照する。
+- 実装済みテーマはnumeric theme ID 1〜11の11テーマ。一桁の足し算、一次方程式(1)/(2)、一桁の引き算、二桁の足し算、九九、負の数の計算(1)/(2)、分数の足し算、分数の引き算、分数の掛け算を登録し、おすすめと学年選択は同じregistry object・generatorを参照する。
 - 各学年の未実装枝は`Dummy1`で表し、選択中は生成・印刷を無効化して`このテーマはまだ利用できません`と表示する。DummyはURL、metadata、sitemapへ出さない。
 - 難易度1〜5を実装し、既定3。UI、生成request、問題セットIDは同じ値を使う。
 - 一桁足し算は候補8n件、2n種類の多様性条件、effort order statistic、最終重複排除、決定的shuffleで固定20問を生成する。
 - 共通`AnswerNode`、標準解法`SolutionGraph`、固定27成分`OperationVector`、分離された重みlayerをRust coreに実装した。
 - 問題セットIDは`{schema_version}-{numeric_theme_id}-{generator_revision}-{seed}-{difficulty}`。例は`3-1-3-Ab3Z-3`。
-- 実装済み単元URLは`/drills/grade-1/one-digit-addition`。`/`はTOPのまま。
+- 実装済み11テーマはそれぞれcanonical単元URLを持ち、metadata/static params/sitemapも同じtheme registryから導出する。`/`はTOPのまま。
 - Rust/WASM境界はschema version 3。TypeScript側に数学規則のfallbackを置かない。
-- Problemの`input_interface`は`answer_schema`と直交する。現行の一桁足し算は`simple_numeric`で、q2はdigits-only keypadを表示する。`structured_math`では`allowed_structures`だけをパレットと物理キーへ投影する。
+- Problemの`input_interface`は`answer_schema`と直交する。整数算術テーマは必要に応じてnegativeを許可する`simple_numeric`、分数テーマと一次方程式は`structured_math`を使い、`allowed_structures`だけをパレットと物理キーへ投影する。
 
 ## 2. 画面と遷移
 
 | 状態 | URL/入口 | 表示・操作 | 遷移 |
 |---|---|---|---|
 | q1 設定 | `/`または実装済み単元URL | ふりがな、選択モード、カリキュラムselect、難易度、Seed、問題生成、印刷 | 生成→q2、印刷→q3 |
-| q2 回答 | q1で生成 | 2列×10行、固定リボン、固定数式パレット・10キー、物理キー、タイマー、採点、印刷 | 印刷→q3、TOP→q1 |
-| q2 採点後 | q2で採点 | 誤答赤枠、赤字正答、問題に戻る、同一問題再挑戦、別Seed生成 | 各操作に応じq2へ |
+| q2 編集中 | q1で生成、または採点後に問題へ戻る | 問題選択、MathLive回答欄、入力パネル、タイマー、採点、印刷 | 採点→`grading`、TOP→q1 |
+| q2 採点中 | 編集中に採点 | 入力・問題選択をロック、タイマー停止、採点ボタン黒転・無効 | 成功→`graded`、失敗→`editing` |
+| q2 採点済み | 採点成功 | 誤答赤枠、赤字正答、全回答readonly、採点ボタン黒転・無効、採点後操作 | 問題に戻る/再挑戦→`editing`、別Seed→`replacing` |
+| q2 別問題生成中 | 採点済みから別Seed生成 | 現在の採点結果を保持したまま結果操作・TOP・印刷をロック | 成功→新しい`editing`、失敗→元の`graded` |
 | q3 印刷 | q1またはq2の印刷 | Blob URLの2ページPDF | ブラウザのタブ操作 |
 
-q2は共有A4 geometryを使い、左列を1〜10、右列を11〜20の縦順で表示します。回答欄選択時だけ画面下のinterface投影による入力パネルを表示し、リボンと入力パネルはviewport固定です。一桁足し算の`simple_numeric`は10個の数字キーだけ、`structured_math`は許可された構造キーと共通の数字・編集キーを表示します。物理キーとボタンは同じcapability projectionを使い、未許可の構造キーは無視します。小数点は許可された場合だけ10キー最下段に表示します。Enterは確定して次問へ移動し、同列の1行分を自動スクロールします。
+q2はregistryの行数を使う共有A4 geometryで、20問テーマは左1〜10・右11〜20、16問テーマは左1〜8・右9〜16の縦順で表示します。回答欄選択時だけ画面下のinterface投影による入力パネルを表示し、リボンと入力パネルはviewport固定です。一桁足し算の`simple_numeric`は10個の数字キーだけ、`structured_math`は許可された構造キーと共通の数字・編集キーを表示します。物理キーとボタンは同じcapability projectionを使い、未許可の構造キーは無視します。小数点は許可された場合だけ10キー最下段に表示します。Enterは確定して次問へ移動し、同列の1行分を自動スクロールします。
 
-回答は表示sizeと構造node数をそれぞれ18以下にします。`EditorState.active_path`が分子・分母等の選択slot、`cursor`がslot内位置を示します。選択中は実カーソルを表示し、11pxを下限に回答枠を右方向へ広げます。いずれかの上限を超える入力は状態を変更せず、リボン付近へ`式が大きすぎます！`を表示します。
+回答は表示sizeと構造node数をそれぞれ18以下にします。Webのcaret・selection・分子/分母placeholder移動はMathLiveだけが所有し、production回答stateと採点requestはRustが受理した`AnswerNode`を直接保持します。旧`EditorState.active_path`/`cursor`は`apply_editor_action`互換境界に限定します。回答枠はMathLiveの実DOM寸法でgrowth guardを掛け、分数・帯分数等の必要な高さは自動的に確保します。上限を超える入力はRust回答stateへ反映せず、`式が大きすぎます！`を表示します。空構造をBackspaceで削除した場合も削除後のMathLive値を明示的に再parseし、表示と`AnswerNode`を同期します。
 
-採点ボタンは入力FIFOを排出してから最新回答を読み、タイマーを停止します。数学的に正解でも表記に冗長性がある場合は、正解扱いのまま問題横へ`約分`、`冗長なマイナス`、`余計な小数点`のwarningを複数表示できます。`問題に戻る`は回答を保持してタイマーを再開、`もう一回問題を解く`は同じ問題セットで回答と時間を初期化、`別の問題を解く`は同じテーマ・難易度の新しい自動Seedを生成します。
+q2の排他的な`WorksheetPhase`は`editing / grading / graded / replacing`の4状態です。採点開始時は最初の`await`より前に同期的に`grading`へ遷移し、全MathLive fieldをreadonly化して入力FIFOを排出してから最新回答を採点します。`grading`/`graded`/`replacing`では採点ボタンを黒地・白字のpressed表示にして再押下を禁止します。採点失敗だけ`editing`へ戻り、採点成功後の`問題に戻る`は回答を保持してタイマーを再開、`もう一回問題を解く`は同じ問題セットで回答と時間を初期化します。`別の問題を解く`は`replacing`で同じテーマ・難易度の新Seedを生成し、成功時のみ新しい`editing`へ入り、失敗時は元の`graded`へ戻ります。数学的に正解でも表記に冗長性がある場合は、正解扱いのまま問題横へwarningを複数表示できます。
 
 ## 3. カリキュラムregistry
 
@@ -43,14 +45,14 @@ Webの正規registryは`apps/web/src/domain/curriculum.ts`です。
 - `CURRICULUM_TREE`: 9学年のcanonical tree。
 - `RECOMMENDED_GENRES`: canonical treeへの参照だけを持つ部分集合。
 - `IMPLEMENTED_THEMES`: metadata、static params、sitemapへ公開してよいテーマだけ。
-- `ONE_DIGIT_ADDITION_THEME`: theme ID 1、revision 3、20問、2列×10行、単元URLを所有。
+- `IMPLEMENTED_THEMES`はtheme ID 1〜11を保持する。20問テーマは2列×10行、一次方程式と分数テーマは16問・2列×8行で、各theme definitionが単元URLと表示metadataを所有する。
 - Dummy theme: `implemented:false`、`route/search/layout/problemCount`は`null`。
 
 Rustの生成registryは`crates/drill-core/src/registry.rs`です。numeric theme IDとgenerator revisionから、skill ID、curriculum path、問題数、列・行、テーマ別重みoverrideを復元します。問題数はrequestや問題セットIDに重複保存しません。
 
 ## 4. 問題生成と再現
 
-`crates/drill-core/src/generator.rs`の`ProblemGenerator`が共通interfaceです。通常のcandidate-pool選択に加え、answer domainを持つgeneratorは「答えを先に一様抽選し、その答えに条件づけて複数式候補を生成し、effortで式だけを選ぶ」strategyを利用できます。現行registryは一桁足し算revision 3と一次方程式(1)/(2) revision 6を持ちます。
+`crates/drill-core/src/generator.rs`の`ProblemGenerator`が共通interfaceです。通常のcandidate-pool選択に加え、answer domainを持つgeneratorは「答えを先に一様抽選し、その答えに条件づけて複数式候補を生成し、effortで式だけを選ぶ」strategyを利用できます。現行registryはtheme ID 1〜11を持ち、一桁足し算はrevision 3、一次方程式(1)/(2)はrevision 6、theme ID 4〜11の8算術テーマはrevision 1です。
 
 一桁足し算の生成手順は次の通りです。
 
@@ -73,7 +75,7 @@ Worksheetは次を持ちます。
 - schema versionとproblem-set ID
 - decode済み`ProblemSetIdentity`
 - registry由来のskill ID、curriculum path、layout
-- 20個の`Problem`
+- registry所定の16個または20個の`Problem`
 
 Problemはschema version、通し番号、numeric theme ID、typed prompt、`answer_schema`、直交した`input_interface`、canonical AnswerNode、SolutionGraph、27成分OperationVector、解決済みeffortを持ちます。
 
@@ -95,7 +97,7 @@ Problemはschema version、通し番号、numeric theme ID、typed prompt、`ans
 
 `AnswerNode::size()`が全variant共通の表示サイズ契約です。integerは十進桁数、compositeは親1と全childの合計で、`frac(num(12),num(42))`は5です。入力検証ではこれとは別に構造node数も最大18とし、19個目のnodeで短絡して拒否します。入力/display treeと採点用normalized treeは`AnswerRepresentation`で分離できます。
 
-structured editorは分数・帯分数・root・negative・plusminusを選択slotへ挿入し、commaをtop-level tupleとして追加します。小数点は数式templateではなく通常の10キー最下段に独立した`.`キーとして置き、表示文字列をFloatへ通さず十進coefficientとscaleを直接更新します。整数・有限小数・分数・帯分数・negative・tuple childはexactに正規化されます。rootとplusminusは構文入力と表示までで、数値評価は後続単元の責務です。回答枠は固定高ではなく、分数・帯分数・root等の描画内容に応じて縦へ伸び、問題行の中央に配置して上下を切り取りません。
+structured math入力はMathLiveへ分数・帯分数・root・negative・plusminus・tupleのLaTeX templateを挿入し、各`input` snapshotを`parse_mathlive_answer`経由でRust `AnswerNode`へ戻します。小数点は通常の10キー最下段に独立した`.`キーとして置きます。整数・有限小数・分数・帯分数・negative・tuple childはRustでexactに正規化され、rootとplusminusの数値評価は後続単元の責務です。回答枠は固定高にせずMathLive内容に応じて伸びるため、分数・帯分数・rootを上下で切り取りません。
 
 ## 6. Effortモデル
 
@@ -192,20 +194,37 @@ crates/drill-wasm/src/lib.rs            # 薄いwasm-bindgen JSON envelope
 - 生成済みWASMを直接Nodeから呼び、両themeの16問生成、rich interface、exact canonical answer、schema-aware gradeを確認。(2)の実分数解に対して未約分を送ると`incorrect + fraction_not_reduced`を返した。
 - production buildをHeadless Chromeで実行し、(1)/(2)とも16問、instruction、全16個の`x =`、`0x/1x`非表示、全rich key、小数点、`← →`隣接、fixed input panel、console/runtime issues 0を確認。回答欄選択後は実測でanswer bottom 234px、keyboard top 258pxとなり重なりなし。
 - 最終検証: `cargo fmt --all -- --check`、Clippy `--workspace --all-targets -D warnings`、Rust all-target tests（drill-core 41 / drill-wasm 10）、Web full Vitest（9 files / 100 tests）、TypeScript typecheck、ESLint warning 0、Next production build、`git diff --check`を実施。
-- q1のnative selectを廃止し、候補行にもsemantic rubyを描画できる共通custom combobox/listboxへ変更。q2の数式templateは文字組みではなくTeX風のinline SVG glyphへ変更した。空のstructured slotでBackspaceされた場合はRust reducerがそのslotを含む最も浅いAST nodeを削除し、実WASM/ブラウザでもfraction→emptyを確認した。
+- q1のnative selectを廃止し、候補行にもsemantic rubyを描画できる共通custom combobox/listboxへ変更。q2の旧inline SVG/独自slot rendererは2026-08-10にMathLiveへ置換済みで、Web production pathには残さない。
 
-### 2026-08-10 structured-math rendering / equation sampling hardening
+### 2026-08-10 MathLive migration / equation sampling hardening
 
-- 数式template SVGのplaceholderを拡大し、`±`/`−`との視覚重量を揃えた。帯分数は整数部と分数部の水平間隔を縮め、1つの数として読める比率へ調整した。
-- nested fractionの表示CSSを`grid-template-rows: 1fr 1fr`から`auto auto`へ変更。親分数が子分数の高さを上下両段へ複製して指数的に肥大する再帰を除去した。
-- Web editorはRustが返したgrowth candidate（digit/structure insertion）をoff-screenで同じ`StructuredAnswer`として1回renderし、実DOM寸法をproblem cellの許容幅/高さと比較する。超過候補はstateへcommitせずnopとし、Backspace/Delete等の縮小操作は常に通す。これはfractionだけでなくroot/mixed-fraction/tuple/negative等の全ASTへ共通適用する。
-- Headless Chrome実測では繁分数の表示高さはempty約19px → 1段約48px → 2段約69pxとなり、3段目以降はsize guardによりnop。7回連打後も2段・約69pxのままで、103px高のproblem cell内に収まった。
+- Web数式renderer/editorをMathLive 0.110.0へ統一した。問題式・採点後canonical answer・数式palette previewは`math-span`、editable answerは`math-field`を使う。旧native MathML helper、MathML JSX宣言、CSS/SVG fraction/root/caret rendererは削除し、Web内でrendererを混在させない。PDFは従来どおりpdf-libの独立rendererを使う。
+- MathLiveはlayout、caret、placeholder navigationを担当し、Rustは数学authorityのまま維持する。`math-field.value`は`parse_mathlive_answer` WASM adapterを通して`AnswerNode`へ変換し、normalize/grade/effortは既存Rust coreが担当する。MathLiveが返す`\frac72`/`\sqrt2`等のcanonical TeXもRustで解釈する。
+- 空structured placeholderのBackspaceはMathLiveの公開range/selection/command APIだけで最小の空構造を削除する。独自caret/slot overlayは持たない。growth guardはMathLive実DOMを測定し、セル外へ伸びるgrowthだけをnopにする。
+- 実Chromeで整数、caret中間挿入、分数`7/2`、帯分数`1 1/2`、平方根`√2`、nested fraction、空分数Backspace、canonical answerを確認。instructionは15px、一次方程式は17pxで、problem/canonical/paletteはMathLive static renderer、answerはMathLive editorとなり旧MathML/SVG要素は0件だった。
+- MathLive既定placeholder記号`▢` (U+25A2) はChromeでfraction numeratorへ縮小された際に上辺が欠ける。`□` (U+25A1) は欠けないが空分数の視覚中心が約2px上へ寄ったため、公開`placeholderSymbol`は`☐` (U+2610)を使う。20pxの実answer-boxを2倍Rasterで画素測定し、空分数の黒線包含矩形と外枠中心の差が約0.25pxまで縮むことを確認した。serialized LaTeXは引き続き`\placeholder{}`のままRust/WASMへ渡す。
+- editable answerの外枠とMathLive rendererを分離した。外側`answer-box`だけがborder/min-size/paddingを持ち、内側`answer-mathfield`は自然サイズで描画する。外枠はflexで内側を水平・垂直中央配置し、MathLiveの公開`container`/`content` partの既定paddingと強制widthを除去する。実Chrome計測では整数・空分数・空帯分数の外枠中心と公開`content`中心がすべて`Δx=0, Δy=0`、実描画baseとの差も縦約0.10pxだった。growth guardは分離後も外枠込みの実footprintを測定する。
+- 静的palette previewと編集templateを分離した。previewは`\square`を使って入力位置を常に可視化し、編集時だけMathLiveの`\placeholder{}`を使う。実Chromeでは分数・帯分数previewのMathLive glyph全体がボタン内に収まり、上端余白8px、回答欄の空/入力済み分数・帯分数はいずれも上下overflow 0pxだった。
+- 採点状態を`editing / grading / graded / replacing`で明示した。`grading`は同期lockで二重採点を防ぎ、`graded`ではfield click/物理キー/入力panel再表示を禁止する。`replacing`は別問題生成の非同期競合を遮断し、失敗時に`graded`へ戻る。採点中・採点済み・置換中の採点ボタンは`aria-pressed=true`、黒地白字、disabledとなる。実Chromeで採点済み値`9`へ物理キー`7`を送っても値不変、`問題に戻る`後だけreadonly解除・入力panel復帰を確認した。
+- この修正後のWeb full Vitestは9 files / 108 tests、TypeScript typecheck、ESLint warning 0、contract check、Next production build、`git diff --check`が成功した。
 - revision 6では各candidateで答えを一様抽選してから4形の係数を逆算し、式生成失敗時も同じ答えを保持する。128候補全体を`SolutionGraph`由来effortで比較するため、答え自体の計算負荷もdifficultyに反映される。(2)は最終除算で約分が発生する整数共通因子付き`A,B`を優先する。
 - revision 6 validation: Rust workspaceはdrill-core 48 tests / drill-wasm 10 tests、`cargo fmt --check`、Clippy `-D warnings`が成功。WebはTypeScript typecheck、ESLint warning 0、関連Vitest 82 testsが成功し、actual wasm-packを再生成した。生成済みWASMの一次方程式(2)を8 seedで測定した平均effortはdifficulty 1..5で`17.57, 21.02, 23.61, 25.82, 28.31`と単調増加した。候補poolは8n、bootstrapはn+4問を選択し、effort最小2問・最大2問をtrimして最終n問とする。
 
+### 2026-08-10 算術8テーマ追加・小学生負数禁止 acceptance
+
+- theme ID 4〜11/revision 1として、一桁の引き算、二桁の足し算、九九、負の数の計算(1)/(2)、分数の足し算、分数の引き算、分数の掛け算を登録する。問題数は前5テーマが20問、分数3テーマが16問。
+- `ProblemPrompt::Arithmetic`はRustのtyped `ArithmeticExpression` ASTを保持し、Web MathLiveとPDFは同じASTから表示を投影する。負の数(1)は2〜4整数項の加減、負の数(2)は2〜4整数leafの四則演算ASTで、0除算を拒否し最終値が整数になる候補だけを採用する。
+- 一桁引き算は`a=b+c`として`b,c in 1..=9`から生成するため、`1<=a<=18, 1<=b,c<=9`を構成的に保証する。二桁加算は両operandを10〜99、九九は両operandを1〜9とする。九九のeffortは例外的に`BaseTimes`を使わず、正解`c`の`BigNum(c)=log10(c)`だけを持つ。
+- 小学生registrationは共通generator境界で負数をfail closedに拒否する。prompt/canonical answerだけでなく、`allow_negative`、`negative`、`plus_minus`入力capabilityも許可しないため、現在の分数3テーマの入力パレットは`fraction`のみを公開する。
+- 分数3テーマの有効式domainは有限（加算36、減算36、乗算94）なので、重複あり128候補を集める方式ではなく全候補を1回ずつ直接構築してdifficulty poolとする。これによりWASMでのcoupon-collector型のseed依存遅延を除去し、100ms generation budgetを安定化する。
+- 一次方程式(2)の係数に使う非整数分数domainを`linear_fraction_domain()`へ共通化した。小学生の分数加算/減算/乗算はそのうち正の値だけを`positive_linear_fraction_domain()`として共有する。加算/乗算は`a,b,c>0`、減算は`a-b=c`かつ`a,b,c>0`で、いずれも`a,b,c`すべてが正の同一domainに属する候補だけを採用する。
+- Recommendedは`足し算と引き算 / 掛け算と割り算 / 分数 / 負の数 / 方程式`の5ジャンルだけを持ち、theme ID 4〜11の8テーマをすべて含む。学年配置はcurriculum.mdに従い、一桁引き算=小1、二桁加算/九九=小2、分数加算/減算=小5、分数乗算=小6、負の数=中1。
+- 実Chrome 151 + release生成済みWASMでおすすめ5ジャンルを実listboxから確認済み。今回さらに分数加算/減算/乗算を実routeで生成し、全operandが正、減算は`a>b>0`、採点後canonical answerも全て正、入力パレットは`分数`のみ、Runtime/WASMエラー0を確認した。Seed空欄の冷起動でも分数加算16問を100ms既定設定のまま生成できた。
+- 最終検証はRust `cargo fmt --check`、Clippy `-D warnings`、workspace tests（drill-core 52 / drill-wasm 10）、Web full Vitest 112 tests、TypeScript typecheck、ESLint warning 0、Rust→Web contract check、Next production build、`git diff --check`を通過した。最終Rust sourceからrelease WASMも再生成した。
+
 ## 10. 既知の制約と次の拡張点
 
-- 実装済みgeneratorは一桁足し算、一次方程式(1)、一次方程式(2)。ほかの学年・テーマは意図的にDummy。
+- 実装済みgeneratorはtheme ID 1〜11の11テーマ。未実装の残り学年・テーマ枝だけをDummyで表す。
 - 新themeはRustの`ThemeRegistration + ProblemGenerator`とWebの`ThemeDefinition`を追加し、prompt variant/formatterが新種ならそこだけ拡張する。grade tree、Recommended、routes、sitemap、layout validationへ個別theme-ID分岐を追加しない。
 - 旧generator revisionを永続的に再現するには、revision実装を削除せずregistryへ残す。
 - `NEXT_PUBLIC_SITE_URL`未指定時、sitemap originは開発用`http://localhost:3000`。配布時は正規URLを指定する。

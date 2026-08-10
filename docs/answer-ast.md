@@ -22,16 +22,26 @@
 
 ## Structured editor
 
-入力許可は`Problem.input_interface`が所有し、`answer_schema`とは直交する。`simple_numeric`は桁キーを
+入力許可は`Problem.input_interface`が所有し、`answer_schema`とは直交する。`simple_numeric`は桁入力を
 基本にし、`allow_decimal`と`allow_negative`だけを追加許可する。`structured_math`は
-`allowed_structures`に列挙された構造だけを数式パレット、ボタン、物理キーへ投影する。
-一桁の足し算はdigits-only keypadで、構造テンプレート、小数点、負数キーを表示しない。
+`allowed_structures`に列挙された構造だけを画面下部パレットへ投影する。一桁の足し算はdigits-only
+keypadで、構造template、小数点、負数キーを表示しない。
 
-`EditorState`は`answer`に入力途中のtree、`active_path`に選択中のnumeric slotまでのchild index列、`cursor`にそのslotの表示文字列内offsetを持つ。例えば分数の分子は`[0]`、分母は`[1]`、帯分数の整数・分子・分母は`[0]`、`[1]`、`[2]`である。各slotはempty、非負integer、非負exact decimalを直接編集し、符号は`negative` nodeとして構造化する。
+Webの編集・caret・placeholder移動・fraction/root layoutはMathLiveが担当する。MathLiveの各`input`
+で得たLaTeXは`parse_mathlive_answer`という明示adapterを通り、Rustの`AnswerNode`へ変換されて初めて
+回答stateとなる。従ってMathLiveのmodelやLaTeX自体を採点authorityにはしない。adapterはMathLiveが
+正規化して返す`\frac72`や`\sqrt2`のような1-token TeX引数も受理し、許可されない構造は
+`input_interface`検証で拒否する。
 
-`insert_structure`は`fraction`、`mixed_fraction`、`decimal`、`root`、`negative`、`plus_minus`、`tuple`を受け付ける。分数等は現在slotを置換または包み、tupleは複数解を表すtop-level nodeへ項を追加する。左右移動はslot内cursorを動かし、端に達すると前後のslotへ移る。`select_slot`により表示された分子・分母等を直接選べる。`select_slot` requestはpathとslot内cursorを必須とし、現在stateのactive path/cursorと選択先path/cursorをclone・編集前に検証する。範囲外や欠落値は補正せず拒否し、`clear`だけは壊れたstateからの無条件復旧として受け付ける。
+MathLive worksheetの回答stateはRustが受理した`AnswerNode`そのものとし、採点にも`AnswerNode`を直接渡す。
+旧`EditorState.active_path`/`cursor`は`apply_editor_action`互換境界だけに残し、MathLive production pathでは
+生成・検証しない。selectionはMathLiveだけが所有する。空placeholderでのBackspaceはMathLiveの公開
+range/selection/command APIから最小の空構造を削除し、その直後のfield値を明示的に再parseして
+`AnswerNode`へ同期する。自前caret overlayやfraction/rootのpixel geometryは持たない。
 
-小数入力は表示文字列をFloatへ変換せず、常にcoefficientとscaleへ戻す。入力途中の`12.`は`ExactDecimal { coefficient: 12, scale: 0 }`、続けて`3`を入力すると`12.3`、すなわち`{ coefficient: 123, scale: 1 }`になる。rootとplusminusは今回構文として保持・表示するが、数値評価規則はまだ定義しない。解析できないbounded raw textは`nan_error`としてそのまま表示し、編集可能なslotに残す。`nan_error`は入力interfaceに依存しない回復用sentinelだが、そこから生成される候補もinterface検証を通り、許可されない小数・符号・構造をtyped nodeへ昇格させない。`nan_error`をJavaScript `number`へ変換したり、採点で空欄・数値へ置き換えたりせず、含まれる回答は常に不正解とする。
+小数は表示文字列をFloatへ変換せず、adapterが`ExactDecimal { coefficient, scale }`へ戻す。rootと
+plusminusは今回構文として保持・表示するが、数値評価規則はまだ定義しない。解析不能なbounded raw textは
+`nan_error`として保持し、JavaScript `number`へcoerceしない。`nan_error`を含む回答は採点で常に不正解である。
 
 ## Structural size
 

@@ -13,6 +13,14 @@ describe('implemented unit route', () => {
     expect(dynamicParams).toBe(false);
     expect(generateStaticParams()).toEqual([
       { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' },
+      { gradeSlug: 'grade-1', themeSlug: 'one-digit-subtraction' },
+      { gradeSlug: 'grade-2', themeSlug: 'two-digit-addition' },
+      { gradeSlug: 'grade-2', themeSlug: 'multiplication-table' },
+      { gradeSlug: 'grade-5', themeSlug: 'fraction-addition' },
+      { gradeSlug: 'grade-5', themeSlug: 'fraction-subtraction' },
+      { gradeSlug: 'grade-6', themeSlug: 'fraction-multiplication' },
+      { gradeSlug: 'grade-7', themeSlug: 'signed-arithmetic-1' },
+      { gradeSlug: 'grade-7', themeSlug: 'signed-arithmetic-2' },
       { gradeSlug: 'grade-7', themeSlug: 'linear-equation-1' },
       { gradeSlug: 'grade-7', themeSlug: 'linear-equation-2' },
     ]);

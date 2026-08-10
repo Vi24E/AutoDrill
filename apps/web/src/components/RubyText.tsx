@@ -11,6 +11,11 @@ export function RubyText({ parts }: RubyTextProps) {
   return parts.map((part, index) => (
     typeof part === 'string'
       ? <Fragment key={`${part}-${index}`}>{part}</Fragment>
-      : <ruby key={`${part[0]}-${index}`}>{part[0]}<rt aria-hidden="true">{part[1]}</rt></ruby>
+      : (
+        <ruby key={`${part[0]}-${index}`}>
+          {part[0]}
+          <rt aria-hidden="true">{part[1]}</rt>
+        </ruby>
+      )
   ));
 }

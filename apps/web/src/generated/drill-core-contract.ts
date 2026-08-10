@@ -50,6 +50,126 @@ export const DRILL_CORE_CONTRACT = {
         "columns": 2,
         "rows": 8
       }
+    },
+    "4": {
+      "numeric_theme_id": 4,
+      "generator_revision": 1,
+      "skill_id": "jp.grade1.subtraction.one_digit",
+      "curriculum_path": [
+        "root",
+        "小学1年生",
+        "一桁の引き算"
+      ],
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "5": {
+      "numeric_theme_id": 5,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.addition.two_digit",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "二桁の足し算"
+      ],
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "6": {
+      "numeric_theme_id": 6,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九"
+      ],
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "7": {
+      "numeric_theme_id": 7,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.signed.arithmetic.1",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "負の数の計算(1)"
+      ],
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "8": {
+      "numeric_theme_id": 8,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.signed.arithmetic.2",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "負の数の計算(2)"
+      ],
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "9": {
+      "numeric_theme_id": 9,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.fraction.addition",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "分数の足し算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "10": {
+      "numeric_theme_id": 10,
+      "generator_revision": 1,
+      "skill_id": "jp.grade6.fraction.multiplication",
+      "curriculum_path": [
+        "root",
+        "小学6年生",
+        "分数の掛け算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "11": {
+      "numeric_theme_id": 11,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.fraction.subtraction",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "分数の引き算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
     }
   },
   "grade_warning_codes": [

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { problemExpression, problemExpressionTokens } from './problem-format';
-import { linearFixtureWorksheet } from '@/test/fixtures';
+import { fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
+import { problemExpressionLatex } from './mathlive-format';
 import type { ProblemDto, RationalCoefficient } from './drill-engine';
 
 function linearProblem(
@@ -63,4 +64,28 @@ describe('problemExpression', () => {
       { kind: 'fraction', numerator: 1, denominator: 5 },
     ]);
   });
+  it('formats arithmetic ASTs with exact fractions and precedence for MathLive and PDF', () => {
+    const base = fixtureWorksheet().problems[0]!;
+    const problem: ProblemDto = {
+      ...base,
+      prompt: {
+        kind: 'arithmetic',
+        expression: {
+          kind: 'binary',
+          operator: 'multiply',
+          left: { kind: 'rational', value: q(-1, 2) },
+          right: {
+            kind: 'binary',
+            operator: 'add',
+            left: { kind: 'integer', value: 3 },
+            right: { kind: 'integer', value: -4 },
+          },
+        },
+      },
+    };
+    expect(problemExpression(problem)).toBe('(−1/2) × (3 + (−4)) =');
+    expect(problemExpressionLatex(problem)).toBe('(-\\frac{1}{2})\\,\\times\\,\\left(3\\,+\\,(-4)\\right)\\,=');
+    expect(problemExpressionTokens(problem).some((token) => token.kind === 'fraction')).toBe(true);
+  });
+
 });

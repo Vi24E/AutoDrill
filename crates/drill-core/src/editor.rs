@@ -348,7 +348,7 @@ fn validate_cursor(cursor: usize, text: &str) -> Result<(), EditorError> {
     }
 }
 
-fn ensure_capability(
+pub(crate) fn ensure_capability(
     answer: &AnswerNode,
     input_interface: &AnswerInputInterface,
 ) -> Result<(), EditorError> {

@@ -9,6 +9,7 @@ mod exact;
 mod generator;
 mod grade;
 mod identity;
+mod mathlive_input;
 mod model;
 mod normalize;
 mod registry;
@@ -18,9 +19,10 @@ pub use answer::{AnswerNode, AnswerRepresentation};
 pub use contract::{web_contract, WebContract, WebLayoutContract, WebThemeContract};
 pub use editor::apply_editor_action;
 pub use effort::{
-    big_num_operations, calculate_effort, calculate_graph_effort, default_effort,
-    linear_equation_graph, one_digit_addition_graph, signed_addition_graph,
-    signed_subtraction_graph, EffortResult, EffortWeights, Operation, OperationKind,
+    arithmetic_expression_graph, big_num_operations, calculate_effort, calculate_graph_effort,
+    default_effort, linear_equation_graph, multiplication_table_graph, one_digit_addition_graph,
+    one_digit_subtraction_graph, signed_addition_graph, signed_subtraction_graph,
+    two_digit_addition_graph, EffortResult, EffortWeights, Operation, OperationKind,
     OperationVector, OperationWeights, SolutionGraph, SolutionStep, WeightError, WeightMultipliers,
     WeightProfile, OPERATION_KIND_COUNT,
 };
@@ -28,26 +30,27 @@ pub use error::{EditorError, GenerationError};
 pub use generator::{
     generate_identity_with_clock, generate_problem, generate_problem_request, generate_worksheet,
     generate_worksheet_request, generate_worksheet_request_with_clock, regenerate_problem_set,
-    registered_generator, GenerationConfig, LinearEquationGenerator, MonotonicClock,
-    OneDigitAdditionGenerator, ProblemGenerator, StepClock, SystemClock, DEFAULT_MAX_ATTEMPTS,
-    DEFAULT_TIMEOUT,
+    registered_generator, ArithmeticThemeGenerator, GenerationConfig, LinearEquationGenerator,
+    MonotonicClock, OneDigitAdditionGenerator, ProblemGenerator, StepClock, SystemClock,
+    DEFAULT_MAX_ATTEMPTS, DEFAULT_TIMEOUT,
 };
 pub use grade::{grade_answer, grade_answer_with_schema};
 pub use identity::{
     validate_seed, Difficulty, IdentityError, ProblemSetIdentity, DEFAULT_DIFFICULTY,
     MAX_DIFFICULTY, MAX_SEED_LENGTH, MIN_DIFFICULTY,
 };
+pub use mathlive_input::parse_mathlive_answer;
 pub use model::{
-    AnswerInputInterface, AnswerSchema, EditorAction, EditorState, EditorStructure,
-    GenerateProblemRequest, GenerateWorksheetRequest, GradeResult, GradeStatus, GradeWarning,
-    LayoutMetadata, Problem, ProblemPrompt, RationalCoefficient, Worksheet, CURRICULUM_PATH,
-    CURRICULUM_PATH_LINEAR_EQUATION_1, CURRICULUM_PATH_LINEAR_EQUATION_2, DEFAULT_COLUMNS,
-    DEFAULT_PROBLEM_COUNT, DEFAULT_ROWS, GENERATOR_REVISION_LINEAR_EQUATION_1,
-    GENERATOR_REVISION_LINEAR_EQUATION_2, GENERATOR_REVISION_ONE_DIGIT_ADDITION,
-    LINEAR_EQUATION_COLUMNS, LINEAR_EQUATION_PROBLEM_COUNT, LINEAR_EQUATION_ROWS, MAX_ANSWER,
-    MAX_ANSWER_AST_SIZE, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND, SCHEMA_VERSION, SKILL_ID,
-    SKILL_ID_LINEAR_EQUATION_1, SKILL_ID_LINEAR_EQUATION_2, THEME_ID_LINEAR_EQUATION_1,
-    THEME_ID_LINEAR_EQUATION_2, THEME_ID_ONE_DIGIT_ADDITION,
+    AnswerInputInterface, AnswerSchema, ArithmeticExpression, ArithmeticOperator, EditorAction,
+    EditorState, EditorStructure, GenerateProblemRequest, GenerateWorksheetRequest, GradeResult,
+    GradeStatus, GradeWarning, LayoutMetadata, Problem, ProblemPrompt, RationalCoefficient,
+    Worksheet, CURRICULUM_PATH, CURRICULUM_PATH_LINEAR_EQUATION_1,
+    CURRICULUM_PATH_LINEAR_EQUATION_2, DEFAULT_COLUMNS, DEFAULT_PROBLEM_COUNT, DEFAULT_ROWS,
+    GENERATOR_REVISION_LINEAR_EQUATION_1, GENERATOR_REVISION_LINEAR_EQUATION_2,
+    GENERATOR_REVISION_ONE_DIGIT_ADDITION, LINEAR_EQUATION_COLUMNS, LINEAR_EQUATION_PROBLEM_COUNT,
+    LINEAR_EQUATION_ROWS, MAX_ANSWER, MAX_ANSWER_AST_SIZE, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
+    SCHEMA_VERSION, SKILL_ID, SKILL_ID_LINEAR_EQUATION_1, SKILL_ID_LINEAR_EQUATION_2,
+    THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2, THEME_ID_ONE_DIGIT_ADDITION,
 };
 pub use normalize::normalize_answer;
 pub use registry::{

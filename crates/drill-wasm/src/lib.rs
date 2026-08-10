@@ -15,10 +15,10 @@ use drill_core::{
     apply_editor_action as core_apply_editor_action, calculate_effort as core_calculate_effort,
     generate_problem_request as core_generate_problem_request,
     grade_answer_with_schema as core_grade_answer_with_schema,
-    normalize_answer as core_normalize_answer, AnswerInputInterface, AnswerNode, AnswerSchema,
-    EditorAction, EditorError, EditorState, EffortWeights, GenerateProblemRequest,
-    GenerateWorksheetRequest, GenerationError, Problem, ProblemSetIdentity, MAX_ANSWER_AST_SIZE,
-    SCHEMA_VERSION,
+    normalize_answer as core_normalize_answer, parse_mathlive_answer as core_parse_mathlive_answer,
+    AnswerInputInterface, AnswerNode, AnswerSchema, EditorAction, EditorError, EditorState,
+    EffortWeights, GenerateProblemRequest, GenerateWorksheetRequest, GenerationError, Problem,
+    ProblemSetIdentity, MAX_ANSWER_AST_SIZE, SCHEMA_VERSION,
 };
 #[cfg(target_arch = "wasm32")]
 use drill_core::{
@@ -118,6 +118,13 @@ struct EditorActionRequest {
     input_interface: AnswerInputInterface,
     state: EditorState,
     action: EditorAction,
+}
+
+#[derive(Debug, Deserialize)]
+struct ParseMathLiveAnswerRequest {
+    schema_version: u16,
+    input_interface: AnswerInputInterface,
+    latex: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -223,6 +230,14 @@ pub fn apply_editor_action(input_json: &str) -> String {
         validate_schema(request.schema_version)?;
         core_apply_editor_action(&request.state, &request.action, &request.input_interface)
             .map_err(editor_error)
+    })
+}
+
+#[wasm_bindgen]
+pub fn parse_mathlive_answer(input_json: &str) -> String {
+    respond_with(input_json, |request: ParseMathLiveAnswerRequest| {
+        validate_schema(request.schema_version)?;
+        core_parse_mathlive_answer(&request.latex, &request.input_interface).map_err(editor_error)
     })
 }
 

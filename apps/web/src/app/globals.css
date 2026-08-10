@@ -21,6 +21,16 @@ button { color: inherit; }
 button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 ruby { ruby-position: over; }
 rt { font-size: .52em; font-weight: 500; letter-spacing: 0; }
+.settings-screen ruby { position: relative; display: inline-block; }
+.settings-screen ruby > rt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 1px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  line-height: 1;
+  pointer-events: none;
+}
 
 .app-shell { min-height: 100vh; padding: 40px 20px 56px; }
 .settings-screen {
@@ -61,7 +71,7 @@ rt { font-size: .52em; font-weight: 500; letter-spacing: 0; }
   background: rgba(255, 255, 255, .96);
   box-shadow: 0 22px 60px rgba(35, 54, 60, .16), 0 2px 0 rgba(255, 255, 255, .8) inset;
 }
-.settings-screen .page-heading { position: relative; margin: 0; padding: 34px 38px 25px; border-bottom: 1px solid #dce3e5; text-align: center; }
+.settings-screen .page-heading { position: relative; display: grid; min-height: 138px; margin: 0; padding: 42px 38px 27px; border-bottom: 1px solid #dce3e5; place-items: center; text-align: center; }
 .furigana-toggle {
   position: absolute;
   top: 16px;
@@ -76,8 +86,6 @@ rt { font-size: .52em; font-weight: 500; letter-spacing: 0; }
 }
 .furigana-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--lobby-cyan-dark); }
 .eyebrow, .ribbon-label { margin: 0 0 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; }
-.settings-screen .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: #557078; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.settings-screen .eyebrow span { width: 8px; height: 8px; border-radius: 50%; background: var(--lobby-cyan); box-shadow: 0 0 0 4px rgba(8, 169, 196, .13); }
 h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weight: 650; }
 .settings-screen h1 { color: #20343b; font-size: clamp(29px, 5vw, 40px); font-weight: 800; letter-spacing: .025em; }
 .description { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
@@ -158,7 +166,7 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 }
 .custom-select-trigger:hover { border-color: #6f858c; background: #fff; }
 .custom-select-trigger[aria-expanded='true'] { border-color: var(--lobby-cyan-dark); box-shadow: 0 0 0 2px rgba(8, 169, 196, .12); }
-.custom-select-value { overflow: hidden; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-value { overflow: visible; line-height: 1.35; white-space: nowrap; }
 .custom-select-chevron { width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; transition: rotate .16s ease; }
 .custom-select-trigger[aria-expanded='true'] .custom-select-chevron { rotate: 180deg; }
 .custom-select-listbox {
@@ -191,8 +199,30 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .custom-select-option[aria-selected='true'] { font-weight: 750; }
 .custom-select-check { color: var(--lobby-cyan-dark); font-size: 13px; text-align: center; }
 .settings-screen :is(button, select, input):focus-visible { outline: 3px solid rgba(8, 169, 196, .32); outline-offset: 2px; border-color: var(--lobby-cyan-dark); }
-.field-note, .wasm-note, .muted-message { margin: 0; color: var(--muted); font-size: 12px; }
-.seed-field { display: grid; gap: 7px; }
+.field-note, .muted-message { margin: 0; color: var(--muted); font-size: 12px; }
+.advanced-settings { border-top: 1px solid #dbe3e5; }
+.advanced-settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 8px 2px;
+  color: #40565e;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .045em;
+  list-style: none;
+  user-select: none;
+}
+.advanced-settings > summary::-webkit-details-marker { display: none; }
+.advanced-settings > summary:hover { color: #20343b; }
+.advanced-settings-chevron { width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; transition: rotate .16s ease; }
+.advanced-settings[open] .advanced-settings-chevron { rotate: 180deg; }
+.advanced-settings-body { padding: 8px 0 1px; }
+.seed-field { display: grid; gap: 8px; }
+.seed-label { display: flex; flex-wrap: wrap; gap: 3px; align-items: baseline; }
+.seed-label > span { margin-left: 0; }
 .fixed-count {
   display: flex;
   justify-content: space-between;
@@ -209,7 +239,7 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 }
 .fixed-count strong { color: var(--lobby-cyan-dark); font-size: 24px; line-height: 1; }
 .fixed-count strong span { margin-left: 2px; font-size: 11px; }
-.settings-actions { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; padding: 0 38px; }
+.settings-actions { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; padding: 0 38px 30px; }
 .primary-button, .secondary-button {
   display: inline-flex;
   align-items: center;
@@ -229,8 +259,20 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .primary-button:active:not(:disabled), .secondary-button:active:not(:disabled) { box-shadow: 0 1px 0 #82949a; translate: 0 4px; }
 .settings-actions button:disabled { cursor: wait; box-shadow: 0 2px 0 #b9c4c7; filter: saturate(.35); opacity: .65; }
 .button-icon { font-size: 11px; line-height: 1; }
+.share-pdf-icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 button:disabled { cursor: wait; opacity: .5; }
-.wasm-note { min-height: 42px; padding: 15px 38px 18px; text-align: center; }
+.settings-version {
+  position: fixed;
+  z-index: 4;
+  right: 18px;
+  bottom: 13px;
+  margin: 0;
+  color: #667b82;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
 .settings-screen .muted-message { margin: 0 38px 15px; padding: 10px 12px; border-radius: 6px; background: #f0f4f5; text-align: center; }
 .unavailable-message { margin: 0 38px 15px; padding: 10px 12px; border-radius: 6px; color: #674f10; background: #fff8db; font-size: 13px; text-align: center; }
 .error-message { margin: 14px 0; padding: 11px 12px; border: 1px solid #7a2020; color: #7a2020; background: #fffafa; font-size: 13px; }
@@ -258,6 +300,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .ribbon-meta { display: grid; gap: 2px; color: var(--muted); font-size: 11px; text-align: right; }
 .ribbon-meta strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
 .ribbon-button, .ribbon-icon, .ribbon-link { min-height: 36px; padding: 7px 12px; border: 1px solid var(--ink); border-radius: 2px; background: var(--paper); cursor: pointer; font-size: 13px; }
+.ribbon-button[aria-pressed='true'] { color: var(--paper); border-color: var(--ink); background: var(--ink); cursor: default; opacity: 1; }
 .ribbon-link { padding-inline: 4px; border-color: transparent; text-decoration: underline; }
 .worksheet-toast {
   position: fixed;
@@ -293,49 +336,67 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-number { flex: 0 0 15%; color: #484848; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .expression { flex: 0 0 auto; white-space: nowrap; font-size: clamp(17px, 2.8vw, 23px); font-variant-numeric: tabular-nums; }
 .problem-math-expression { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
-.problem-math-expression :is(mtext, mn, mi, mo) { font-family: 'Noto Sans JP', system-ui, sans-serif; }
 .answer-box {
   display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  justify-content: flex-start;
   min-width: 42px;
   max-width: 100%;
-  min-height: 34px;
+  min-height: 38px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
   margin-left: 6px;
   overflow: visible;
-  padding: 2px 4px;
+  padding: 5px 8px;
   border: 1px solid #4f4f4f;
   border-radius: 0;
+  color: #111;
   background: #fff;
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
+  cursor: text;
+  line-height: 1;
+  vertical-align: middle;
   white-space: nowrap;
 }
-.answer-value { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; overflow: visible; line-height: 1; text-align: left; }
-
-.answer-render-probe {
-  position: fixed;
-  z-index: -1;
-  top: 0;
-  left: -10000px;
+.answer-mathfield {
+  display: inline-block;
   width: max-content;
-  visibility: hidden;
-  pointer-events: none;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  vertical-align: middle;
+  --caret-color: #111;
+  --selection-background-color: rgba(30, 115, 170, .18);
+  --placeholder-color: #777;
 }
-.answer-render-probe .answer-value { max-width: none; }
-@keyframes answer-caret-blink { 50% { opacity: 0; } }
-.answer-box-structured { min-height: 46px; padding-block: 3px; }
-.answer-math { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
-.answer-math :is(mtext, mn, mi, mo) { font-family: 'Noto Sans JP', system-ui, sans-serif; }
-.answer-math { math-style: normal; }
-.answer-math mfrac > * { math-depth: 0; math-style: normal; }
-.answer-math-slot { cursor: text; }
-.answer-math-slot-empty { color: #777; }
-.answer-math-slot-active { color: #111; }
-.answer-math-caret { color: #111; font-family: 'Noto Sans JP', system-ui, sans-serif; font-size: .78em; animation: answer-caret-blink 1s steps(1, end) infinite; }
-.answer-box-selected { border: 2px solid #111; }
-.answer-box:disabled { cursor: default; opacity: 1; }
+/* AutoDrill owns the visible selection frame. MathLive's native host focus
+   ring otherwise extends outside that frame for tall structures such as
+   fractions. Keep keyboard focus/caret behavior, but suppress only the host
+   outline. */
+.answer-mathfield:focus,
+.answer-mathfield:focus-within { outline: none; }
+.answer-mathfield::part(container) {
+  display: inline-flex;
+  width: auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.answer-mathfield::part(content) {
+  width: auto;
+  padding: 0;
+  overflow: visible;
+}
+.answer-mathfield::part(menu-toggle),
+.answer-mathfield::part(virtual-keyboard-toggle) { display: none; }
+.answer-box-readonly { cursor: default; }
+.canonical-answer-math { display: inline-block; font-size: 1em; vertical-align: middle; }
+.answer-box-selected { outline: 2px solid #111; outline-offset: -1px; }
 .answer-box-correct { border-color: #222; }
 .answer-box-wrong { border: 3px solid #e01010; }
 .problem-cell-graded .answer-box { min-width: 25px; }
@@ -370,10 +431,8 @@ button:disabled { cursor: wait; opacity: .5; }
 .formula-keypad button, .keypad-numbers button, .keypad-controls button { min-height: 42px; border: 1px solid #8d969a; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 650; }
 .formula-keypad button { display: grid; gap: 1px; min-height: 58px; place-items: center; padding: 4px 3px 3px; color: #243d45; background: #fafdfe; }
 .formula-keypad button:hover:not(:disabled), .keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
-.formula-key-symbol { display: flex; min-height: 31px; align-items: center; justify-content: center; }
-.math-template-icon { display: inline-block; margin: 0; font-size: 24px; line-height: 1; vertical-align: middle; }
-.math-template-icon :is(mtext, mn, mi, mo) { font-family: 'Noto Sans JP', system-ui, sans-serif; }
-.math-template-slot { font-family: inherit; font-size: .78em; }
+.formula-key-symbol { display: flex; min-height: 44px; align-items: center; justify-content: center; padding-block: 3px; overflow: visible; }
+.math-template-icon { display: inline-block; margin: 0; overflow: visible; font-size: 24px; line-height: normal; vertical-align: middle; }
 .formula-key-label { color: #53676e; font-family: 'Noto Sans JP', system-ui, sans-serif; font-size: 9px; font-weight: 700; line-height: 1; }
 .keypad-zero { grid-column: span 2; }
 .keypad-decimal { font-family: Georgia, 'Times New Roman', serif; font-size: 22px; line-height: 1; }
@@ -382,18 +441,18 @@ button:disabled { cursor: wait; opacity: .5; }
 
 @media (max-width: 680px) {
   .app-shell { padding: 22px 10px 34px; }
-  .settings-screen .page-heading { padding: 28px 20px 21px; }
+  .settings-screen .page-heading { min-height: 126px; padding: 36px 20px 24px; }
   .settings-card { gap: 20px; padding: 22px 20px; }
   .curriculum-fields { grid-template-columns: 1fr 1fr; }
   .field-group-theme { grid-column: 1 / -1; }
   .curriculum-fields-recommended .field-group-theme { grid-column: auto; }
   .settings-options { grid-template-columns: minmax(0, 1fr) 120px; }
-  .settings-actions { grid-template-columns: 1fr; padding: 0 20px; }
-  .wasm-note { padding-inline: 20px; }
+  .settings-actions { grid-template-columns: 1fr; padding: 0 20px 26px; }
   .settings-screen .muted-message, .settings-screen .error-message, .unavailable-message { margin-inline: 20px; }
   .lobby-shape-square { left: -14px; }
   .lobby-shape-circle { right: -18px; }
   .lobby-shape-triangle { right: 4%; opacity: .14; }
+  .settings-version { right: 10px; bottom: 8px; font-size: 9px; }
   .worksheet-screen { padding-top: 102px; }
   .worksheet-input-open { padding-bottom: 300px; }
   .ribbon { grid-template-columns: 1fr auto auto; gap: 8px; min-height: 102px; padding: 8px 10px; }
@@ -405,7 +464,7 @@ button:disabled { cursor: wait; opacity: .5; }
   .problem-cell { padding-inline: 2%; }
   .problem-number { flex-basis: 14%; font-size: 12px; }
   .expression { font-size: clamp(15px, 4.6vw, 20px); }
-  .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 2px; }
+  .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 6px; }
   .correct-answer { margin-left: 3px; font-size: 13px; }
   .input-panel-inner { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 7px; }
   .formula-keypad { grid-column: 1 / -1; grid-template-columns: repeat(6, minmax(70px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
@@ -422,7 +481,6 @@ button:disabled { cursor: wait; opacity: .5; }
 
 @media (prefers-reduced-motion: reduce) {
   .lobby-shape { animation: none; }
-  .answer-math-caret { animation: none; }
   .settings-screen :is(button, select, input) { scroll-behavior: auto; transition: none; }
 }
 

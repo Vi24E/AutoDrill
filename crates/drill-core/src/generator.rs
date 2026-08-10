@@ -5,14 +5,17 @@ use std::time::{Duration, Instant};
 
 use crate::answer::AnswerNode;
 use crate::effort::{
-    calculate_graph_effort, linear_equation_graph, one_digit_addition_graph, OperationWeights,
+    arithmetic_expression_graph, calculate_graph_effort, linear_equation_graph,
+    multiplication_table_graph, one_digit_addition_graph, one_digit_subtraction_graph,
+    two_digit_addition_graph, OperationWeights,
 };
 use crate::error::GenerationError;
 use crate::identity::{validate_seed, ProblemSetIdentity};
 use crate::model::{
-    AnswerInputInterface, AnswerSchema, EditorStructure, GenerateProblemRequest,
-    GenerateWorksheetRequest, LayoutMetadata, Problem, ProblemPrompt, RationalCoefficient,
-    Worksheet, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND, SCHEMA_VERSION,
+    AnswerInputInterface, AnswerSchema, ArithmeticExpression, ArithmeticOperator, EditorStructure,
+    GenerateProblemRequest, GenerateWorksheetRequest, LayoutMetadata, Problem, ProblemPrompt,
+    RationalCoefficient, Worksheet, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
+    SCHEMA_VERSION,
 };
 use crate::registry::{active_registration, registration, resolved_weights, ThemeRegistration};
 use crate::rng::DeterministicRng;
@@ -80,6 +83,21 @@ pub trait ProblemGenerator: Sync {
         None
     }
 
+    /// Finite expression domains can ask the common sampler to build a small
+    /// unique pool instead of an 8n pool with duplicate expressions.
+    fn finite_distinct_candidate_count(&self) -> Option<usize> {
+        None
+    }
+
+    fn draw_finite_candidate(
+        &self,
+        _index: usize,
+        _ordinal: u32,
+        _weights: &OperationWeights,
+    ) -> Option<Problem> {
+        None
+    }
+
     fn draw_candidate_for_answer(
         &self,
         rng: &mut DeterministicRng,
@@ -107,6 +125,74 @@ impl ProblemGenerator for OneDigitAdditionGenerator {
     ) -> Option<Problem> {
         let (left, right) = rng.next_ordered_pair();
         Some(addition_problem(ordinal, left, right, weights))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ArithmeticThemeMode {
+    OneDigitSubtraction,
+    TwoDigitAddition,
+    MultiplicationTable,
+    SignedArithmetic1,
+    SignedArithmetic2,
+    FractionAddition,
+    FractionSubtraction,
+    FractionMultiplication,
+}
+
+#[derive(Debug)]
+pub struct ArithmeticThemeGenerator {
+    registration: &'static ThemeRegistration,
+    mode: ArithmeticThemeMode,
+}
+
+impl ProblemGenerator for ArithmeticThemeGenerator {
+    fn registration(&self) -> &'static ThemeRegistration {
+        self.registration
+    }
+
+    fn finite_distinct_candidate_count(&self) -> Option<usize> {
+        match self.mode {
+            ArithmeticThemeMode::FractionAddition
+            | ArithmeticThemeMode::FractionSubtraction
+            | ArithmeticThemeMode::FractionMultiplication => {
+                Some(fraction_arithmetic_domain(self.mode).len())
+            }
+            _ => None,
+        }
+    }
+
+    fn draw_finite_candidate(
+        &self,
+        index: usize,
+        ordinal: u32,
+        weights: &OperationWeights,
+    ) -> Option<Problem> {
+        let &(left, right, result) = fraction_arithmetic_domain(self.mode).get(index)?;
+        Some(fraction_theme_problem(
+            self.registration.numeric_theme_id,
+            self.mode,
+            ordinal,
+            weights,
+            left,
+            right,
+            result,
+        ))
+    }
+
+    fn draw_candidate(
+        &self,
+        rng: &mut DeterministicRng,
+        ordinal: u32,
+        weights: &OperationWeights,
+    ) -> Option<Problem> {
+        arithmetic_theme_problem(
+            self.registration.numeric_theme_id,
+            self.mode,
+            rng,
+            ordinal,
+            weights,
+        )
     }
 }
 
@@ -193,10 +279,51 @@ static LINEAR_EQUATION_2_GENERATOR: LinearEquationGenerator = LinearEquationGene
     mode: LinearEquationMode::RationalSolution,
 };
 
-static REGISTERED_GENERATORS: [&dyn ProblemGenerator; 3] = [
+static ONE_DIGIT_SUBTRACTION_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::ONE_DIGIT_SUBTRACTION_REGISTRATION,
+    mode: ArithmeticThemeMode::OneDigitSubtraction,
+};
+static TWO_DIGIT_ADDITION_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::TWO_DIGIT_ADDITION_REGISTRATION,
+    mode: ArithmeticThemeMode::TwoDigitAddition,
+};
+static MULTIPLICATION_TABLE_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::MULTIPLICATION_TABLE_REGISTRATION,
+    mode: ArithmeticThemeMode::MultiplicationTable,
+};
+static SIGNED_ARITHMETIC_1_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::SIGNED_ARITHMETIC_1_REGISTRATION,
+    mode: ArithmeticThemeMode::SignedArithmetic1,
+};
+static SIGNED_ARITHMETIC_2_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::SIGNED_ARITHMETIC_2_REGISTRATION,
+    mode: ArithmeticThemeMode::SignedArithmetic2,
+};
+static FRACTION_ADDITION_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::FRACTION_ADDITION_REGISTRATION,
+    mode: ArithmeticThemeMode::FractionAddition,
+};
+static FRACTION_SUBTRACTION_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::FRACTION_SUBTRACTION_REGISTRATION,
+    mode: ArithmeticThemeMode::FractionSubtraction,
+};
+static FRACTION_MULTIPLICATION_GENERATOR: ArithmeticThemeGenerator = ArithmeticThemeGenerator {
+    registration: &crate::registry::FRACTION_MULTIPLICATION_REGISTRATION,
+    mode: ArithmeticThemeMode::FractionMultiplication,
+};
+
+static REGISTERED_GENERATORS: [&dyn ProblemGenerator; 11] = [
     &ONE_DIGIT_ADDITION_GENERATOR,
     &LINEAR_EQUATION_1_GENERATOR,
     &LINEAR_EQUATION_2_GENERATOR,
+    &ONE_DIGIT_SUBTRACTION_GENERATOR,
+    &TWO_DIGIT_ADDITION_GENERATOR,
+    &MULTIPLICATION_TABLE_GENERATOR,
+    &SIGNED_ARITHMETIC_1_GENERATOR,
+    &SIGNED_ARITHMETIC_2_GENERATOR,
+    &FRACTION_ADDITION_GENERATOR,
+    &FRACTION_SUBTRACTION_GENERATOR,
+    &FRACTION_MULTIPLICATION_GENERATOR,
 ];
 
 pub fn registered_generator(
@@ -305,7 +432,9 @@ pub fn generate_problem_request(
             None => generator.draw_candidate(&mut rng, ordinal as u32, &weights),
         };
         if let Some(problem) = problem {
-            return Ok(problem);
+            if problem_allowed_by_curriculum(registration, &problem) {
+                return Ok(problem);
+            }
         }
     }
     Err(GenerationError::AttemptLimit {
@@ -396,49 +525,84 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
     let mut rng = DeterministicRng::from_seed(&identity.seed);
     let weights = resolved_weights(registration);
     let n = registration.problem_count;
+    let finite_distinct_count = generator.finite_distinct_candidate_count();
+    let unique_finite_pool = finite_distinct_count.is_some();
     let pool_size = CANDIDATE_POOL_MULTIPLIER * n;
+    let required_diversity = DIVERSITY_MULTIPLIER * n;
 
-    let mut pool = loop {
-        let mut candidate_pool = Vec::with_capacity(pool_size);
-        let mut distinct = HashSet::with_capacity(pool_size);
-        while candidate_pool.len() < pool_size {
-            // When a generator exposes an answer domain, sample the answer
-            // exactly once for this candidate. If construction fails, retry
-            // the expression while keeping that answer fixed. This preserves
-            // the requested uniform source distribution without requiring or
-            // forbidding duplicate answers in the final worksheet.
-            let fixed_answer = generator
-                .answer_domain()
-                .map(|domain| domain[rng.next_bounded(domain.len() as u64) as usize].clone());
-            loop {
-                consume_attempt(started, clock, config, &mut attempts)?;
-                let ordinal = u32::try_from(attempts).unwrap_or(u32::MAX);
-                let problem = match fixed_answer.as_ref() {
-                    Some(answer) => {
-                        generator.draw_candidate_for_answer(&mut rng, ordinal, &weights, answer)
-                    }
-                    None => generator.draw_candidate(&mut rng, ordinal, &weights),
-                };
-                let Some(problem) = problem else {
-                    continue;
-                };
-                if fixed_answer
-                    .as_ref()
-                    .is_some_and(|answer| problem.canonical_answer != *answer)
-                {
-                    continue;
-                }
-                distinct.insert(problem_key(&problem));
+    let mut pool = if let Some(finite_count) = finite_distinct_count {
+        if finite_count as u64 > config.max_attempts {
+            return Err(GenerationError::AttemptLimit {
+                attempts: config.max_attempts,
+                max_attempts: config.max_attempts,
+            });
+        }
+        attempts = attempts.saturating_add(finite_count as u64);
+        let mut candidate_pool = Vec::with_capacity(finite_count);
+        for index in 0..finite_count {
+            let ordinal = u32::try_from(index + 1).unwrap_or(u32::MAX);
+            let Some(problem) = generator.draw_finite_candidate(index, ordinal, &weights) else {
+                continue;
+            };
+            if problem_allowed_by_curriculum(registration, &problem) {
                 candidate_pool.push(problem);
-                break;
             }
         }
         check_timeout(started, clock, config)?;
-        if distinct.len() >= DIVERSITY_MULTIPLIER * n {
-            break candidate_pool;
+        candidate_pool
+    } else {
+        loop {
+            let mut candidate_pool = Vec::with_capacity(pool_size);
+            let mut distinct = HashSet::with_capacity(pool_size);
+            while candidate_pool.len() < pool_size {
+                // When a generator exposes an answer domain, sample the answer
+                // exactly once for this candidate. If construction fails, retry
+                // the expression while keeping that answer fixed. This preserves
+                // the requested uniform source distribution without requiring or
+                // forbidding duplicate answers in the final worksheet.
+                let fixed_answer = generator
+                    .answer_domain()
+                    .map(|domain| domain[rng.next_bounded(domain.len() as u64) as usize].clone());
+                loop {
+                    consume_attempt(started, clock, config, &mut attempts)?;
+                    let ordinal = u32::try_from(attempts).unwrap_or(u32::MAX);
+                    let problem = match fixed_answer.as_ref() {
+                        Some(answer) => {
+                            generator.draw_candidate_for_answer(&mut rng, ordinal, &weights, answer)
+                        }
+                        None => generator.draw_candidate(&mut rng, ordinal, &weights),
+                    };
+                    let Some(problem) = problem else {
+                        continue;
+                    };
+                    if !problem_allowed_by_curriculum(registration, &problem) {
+                        continue;
+                    }
+                    if fixed_answer
+                        .as_ref()
+                        .is_some_and(|answer| problem.canonical_answer != *answer)
+                    {
+                        continue;
+                    }
+                    let key = problem_key(&problem);
+                    if unique_finite_pool {
+                        if !distinct.insert(key) {
+                            continue;
+                        }
+                    } else {
+                        distinct.insert(key);
+                    }
+                    candidate_pool.push(problem);
+                    break;
+                }
+            }
+            check_timeout(started, clock, config)?;
+            if distinct.len() >= required_diversity {
+                break candidate_pool;
+            }
+            // The full pool is discarded. The next loop consumes fresh attempts
+            // and fresh deterministic RNG draws.
         }
-        // The full pool is discarded. The next loop consumes fresh attempts
-        // and fresh deterministic RNG draws.
     };
 
     pool.sort_by(|left, right| {
@@ -449,6 +613,7 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
     });
 
     let bootstrap_count = n + EFFORT_TRIM_PER_SIDE * 2;
+    debug_assert!(pool.len() >= bootstrap_count);
     let mut selected = Vec::with_capacity(bootstrap_count);
     let mut selected_expressions = HashSet::with_capacity(bootstrap_count);
     while selected.len() < bootstrap_count {
@@ -459,9 +624,11 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
         }
         draws.sort_unstable();
         let selected_index = draws[usize::from(identity.difficulty.value() - 1)] - 1;
-        let key = problem_key(&pool[selected_index]);
-        if !selected_expressions.insert(key) {
-            continue;
+        if !unique_finite_pool {
+            let key = problem_key(&pool[selected_index]);
+            if !selected_expressions.insert(key) {
+                continue;
+            }
         }
         selected.push(pool.remove(selected_index));
     }
@@ -539,11 +706,95 @@ fn check_timeout<C: MonotonicClock + ?Sized>(
     }
 }
 
+fn problem_allowed_by_curriculum(registration: &ThemeRegistration, problem: &Problem) -> bool {
+    if !registration
+        .curriculum_path
+        .iter()
+        .any(|segment| segment.starts_with("小学"))
+    {
+        return true;
+    }
+    prompt_has_no_negative_values(&problem.prompt)
+        && answer_has_no_negative_values(&problem.canonical_answer)
+        && input_interface_has_no_negative_capability(&problem.input_interface)
+}
+
+fn prompt_has_no_negative_values(prompt: &ProblemPrompt) -> bool {
+    match prompt {
+        ProblemPrompt::Addition { .. } => true,
+        ProblemPrompt::Arithmetic { expression } => expression_has_no_negative_values(expression),
+        ProblemPrompt::LinearEquation {
+            a,
+            b,
+            c,
+            d,
+            left_negative_constant_as_subtraction,
+            right_negative_constant_as_subtraction,
+        } => {
+            [a, b, c, d].iter().all(|value| value.numerator >= 0)
+                && !left_negative_constant_as_subtraction
+                && !right_negative_constant_as_subtraction
+        }
+    }
+}
+
+fn expression_has_no_negative_values(expression: &ArithmeticExpression) -> bool {
+    match expression {
+        ArithmeticExpression::Integer { value } => *value >= 0,
+        ArithmeticExpression::Rational { value } => value.numerator >= 0,
+        ArithmeticExpression::Binary { left, right, .. } => {
+            expression_has_no_negative_values(left) && expression_has_no_negative_values(right)
+        }
+    }
+}
+
+fn answer_has_no_negative_values(answer: &AnswerNode) -> bool {
+    match answer {
+        AnswerNode::Empty => true,
+        AnswerNode::Integer(value) => *value >= 0,
+        AnswerNode::ExactDecimal { coefficient, .. } => *coefficient >= 0,
+        AnswerNode::NanError(raw) => !raw.contains('-') && !raw.contains('−'),
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => answer_has_no_negative_values(numerator) && answer_has_no_negative_values(denominator),
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => {
+            answer_has_no_negative_values(whole)
+                && answer_has_no_negative_values(numerator)
+                && answer_has_no_negative_values(denominator)
+        }
+        AnswerNode::Root { radicand, index } => {
+            answer_has_no_negative_values(radicand)
+                && index.as_deref().is_none_or(answer_has_no_negative_values)
+        }
+        AnswerNode::Negative(_) | AnswerNode::PlusMinus(_) => false,
+        AnswerNode::Tuple(values) => values.iter().all(answer_has_no_negative_values),
+        AnswerNode::Variable(_) => true,
+    }
+}
+
+fn input_interface_has_no_negative_capability(input: &AnswerInputInterface) -> bool {
+    match input {
+        AnswerInputInterface::SimpleNumeric { allow_negative, .. } => !allow_negative,
+        AnswerInputInterface::StructuredMath { allowed_structures } => {
+            !allowed_structures.contains(&EditorStructure::Negative)
+                && !allowed_structures.contains(&EditorStructure::PlusMinus)
+        }
+    }
+}
+
 fn problem_key(problem: &Problem) -> ProblemPrompt {
     match &problem.prompt {
         ProblemPrompt::Addition { left, right } => ProblemPrompt::Addition {
             left: *left,
             right: *right,
+        },
+        ProblemPrompt::Arithmetic { expression } => ProblemPrompt::Arithmetic {
+            expression: expression.clone(),
         },
         ProblemPrompt::LinearEquation { a, b, c, d, .. } => ProblemPrompt::LinearEquation {
             a: *a,
@@ -836,10 +1087,10 @@ fn linear_integer_domain() -> &'static [RationalCoefficient] {
     })
 }
 
-fn linear_rational_domain() -> &'static [RationalCoefficient] {
+fn linear_fraction_domain() -> &'static [RationalCoefficient] {
     static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     VALUES.get_or_init(|| {
-        let mut values = linear_integer_domain().to_vec();
+        let mut values = Vec::new();
         for denominator in 2_i64..=9 {
             for numerator_abs in 1_i64..=(10 - denominator) {
                 let Some(positive) = RationalCoefficient::new(numerator_abs, denominator) else {
@@ -859,6 +1110,363 @@ fn linear_rational_domain() -> &'static [RationalCoefficient] {
         values.dedup();
         values
     })
+}
+
+fn positive_linear_fraction_domain() -> &'static [RationalCoefficient] {
+    static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
+    VALUES.get_or_init(|| {
+        linear_fraction_domain()
+            .iter()
+            .copied()
+            .filter(|value| value.numerator > 0)
+            .collect()
+    })
+}
+
+fn fraction_arithmetic_domain(
+    mode: ArithmeticThemeMode,
+) -> &'static [(
+    RationalCoefficient,
+    RationalCoefficient,
+    RationalCoefficient,
+)] {
+    type Triple = (
+        RationalCoefficient,
+        RationalCoefficient,
+        RationalCoefficient,
+    );
+    static ADDITION: OnceLock<Vec<Triple>> = OnceLock::new();
+    static SUBTRACTION: OnceLock<Vec<Triple>> = OnceLock::new();
+    static MULTIPLICATION: OnceLock<Vec<Triple>> = OnceLock::new();
+
+    fn build(operator: ArithmeticOperator) -> Vec<Triple> {
+        let domain = positive_linear_fraction_domain();
+        let mut triples = Vec::new();
+        for &left in domain {
+            for &right in domain {
+                let result = match operator {
+                    ArithmeticOperator::Add => left.checked_add(right),
+                    ArithmeticOperator::Subtract => left.subtract(right),
+                    ArithmeticOperator::Multiply => left.multiply(right),
+                    ArithmeticOperator::Divide => unreachable!(),
+                };
+                let Some(result) = result else {
+                    continue;
+                };
+                if result.numerator > 0 && domain.contains(&result) {
+                    triples.push((left, right, result));
+                }
+            }
+        }
+        triples
+    }
+
+    match mode {
+        ArithmeticThemeMode::FractionAddition => {
+            ADDITION.get_or_init(|| build(ArithmeticOperator::Add))
+        }
+        ArithmeticThemeMode::FractionSubtraction => {
+            SUBTRACTION.get_or_init(|| build(ArithmeticOperator::Subtract))
+        }
+        ArithmeticThemeMode::FractionMultiplication => {
+            MULTIPLICATION.get_or_init(|| build(ArithmeticOperator::Multiply))
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn linear_rational_domain() -> &'static [RationalCoefficient] {
+    static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
+    VALUES.get_or_init(|| {
+        let mut values = linear_integer_domain().to_vec();
+        values.extend_from_slice(linear_fraction_domain());
+        values.sort_unstable();
+        values.dedup();
+        values
+    })
+}
+
+fn fraction_theme_problem(
+    numeric_theme_id: u32,
+    mode: ArithmeticThemeMode,
+    id: u32,
+    weights: &OperationWeights,
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+    result: RationalCoefficient,
+) -> Problem {
+    let operator = match mode {
+        ArithmeticThemeMode::FractionAddition => ArithmeticOperator::Add,
+        ArithmeticThemeMode::FractionSubtraction => ArithmeticOperator::Subtract,
+        ArithmeticThemeMode::FractionMultiplication => ArithmeticOperator::Multiply,
+        _ => unreachable!(),
+    };
+    let expression = binary_expression(
+        operator,
+        rational_expression(left),
+        rational_expression(right),
+    );
+    let answer = rational_answer(result);
+    let solution_graph = arithmetic_expression_graph(&expression, &answer)
+        .expect("accepted fraction-domain expression must have an effort graph");
+    let effort = calculate_graph_effort(&solution_graph, weights);
+    Problem {
+        schema_version: SCHEMA_VERSION,
+        id,
+        numeric_theme_id,
+        prompt: ProblemPrompt::Arithmetic { expression },
+        input_interface: fraction_input_interface(),
+        answer_schema: AnswerSchema::Rational {
+            max_abs_numerator: 8,
+            max_denominator: 9,
+            require_reduced_fraction_form: true,
+        },
+        canonical_answer: answer,
+        solution_graph,
+        operation_vector: effort.operation_vector,
+        effort: effort.value,
+    }
+}
+
+fn arithmetic_theme_problem(
+    numeric_theme_id: u32,
+    mode: ArithmeticThemeMode,
+    rng: &mut DeterministicRng,
+    id: u32,
+    weights: &OperationWeights,
+) -> Option<Problem> {
+    let (expression, answer, solution_graph, input_interface, answer_schema) = match mode {
+        ArithmeticThemeMode::OneDigitSubtraction => {
+            let b = 1_i64 + rng.next_bounded(9) as i64;
+            let c = 1_i64 + rng.next_bounded(9) as i64;
+            let a = b + c;
+            let expression = binary_expression(
+                ArithmeticOperator::Subtract,
+                integer_expression(a),
+                integer_expression(b),
+            );
+            let answer = AnswerNode::Integer(c);
+            (
+                expression,
+                answer,
+                one_digit_subtraction_graph(a as u8, b as u8),
+                simple_integer_input(false),
+                AnswerSchema::Integer { min: 1, max: 9 },
+            )
+        }
+        ArithmeticThemeMode::TwoDigitAddition => {
+            let a = 10_i64 + rng.next_bounded(90) as i64;
+            let b = 10_i64 + rng.next_bounded(90) as i64;
+            let c = a + b;
+            let expression = binary_expression(
+                ArithmeticOperator::Add,
+                integer_expression(a),
+                integer_expression(b),
+            );
+            let answer = AnswerNode::Integer(c);
+            (
+                expression,
+                answer,
+                two_digit_addition_graph(a as u8, b as u8),
+                simple_integer_input(false),
+                AnswerSchema::Integer { min: 20, max: 198 },
+            )
+        }
+        ArithmeticThemeMode::MultiplicationTable => {
+            let a = 1_i64 + rng.next_bounded(9) as i64;
+            let b = 1_i64 + rng.next_bounded(9) as i64;
+            let c = a * b;
+            let expression = binary_expression(
+                ArithmeticOperator::Multiply,
+                integer_expression(a),
+                integer_expression(b),
+            );
+            let answer = AnswerNode::Integer(c);
+            (
+                expression,
+                answer,
+                multiplication_table_graph(c as u8),
+                simple_integer_input(false),
+                AnswerSchema::Integer { min: 1, max: 81 },
+            )
+        }
+        ArithmeticThemeMode::SignedArithmetic1 => {
+            let term_count = 2 + rng.next_bounded(3) as usize;
+            let mut terms = (0..term_count)
+                .map(|_| draw_signed_integer(rng, 15))
+                .collect::<Vec<_>>();
+            ensure_negative_term(rng, &mut terms);
+            let mut expression = integer_expression(terms[0]);
+            for term in terms.iter().skip(1) {
+                let operator = if rng.next_bounded(2) == 0 {
+                    ArithmeticOperator::Add
+                } else {
+                    ArithmeticOperator::Subtract
+                };
+                expression = binary_expression(operator, expression, integer_expression(*term));
+            }
+            let value = evaluate_expression(&expression)?;
+            if !value.is_integer() {
+                return None;
+            }
+            let answer = AnswerNode::Integer(value.numerator);
+            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            (
+                expression,
+                answer,
+                graph,
+                simple_integer_input(true),
+                AnswerSchema::Integer { min: -60, max: 60 },
+            )
+        }
+        ArithmeticThemeMode::SignedArithmetic2 => {
+            let leaf_count = 2 + rng.next_bounded(3) as usize;
+            let mut values = (0..leaf_count)
+                .map(|_| draw_signed_integer(rng, 9))
+                .collect::<Vec<_>>();
+            ensure_negative_term(rng, &mut values);
+            let expression = draw_integer_arithmetic_ast(rng, &values)?;
+            let value = evaluate_expression(&expression)?;
+            if !value.is_integer() || value.numerator.unsigned_abs() > 6561 {
+                return None;
+            }
+            let answer = AnswerNode::Integer(value.numerator);
+            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            (
+                expression,
+                answer,
+                graph,
+                simple_integer_input(true),
+                AnswerSchema::Integer {
+                    min: -6561,
+                    max: 6561,
+                },
+            )
+        }
+        ArithmeticThemeMode::FractionAddition
+        | ArithmeticThemeMode::FractionSubtraction
+        | ArithmeticThemeMode::FractionMultiplication => {
+            let triples = fraction_arithmetic_domain(mode);
+            let &(left, right, result) = &triples[rng.next_bounded(triples.len() as u64) as usize];
+            return Some(fraction_theme_problem(
+                numeric_theme_id,
+                mode,
+                id,
+                weights,
+                left,
+                right,
+                result,
+            ));
+        }
+    };
+    let result = calculate_graph_effort(&solution_graph, weights);
+    Some(Problem {
+        schema_version: SCHEMA_VERSION,
+        id,
+        numeric_theme_id,
+        prompt: ProblemPrompt::Arithmetic { expression },
+        input_interface,
+        answer_schema,
+        canonical_answer: answer,
+        solution_graph,
+        operation_vector: result.operation_vector,
+        effort: result.value,
+    })
+}
+
+fn simple_integer_input(allow_negative: bool) -> AnswerInputInterface {
+    AnswerInputInterface::SimpleNumeric {
+        allow_decimal: false,
+        allow_negative,
+    }
+}
+
+fn fraction_input_interface() -> AnswerInputInterface {
+    AnswerInputInterface::StructuredMath {
+        allowed_structures: vec![EditorStructure::Fraction],
+    }
+}
+
+fn integer_expression(value: i64) -> ArithmeticExpression {
+    ArithmeticExpression::Integer { value }
+}
+
+fn rational_expression(value: RationalCoefficient) -> ArithmeticExpression {
+    ArithmeticExpression::Rational { value }
+}
+
+fn binary_expression(
+    operator: ArithmeticOperator,
+    left: ArithmeticExpression,
+    right: ArithmeticExpression,
+) -> ArithmeticExpression {
+    ArithmeticExpression::Binary {
+        operator,
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
+fn draw_signed_integer(rng: &mut DeterministicRng, max_abs: i64) -> i64 {
+    let magnitude = 1 + rng.next_bounded(max_abs as u64) as i64;
+    if rng.next_bounded(2) == 0 {
+        magnitude
+    } else {
+        -magnitude
+    }
+}
+
+fn ensure_negative_term(rng: &mut DeterministicRng, values: &mut [i64]) {
+    if values.iter().all(|value| *value > 0) {
+        let index = rng.next_bounded(values.len() as u64) as usize;
+        values[index] = -values[index];
+    }
+}
+
+fn draw_integer_arithmetic_ast(
+    rng: &mut DeterministicRng,
+    values: &[i64],
+) -> Option<ArithmeticExpression> {
+    if values.len() == 1 {
+        return Some(integer_expression(values[0]));
+    }
+    let split = 1 + rng.next_bounded((values.len() - 1) as u64) as usize;
+    let left = draw_integer_arithmetic_ast(rng, &values[..split])?;
+    let right = draw_integer_arithmetic_ast(rng, &values[split..])?;
+    let operator = match rng.next_bounded(4) {
+        0 => ArithmeticOperator::Add,
+        1 => ArithmeticOperator::Subtract,
+        2 => ArithmeticOperator::Multiply,
+        _ => ArithmeticOperator::Divide,
+    };
+    let expression = binary_expression(operator, left, right);
+    let value = evaluate_expression(&expression)?;
+    // Division exercises stay inside the integers at every AST node.
+    value.is_integer().then_some(expression)
+}
+
+fn evaluate_expression(expression: &ArithmeticExpression) -> Option<RationalCoefficient> {
+    match expression {
+        ArithmeticExpression::Integer { value } => RationalCoefficient::new(*value, 1),
+        ArithmeticExpression::Rational { value } => Some(*value),
+        ArithmeticExpression::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let left = evaluate_expression(left)?;
+            let right = evaluate_expression(right)?;
+            match operator {
+                ArithmeticOperator::Add => left.checked_add(right),
+                ArithmeticOperator::Subtract => left.subtract(right),
+                ArithmeticOperator::Multiply => left.multiply(right),
+                ArithmeticOperator::Divide => {
+                    let quotient = left.divide(right)?;
+                    quotient.is_integer().then_some(quotient)
+                }
+            }
+        }
+    }
 }
 
 fn all_structures_input_interface() -> AnswerInputInterface {
@@ -1060,6 +1668,213 @@ mod tests {
         let rational = linear_rational_domain_with_zero();
         assert_eq!(rational.len(), linear_rational_domain().len() + 1);
         assert_eq!(rational.iter().filter(|value| value.is_zero()).count(), 1);
+    }
+
+    #[test]
+    fn new_arithmetic_themes_generate_with_requested_domains() {
+        use crate::model::{
+            THEME_ID_FRACTION_ADDITION, THEME_ID_FRACTION_MULTIPLICATION,
+            THEME_ID_FRACTION_SUBTRACTION, THEME_ID_MULTIPLICATION_TABLE,
+            THEME_ID_ONE_DIGIT_SUBTRACTION, THEME_ID_SIGNED_ARITHMETIC_1,
+            THEME_ID_SIGNED_ARITHMETIC_2, THEME_ID_TWO_DIGIT_ADDITION,
+        };
+        let ids = [
+            THEME_ID_ONE_DIGIT_SUBTRACTION,
+            THEME_ID_TWO_DIGIT_ADDITION,
+            THEME_ID_MULTIPLICATION_TABLE,
+            THEME_ID_SIGNED_ARITHMETIC_1,
+            THEME_ID_SIGNED_ARITHMETIC_2,
+            THEME_ID_FRACTION_ADDITION,
+            THEME_ID_FRACTION_SUBTRACTION,
+            THEME_ID_FRACTION_MULTIPLICATION,
+        ];
+        for theme_id in ids {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: theme_id,
+                seed: "NwA".to_owned(),
+                difficulty: crate::identity::DEFAULT_DIFFICULTY,
+                timeout_ms: None,
+                max_attempts: None,
+            })
+            .unwrap_or_else(|error| panic!("theme {theme_id} failed: {error}"));
+            let expected = if theme_id >= THEME_ID_FRACTION_ADDITION {
+                16
+            } else {
+                20
+            };
+            assert_eq!(worksheet.problems.len(), expected);
+            for problem in &worksheet.problems {
+                let ProblemPrompt::Arithmetic { expression } = &problem.prompt else {
+                    panic!("new arithmetic theme returned a non-arithmetic prompt");
+                };
+                let value =
+                    evaluate_expression(expression).expect("generated expression must evaluate");
+                assert_eq!(rational_answer(value), problem.canonical_answer);
+                match theme_id {
+                    THEME_ID_ONE_DIGIT_SUBTRACTION => {
+                        let ArithmeticExpression::Binary {
+                            operator: ArithmeticOperator::Subtract,
+                            left,
+                            right,
+                        } = expression
+                        else {
+                            panic!("subtraction shape");
+                        };
+                        let (
+                            ArithmeticExpression::Integer { value: a },
+                            ArithmeticExpression::Integer { value: b },
+                        ) = (&**left, &**right)
+                        else {
+                            panic!("integer subtraction operands");
+                        };
+                        assert!((1..=18).contains(a));
+                        assert!((1..=9).contains(b));
+                        assert!((1..=9).contains(&value.numerator));
+                    }
+                    THEME_ID_TWO_DIGIT_ADDITION => {
+                        let ArithmeticExpression::Binary {
+                            operator: ArithmeticOperator::Add,
+                            left,
+                            right,
+                        } = expression
+                        else {
+                            panic!("addition shape");
+                        };
+                        let (
+                            ArithmeticExpression::Integer { value: a },
+                            ArithmeticExpression::Integer { value: b },
+                        ) = (&**left, &**right)
+                        else {
+                            panic!("integer addition operands");
+                        };
+                        assert!((10..=99).contains(a) && (10..=99).contains(b));
+                    }
+                    THEME_ID_MULTIPLICATION_TABLE => {
+                        let ArithmeticExpression::Binary {
+                            operator: ArithmeticOperator::Multiply,
+                            left,
+                            right,
+                        } = expression
+                        else {
+                            panic!("multiplication shape");
+                        };
+                        let (
+                            ArithmeticExpression::Integer { value: a },
+                            ArithmeticExpression::Integer { value: b },
+                        ) = (&**left, &**right)
+                        else {
+                            panic!("integer multiplication operands");
+                        };
+                        assert!((1..=9).contains(a) && (1..=9).contains(b));
+                        assert_eq!(problem.solution_graph.steps.len(), 1);
+                        assert!(matches!(
+                            problem.solution_graph.steps[0].operation,
+                            crate::effort::Operation::BigNum { .. }
+                        ));
+                    }
+                    THEME_ID_SIGNED_ARITHMETIC_1 => {
+                        assert!((2..=4).contains(&expression_leaf_count(expression)));
+                        assert!(expression_operators(expression).iter().all(|op| matches!(
+                            op,
+                            ArithmeticOperator::Add | ArithmeticOperator::Subtract
+                        )));
+                    }
+                    THEME_ID_SIGNED_ARITHMETIC_2 => {
+                        assert!((2..=4).contains(&expression_leaf_count(expression)));
+                        assert!(value.is_integer());
+                    }
+                    THEME_ID_FRACTION_ADDITION
+                    | THEME_ID_FRACTION_SUBTRACTION
+                    | THEME_ID_FRACTION_MULTIPLICATION => {
+                        let ArithmeticExpression::Binary {
+                            operator,
+                            left,
+                            right,
+                        } = expression
+                        else {
+                            panic!("fraction binary shape");
+                        };
+                        for node in [&**left, &**right] {
+                            let ArithmeticExpression::Rational { value } = node else {
+                                panic!("fraction operand");
+                            };
+                            assert!(positive_linear_fraction_domain().contains(value));
+                            assert!(value.numerator > 0);
+                        }
+                        assert!(positive_linear_fraction_domain().contains(&value));
+                        assert!(value.numerator > 0);
+                        if theme_id == THEME_ID_FRACTION_SUBTRACTION {
+                            assert_eq!(*operator, ArithmeticOperator::Subtract);
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn elementary_registered_themes_never_expose_negative_values() {
+        for registration in crate::registry::GENERATOR_REGISTRY
+            .iter()
+            .filter(|registration| {
+                registration
+                    .curriculum_path
+                    .iter()
+                    .any(|segment| segment.starts_with("小学"))
+            })
+        {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: registration.numeric_theme_id,
+                seed: "Em7Z".to_owned(),
+                difficulty: crate::identity::DEFAULT_DIFFICULTY,
+                timeout_ms: None,
+                max_attempts: None,
+            })
+            .unwrap_or_else(|error| {
+                panic!(
+                    "elementary theme {} failed: {error}",
+                    registration.numeric_theme_id
+                )
+            });
+            for problem in &worksheet.problems {
+                assert!(problem_allowed_by_curriculum(registration, problem));
+                assert!(prompt_has_no_negative_values(&problem.prompt));
+                assert!(answer_has_no_negative_values(&problem.canonical_answer));
+                assert!(input_interface_has_no_negative_capability(
+                    &problem.input_interface
+                ));
+            }
+        }
+    }
+
+    fn expression_leaf_count(expression: &ArithmeticExpression) -> usize {
+        match expression {
+            ArithmeticExpression::Integer { .. } | ArithmeticExpression::Rational { .. } => 1,
+            ArithmeticExpression::Binary { left, right, .. } => {
+                expression_leaf_count(left) + expression_leaf_count(right)
+            }
+        }
+    }
+
+    fn expression_operators(expression: &ArithmeticExpression) -> Vec<ArithmeticOperator> {
+        match expression {
+            ArithmeticExpression::Integer { .. } | ArithmeticExpression::Rational { .. } => {
+                Vec::new()
+            }
+            ArithmeticExpression::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                let mut values = vec![*operator];
+                values.extend(expression_operators(left));
+                values.extend(expression_operators(right));
+                values
+            }
+        }
     }
 
     proptest! {

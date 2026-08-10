@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import '@fontsource/noto-sans-jp/400.css';
+import 'mathlive/fonts.css';
 import './globals.css';
 
 export const metadata: Metadata = {

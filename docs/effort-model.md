@@ -4,6 +4,8 @@ Effortは標準解法graph、denseなoperation vector、重みを分離する。
 
 `SolutionGraph.steps`の各nodeはtyped `Operation`とdependency IDを持つ。Vector化ではgraph nodeを一度だけ数え、複数nodeから参照されるdependencyを再帰的に重複加算しない。一桁の足し算graphは答えの正確な`BigNum(left + right)`と`BasePlus`を持ち、繰り上がり時には`Increment`と`OverheadCarryPlus`を別nodeとして追加する。被演算子を個別のBigNumとして二重計上しない。
 
+算術追加テーマも同じoperationを再利用する。一桁引き算は`BaseMinus`と必要な借り`Decrement + OverheadCarryMinus`、二桁加算は各桁の`BasePlus`と1の位/10の位それぞれの繰り上がりを記録する。負の数(1)/(2)と分数加算/減算/乗算はtyped arithmetic ASTをbottom-upに評価し、各binary operationの標準cost、必要な`OverheadNegative`、通分`OverheadLCM`、約分`OverheadGCD`を加え、最後に正解ASTの`BigNum`を加える。**九九だけは製品仕様上の例外で、`BaseTimes`を記録せず正解`c`の`BigNum(c)`だけを持つため、既定重みではeffort=`log10(c)`となる。**
+
 一次方程式`ax+b=cx+d`はcurriculum.mdの標準解法に従い、まず`A=a-c`、`B=d-b`として`Ax=B`へ整理し、最後に`x=B/A`とする。graphは`OverheadLinear`を1回、実際に辺をまたぐ非零項ごとに`Transposition`、係数・定数をまとめるexactな加減算、最後の`BaseDivide`を記録する。分母が異なる有理係数の整理には`OverheadLCM`と必要な乗算、非自明な分数簡約には`OverheadGCD`を加える。`A=0`のcandidateはgeneratorで除算前に棄却するためeffort graphへ入らない。正解の整数成分は既存の`BigNum`規則で加算する。
 
 ## Dense vector order and base weights

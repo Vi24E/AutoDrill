@@ -33,10 +33,13 @@ refinement.
 
 ## WASM adapter
 
-`src/domain/wasm-adapter.ts` is the only production boundary for math and editor
-operations. It calls the generated runtime methods `generate_worksheet`,
-`apply_editor_action`, and `grade_answer` with schema-v3 JSON DTO strings. The
-single-problem `generate_problem` export is also part of the Rust/WASM package
+`src/domain/wasm-adapter.ts` is the only production boundary for mathematical input and grading.
+It calls the generated runtime methods `generate_worksheet`, `parse_mathlive_answer`,
+`apply_editor_action`, and `grade_answer` with schema-v3 JSON DTO strings. Web editing is rendered
+by MathLive, but every MathLive LaTeX snapshot crosses `parse_mathlive_answer` before becoming an
+`AnswerNode`; MathLive is never the grading or normalization authority. `apply_editor_action` remains
+a versioned Rust editor API for compatible callers/tests, but the worksheet UI does not mirror MathLive's
+caret/model through it. The single-problem `generate_problem` export is also part of the Rust/WASM package
 for direct callers; it is not substituted for worksheet generation. The adapter unwraps
 `{schema_version, ok, data, error}` and
 maps `generation_timeout` and `generation_attempt_limit` to distinct errors.
@@ -51,19 +54,20 @@ AnswerNode integer/coefficient values, integer answer-schema bounds, and
 BigNum magnitudes. The adapter validates format and range without converting
 them to JavaScript `number`; only scalar effort/vector quantities use numbers.
 
-Structured editing also remains behind this boundary. Each Problem supplies an orthogonal typed
-`input_interface`; the selected interface is included in every `apply_editor_action` request. A
-`simple_numeric` one-digit addition problem renders only the conventional 10-digit keypad, while a
-`structured_math` problem renders only its `allowed_structures` plus the shared numeric and editing controls.
-`nan_error` preserves malformed raw text through DTO validation, display, editing, and grade projection without
-coercing it to a number. `EditorState` carries the
-display `answer` tree, an `active_path` to the selected numeric slot, and the
-slot-local `cursor`. The adapter validates the complete answer tree against the selected interface on both
-editor input/output and grading projections. Non-Clear editor calls require a valid current path/cursor and
-SelectSlot requires an explicit valid target path/cursor; values are never silently repaired. Clear remains the
-unconditional recovery action. Template and slot-selection actions are serialized to Rust;
-the Web client only renders the returned fraction, mixed-fraction, decimal,
-root, negative, plus-minus, and tuple nodes.
+MathLive owns Web caret movement, placeholder navigation, fraction/root layout, and editable rendering.
+Problem `input_interface` still owns capabilities: the Web palette exposes only allowed controls, and Rust
+validates every parsed `AnswerNode` against that interface. Unsupported physical input therefore cannot
+become an accepted typed answer; the UI restores the last Rust-authorized tree on adapter rejection.
+`nan_error` is the bounded Rust representation for parseable-as-text but non-numeric input and is never
+coerced to a JavaScript number. The MathLive adapter accepts the small LaTeX language represented by
+`AnswerNode`, including MathLive's canonical one-token forms such as `\frac72` and `\sqrt2`.
+
+The MathLive worksheet stores the Rust-authorized `AnswerNode` directly and sends that node to grading; it does
+not manufacture a legacy `EditorState` merely to satisfy the old cursor DTO. `EditorState.active_path`/`cursor`
+remain confined to the legacy `apply_editor_action` boundary and its compatibility tests, while MathLive owns
+selection. Empty structured Backspace compatibility uses MathLive's public range/selection/command API and
+explicitly re-parses the resulting field value so the stored `AnswerNode` cannot lag behind the visible field.
+
 
 The runtime is intentionally injected as `window.__AUTODRILL_WASM__`. The
 `src/wasm/load-generated.ts` seam loads the ignored package emitted under
@@ -104,13 +108,13 @@ after rotation it is physically bottom-right and remains readable. The pure
 `getFooterPosition`/`getFooterPhysicalBounds` helpers make this transform
 explicit and are covered by PDF tests.
 
-Editor actions use a FIFO queue in the q2 client. The grading path awaits that
-queue and reads the latest answer ref before sending the request, so a delayed
-WASM editor action cannot be omitted by an immediately-following grade click.
+Accepted MathLive input snapshots and commit operations use a FIFO queue in the q2 client. The grading
+path awaits that queue and reads the latest Rust-authorized answer ref before sending the request, so a
+delayed `parse_mathlive_answer` result cannot be omitted by an immediately-following grade click.
 
 ## Dependencies and licensing
 
-- Next.js, React, Vitest, and Testing Library: MIT. TypeScript: Apache-2.0.
+- Next.js, React, MathLive, Vitest, and Testing Library: MIT. TypeScript: Apache-2.0.
   Their upstream license metadata is retained by the package manager.
 - `pdf-lib`: MIT; used entirely in the browser, with no server or external
   service.

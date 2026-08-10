@@ -8,17 +8,49 @@ import { DRILL_CORE_CONTRACT, type DrillCoreGradeWarningCode } from '@/generated
 const ADDITION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['1'];
 const LINEAR_EQUATION_1_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['2'];
 const LINEAR_EQUATION_2_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['3'];
+const ONE_DIGIT_SUBTRACTION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['4'];
+const TWO_DIGIT_ADDITION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['5'];
+const MULTIPLICATION_TABLE_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['6'];
+const SIGNED_ARITHMETIC_1_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['7'];
+const SIGNED_ARITHMETIC_2_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['8'];
+const FRACTION_ADDITION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['9'];
+const FRACTION_MULTIPLICATION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['10'];
+const FRACTION_SUBTRACTION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['11'];
 
 export const DRILL_SCHEMA_VERSION = DRILL_CORE_CONTRACT.schema_version;
 export const ADDITION_THEME_ID = ADDITION_CORE_CONTRACT.numeric_theme_id;
 export const LINEAR_EQUATION_1_THEME_ID = LINEAR_EQUATION_1_CORE_CONTRACT.numeric_theme_id;
 export const LINEAR_EQUATION_2_THEME_ID = LINEAR_EQUATION_2_CORE_CONTRACT.numeric_theme_id;
+export const ONE_DIGIT_SUBTRACTION_THEME_ID = ONE_DIGIT_SUBTRACTION_CORE_CONTRACT.numeric_theme_id;
+export const TWO_DIGIT_ADDITION_THEME_ID = TWO_DIGIT_ADDITION_CORE_CONTRACT.numeric_theme_id;
+export const MULTIPLICATION_TABLE_THEME_ID = MULTIPLICATION_TABLE_CORE_CONTRACT.numeric_theme_id;
+export const SIGNED_ARITHMETIC_1_THEME_ID = SIGNED_ARITHMETIC_1_CORE_CONTRACT.numeric_theme_id;
+export const SIGNED_ARITHMETIC_2_THEME_ID = SIGNED_ARITHMETIC_2_CORE_CONTRACT.numeric_theme_id;
+export const FRACTION_ADDITION_THEME_ID = FRACTION_ADDITION_CORE_CONTRACT.numeric_theme_id;
+export const FRACTION_MULTIPLICATION_THEME_ID = FRACTION_MULTIPLICATION_CORE_CONTRACT.numeric_theme_id;
+export const FRACTION_SUBTRACTION_THEME_ID = FRACTION_SUBTRACTION_CORE_CONTRACT.numeric_theme_id;
 export const ADDITION_SKILL_ID = ADDITION_CORE_CONTRACT.skill_id;
 export const ADDITION_GENERATOR_REVISION = ADDITION_CORE_CONTRACT.generator_revision;
 export const LINEAR_EQUATION_1_SKILL_ID = LINEAR_EQUATION_1_CORE_CONTRACT.skill_id;
 export const LINEAR_EQUATION_2_SKILL_ID = LINEAR_EQUATION_2_CORE_CONTRACT.skill_id;
 export const LINEAR_EQUATION_1_GENERATOR_REVISION = LINEAR_EQUATION_1_CORE_CONTRACT.generator_revision;
 export const LINEAR_EQUATION_2_GENERATOR_REVISION = LINEAR_EQUATION_2_CORE_CONTRACT.generator_revision;
+export const ONE_DIGIT_SUBTRACTION_SKILL_ID = ONE_DIGIT_SUBTRACTION_CORE_CONTRACT.skill_id;
+export const ONE_DIGIT_SUBTRACTION_GENERATOR_REVISION = ONE_DIGIT_SUBTRACTION_CORE_CONTRACT.generator_revision;
+export const TWO_DIGIT_ADDITION_SKILL_ID = TWO_DIGIT_ADDITION_CORE_CONTRACT.skill_id;
+export const TWO_DIGIT_ADDITION_GENERATOR_REVISION = TWO_DIGIT_ADDITION_CORE_CONTRACT.generator_revision;
+export const MULTIPLICATION_TABLE_SKILL_ID = MULTIPLICATION_TABLE_CORE_CONTRACT.skill_id;
+export const MULTIPLICATION_TABLE_GENERATOR_REVISION = MULTIPLICATION_TABLE_CORE_CONTRACT.generator_revision;
+export const SIGNED_ARITHMETIC_1_SKILL_ID = SIGNED_ARITHMETIC_1_CORE_CONTRACT.skill_id;
+export const SIGNED_ARITHMETIC_1_GENERATOR_REVISION = SIGNED_ARITHMETIC_1_CORE_CONTRACT.generator_revision;
+export const SIGNED_ARITHMETIC_2_SKILL_ID = SIGNED_ARITHMETIC_2_CORE_CONTRACT.skill_id;
+export const SIGNED_ARITHMETIC_2_GENERATOR_REVISION = SIGNED_ARITHMETIC_2_CORE_CONTRACT.generator_revision;
+export const FRACTION_ADDITION_SKILL_ID = FRACTION_ADDITION_CORE_CONTRACT.skill_id;
+export const FRACTION_ADDITION_GENERATOR_REVISION = FRACTION_ADDITION_CORE_CONTRACT.generator_revision;
+export const FRACTION_MULTIPLICATION_SKILL_ID = FRACTION_MULTIPLICATION_CORE_CONTRACT.skill_id;
+export const FRACTION_MULTIPLICATION_GENERATOR_REVISION = FRACTION_MULTIPLICATION_CORE_CONTRACT.generator_revision;
+export const FRACTION_SUBTRACTION_SKILL_ID = FRACTION_SUBTRACTION_CORE_CONTRACT.skill_id;
+export const FRACTION_SUBTRACTION_GENERATOR_REVISION = FRACTION_SUBTRACTION_CORE_CONTRACT.generator_revision;
 /** Kept as a presentation label for existing callers; never sent to Rust. */
 export const ADDITION_GENERATOR_VERSION = 'addition-one-digit-r2' as const;
 
@@ -49,6 +81,23 @@ export const LINEAR_EQUATION_2_CURRICULUM_PATH: readonly CurriculumPathSegment[]
   { id: LINEAR_EQUATION_2_SKILL_ID, label: LINEAR_EQUATION_2_CORE_CONTRACT.curriculum_path[3] },
 ];
 
+function simpleCurriculumPath(core: { curriculum_path: readonly string[]; skill_id: string }, gradeId: string): readonly CurriculumPathSegment[] {
+  return [
+    { id: 'root', label: core.curriculum_path[0]! },
+    { id: gradeId, label: core.curriculum_path[1]! },
+    { id: core.skill_id, label: core.curriculum_path[2]! },
+  ];
+}
+
+export const ONE_DIGIT_SUBTRACTION_CURRICULUM_PATH = simpleCurriculumPath(ONE_DIGIT_SUBTRACTION_CORE_CONTRACT, 'jp-grade-1');
+export const TWO_DIGIT_ADDITION_CURRICULUM_PATH = simpleCurriculumPath(TWO_DIGIT_ADDITION_CORE_CONTRACT, 'jp-grade-2');
+export const MULTIPLICATION_TABLE_CURRICULUM_PATH = simpleCurriculumPath(MULTIPLICATION_TABLE_CORE_CONTRACT, 'jp-grade-2');
+export const SIGNED_ARITHMETIC_1_CURRICULUM_PATH = simpleCurriculumPath(SIGNED_ARITHMETIC_1_CORE_CONTRACT, 'jp-grade-7');
+export const SIGNED_ARITHMETIC_2_CURRICULUM_PATH = simpleCurriculumPath(SIGNED_ARITHMETIC_2_CORE_CONTRACT, 'jp-grade-7');
+export const FRACTION_ADDITION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_ADDITION_CORE_CONTRACT, 'jp-grade-5');
+export const FRACTION_SUBTRACTION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_SUBTRACTION_CORE_CONTRACT, 'jp-grade-5');
+export const FRACTION_MULTIPLICATION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_MULTIPLICATION_CORE_CONTRACT, 'jp-grade-6');
+
 export type WorksheetLayout = {
   problem_count: number;
   columns: number;
@@ -58,6 +107,14 @@ export type WorksheetLayout = {
 export const ADDITION_LAYOUT: WorksheetLayout = { ...ADDITION_CORE_CONTRACT.layout };
 export const LINEAR_EQUATION_1_LAYOUT: WorksheetLayout = { ...LINEAR_EQUATION_1_CORE_CONTRACT.layout };
 export const LINEAR_EQUATION_2_LAYOUT: WorksheetLayout = { ...LINEAR_EQUATION_2_CORE_CONTRACT.layout };
+export const ONE_DIGIT_SUBTRACTION_LAYOUT: WorksheetLayout = { ...ONE_DIGIT_SUBTRACTION_CORE_CONTRACT.layout };
+export const TWO_DIGIT_ADDITION_LAYOUT: WorksheetLayout = { ...TWO_DIGIT_ADDITION_CORE_CONTRACT.layout };
+export const MULTIPLICATION_TABLE_LAYOUT: WorksheetLayout = { ...MULTIPLICATION_TABLE_CORE_CONTRACT.layout };
+export const SIGNED_ARITHMETIC_1_LAYOUT: WorksheetLayout = { ...SIGNED_ARITHMETIC_1_CORE_CONTRACT.layout };
+export const SIGNED_ARITHMETIC_2_LAYOUT: WorksheetLayout = { ...SIGNED_ARITHMETIC_2_CORE_CONTRACT.layout };
+export const FRACTION_ADDITION_LAYOUT: WorksheetLayout = { ...FRACTION_ADDITION_CORE_CONTRACT.layout };
+export const FRACTION_MULTIPLICATION_LAYOUT: WorksheetLayout = { ...FRACTION_MULTIPLICATION_CORE_CONTRACT.layout };
+export const FRACTION_SUBTRACTION_LAYOUT: WorksheetLayout = { ...FRACTION_SUBTRACTION_CORE_CONTRACT.layout };
 
 /** Exact generate_worksheet request; registry owns layout and generator revision. */
 export type DrillSettings = {
@@ -158,11 +215,22 @@ export type RationalCoefficient = {
   denominator: number;
 };
 
+export type ArithmeticOperator = 'add' | 'subtract' | 'multiply' | 'divide';
+
+export type ArithmeticExpression =
+  | { kind: 'integer'; value: number }
+  | { kind: 'rational'; value: RationalCoefficient }
+  | { kind: 'binary'; operator: ArithmeticOperator; left: ArithmeticExpression; right: ArithmeticExpression };
+
 export type ProblemPrompt =
   | {
       kind: 'addition';
       left: number;
       right: number;
+    }
+  | {
+      kind: 'arithmetic';
+      expression: ArithmeticExpression;
     }
   | {
       kind: 'linear_equation';
@@ -231,7 +299,7 @@ export type WorksheetDto = {
 
 export type AnswerEntry = {
   problem_id: string;
-  editor_state: EditorState;
+  answer: AnswerNode;
 };
 
 export type GradeRequest = {
@@ -278,6 +346,7 @@ export class DrillEngineError extends Error {
 export interface DrillEngine {
   generateWorksheet(settings: DrillSettings): Promise<WorksheetDto>;
   applyEditorAction(state: EditorState, action: EditorAction, inputInterface: AnswerInputInterface): Promise<EditorState>;
+  parseMathLiveAnswer(latex: string, inputInterface: AnswerInputInterface): Promise<AnswerNode>;
   gradeAnswer(request: GradeRequest): Promise<GradeResult>;
 }
 

@@ -13,11 +13,11 @@ import {
 import { ALL_MATH_STRUCTURES } from '@/domain/theme-registry';
 
 describe('Web curriculum registry', () => {
-  it('registers addition and both linear-equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 2, 3]);
+  it('registers all implemented arithmetic and equation themes from one data model', () => {
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 6, 9, 11, 10, 7, 8, 2, 3]);
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
-      generator_revision: 2,
+      generator_revision: 3,
       recommendedGenre: { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
       problemCount: 20,
       layout: { problem_count: 20, columns: 2, rows: 10 },
@@ -39,7 +39,7 @@ describe('Web curriculum registry', () => {
     }
   });
 
-  it('keeps addition and equations in Recommended and defaults to addition', () => {
+  it('exposes exactly the five requested Recommended sections and defaults to addition', () => {
     expect(DEFAULT_WEB_DRILL_SETTINGS).toEqual({
       schema_version: 3,
       numeric_theme_id: ONE_DIGIT_ADDITION_THEME.numeric_theme_id,
@@ -47,11 +47,27 @@ describe('Web curriculum registry', () => {
       difficulty: 3,
       seed: '',
     });
-    expect(RECOMMENDED_GENRES).toHaveLength(2);
-    expect(RECOMMENDED_GENRES[0]).toMatchObject({ genreKey: 'addition-and-subtraction', label: '足し算と引き算' });
-    expect(RECOMMENDED_GENRES[0]?.themes).toEqual([ONE_DIGIT_ADDITION_THEME]);
-    expect(RECOMMENDED_GENRES[1]).toMatchObject({ genreKey: 'equation', label: '方程式' });
-    expect(RECOMMENDED_GENRES[1]?.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
+    expect(RECOMMENDED_GENRES.map(({ genreKey, label }) => ({ genreKey, label }))).toEqual([
+      { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
+      { genreKey: 'multiplication-and-division', label: '掛け算と割り算' },
+      { genreKey: 'fractions', label: '分数' },
+      { genreKey: 'negative-numbers', label: '負の数' },
+      { genreKey: 'equation', label: '方程式' },
+    ]);
+    expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes)).toEqual(IMPLEMENTED_THEMES);
+  });
+
+  it('never exposes negative input capability for elementary-school themes', () => {
+    const elementary = IMPLEMENTED_THEMES.filter((theme) => Number(theme.grade.slug.slice(6)) <= 6);
+    expect(elementary.length).toBeGreaterThan(0);
+    for (const theme of elementary) {
+      if (theme.inputInterface.type === 'simple_numeric') {
+        expect(theme.inputInterface.allow_negative).toBe(false);
+      } else {
+        expect(theme.inputInterface.allowed_structures).not.toContain('negative');
+        expect(theme.inputInterface.allowed_structures).not.toContain('plus_minus');
+      }
+    }
   });
 
   it('maps grade-1 through grade-9 and places equations under 中1 / 一次方程式', () => {
@@ -75,9 +91,9 @@ describe('Web curriculum registry', () => {
   });
 
   it('resolves all implemented public routes', () => {
-    expect(findImplementedThemeByRoute('grade-1', 'one-digit-addition')).toBe(ONE_DIGIT_ADDITION_THEME);
-    expect(findImplementedThemeByRoute('grade-7', 'linear-equation-1')).toBe(LINEAR_EQUATION_1_THEME);
-    expect(findImplementedThemeByRoute('grade-7', 'linear-equation-2')).toBe(LINEAR_EQUATION_2_THEME);
+    for (const theme of IMPLEMENTED_THEMES) {
+      expect(findImplementedThemeByRoute(theme.route.gradeSlug, theme.route.themeSlug)).toBe(theme);
+    }
     expect(findImplementedThemeByRoute('grade-2', 'Dummy1')).toBeUndefined();
   });
 });

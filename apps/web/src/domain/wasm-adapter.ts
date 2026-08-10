@@ -25,6 +25,7 @@ export type DrillWasmRuntime = {
   generate_worksheet?: (request: string) => unknown | Promise<unknown>;
   regenerate_problem_set?: (request: string) => unknown | Promise<unknown>;
   apply_editor_action?: (request: string) => unknown | Promise<unknown>;
+  parse_mathlive_answer?: (request: string) => unknown | Promise<unknown>;
   normalize_answer?: (request: string) => unknown | Promise<unknown>;
   grade_answer?: (request: string) => unknown | Promise<unknown>;
   calculate_effort?: (request: string) => unknown | Promise<unknown>;
@@ -373,13 +374,36 @@ function assertRationalCoefficient(value: unknown, label: string): void {
   if (value.denominator <= 0) invalidDto(`WASM returned a nonpositive ${label} denominator.`, value);
 }
 
-function assertPrompt(value: unknown, expectedKind: 'addition' | 'linear_equation'): void {
+function assertArithmeticExpression(value: unknown): void {
+  if (!isRecord(value) || typeof value.kind !== 'string') invalidDto('WASM returned an invalid arithmetic expression.', value);
+  if (value.kind === 'integer') {
+    assertInteger(value.value, 'arithmetic integer');
+    return;
+  }
+  if (value.kind === 'rational') {
+    assertRationalCoefficient(value.value, 'arithmetic rational');
+    return;
+  }
+  if (value.kind === 'binary') {
+    if (!['add', 'subtract', 'multiply', 'divide'].includes(String(value.operator))) invalidDto('WASM returned an invalid arithmetic operator.', value);
+    assertArithmeticExpression(value.left);
+    assertArithmeticExpression(value.right);
+    return;
+  }
+  invalidDto('WASM returned an unsupported arithmetic expression variant.', value);
+}
+
+function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'linear_equation'): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported prompt variant; expected ${expectedKind}.`, value);
   }
   if (expectedKind === 'addition') {
     assertInteger(value.left, 'addition left operand');
     assertInteger(value.right, 'addition right operand');
+    return;
+  }
+  if (expectedKind === 'arithmetic') {
+    assertArithmeticExpression(value.expression);
     return;
   }
   assertRationalCoefficient(value.a, 'linear coefficient a');
@@ -741,6 +765,30 @@ export function createWasmDrillEngine(runtime?: DrillWasmRuntime): DrillEngine {
       }
     },
 
+    async parseMathLiveAnswer(latex, inputInterface) {
+      try {
+        assertInputInterface(inputInterface);
+        const parse = resolveRuntime(runtime).parse_mathlive_answer;
+        if (!parse) throw new DrillEngineError('wasm_unavailable', 'drill-wasm does not expose parse_mathlive_answer.');
+        const decoded = decodeWasmValue(await invokeBoundary(parse, {
+          schema_version: DRILL_SCHEMA_VERSION,
+          input_interface: {
+            ...inputInterface,
+            ...(inputInterface.type === 'structured_math'
+              ? { allowed_structures: [...inputInterface.allowed_structures] }
+              : {}),
+          },
+          latex,
+        }));
+        const data = unwrapEnvelope(decoded);
+        assertAnswerNode(data);
+        assertAnswerSupportsInputInterface(data, inputInterface);
+        return data;
+      } catch (error) {
+        throw mapBoundaryError(error);
+      }
+    },
+
     async gradeAnswer(request: GradeRequest) {
       try {
         if (request.schema_version !== DRILL_SCHEMA_VERSION || request.worksheet.schema_version !== DRILL_SCHEMA_VERSION) {
@@ -752,12 +800,15 @@ export function createWasmDrillEngine(runtime?: DrillWasmRuntime): DrillEngine {
           assertInputInterface(problem.input_interface);
           assertAnswerNode(problem.canonical_answer);
           assertAnswerSupportsInputInterface(problem.canonical_answer, problem.input_interface);
-          const editorState = request.answers.find((entry) => entry.problem_id === problem.problem_id)?.editor_state;
-          if (editorState) assertEditorStatePayload(editorState, problem.input_interface);
+          const answer = request.answers.find((entry) => entry.problem_id === problem.problem_id)?.answer;
+          if (answer) {
+            assertAnswerNode(answer);
+            assertAnswerSupportsInputInterface(answer, problem.input_interface);
+          }
           const value = await invokeBoundary(gradeAnswer, {
             schema_version: DRILL_SCHEMA_VERSION,
             expected: problem.canonical_answer,
-            actual: editorState?.answer ?? { type: 'empty' },
+            actual: answer ?? { type: 'empty' },
             answer_schema: problem.answer_schema,
           });
           return gradeItemFromWasm(problem.problem_id, problem.input_interface, value);

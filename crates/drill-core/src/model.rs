@@ -10,17 +10,50 @@ pub const SCHEMA_VERSION: u16 = 3;
 pub const THEME_ID_ONE_DIGIT_ADDITION: u32 = 1;
 pub const THEME_ID_LINEAR_EQUATION_1: u32 = 2;
 pub const THEME_ID_LINEAR_EQUATION_2: u32 = 3;
+pub const THEME_ID_ONE_DIGIT_SUBTRACTION: u32 = 4;
+pub const THEME_ID_TWO_DIGIT_ADDITION: u32 = 5;
+pub const THEME_ID_MULTIPLICATION_TABLE: u32 = 6;
+pub const THEME_ID_SIGNED_ARITHMETIC_1: u32 = 7;
+pub const THEME_ID_SIGNED_ARITHMETIC_2: u32 = 8;
+pub const THEME_ID_FRACTION_ADDITION: u32 = 9;
+pub const THEME_ID_FRACTION_MULTIPLICATION: u32 = 10;
+pub const THEME_ID_FRACTION_SUBTRACTION: u32 = 11;
 pub const GENERATOR_REVISION_ONE_DIGIT_ADDITION: u32 = 3;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 6;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 6;
+pub const GENERATOR_REVISION_ONE_DIGIT_SUBTRACTION: u32 = 1;
+pub const GENERATOR_REVISION_TWO_DIGIT_ADDITION: u32 = 1;
+pub const GENERATOR_REVISION_MULTIPLICATION_TABLE: u32 = 1;
+pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_1: u32 = 1;
+pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_2: u32 = 1;
+pub const GENERATOR_REVISION_FRACTION_ADDITION: u32 = 1;
+pub const GENERATOR_REVISION_FRACTION_MULTIPLICATION: u32 = 1;
+pub const GENERATOR_REVISION_FRACTION_SUBTRACTION: u32 = 1;
 pub const SKILL_ID: &str = "jp.grade1.addition.one_digit";
 pub const SKILL_ID_LINEAR_EQUATION_1: &str = "jp.grade7.equation.linear.1";
 pub const SKILL_ID_LINEAR_EQUATION_2: &str = "jp.grade7.equation.linear.2";
+pub const SKILL_ID_ONE_DIGIT_SUBTRACTION: &str = "jp.grade1.subtraction.one_digit";
+pub const SKILL_ID_TWO_DIGIT_ADDITION: &str = "jp.grade2.addition.two_digit";
+pub const SKILL_ID_MULTIPLICATION_TABLE: &str = "jp.grade2.multiplication.table";
+pub const SKILL_ID_SIGNED_ARITHMETIC_1: &str = "jp.grade7.signed.arithmetic.1";
+pub const SKILL_ID_SIGNED_ARITHMETIC_2: &str = "jp.grade7.signed.arithmetic.2";
+pub const SKILL_ID_FRACTION_ADDITION: &str = "jp.grade5.fraction.addition";
+pub const SKILL_ID_FRACTION_MULTIPLICATION: &str = "jp.grade6.fraction.multiplication";
+pub const SKILL_ID_FRACTION_SUBTRACTION: &str = "jp.grade5.fraction.subtraction";
 pub const CURRICULUM_PATH: [&str; 3] = ["root", "小学1年生", "一桁の足し算"];
 pub const CURRICULUM_PATH_LINEAR_EQUATION_1: [&str; 4] =
     ["root", "中学1年生", "一次方程式", "一次方程式(1)"];
 pub const CURRICULUM_PATH_LINEAR_EQUATION_2: [&str; 4] =
     ["root", "中学1年生", "一次方程式", "一次方程式(2)"];
+pub const CURRICULUM_PATH_ONE_DIGIT_SUBTRACTION: [&str; 3] = ["root", "小学1年生", "一桁の引き算"];
+pub const CURRICULUM_PATH_TWO_DIGIT_ADDITION: [&str; 3] = ["root", "小学2年生", "二桁の足し算"];
+pub const CURRICULUM_PATH_MULTIPLICATION_TABLE: [&str; 3] = ["root", "小学2年生", "九九"];
+pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_1: [&str; 3] = ["root", "中学1年生", "負の数の計算(1)"];
+pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_2: [&str; 3] = ["root", "中学1年生", "負の数の計算(2)"];
+pub const CURRICULUM_PATH_FRACTION_ADDITION: [&str; 3] = ["root", "小学5年生", "分数の足し算"];
+pub const CURRICULUM_PATH_FRACTION_MULTIPLICATION: [&str; 3] =
+    ["root", "小学6年生", "分数の掛け算"];
+pub const CURRICULUM_PATH_FRACTION_SUBTRACTION: [&str; 3] = ["root", "小学5年生", "分数の引き算"];
 pub const DEFAULT_PROBLEM_COUNT: usize = 20;
 pub const DEFAULT_COLUMNS: usize = 2;
 pub const DEFAULT_ROWS: usize = 10;
@@ -79,6 +112,15 @@ impl RationalCoefficient {
         self.denominator == 1
     }
 
+    pub fn checked_add(self, other: Self) -> Option<Self> {
+        let left = self.numerator.checked_mul(other.denominator)?;
+        let right = other.numerator.checked_mul(self.denominator)?;
+        Self::new(
+            left.checked_add(right)?,
+            self.denominator.checked_mul(other.denominator)?,
+        )
+    }
+
     pub fn subtract(self, other: Self) -> Option<Self> {
         let left = self.numerator.checked_mul(other.denominator)?;
         let right = other.numerator.checked_mul(self.denominator)?;
@@ -115,12 +157,40 @@ fn gcd_i64(mut left: u64, mut right: u64) -> u64 {
     left
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArithmeticOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ArithmeticExpression {
+    Integer {
+        value: i64,
+    },
+    Rational {
+        value: RationalCoefficient,
+    },
+    Binary {
+        operator: ArithmeticOperator,
+        left: Box<ArithmeticExpression>,
+        right: Box<ArithmeticExpression>,
+    },
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProblemPrompt {
     Addition {
         left: u8,
         right: u8,
+    },
+    Arithmetic {
+        expression: ArithmeticExpression,
     },
     LinearEquation {
         a: RationalCoefficient,
@@ -201,7 +271,9 @@ impl Problem {
     pub fn ordered_pair(&self) -> (u8, u8) {
         match self.prompt {
             ProblemPrompt::Addition { left, right } => (left, right),
-            ProblemPrompt::LinearEquation { .. } => panic!("ordered_pair is addition-only"),
+            ProblemPrompt::Arithmetic { .. } | ProblemPrompt::LinearEquation { .. } => {
+                panic!("ordered_pair is addition-only")
+            }
         }
     }
 

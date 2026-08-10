@@ -4,7 +4,6 @@ import {
   ADDITION_LAYOUT,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
-  emptyEditorState,
   type AnswerNode,
   type DrillEngine,
   type DrillSettings,
@@ -170,10 +169,18 @@ export function fixtureEngine(worksheet = fixtureWorksheet()): DrillEngine {
     async applyEditorAction(state, action, inputInterface) {
       return applyFixtureEditor(state, action, inputInterface);
     },
+    async parseMathLiveAnswer(latex) {
+      if (latex === '') return { type: 'empty' };
+      if (/^\d+$/.test(latex)) {
+        if (latex.length > 18) throw new DrillEngineError('answer_ast_size_limit', 'Answer is too large.');
+        return { type: 'integer', value: String(BigInt(latex)) };
+      }
+      return { type: 'nan_error', value: latex };
+    },
     async gradeAnswer(request: GradeRequest): Promise<GradeResult> {
       const items = request.worksheet.problems.map((problem) => {
-        const answer = request.answers.find((entry) => entry.problem_id === problem.problem_id)?.editor_state ?? emptyEditorState();
-        const value = answer.answer.type === 'integer' ? answer.answer.value : null;
+        const answer = request.answers.find((entry) => entry.problem_id === problem.problem_id)?.answer ?? { type: 'empty' };
+        const value = answer.type === 'integer' ? answer.value : null;
         const expected = problem.canonical_answer.type === 'integer' ? problem.canonical_answer.value : null;
         return { problem_id: problem.problem_id, answer: value, correct: value !== null && value === expected, warnings: [] };
       });

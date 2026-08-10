@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::answer::AnswerNode;
-use crate::model::{Problem, RationalCoefficient};
+use crate::model::{ArithmeticExpression, ArithmeticOperator, Problem, RationalCoefficient};
 
 pub const OPERATION_KIND_COUNT: usize = 27;
 
@@ -556,6 +556,215 @@ fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
         right = remainder;
     }
     left
+}
+
+pub fn one_digit_subtraction_graph(left: u8, right: u8) -> SolutionGraph {
+    let answer = u64::from(left - right);
+    let mut operations = vec![Operation::BaseMinus];
+    if left >= 10 {
+        operations.push(Operation::Decrement);
+        operations.push(Operation::OverheadCarryMinus);
+    }
+    operations.push(Operation::BigNum { magnitude: answer });
+    operations_graph(operations)
+}
+
+pub fn two_digit_addition_graph(left: u8, right: u8) -> SolutionGraph {
+    let answer = u64::from(left) + u64::from(right);
+    let mut operations = vec![Operation::BasePlus, Operation::BasePlus];
+    let ones_carry = u8::from(left % 10 + right % 10 >= 10);
+    if ones_carry == 1 {
+        operations.push(Operation::Increment);
+        operations.push(Operation::OverheadCarryPlus);
+    }
+    if left / 10 + right / 10 + ones_carry >= 10 {
+        operations.push(Operation::Increment);
+        operations.push(Operation::OverheadCarryPlus);
+    }
+    operations.push(Operation::BigNum { magnitude: answer });
+    operations_graph(operations)
+}
+
+/// The multiplication-table theme intentionally ranks questions only by the
+/// answer-size cost requested by the product specification: log10(c).
+pub fn multiplication_table_graph(answer: u8) -> SolutionGraph {
+    operations_graph(vec![Operation::BigNum {
+        magnitude: u64::from(answer),
+    }])
+}
+
+pub fn arithmetic_expression_graph(
+    expression: &ArithmeticExpression,
+    answer: &AnswerNode,
+) -> Option<SolutionGraph> {
+    let (_, mut operations) = arithmetic_expression_operations(expression)?;
+    operations.extend(big_num_operations(answer));
+    Some(operations_graph(operations))
+}
+
+fn arithmetic_expression_operations(
+    expression: &ArithmeticExpression,
+) -> Option<(RationalCoefficient, Vec<Operation>)> {
+    match expression {
+        ArithmeticExpression::Integer { value } => {
+            Some((RationalCoefficient::new(*value, 1)?, Vec::new()))
+        }
+        ArithmeticExpression::Rational { value } => Some((*value, Vec::new())),
+        ArithmeticExpression::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let (left_value, mut operations) = arithmetic_expression_operations(left)?;
+            let (right_value, right_operations) = arithmetic_expression_operations(right)?;
+            operations.extend(right_operations);
+            let (result, mut operator_operations) = match operator {
+                ArithmeticOperator::Add => {
+                    let result = rational_add(left_value, right_value)?;
+                    let ops = if left_value.is_integer() && right_value.is_integer() {
+                        integer_signed_addition_operations(
+                            left_value.numerator,
+                            right_value.numerator,
+                        )
+                    } else {
+                        rational_addition_operations(left_value, right_value, result)
+                    };
+                    (result, ops)
+                }
+                ArithmeticOperator::Subtract => {
+                    let result = left_value.subtract(right_value)?;
+                    let ops = if left_value.is_integer() && right_value.is_integer() {
+                        integer_signed_subtraction_operations(
+                            left_value.numerator,
+                            right_value.numerator,
+                        )
+                    } else {
+                        rational_subtraction_operations(left_value, right_value, result)
+                    };
+                    (result, ops)
+                }
+                ArithmeticOperator::Multiply => {
+                    let result = left_value.multiply(right_value)?;
+                    let mut ops = if left_value.is_integer() && right_value.is_integer() {
+                        vec![Operation::BaseTimes]
+                    } else {
+                        vec![Operation::BaseTimes, Operation::BaseTimes]
+                    };
+                    if left_value.numerator < 0 || right_value.numerator < 0 {
+                        ops.push(Operation::OverheadNegative);
+                    }
+                    if result.denominator > 1
+                        && rational_multiplication_requires_reduction(left_value, right_value)
+                    {
+                        ops.push(Operation::OverheadGcd);
+                    }
+                    (result, ops)
+                }
+                ArithmeticOperator::Divide => {
+                    let result = left_value.divide(right_value)?;
+                    let mut ops = vec![Operation::BaseDivide];
+                    if left_value.numerator < 0 || right_value.numerator < 0 {
+                        ops.push(Operation::OverheadNegative);
+                    }
+                    if result.denominator > 1
+                        && rational_division_requires_reduction(left_value, right_value)
+                    {
+                        ops.push(Operation::OverheadGcd);
+                    }
+                    (result, ops)
+                }
+            };
+            operations.append(&mut operator_operations);
+            Some((result, operations))
+        }
+    }
+}
+
+fn rational_add(
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+) -> Option<RationalCoefficient> {
+    let left_scaled = left.numerator.checked_mul(right.denominator)?;
+    let right_scaled = right.numerator.checked_mul(left.denominator)?;
+    RationalCoefficient::new(
+        left_scaled.checked_add(right_scaled)?,
+        left.denominator.checked_mul(right.denominator)?,
+    )
+}
+
+fn rational_addition_operations(
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+    result: RationalCoefficient,
+) -> Vec<Operation> {
+    let mut operations = Vec::new();
+    if left.denominator != right.denominator {
+        operations.push(Operation::OverheadLcm);
+        operations.push(Operation::BaseTimes);
+        operations.push(Operation::BaseTimes);
+    }
+    operations.push(Operation::BasePlus);
+    if left.numerator < 0 || right.numerator < 0 {
+        operations.push(Operation::OverheadNegative);
+    }
+    if result.denominator > 1 && rational_addition_requires_reduction(left, right) {
+        operations.push(Operation::OverheadGcd);
+    }
+    operations
+}
+
+fn rational_addition_requires_reduction(
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+) -> bool {
+    let denominator_gcd = gcd_u64(left.denominator as u64, right.denominator as u64);
+    let left_scale = right.denominator / denominator_gcd as i64;
+    let right_scale = left.denominator / denominator_gcd as i64;
+    let raw_numerator = left
+        .numerator
+        .checked_mul(left_scale)
+        .and_then(|value| value.checked_add(right.numerator.checked_mul(right_scale)?));
+    let common_denominator = left.denominator.checked_mul(left_scale);
+    match (raw_numerator, common_denominator) {
+        (Some(numerator), Some(denominator)) => {
+            gcd_u64(numerator.unsigned_abs(), denominator as u64) > 1
+        }
+        _ => false,
+    }
+}
+
+fn rational_multiplication_requires_reduction(
+    left: RationalCoefficient,
+    right: RationalCoefficient,
+) -> bool {
+    let raw_numerator = left.numerator.checked_mul(right.numerator);
+    let raw_denominator = left.denominator.checked_mul(right.denominator);
+    match (raw_numerator, raw_denominator) {
+        (Some(numerator), Some(denominator)) => {
+            gcd_u64(numerator.unsigned_abs(), denominator as u64) > 1
+        }
+        _ => false,
+    }
+}
+
+fn integer_signed_addition_operations(left: i64, right: i64) -> Vec<Operation> {
+    let graph = signed_addition_graph(left, right);
+    graph.steps.into_iter().map(|step| step.operation).collect()
+}
+
+fn integer_signed_subtraction_operations(left: i64, right: i64) -> Vec<Operation> {
+    let graph = signed_subtraction_graph(left, right);
+    graph.steps.into_iter().map(|step| step.operation).collect()
+}
+
+fn operations_graph(operations: Vec<Operation>) -> SolutionGraph {
+    let mut steps = Vec::with_capacity(operations.len());
+    for (index, operation) in operations.into_iter().enumerate() {
+        let id = index as u32;
+        let depends_on = if id == 0 { vec![] } else { vec![id - 1] };
+        steps.push(step(id, operation, depends_on));
+    }
+    SolutionGraph { steps }
 }
 
 pub fn one_digit_addition_graph(left: u8, right: u8) -> SolutionGraph {

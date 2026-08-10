@@ -21,6 +21,14 @@ Alpha 1.1のRust domainとWASM JSON境界は`schema_version = 3`を共通で使�
 | 一桁の足し算 | 1 | 3 | 20問・2列10行 |
 | 一次方程式(1) | 2 | 6 | 16問・2列8行 |
 | 一次方程式(2) | 3 | 6 | 16問・2列8行 |
+| 一桁の引き算 | 4 | 1 | 20問・2列10行 |
+| 二桁の足し算 | 5 | 1 | 20問・2列10行 |
+| 九九 | 6 | 1 | 20問・2列10行 |
+| 負の数の計算(1) | 7 | 1 | 20問・2列10行 |
+| 負の数の計算(2) | 8 | 1 | 20問・2列10行 |
+| 分数の足し算 | 9 | 1 | 16問・2列8行 |
+| 分数の掛け算 | 10 | 1 | 16問・2列8行 |
+| 分数の引き算 | 11 | 1 | 16問・2列8行 |
 
 ## Problem-set identity
 
@@ -46,6 +54,20 @@ Worksheetは`problem_set_id`に加えてdecode済み`identity`、registry由来�
 Typed leaf/composite answer、editor state、editor candidate、gradeのexpected/actualは、このinterfaceの
 capability projectionを満たす必要がある。`nan_error`だけはboundedなraw-text recovery sentinelとして
 保持できるが、digits-only `simple_numeric`から小数・負数・構造のtyped nodeを回復経路で生成することはできない。
+
+
+## 算術式generator
+
+`ProblemPrompt::Arithmetic`は整数/rational literalと`+,-,×,÷`のbinary nodeからなるexactな`ArithmeticExpression`を保持する。一桁引き算、二桁加算、九九、負の数(1)/(2)、分数加算/減算/乗算はこのpromptを共有し、Web/PDFは同じtyped ASTから式を描画する。
+
+- 一桁引き算: `a-b=c`、`1<=a<=18`、`1<=b,c<=9`。
+- 二桁加算: `a+b=c`、`10<=a,b<=99`。
+- 九九: `1<=a,b<=9`。effortは例外的に正解`c`の`BigNum(c)=log10(c)`だけを使う。
+- 負の数(1): 2〜4整数項、演算子は加減のみ。少なくとも1つ負整数を含む。
+- 負の数(2): 2〜4整数leafの四則演算AST。0除算を拒否し、最終値が整数になる候補だけを採用する。
+- 分数加算/減算/乗算: 一次方程式(2)の係数用`linear_fraction_domain()`（分母2〜9、`|numerator|<=10-denominator`、既約・非整数・正負）のうち、`numerator>0`だけを抽出した`positive_linear_fraction_domain()`を共有する。加算/乗算は`a,b,c>0`かつ3値すべてがこのdomainに属する候補だけを採用する。減算は`a-b=c`で`a,b,c>0`かつ3値すべてが同domainに属する候補だけを採用する。
+
+小学生registrationには共通のfail-closed制約を適用する。`curriculum_path`が`小学...`を含む場合、prompt literal/係数、canonical answerに負数があるcandidate、または`allow_negative`/`negative`/`plus_minus`入力capabilityを持つcandidateは共通generator境界で採用しない。これは個別themeのgenerator実装に依存しない。
 
 
 ## 一次方程式generator
