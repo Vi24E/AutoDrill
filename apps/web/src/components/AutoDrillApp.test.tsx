@@ -373,6 +373,16 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('button', { name: '問題生成' })).toBeEnabled();
   });
 
+  it('keeps custom-select hit targets inside their visible trigger boxes', () => {
+    const { container } = render(<AutoDrillApp engine={fixtureEngine()} />);
+    expect(container.querySelector('label[for="difficulty-select"]')).toBeNull();
+    expect(container.querySelector('label[for="genre-select"]')).toBeNull();
+    expect(container.querySelector('label[for="theme-select"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    expect(container.querySelector('label[for="grade-select"]')).toBeNull();
+  });
+
   it('stores difficulty changes through the custom difficulty dropdown', async () => {
     const onWebSettingsChange = vi.fn();
     render(<AutoDrillApp engine={fixtureEngine()} onWebSettingsChange={onWebSettingsChange} />);

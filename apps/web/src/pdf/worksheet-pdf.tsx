@@ -4,6 +4,7 @@ import { useEffect, type CSSProperties } from 'react';
 import { MathLiveStatic } from '@/components/MathLiveMath';
 import { ProblemExpression } from '@/components/ProblemExpression';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
+import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { answerNodeText, type WorksheetDto } from '@/domain/drill-engine';
 import { answerNodeLatex } from '@/domain/mathlive-format';
 import { problemExpression } from '@/domain/problem-format';
@@ -124,6 +125,7 @@ function WorksheetPrintPage({
 }) {
   const layout = buildSharedWorksheetLayout(worksheet);
   const theme = themeForWorksheet(worksheet);
+  const gradeBandClass = worksheetGradeBandClass(theme.grade.slug);
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
   const dividerStyle: CSSProperties = {
@@ -138,7 +140,7 @@ function WorksheetPrintPage({
 
   return (
     <article
-      className={`worksheet-print-page ${answers ? 'worksheet-print-page-answers' : 'worksheet-print-page-problems'}`}
+      className={`worksheet-print-page ${gradeBandClass} ${answers ? 'worksheet-print-page-answers' : 'worksheet-print-page-problems'}`}
       data-print-page={answers ? 'answers' : 'problems'}
       aria-label={`${theme.worksheet.title}${answers ? ' 解答' : ''}`}
     >

@@ -62,6 +62,9 @@ jobs:
       - name: Verify Pages export
         run: pnpm pages:verify
 
+      - name: Verify browser worksheet layout
+        run: pnpm layout:verify
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

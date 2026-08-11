@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 
 export type CustomSelectOption = {
   value: string;
@@ -16,31 +17,80 @@ type CustomSelectProps = {
   renderLabel?: (option: CustomSelectOption) => ReactNode;
 };
 
+type PopupLayout = {
+  left: number;
+  width: number;
+  maxHeight: number;
+  top?: number;
+  bottom?: number;
+};
+
+const POPUP_GAP = 5;
+const VIEWPORT_MARGIN = 10;
+const POPUP_MAX_HEIGHT = 300;
+const POPUP_MIN_USEFUL_HEIGHT = 120;
+
 /** Accessible custom combobox so option rows may contain ruby markup. */
 export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLabel }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [popupLayout, setPopupLayout] = useState<PopupLayout | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
   const listboxId = `${id}-${useId().replace(/:/g, '')}-listbox`;
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
   const selected = options[selectedIndex] ?? options[0];
 
+  const positionPopup = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger || typeof window === 'undefined') return;
+    const rect = trigger.getBoundingClientRect();
+    const availableBelow = Math.max(0, window.innerHeight - rect.bottom - POPUP_GAP - VIEWPORT_MARGIN);
+    const availableAbove = Math.max(0, rect.top - POPUP_GAP - VIEWPORT_MARGIN);
+    const openBelow = availableBelow >= POPUP_MIN_USEFUL_HEIGHT || availableBelow >= availableAbove;
+    const available = openBelow ? availableBelow : availableAbove;
+    const maxHeight = Math.max(64, Math.min(POPUP_MAX_HEIGHT, available));
+    const left = Math.min(
+      Math.max(VIEWPORT_MARGIN, rect.left),
+      Math.max(VIEWPORT_MARGIN, window.innerWidth - VIEWPORT_MARGIN - rect.width),
+    );
+    setPopupLayout(openBelow
+      ? { left, width: rect.width, maxHeight, top: rect.bottom + POPUP_GAP }
+      : { left, width: rect.width, maxHeight, bottom: window.innerHeight - rect.top + POPUP_GAP });
+  }, []);
+
   useEffect(() => {
     if (!open) return undefined;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !listboxRef.current?.contains(target)) setOpen(false);
     };
+    const reposition = () => positionPopup();
     document.addEventListener('pointerdown', closeOnOutsidePointer);
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
-  }, [open]);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [open, positionPopup]);
 
   useEffect(() => {
     if (!open) setActiveIndex(selectedIndex);
   }, [open, selectedIndex]);
 
+  useEffect(() => {
+    if (!open) return;
+    const option = document.getElementById(`${listboxId}-option-${activeIndex}`);
+    if (option && typeof option.scrollIntoView === 'function') option.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, listboxId, open]);
+
   const optionId = (index: number) => `${listboxId}-option-${index}`;
   const openAt = (index: number) => {
     setActiveIndex(Math.min(Math.max(index, 0), Math.max(0, options.length - 1)));
+    positionPopup();
     setOpen(true);
   };
   const choose = (index: number) => {
@@ -75,9 +125,19 @@ export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLa
     }
   };
 
+  const listboxStyle: CSSProperties | undefined = popupLayout ? {
+    position: 'fixed',
+    left: popupLayout.left,
+    width: popupLayout.width,
+    maxHeight: popupLayout.maxHeight,
+    top: popupLayout.top,
+    bottom: popupLayout.bottom,
+  } : undefined;
+
   return (
     <div className="custom-select" ref={rootRef}>
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         className="custom-select-trigger"
@@ -95,8 +155,15 @@ export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLa
         <span className="custom-select-value">{selected ? (renderLabel?.(selected) ?? selected.label) : null}</span>
         <svg className="custom-select-chevron" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" /></svg>
       </button>
-      {open ? (
-        <div id={listboxId} className="custom-select-listbox" role="listbox" aria-label={`${ariaLabel}の選択肢`}>
+      {open && popupLayout && typeof document !== 'undefined' ? createPortal(
+        <div
+          ref={listboxRef}
+          id={listboxId}
+          className="custom-select-listbox"
+          role="listbox"
+          aria-label={`${ariaLabel}の選択肢`}
+          style={listboxStyle}
+        >
           {options.map((option, index) => (
             <div
               id={optionId(index)}
@@ -113,7 +180,8 @@ export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLa
               {option.value === value ? <span className="custom-select-check" aria-hidden="true">✓</span> : null}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

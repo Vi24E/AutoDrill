@@ -16,6 +16,7 @@
     "contract:generate": "node scripts/sync-web-contract.mjs --write",
     "wasm:ensure": "./scripts/ensure-wasm.sh",
     "dev:cache": "./scripts/ensure-next-dev-cache.sh",
-    "pages:verify": "node scripts/verify-pages-export.mjs"
+    "pages:verify": "node scripts/verify-pages-export.mjs",
+    "layout:verify": "node scripts/verify-browser-layout.mjs"
   }
 }

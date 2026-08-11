@@ -170,13 +170,11 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .custom-select-chevron { width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; transition: rotate .16s ease; }
 .custom-select-trigger[aria-expanded='true'] .custom-select-chevron { rotate: 180deg; }
 .custom-select-listbox {
-  position: absolute;
-  z-index: 80;
-  top: calc(100% + 5px);
-  right: 0;
-  left: 0;
-  max-height: 300px;
+  z-index: 1000;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 5px;
   padding: 5px;
   border: 1px solid #9eacb1;
   border-radius: 7px;
@@ -320,6 +318,22 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 .paper-wrap { display: flex; justify-content: center; width: 100%; overflow: visible; }
 .paper { position: relative; width: min(720px, 100%); min-width: 0; background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
+
+.paper, .worksheet-print-page {
+  --worksheet-expression-font-size: 23px;
+  --worksheet-linear-expression-font-size: 17px;
+  --worksheet-problem-number-font-size: 14px;
+}
+.worksheet-grade-late-elementary {
+  --worksheet-expression-font-size: 21px;
+  --worksheet-linear-expression-font-size: 16.5px;
+  --worksheet-problem-number-font-size: 13.5px;
+}
+.worksheet-grade-junior-high {
+  --worksheet-expression-font-size: 18px;
+  --worksheet-linear-expression-font-size: 15.5px;
+  --worksheet-problem-number-font-size: 13px;
+}
 .problem-grid { position: relative; width: 100%; height: 100%; }
 .problem-divider { position: absolute; border-left: 1px solid #888; pointer-events: none; }
 .problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: visible; padding: 0 2%; }
@@ -328,13 +342,13 @@ button:disabled { cursor: wait; opacity: .5; }
 .answer-prefix-label { margin-right: 5px; font-size: 17px; font-weight: 600; white-space: nowrap; }
 .problem-cell-linear-equation { display: block; padding: 0; }
 .problem-cell-linear-equation .problem-number { position: absolute; top: 14%; left: 4%; width: auto; }
-.problem-cell-linear-equation .expression { position: absolute; top: 11%; left: 15%; max-width: 80%; font-size: 17px; }
+.problem-cell-linear-equation .expression { position: absolute; top: 11%; left: 15%; max-width: 80%; font-size: var(--worksheet-linear-expression-font-size); }
 .problem-cell-linear-equation .problem-answer-area { position: absolute; right: 6%; bottom: 11%; }
 .problem-cell-linear-equation .answer-box { margin-left: 0; }
 .problem-cell-linear-equation .grade-warnings { right: 0; bottom: -20px; left: auto; }
 .worksheet-footer { position: absolute; color: var(--muted); font-size: 7px; line-height: 1; white-space: nowrap; }
-.problem-number { flex: 0 0 15%; color: #484848; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.expression { flex: 0 0 auto; white-space: nowrap; font-size: clamp(17px, 2.8vw, 23px); font-variant-numeric: tabular-nums; }
+.problem-number { flex: 0 0 15%; color: #484848; font-size: var(--worksheet-problem-number-font-size); font-weight: 700; font-variant-numeric: tabular-nums; }
+.expression { flex: 0 0 auto; white-space: nowrap; font-size: var(--worksheet-expression-font-size); font-variant-numeric: tabular-nums; }
 .problem-math-expression { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
 .answer-box {
   display: inline-flex;
@@ -463,8 +477,8 @@ button:disabled { cursor: wait; opacity: .5; }
   .ribbon-link { grid-column: 3; grid-row: 2; }
   .problem-cell { padding-inline: 2%; }
   .problem-number { flex-basis: 14%; font-size: 12px; }
-  .expression { font-size: clamp(15px, 4.6vw, 20px); }
-  .problem-cell-linear-equation .expression { font-size: clamp(11px, 3.2vw, 15px); }
+  .expression { font-size: clamp(15px, 4.6vw, var(--worksheet-expression-font-size)); }
+  .problem-cell-linear-equation .expression { font-size: clamp(11px, 3.2vw, var(--worksheet-linear-expression-font-size)); }
   .problem-cell-linear-equation .answer-prefix-label { font-size: 14px; }
   .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 6px; }
   .correct-answer { margin-left: 3px; font-size: 13px; }
@@ -571,16 +585,16 @@ button:disabled { cursor: wait; opacity: .5; }
 .worksheet-print-page .problem-grid { position: absolute; inset: 0; }
 .worksheet-print-page .problem-cell { padding-inline: 2%; }
 .worksheet-print-page .problem-number { flex-basis: 15%; font-size: 14px; }
-.worksheet-print-page .expression { font-size: 23px; }
-.worksheet-print-page .problem-cell-linear-equation .expression { font-size: 17px; }
-.worksheet-print-page .problem-cell-linear-equation .answer-prefix-label { font-size: 17px; }
+.worksheet-print-page .expression { font-size: var(--worksheet-expression-font-size); }
+.worksheet-print-page .problem-cell-linear-equation .expression { font-size: var(--worksheet-linear-expression-font-size); }
+.worksheet-print-page .problem-cell-linear-equation .answer-prefix-label { font-size: var(--worksheet-linear-expression-font-size); }
 .worksheet-print-page .problem-math-expression,
 .worksheet-print-page .canonical-answer-math,
 .worksheet-print-page .answer-prefix-label { vertical-align: middle; }
 .worksheet-print-empty-answer { flex: 0 0 auto; width: 42px; min-width: 42px; height: 38px; min-height: 38px; padding: 0; }
 .worksheet-print-answer-area { min-width: 0; }
 .worksheet-print-answer-value { display: inline-block; margin-left: 6px; font-size: 23px; line-height: 1; }
-.worksheet-print-page .problem-cell-linear-equation .worksheet-print-answer-value { margin-left: 0; font-size: 17px; }
+.worksheet-print-page .problem-cell-linear-equation .worksheet-print-answer-value { margin-left: 0; font-size: var(--worksheet-linear-expression-font-size); }
 .worksheet-print-page .worksheet-footer { color: #626262; font-size: 7px; }
 
 @media (max-width: 760px) {

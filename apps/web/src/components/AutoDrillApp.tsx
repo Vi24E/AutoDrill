@@ -39,6 +39,7 @@ import { answerNodeLatex, mathTemplateInsertLatex } from '@/domain/mathlive-form
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
+import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { generateAutomaticSeed } from '@/domain/seed';
 import { AUTODRILL_VERSION_LABEL } from '@/domain/version';
 import {
@@ -1041,7 +1042,7 @@ function SettingsScreen({
           <div className={`curriculum-fields ${curriculumMode === 'recommended' ? 'curriculum-fields-recommended' : ''}`} aria-label="出題範囲">
             {curriculumMode === 'grade' ? (
               <div className="field-group">
-                <label className="field-label" htmlFor="grade-select"><RubyMessage text="学年" /></label>
+                <div className="field-label"><RubyMessage text="学年" /></div>
                 <CustomSelect
                   id="grade-select"
                   ariaLabel="学年"
@@ -1053,7 +1054,7 @@ function SettingsScreen({
               </div>
             ) : null}
             <div className="field-group">
-              <label className="field-label" htmlFor="genre-select">ジャンル</label>
+              <div className="field-label">ジャンル</div>
               <CustomSelect
                 id="genre-select"
                 ariaLabel="ジャンル"
@@ -1065,7 +1066,7 @@ function SettingsScreen({
             </div>
 
             <div className="field-group field-group-theme">
-              <label className="field-label" htmlFor="theme-select">テーマ</label>
+              <div className="field-label">テーマ</div>
               <CustomSelect
                 id="theme-select"
                 ariaLabel="テーマ"
@@ -1079,7 +1080,7 @@ function SettingsScreen({
 
           <div className="settings-options">
             <div className="field-group">
-              <label className="field-label" htmlFor="difficulty-select"><RubyMessage text="難易度" /></label>
+              <div className="field-label"><RubyMessage text="難易度" /></div>
               <CustomSelect
                 id="difficulty-select"
                 ariaLabel="難易度"
@@ -1189,6 +1190,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
+  const gradeBandClass = worksheetGradeBandClass(worksheetTheme.grade.slug);
   const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
   const selectedCapabilities = selectedProblem ? inputCapabilities(selectedProblem.input_interface) : null;
   const visibleStructures = selectedCapabilities?.allowed_structures.filter(
@@ -1239,7 +1241,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       ) : null}
 
       <div className="paper-wrap">
-        <article className="paper" style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}` }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
+        <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}` }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
           <div className="problem-grid">
             {worksheetTheme.worksheet.instruction ? (
               <p className="worksheet-instruction">{worksheetTheme.worksheet.instruction}</p>
