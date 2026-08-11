@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize, resolve } from 'node:path';
+import net from 'node:net';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const OUT = join(ROOT, 'apps/web/out');
@@ -58,17 +59,16 @@ function chromeBinary() {
   throw new Error('Chrome/Chromium was not found. Set CHROME_PATH for browser layout verification.');
 }
 
-async function waitForDevToolsPort(userDataDir, timeoutMs = 15_000) {
-  const file = join(userDataDir, 'DevToolsActivePort');
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (existsSync(file)) {
-      const [port] = readFileSync(file, 'utf8').trim().split(/\r?\n/);
-      if (port && /^\d+$/.test(port)) return Number(port);
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
-  }
-  throw new Error(`Chrome did not create ${file} within ${timeoutMs}ms.`);
+function freePort() {
+  return new Promise((resolvePort, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      const port = typeof address === 'object' && address ? address.port : null;
+      probe.close(() => port ? resolvePort(port) : reject(new Error('Could not allocate a Chrome debugging port.')));
+    });
+  });
 }
 
 async function waitForJson(url, timeoutMs = 15_000) {
@@ -269,23 +269,36 @@ const httpPort = await new Promise((resolveListen, reject) => {
     resolveListen(typeof address === 'object' && address ? address.port : 0);
   });
 });
+const debugPort = await freePort();
 const userDataDir = mkdtempSync(join(tmpdir(), 'autodrill-layout-'));
-const chrome = spawn(chromeBinary(), [
+const chromeArgs = [
   '--headless=new',
-  '--remote-debugging-port=0',
+  `--remote-debugging-port=${debugPort}`,
   `--user-data-dir=${userDataDir}`,
   '--disable-gpu',
   '--no-first-run',
   '--no-default-browser-check',
   '--disable-background-networking',
   '--disable-extensions',
-  'about:blank',
-], { stdio: ['ignore', 'ignore', 'ignore'] });
+];
+if (process.env.CI === 'true' && process.platform === 'linux') {
+  chromeArgs.push('--no-sandbox', '--disable-dev-shm-usage');
+}
+chromeArgs.push('about:blank');
+const chrome = spawn(chromeBinary(), chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+let chromeStderr = '';
+chrome.stderr.setEncoding('utf8');
+chrome.stderr.on('data', (chunk) => { chromeStderr += chunk; });
 
 let cdp;
 try {
-  const debugPort = await waitForDevToolsPort(userDataDir);
-  const targets = await waitForJson(`http://127.0.0.1:${debugPort}/json/list`);
+  let targets;
+  try {
+    targets = await waitForJson(`http://127.0.0.1:${debugPort}/json/list`, 30_000);
+  } catch (error) {
+    const diagnostics = chromeStderr.trim();
+    throw new Error(`Chrome DevTools did not become reachable on port ${debugPort}.${diagnostics ? `\nChrome stderr:\n${diagnostics}` : ''}`, { cause: error });
+  }
   const page = targets.find((target) => target.type === 'page');
   if (!page) throw new Error('Chrome page target not found.');
   cdp = await connectCdp(page.webSocketDebuggerUrl);
