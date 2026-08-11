@@ -14,6 +14,7 @@ __pycache__/
 **/target/
 apps/web/.next/
 apps/web/.next-dev/
+apps/web/out/
 coverage/
 **/coverage/
 .vitest/
@@ -27,3 +28,6 @@ apps/web/public/wasm/pkg/*
 !apps/web/public/wasm/pkg/.gitignore
 apps/web/src/wasm/pkg/*
 !apps/web/src/wasm/pkg/.gitignore
+
+# Local GitHub Pages smoke-test mount.
+.pages-smoke/

@@ -35,6 +35,16 @@ pnpm dev              # http://localhost:3000
 
 macOSではrepository直下の`AutoDrillを起動.command`をダブルクリックしても起動できます。
 
+## Alpha公開
+
+alpha版はGitHub Pagesのproject siteとして `https://vi24e.github.io/AutoDrill/` に公開します。`main`へのpushで`.github/workflows/pages.yml`がRust/WASM・Webの検証、Next.js static export、Pages成果物検証、deployを順に実行します。Pages buildだけ`/AutoDrill`のbase pathを使用し、通常のlocal buildには影響しません。alphaは将来の独自ドメインSEOへ影響を残さないよう`noindex, nofollow`で公開します。
+
+Pages成果物だけを検証する場合は、GitHub Pages用環境変数で`pnpm build`した後に次を実行します。
+
+```bash
+pnpm pages:verify
+```
+
 主要な検証コマンド:
 
 ```bash

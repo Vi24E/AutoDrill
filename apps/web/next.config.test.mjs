@@ -20,6 +20,22 @@ describe('Next runtime config', () => {
     expect(nextConfig(PHASE_PRODUCTION_BUILD).poweredByHeader).toBe(false);
   });
 
+
+  it('exports a GitHub Pages project site without unsupported response headers', () => {
+    const previous = process.env.GITHUB_PAGES;
+    process.env.GITHUB_PAGES = 'true';
+    try {
+      const config = nextConfig(PHASE_PRODUCTION_BUILD);
+      expect(config.output).toBe('export');
+      expect(config.trailingSlash).toBe(true);
+      expect(config.basePath).toBe('/AutoDrill');
+      expect(config.headers).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.GITHUB_PAGES;
+      else process.env.GITHUB_PAGES = previous;
+    }
+  });
+
   it('serves generated WASM without persistent browser caching during active development', async () => {
     const routes = await nextConfig(PHASE_PRODUCTION_SERVER).headers();
     const wasm = routes.find((route) => route.source === '/wasm/pkg/:path*');

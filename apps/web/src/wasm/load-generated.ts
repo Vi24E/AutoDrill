@@ -7,7 +7,8 @@ async function initializeGeneratedWasmRuntime(): Promise<DrillWasmRuntime> {
   // absent from normal source checkouts.
   // Keep the specifier out of both Next/Webpack and Vitest/Vite's static module
   // graph; the file is a public asset created after this source is compiled.
-  const generatedPath = ['/wasm/pkg', 'drill_wasm.js'].join('/');
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+  const generatedPath = [`${basePath}/wasm/pkg`, 'drill_wasm.js'].join('/');
   const generated = (await import(/* webpackIgnore: true */ generatedPath)) as {
     default?: (input?: unknown) => Promise<unknown>;
     [key: string]: unknown;
@@ -24,7 +25,8 @@ async function initializeGeneratedWasmRuntime(): Promise<DrillWasmRuntime> {
  * The dynamic import keeps the optional generated file out of the Next.js and
  * Vitest compile graphs, so a normal source checkout remains buildable while a
  * locally generated package is still loadable at runtime. The generated web
- * glue initializes itself relative to `/wasm/pkg/drill_wasm_bg.wasm`.
+ * glue initializes itself relative to the loaded glue module, so both `/wasm/pkg/...` locally and
+ * `/AutoDrill/wasm/pkg/...` on GitHub Pages resolve without a second path rule.
  *
  * React StrictMode may mount the preload effect twice before the first async
  * initialization completes. wasm-bindgen initialization is therefore shared
