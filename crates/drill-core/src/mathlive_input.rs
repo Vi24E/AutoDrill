@@ -3,6 +3,8 @@ use crate::editor::ensure_capability;
 use crate::error::EditorError;
 use crate::model::{AnswerInputInterface, MAX_ANSWER_AST_SIZE};
 
+const MAX_MATHLIVE_LATEX_BYTES: usize = 4096;
+
 /// Parse the deliberately small MathLive/LaTeX answer language accepted by
 /// AutoDrill. MathLive owns editing and layout; this adapter is the only place
 /// where Web editor output becomes the Rust AnswerNode authority.
@@ -10,6 +12,11 @@ pub fn parse_mathlive_answer(
     latex: &str,
     input_interface: &AnswerInputInterface,
 ) -> Result<AnswerNode, EditorError> {
+    if latex_exceeds_parse_budget(latex) {
+        return Err(EditorError::AnswerSizeLimit {
+            max_size: MAX_ANSWER_AST_SIZE,
+        });
+    }
     let compact = compact_mathlive_latex(latex);
     let mut parser = Parser::new(&compact);
     let answer = match parser.parse_expression(None) {
@@ -24,6 +31,35 @@ pub fn parse_mathlive_answer(
     }
     ensure_capability(&answer, input_interface)?;
     Ok(answer)
+}
+
+fn latex_exceeds_parse_budget(input: &str) -> bool {
+    if input.len() > MAX_MATHLIVE_LATEX_BYTES {
+        return true;
+    }
+
+    // The AnswerNode limit is also a safe parser-depth budget. Reject deeply
+    // nested MathLive structures before entering the recursive-descent parser,
+    // so malformed/pasted input cannot reach the native/WASM stack limit.
+    let mut depth = 0usize;
+    for ch in input.chars() {
+        match ch {
+            '{' | '[' => {
+                depth = depth.saturating_add(1);
+                if depth > MAX_ANSWER_AST_SIZE {
+                    return true;
+                }
+            }
+            '}' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    ["\\frac", "\\sqrt", "\\placeholder"]
+        .iter()
+        .map(|command| input.match_indices(command).count())
+        .sum::<usize>()
+        > MAX_ANSWER_AST_SIZE
 }
 
 fn compact_mathlive_latex(input: &str) -> String {
@@ -402,5 +438,25 @@ mod tests {
                 denominator: Box::new(AnswerNode::Empty),
             }
         );
+    }
+
+    #[test]
+    fn rejects_pathological_latex_before_recursive_parsing() {
+        let interface = structured();
+        let deeply_nested = format!(
+            "{}1{}",
+            "\\sqrt{".repeat(MAX_ANSWER_AST_SIZE + 20),
+            "}".repeat(MAX_ANSWER_AST_SIZE + 20)
+        );
+        assert!(matches!(
+            parse_mathlive_answer(&deeply_nested, &interface),
+            Err(EditorError::AnswerSizeLimit { .. })
+        ));
+
+        let oversized = "1".repeat(MAX_MATHLIVE_LATEX_BYTES + 1);
+        assert!(matches!(
+            parse_mathlive_answer(&oversized, &interface),
+            Err(EditorError::AnswerSizeLimit { .. })
+        ));
     }
 }

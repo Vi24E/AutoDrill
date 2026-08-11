@@ -318,8 +318,8 @@ button:disabled { cursor: wait; opacity: .5; }
   font-weight: 700;
   translate: -50% 0;
 }
-.paper-wrap { display: flex; justify-content: center; overflow-x: auto; }
-.paper { position: relative; width: 720px; min-width: 720px; background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
+.paper-wrap { display: flex; justify-content: center; width: 100%; overflow: visible; }
+.paper { position: relative; width: min(720px, 100%); min-width: 0; background: var(--paper); border: 0; box-shadow: 0 5px 24px rgba(0, 0, 0, .09); }
 .problem-grid { position: relative; width: 100%; height: 100%; }
 .problem-divider { position: absolute; border-left: 1px solid #888; pointer-events: none; }
 .problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: visible; padding: 0 2%; }
@@ -464,6 +464,8 @@ button:disabled { cursor: wait; opacity: .5; }
   .problem-cell { padding-inline: 2%; }
   .problem-number { flex-basis: 14%; font-size: 12px; }
   .expression { font-size: clamp(15px, 4.6vw, 20px); }
+  .problem-cell-linear-equation .expression { font-size: clamp(11px, 3.2vw, 15px); }
+  .problem-cell-linear-equation .answer-prefix-label { font-size: 14px; }
   .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 6px; }
   .correct-answer { margin-left: 3px; font-size: 13px; }
   .input-panel-inner { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 7px; }
@@ -484,10 +486,125 @@ button:disabled { cursor: wait; opacity: .5; }
   .settings-screen :is(button, select, input) { scroll-behavior: auto; transition: none; }
 }
 
+.worksheet-print-host-hidden {
+  position: fixed;
+  z-index: -2147483647;
+  top: 0;
+  left: 0;
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.worksheet-print-host-preview {
+  position: fixed;
+  z-index: 2147483646;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+}
+.worksheet-print-preview {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background: #e7e9ea;
+}
+.worksheet-print-preview-toolbar {
+  z-index: 2;
+  display: grid;
+  min-height: 68px;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(96px, 1fr) auto minmax(96px, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 10px 24px;
+  border-bottom: 1px solid #c8cdd0;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 2px 10px rgba(30, 43, 48, .08);
+}
+.worksheet-print-preview-toolbar button {
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid #7b8387;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+}
+.worksheet-print-preview-back { justify-self: start; }
+.worksheet-print-preview-print {
+  justify-self: end;
+  border-color: #151515 !important;
+  background: #151515 !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+.worksheet-print-preview-title-group { text-align: center; }
+.worksheet-print-preview-title-group h2 { margin: 0; font-size: 17px; }
+.worksheet-print-preview-title-group p { margin: 2px 0 0; color: #626262; font-size: 11px; }
+.worksheet-print-preview-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 28px 24px 48px;
+  text-align: center;
+}
+.worksheet-print-preview-document {
+  display: inline-block;
+  zoom: .78;
+  text-align: left;
+}
+.worksheet-print-preview .worksheet-print-page {
+  margin: 0 auto 28px;
+  box-shadow: 0 3px 18px rgba(31, 42, 46, .22);
+}
+.worksheet-print-preview .worksheet-print-page:last-child { margin-bottom: 0; }
+.worksheet-print-document { width: 210mm; color: #111; background: #fff; font-family: 'Noto Sans JP', system-ui, sans-serif; }
+.worksheet-print-page { position: relative; width: 210mm; height: 297mm; overflow: hidden; background: #fff; break-after: page; page-break-after: always; }
+.worksheet-print-page:last-child { break-after: auto; page-break-after: auto; }
+.worksheet-print-page-inner { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center; }
+.worksheet-print-page-inner-rotated { transform: rotate(180deg); }
+.worksheet-print-heading { position: absolute; z-index: 2; top: 2.1%; right: 7%; left: 7%; display: flex; gap: 9px; align-items: baseline; white-space: nowrap; }
+.worksheet-print-heading span { color: #666; font-size: 10px; }
+.worksheet-print-heading strong { font-size: 14px; font-weight: 700; }
+.worksheet-print-page .problem-grid { position: absolute; inset: 0; }
+.worksheet-print-page .problem-cell { padding-inline: 2%; }
+.worksheet-print-page .problem-number { flex-basis: 15%; font-size: 14px; }
+.worksheet-print-page .expression { font-size: 23px; }
+.worksheet-print-page .problem-cell-linear-equation .expression { font-size: 17px; }
+.worksheet-print-page .problem-cell-linear-equation .answer-prefix-label { font-size: 17px; }
+.worksheet-print-page .problem-math-expression,
+.worksheet-print-page .canonical-answer-math,
+.worksheet-print-page .answer-prefix-label { vertical-align: middle; }
+.worksheet-print-empty-answer { flex: 0 0 auto; width: 42px; min-width: 42px; height: 38px; min-height: 38px; padding: 0; }
+.worksheet-print-answer-area { min-width: 0; }
+.worksheet-print-answer-value { display: inline-block; margin-left: 6px; font-size: 23px; line-height: 1; }
+.worksheet-print-page .problem-cell-linear-equation .worksheet-print-answer-value { margin-left: 0; font-size: 17px; }
+.worksheet-print-page .worksheet-footer { color: #626262; font-size: 7px; }
+
+@media (max-width: 760px) {
+  .worksheet-print-preview-toolbar { grid-template-columns: auto 1fr auto; gap: 8px; padding-inline: 12px; }
+  .worksheet-print-preview-toolbar button { min-height: 38px; padding-inline: 12px; }
+  .worksheet-print-preview-title-group h2 { font-size: 15px; }
+  .worksheet-print-preview-title-group p { display: none; }
+  .worksheet-print-preview-scroll { padding: 18px 8px 32px; }
+  .worksheet-print-preview-document { zoom: .58; }
+}
+
+@media (max-width: 500px) {
+  .worksheet-print-preview-document { zoom: .43; }
+}
+
 @media print {
-  body { background: #fff; }
-  .app-shell { padding: 0; }
-  .ribbon, .input-panel, .grade-result-panel, .error-message, .worksheet-toast { display: none !important; }
-  .worksheet-screen { padding: 0; }
-  .paper { width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; box-shadow: none; }
+  @page { size: A4 portrait; margin: 0; }
+  html, body { width: 210mm; min-height: 0; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  body > :not(.worksheet-print-host) { display: none !important; }
+  .worksheet-print-host { position: static; z-index: auto; width: 210mm; height: auto; overflow: visible; opacity: 1; pointer-events: auto; }
+  .worksheet-print-preview { display: block; width: 210mm; height: auto; background: #fff; }
+  .worksheet-print-preview-toolbar { display: none !important; }
+  .worksheet-print-preview-scroll { display: block; overflow: visible; padding: 0; text-align: left; }
+  .worksheet-print-preview-document { display: block; zoom: 1 !important; }
+  .worksheet-print-preview .worksheet-print-page { margin: 0; box-shadow: none; }
+  .worksheet-print-page { box-shadow: none; }
 }

@@ -42,6 +42,12 @@ start_web() {
     return 1
   fi
 
+  echo "Web開発キャッシュを確認します。"
+  "$ROOT/scripts/ensure-next-dev-cache.sh"
+
+  echo "Rust/WASM を確認します。"
+  "$ROOT/scripts/ensure-wasm.sh"
+
   echo "Rust/Web 契約を確認します。"
   node "$CONTRACT_CHECK"
 
@@ -87,9 +93,9 @@ if command -v pnpm >/dev/null 2>&1; then
   echo "依存関係が見つからないため pnpm で復元します。"
   pnpm install --frozen-lockfile
 elif command -v npm >/dev/null 2>&1; then
-  echo "依存関係が見つからないため npm 経由で pnpm 11.9.0 を一時実行して復元します。"
+  echo "依存関係が見つからないため npm 経由で pnpm 10.20.0 を一時実行して復元します。"
   echo "Corepack は使用しません。"
-  npm exec --yes --package=pnpm@11.9.0 -- pnpm install --frozen-lockfile
+  npm exec --yes --package=pnpm@10.20.0 -- pnpm install --frozen-lockfile
 else
   echo "Node.js/npm が見つかりません。"
   echo "asdf の Node.js 環境を確認してください。"

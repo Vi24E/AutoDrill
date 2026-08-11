@@ -1,6 +1,6 @@
 # Problem schema v3
 
-Alpha 1.1のRust domainとWASM JSON境界は`schema_version = 3`を共通で使用する。生成requestは次の値だけを持つ。
+Alpha 1.2のRust domainとWASM JSON境界は`schema_version = 3`を共通で使用する。生成requestは次の値だけを持つ。
 すべての公開requestは`schema_version: 3`を明示し、v2、version欠落、互換DTOはfail closedで拒否する。
 
 ```json

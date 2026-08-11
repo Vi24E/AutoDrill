@@ -548,6 +548,8 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
                 candidate_pool.push(problem);
             }
         }
+        let mut distinct = HashSet::with_capacity(candidate_pool.len());
+        candidate_pool.retain(|problem| distinct.insert(problem_key(problem)));
         check_timeout(started, clock, config)?;
         candidate_pool
     } else {
@@ -787,14 +789,48 @@ fn input_interface_has_no_negative_capability(input: &AnswerInputInterface) -> b
     }
 }
 
+fn canonicalize_commutative_expression(expression: &ArithmeticExpression) -> ArithmeticExpression {
+    match expression {
+        ArithmeticExpression::Integer { .. } | ArithmeticExpression::Rational { .. } => {
+            expression.clone()
+        }
+        ArithmeticExpression::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let mut left = canonicalize_commutative_expression(left);
+            let mut right = canonicalize_commutative_expression(right);
+            if matches!(
+                operator,
+                ArithmeticOperator::Add | ArithmeticOperator::Multiply
+            ) && right < left
+            {
+                std::mem::swap(&mut left, &mut right);
+            }
+            ArithmeticExpression::Binary {
+                operator: *operator,
+                left: Box::new(left),
+                right: Box::new(right),
+            }
+        }
+    }
+}
+
 fn problem_key(problem: &Problem) -> ProblemPrompt {
     match &problem.prompt {
+        // One-digit addition and the multiplication table intentionally keep
+        // ordered variants because their total populations are small.
         ProblemPrompt::Addition { left, right } => ProblemPrompt::Addition {
             left: *left,
             right: *right,
         },
         ProblemPrompt::Arithmetic { expression } => ProblemPrompt::Arithmetic {
-            expression: expression.clone(),
+            expression: if problem.numeric_theme_id == crate::model::THEME_ID_MULTIPLICATION_TABLE {
+                expression.clone()
+            } else {
+                canonicalize_commutative_expression(expression)
+            },
         },
         ProblemPrompt::LinearEquation { a, b, c, d, .. } => ProblemPrompt::LinearEquation {
             a: *a,
@@ -1112,14 +1148,24 @@ fn linear_fraction_domain() -> &'static [RationalCoefficient] {
     })
 }
 
-fn positive_linear_fraction_domain() -> &'static [RationalCoefficient] {
+fn fraction_arithmetic_operand_domain() -> &'static [RationalCoefficient] {
     static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     VALUES.get_or_init(|| {
-        linear_fraction_domain()
-            .iter()
-            .copied()
-            .filter(|value| value.numerator > 0)
-            .collect()
+        let mut values = Vec::new();
+        for denominator in 2_i64..=9 {
+            for numerator in 1_i64..=(10 - denominator) {
+                let Some(value) = RationalCoefficient::new(numerator, denominator) else {
+                    continue;
+                };
+                if value.denominator == 1 {
+                    continue;
+                }
+                values.push(value);
+            }
+        }
+        values.sort_unstable();
+        values.dedup();
+        values
     })
 }
 
@@ -1139,11 +1185,11 @@ fn fraction_arithmetic_domain(
     static SUBTRACTION: OnceLock<Vec<Triple>> = OnceLock::new();
     static MULTIPLICATION: OnceLock<Vec<Triple>> = OnceLock::new();
 
-    fn build(operator: ArithmeticOperator) -> Vec<Triple> {
-        let domain = positive_linear_fraction_domain();
+    fn build(mode: ArithmeticThemeMode, operator: ArithmeticOperator) -> Vec<Triple> {
+        let operand_domain = fraction_arithmetic_operand_domain();
         let mut triples = Vec::new();
-        for &left in domain {
-            for &right in domain {
+        for &left in operand_domain {
+            for &right in operand_domain {
                 let result = match operator {
                     ArithmeticOperator::Add => left.checked_add(right),
                     ArithmeticOperator::Subtract => left.subtract(right),
@@ -1153,7 +1199,24 @@ fn fraction_arithmetic_domain(
                 let Some(result) = result else {
                     continue;
                 };
-                if result.numerator > 0 && domain.contains(&result) {
+                if result.numerator <= 0 {
+                    continue;
+                }
+                // Fraction addition is a grade-5 unlike-denominator topic. Its
+                // result must not be constrained to the coefficient domain used
+                // by linear equations; doing so accidentally rejected standard
+                // examples such as 1/3 + 1/4 = 7/12 and heavily biased the pool
+                // toward equal denominators. Keep the existing operand bounds,
+                // but accept every positive non-integer sum they can produce.
+                let result_allowed = match mode {
+                    ArithmeticThemeMode::FractionAddition => result.denominator > 1,
+                    ArithmeticThemeMode::FractionSubtraction
+                    | ArithmeticThemeMode::FractionMultiplication => {
+                        operand_domain.contains(&result)
+                    }
+                    _ => unreachable!(),
+                };
+                if result_allowed {
                     triples.push((left, right, result));
                 }
             }
@@ -1162,15 +1225,24 @@ fn fraction_arithmetic_domain(
     }
 
     match mode {
-        ArithmeticThemeMode::FractionAddition => {
-            ADDITION.get_or_init(|| build(ArithmeticOperator::Add))
-        }
-        ArithmeticThemeMode::FractionSubtraction => {
-            SUBTRACTION.get_or_init(|| build(ArithmeticOperator::Subtract))
-        }
-        ArithmeticThemeMode::FractionMultiplication => {
-            MULTIPLICATION.get_or_init(|| build(ArithmeticOperator::Multiply))
-        }
+        ArithmeticThemeMode::FractionAddition => ADDITION.get_or_init(|| {
+            build(
+                ArithmeticThemeMode::FractionAddition,
+                ArithmeticOperator::Add,
+            )
+        }),
+        ArithmeticThemeMode::FractionSubtraction => SUBTRACTION.get_or_init(|| {
+            build(
+                ArithmeticThemeMode::FractionSubtraction,
+                ArithmeticOperator::Subtract,
+            )
+        }),
+        ArithmeticThemeMode::FractionMultiplication => MULTIPLICATION.get_or_init(|| {
+            build(
+                ArithmeticThemeMode::FractionMultiplication,
+                ArithmeticOperator::Multiply,
+            )
+        }),
         _ => unreachable!(),
     }
 }
@@ -1216,10 +1288,22 @@ fn fraction_theme_problem(
         numeric_theme_id,
         prompt: ProblemPrompt::Arithmetic { expression },
         input_interface: fraction_input_interface(),
-        answer_schema: AnswerSchema::Rational {
-            max_abs_numerator: 8,
-            max_denominator: 9,
-            require_reduced_fraction_form: true,
+        answer_schema: match mode {
+            // With the current positive operand domain, every non-integer sum
+            // is bounded by numerator <= 65 and denominator <= 72. These are
+            // grading bounds, not an additional generation filter.
+            ArithmeticThemeMode::FractionAddition => AnswerSchema::Rational {
+                max_abs_numerator: 65,
+                max_denominator: 72,
+                require_reduced_fraction_form: true,
+            },
+            ArithmeticThemeMode::FractionSubtraction
+            | ArithmeticThemeMode::FractionMultiplication => AnswerSchema::Rational {
+                max_abs_numerator: 8,
+                max_denominator: 9,
+                require_reduced_fraction_form: true,
+            },
+            _ => unreachable!(),
         },
         canonical_answer: answer,
         solution_graph,
@@ -1799,11 +1883,17 @@ mod tests {
                             let ArithmeticExpression::Rational { value } = node else {
                                 panic!("fraction operand");
                             };
-                            assert!(positive_linear_fraction_domain().contains(value));
+                            assert!(fraction_arithmetic_operand_domain().contains(value));
                             assert!(value.numerator > 0);
                         }
-                        assert!(positive_linear_fraction_domain().contains(&value));
                         assert!(value.numerator > 0);
+                        if theme_id == THEME_ID_FRACTION_ADDITION {
+                            assert!(value.denominator > 1);
+                            assert!(value.numerator <= 65);
+                            assert!(value.denominator <= 72);
+                        } else {
+                            assert!(fraction_arithmetic_operand_domain().contains(&value));
+                        }
                         if theme_id == THEME_ID_FRACTION_SUBTRACTION {
                             assert_eq!(*operator, ArithmeticOperator::Subtract);
                         }
@@ -1811,6 +1901,105 @@ mod tests {
                     _ => unreachable!(),
                 }
             }
+        }
+    }
+
+    #[test]
+    fn all_registered_themes_are_deterministic_without_duplicate_prompts() {
+        for registration in crate::registry::GENERATOR_REGISTRY {
+            for seed in ["A1b2", "M7x9"] {
+                for difficulty_value in [1u8, 5u8] {
+                    let difficulty =
+                        crate::identity::Difficulty::try_from(difficulty_value).unwrap();
+                    let request = GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: registration.numeric_theme_id,
+                        seed: seed.to_owned(),
+                        difficulty,
+                        timeout_ms: None,
+                        max_attempts: None,
+                    };
+                    let first = generate_worksheet_request(&request).unwrap_or_else(|error| {
+                        panic!(
+                            "theme {} seed {seed} difficulty {difficulty_value} failed: {error}",
+                            registration.numeric_theme_id
+                        )
+                    });
+                    let second = generate_worksheet_request(&request).unwrap();
+                    assert_eq!(
+                        first, second,
+                        "same request must be byte-semantically deterministic"
+                    );
+                    assert_eq!(first.problems.len(), registration.problem_count);
+                    for left in 0..first.problems.len() {
+                        for right in left + 1..first.problems.len() {
+                            assert_ne!(
+                                first.problems[left].prompt,
+                                first.problems[right].prompt,
+                                "theme {} duplicated a prompt for seed {seed} difficulty {difficulty_value}",
+                                registration.numeric_theme_id
+                            );
+                            assert_ne!(
+                                problem_key(&first.problems[left]),
+                                problem_key(&first.problems[right]),
+                                "theme {} duplicated a commutative-equivalent prompt for seed {seed} difficulty {difficulty_value}",
+                                registration.numeric_theme_id
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fraction_addition_domain_includes_standard_unlike_denominator_examples() {
+        let one_third = RationalCoefficient::new(1, 3).unwrap();
+        let one_fourth = RationalCoefficient::new(1, 4).unwrap();
+        let seven_twelfths = RationalCoefficient::new(7, 12).unwrap();
+        let domain = fraction_arithmetic_domain(ArithmeticThemeMode::FractionAddition);
+        assert!(domain.contains(&(one_third, one_fourth, seven_twelfths)));
+        assert!(domain
+            .iter()
+            .any(|(left, right, _)| { left.denominator != right.denominator }));
+    }
+
+    #[test]
+    fn hard_fraction_addition_worksheets_do_not_collapse_to_equal_denominators() {
+        for seed in ["Ab3Z", "M7x9", "NwA", "Em7Z", "Qp5A"] {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: crate::model::THEME_ID_FRACTION_ADDITION,
+                seed: seed.to_owned(),
+                difficulty: crate::identity::Difficulty::try_from(5).unwrap(),
+                timeout_ms: None,
+                max_attempts: None,
+            })
+            .unwrap();
+            let unlike_count = worksheet
+                .problems
+                .iter()
+                .filter(|problem| {
+                    let ProblemPrompt::Arithmetic {
+                        expression: ArithmeticExpression::Binary { left, right, .. },
+                    } = &problem.prompt
+                    else {
+                        return false;
+                    };
+                    let (
+                        ArithmeticExpression::Rational { value: left },
+                        ArithmeticExpression::Rational { value: right },
+                    ) = (&**left, &**right)
+                    else {
+                        return false;
+                    };
+                    left.denominator != right.denominator
+                })
+                .count();
+            assert!(
+                unlike_count >= worksheet.problems.len() / 2,
+                "seed {seed} produced only {unlike_count} unlike-denominator additions"
+            );
         }
     }
 

@@ -3,23 +3,53 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
 const DEVELOPMENT_OUTPUT_DIR = '.next-dev';
 const PRODUCTION_OUTPUT_DIR = '.next';
 
-/**
- * Keep the development server's incremental output separate from the
- * production build. A `next build` must not replace chunks that an already
- * running `next dev` page is trying to load.
- */
+/** Keep development and production output isolated so overlapping commands cannot corrupt chunks. */
 export function resolveDistDir(phase) {
   return phase === PHASE_DEVELOPMENT_SERVER ? DEVELOPMENT_OUTPUT_DIR : PRODUCTION_OUTPUT_DIR;
 }
 
-/**
- * Next calls a function-valued config with the current phase. Using that
- * official phase signal avoids relying on a module-load NODE_ENV value that
- * can be stale when dev and production commands overlap.
- */
+function contentSecurityPolicy(development) {
+  const scriptSources = ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"];
+  if (development) scriptSources.push("'unsafe-eval'");
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "form-action 'self'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src ${scriptSources.join(' ')}`,
+    `connect-src 'self'${development ? ' ws: wss:' : ''}`,
+    "worker-src 'self' blob:",
+  ].join('; ');
+}
+
+export function securityHeaders(development = false) {
+  return [
+    { key: 'Content-Security-Policy', value: contentSecurityPolicy(development) },
+    { key: 'X-Content-Type-Options', value: 'nosniff' },
+    { key: 'X-Frame-Options', value: 'DENY' },
+    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+  ];
+}
+
+/** Next calls this config with the current phase, which also lets development CSP allow HMR only in dev. */
 const nextConfig = (phase) => ({
   reactStrictMode: true,
   distDir: resolveDistDir(phase),
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: '/wasm/pkg/:path*',
+        headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
+      },
+      { source: '/:path*', headers: securityHeaders(phase === PHASE_DEVELOPMENT_SERVER) },
+    ];
+  },
 });
 
 export default nextConfig;

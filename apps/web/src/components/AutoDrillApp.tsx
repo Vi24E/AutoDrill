@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { MathfieldElement } from 'mathlive';
 
 import {
   DEFAULT_DRILL_SETTINGS,
@@ -33,15 +34,13 @@ import {
 } from '@/domain/curriculum';
 import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
-import { MathTemplateIcon } from '@/components/MathTemplateIcon';
-import { MathLiveAnswerInput, MathLiveStatic, deleteEmptyMathLiveStructureBackward, type AutoDrillMathfield } from '@/components/MathLiveMath';
-import { openWorksheetPdf } from '@/pdf/worksheet-pdf';
-import { ProblemExpression } from '@/components/ProblemExpression';
+import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
 import { answerNodeLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { generateAutomaticSeed } from '@/domain/seed';
+import { AUTODRILL_VERSION_LABEL } from '@/domain/version';
 import {
   createWorksheetMetadata,
   formatWorksheetFooter,
@@ -49,10 +48,46 @@ import {
   type WorksheetMetadata,
 } from '@/domain/worksheet-metadata';
 
+type AutoDrillMathfield = MathfieldElement;
+
+type WorksheetUiComponents = {
+  MathLiveAnswerInput: typeof import('@/components/MathLiveMath').MathLiveAnswerInput;
+  MathLiveStatic: typeof import('@/components/MathLiveMath').MathLiveStatic;
+  MathTemplateIcon: typeof import('@/components/MathTemplateIcon').MathTemplateIcon;
+  ProblemExpression: typeof import('@/components/ProblemExpression').ProblemExpression;
+};
+
+let worksheetUiPromise: Promise<WorksheetUiComponents> | null = null;
+
+function preloadWorksheetUi(): Promise<WorksheetUiComponents> {
+  if (!worksheetUiPromise) {
+    worksheetUiPromise = Promise.all([
+      import('@/components/MathLiveMath'),
+      import('@/components/MathTemplateIcon'),
+      import('@/components/ProblemExpression'),
+    ]).then(([mathLive, templateIcon, problemExpression]) => ({
+      MathLiveAnswerInput: mathLive.MathLiveAnswerInput,
+      MathLiveStatic: mathLive.MathLiveStatic,
+      MathTemplateIcon: templateIcon.MathTemplateIcon,
+      ProblemExpression: problemExpression.ProblemExpression,
+    })).catch((error: unknown) => {
+      worksheetUiPromise = null;
+      throw error;
+    });
+  }
+  return worksheetUiPromise;
+}
+
 type Screen = 'settings' | 'worksheet';
 type WorksheetPhase = 'editing' | 'grading' | 'graded' | 'replacing';
 type SettingsBusyAction = 'generate' | 'print' | null;
 const FURIGANA_STORAGE_KEY = 'autodrill:furigana-enabled';
+
+async function openWorksheetPdfLazy(worksheet: WorksheetDto, targetWindow?: Window | null, metadata?: WorksheetMetadata): Promise<void> {
+  const { openWorksheetPdf } = await import('@/pdf/worksheet-pdf');
+  return openWorksheetPdf(worksheet, targetWindow, metadata);
+}
+
 const FuriganaContext = createContext(true);
 
 const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
@@ -186,28 +221,66 @@ function formatElapsed(startedAt: number | null, now: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-const MIN_RENDERED_ANSWER_WIDTH_LIMIT = 96;
-const MIN_RENDERED_ANSWER_HEIGHT_LIMIT = 56;
+const MIN_RENDERED_ANSWER_WIDTH_LIMIT = 42;
+const MIN_RENDERED_ANSWER_HEIGHT_LIMIT = 38;
+const ANSWER_CELL_RIGHT_GUTTER = 6;
 
-function mathfieldFitsProblem(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
-  // The visible answer box is an AutoDrill frame around the natural-size
-  // MathLive field. Enforce growth limits against the frame, not only the
-  // inner renderer, so border/padding remain part of the actual footprint.
-  const rendered = mathfield.closest<HTMLElement>('.answer-box') ?? mathfield;
-  const rect = rendered.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return true;
+function numericCssPixels(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function renderedMathfieldContentSize(mathfield: AutoDrillMathfield): { width: number; height: number } {
+  const hostRect = mathfield.getBoundingClientRect();
+  const content = mathfield.shadowRoot?.querySelector<HTMLElement>('[part~="content"]');
+  const contentRect = content?.getBoundingClientRect();
+  return {
+    width: Math.max(hostRect.width, mathfield.scrollWidth, contentRect?.width ?? 0),
+    height: Math.max(hostRect.height, mathfield.scrollHeight, contentRect?.height ?? 0),
+  };
+}
+
+function resizeMathfieldFrameAndCheck(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
+  const frame = mathfield.closest<HTMLElement>('.answer-box');
+  if (!frame) return true;
+  const frameStyle = window.getComputedStyle(frame);
+  const horizontalChrome = numericCssPixels(frameStyle.paddingLeft)
+    + numericCssPixels(frameStyle.paddingRight)
+    + numericCssPixels(frameStyle.borderLeftWidth)
+    + numericCssPixels(frameStyle.borderRightWidth);
+  const verticalChrome = numericCssPixels(frameStyle.paddingTop)
+    + numericCssPixels(frameStyle.paddingBottom)
+    + numericCssPixels(frameStyle.borderTopWidth)
+    + numericCssPixels(frameStyle.borderBottomWidth);
+  const contentSize = renderedMathfieldContentSize(mathfield);
+  const requiredWidth = Math.max(MIN_RENDERED_ANSWER_WIDTH_LIMIT, Math.ceil(contentSize.width + horizontalChrome));
+  const requiredHeight = Math.max(MIN_RENDERED_ANSWER_HEIGHT_LIMIT, Math.ceil(contentSize.height + verticalChrome));
+
   const cell = document.querySelector<HTMLElement>(`[data-problem-index="${problemIndex}"]`);
   const cellRect = cell?.getBoundingClientRect();
-  const maxWidth = cellRect && cellRect.width > 0
-    ? Math.max(MIN_RENDERED_ANSWER_WIDTH_LIMIT, cellRect.width * 0.56)
+  const currentFrameRect = frame.getBoundingClientRect();
+  const maxWidth = cellRect && cellRect.width > 0 && currentFrameRect.left > 0
+    ? Math.max(MIN_RENDERED_ANSWER_WIDTH_LIMIT, cellRect.right - currentFrameRect.left - ANSWER_CELL_RIGHT_GUTTER)
     : 180;
   const maxHeight = cellRect && cellRect.height > 0
     ? Math.max(MIN_RENDERED_ANSWER_HEIGHT_LIMIT, cellRect.height * 0.72)
     : 80;
-  return rect.width <= maxWidth && rect.height <= maxHeight;
+
+  if (requiredWidth > maxWidth || requiredHeight > maxHeight) return false;
+  frame.style.width = `${requiredWidth}px`;
+  frame.style.height = `${requiredHeight}px`;
+  return true;
+}
+
+function waitForMathfieldLayout(): Promise<void> {
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return Promise.resolve();
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
 }
 
 type WorksheetAnswerFieldProps = {
+  worksheetUi: WorksheetUiComponents;
   problem: WorksheetDto['problems'][number];
   index: number;
   answer: AnswerNode;
@@ -223,6 +296,7 @@ type WorksheetAnswerFieldProps = {
 };
 
 function WorksheetAnswerField({
+  worksheetUi,
   problem,
   index,
   answer,
@@ -236,6 +310,7 @@ function WorksheetAnswerField({
   onMathInput,
   onCommit,
 }: WorksheetAnswerFieldProps) {
+  const { MathLiveAnswerInput, MathLiveStatic } = worksheetUi;
   const answerText = answerNodeText(answer);
   const canonicalAnswer = answerNodeText(problem.canonical_answer);
 
@@ -329,6 +404,7 @@ export function AutoDrillApp({
 }: AutoDrillAppProps) {
   const engine = injectedEngine ?? createWasmDrillEngine();
   const [screen, setScreen] = useState<Screen>('settings');
+  const [worksheetUi, setWorksheetUi] = useState<WorksheetUiComponents | null>(null);
   const [settings, setSettings] = useState<DrillSettings>(() => ({
     ...initialSettings,
     // Route-provided Web settings are the canonical selection for the first
@@ -368,6 +444,7 @@ export function AutoDrillApp({
   const worksheetPhaseRef = useRef<WorksheetPhase>('editing');
   const actionQueueRef = useRef(Promise.resolve());
   const mathfieldRefs = useRef(new Map<number, AutoDrillMathfield>());
+  const acceptedLatexRef = useRef<Record<string, string>>({});
   const noticeTimerRef = useRef<number | null>(null);
   const selectedTheme = findTheme(webSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
 
@@ -399,6 +476,30 @@ export function AutoDrillApp({
       // Keep the in-memory preference usable when persistence is unavailable.
     }
   }, []);
+
+  useEffect(() => {
+    if (injectedEngine || typeof window === 'undefined') return undefined;
+    let cancelled = false;
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const preload = () => {
+      if (!cancelled) void preloadWorksheetUi();
+    };
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(preload, { timeout: 1_000 });
+      return () => {
+        cancelled = true;
+        idleWindow.cancelIdleCallback?.(handle);
+      };
+    }
+    const handle = window.setTimeout(preload, 500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [injectedEngine]);
 
   useEffect(() => {
     // Tests and embedders may inject a deterministic engine. The production
@@ -476,6 +577,7 @@ export function AutoDrillApp({
   const installWorksheet = useCallback((nextWorksheet: WorksheetDto, metadata: WorksheetMetadata) => {
     const nextAnswers = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, { type: 'empty' } satisfies AnswerNode]));
     answersRef.current = nextAnswers;
+    acceptedLatexRef.current = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, '']));
     setWorksheet(nextWorksheet);
     setWorksheetMetadata(metadata);
     setAnswers(nextAnswers);
@@ -520,26 +622,28 @@ export function AutoDrillApp({
     dismissNotice();
     setBusy(true);
     setSettingsBusyAction(printAfterGeneration ? 'print' : 'generate');
-    const pdfTarget = printAfterGeneration && typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+    const worksheetUiReady = printAfterGeneration ? null : preloadWorksheetUi();
     try {
       const seed = settings.seed === '' ? seedGenerator() : settings.seed;
       const metadata = createWorksheetMetadata(seed, dateGenerator());
       const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
+      const loadedWorksheetUi = worksheetUiReady ? await worksheetUiReady : null;
       // The Rust DTO remains the source of the problems. The spread adds the
       // exact seed used by this UI invocation when a fixture/runtime returns a
       // stale or normalized seed string.
       const nextWorksheet = { ...generatedWorksheet, seed };
-      if (printAfterGeneration) await openWorksheetPdf(nextWorksheet, pdfTarget, metadata);
+      if (printAfterGeneration) await openWorksheetPdfLazy(nextWorksheet, undefined, metadata);
       if (printAfterGeneration) {
         setWorksheet(nextWorksheet);
         setWorksheetMetadata(metadata);
         setScreen('settings');
       } else {
+        if (!loadedWorksheetUi) throw new Error('Worksheet UI failed to load.');
+        setWorksheetUi(loadedWorksheetUi);
         installWorksheet(nextWorksheet, metadata);
         setScreen('worksheet');
       }
     } catch (value) {
-      pdfTarget?.close();
       showEngineError(value);
     } finally {
       setBusy(false);
@@ -572,26 +676,42 @@ export function AutoDrillApp({
 
     const run = async () => {
       const previous = answersRef.current[problemId] ?? ({ type: 'empty' } satisfies AnswerNode);
+      const previousLatex = acceptedLatexRef.current[problemId] ?? answerNodeLatex(previous);
 
-      if (!mathfieldFitsProblem(mathfield, index)) {
-        mathfield.setValue(answerNodeLatex(previous), { silenceNotifications: true });
+      let answer: AnswerNode;
+      try {
+        // Parse first: AST-size rejection is independent of layout and should
+        // behave as an immediate NOP, without leaving the rejected value visible
+        // while waiting for animation frames.
+        answer = await engine.parseMathLiveAnswer(latex, problem.input_interface);
+      } catch (value) {
+        mathfield.setValue(previousLatex, { silenceNotifications: true });
+        if (value instanceof DrillEngineError && value.kind === 'answer_ast_size_limit') {
+          showEngineError(value);
+        }
+        return;
+      }
+
+      // MathLive updates its shadow DOM after the input event. Measure only
+      // after layout has settled; otherwise a deeply nested fraction can look
+      // small at measurement time and overflow the frame one paint later.
+      await waitForMathfieldLayout();
+      if (!resizeMathfieldFrameAndCheck(mathfield, index)) {
+        // Render-size rejection is also a true NOP. Restore the exact accepted
+        // LaTeX, not a normalized/reconstructed AnswerNode representation.
+        mathfield.setValue(previousLatex, { silenceNotifications: true });
+        await waitForMathfieldLayout();
+        resizeMathfieldFrameAndCheck(mathfield, index);
         setNotice('式が大きすぎます！');
         return;
       }
 
-      try {
-        const answer = await engine.parseMathLiveAnswer(latex, problem.input_interface);
-        const nextAnswers = { ...answersRef.current, [problemId]: answer };
-        answersRef.current = nextAnswers;
-        setAnswers(nextAnswers);
-        setError(null);
-        dismissNotice();
-      } catch (value) {
-        mathfield.setValue(answerNodeLatex(previous), { silenceNotifications: true });
-        if (value instanceof DrillEngineError && value.kind === 'answer_ast_size_limit') {
-          showEngineError(value);
-        }
-      }
+      acceptedLatexRef.current = { ...acceptedLatexRef.current, [problemId]: latex };
+      const nextAnswers = { ...answersRef.current, [problemId]: answer };
+      answersRef.current = nextAnswers;
+      setAnswers(nextAnswers);
+      setError(null);
+      dismissNotice();
     };
 
     const queued = actionQueueRef.current.then(run, run);
@@ -796,8 +916,9 @@ export function AutoDrillApp({
             onGenerate={() => void generate(false)}
             onPrint={() => void generate(true)}
           />
-        ) : worksheet ? (
+        ) : worksheet && worksheetUi ? (
           <WorksheetScreen
+            worksheetUi={worksheetUi}
             worksheet={worksheet}
             worksheetMetadata={worksheetMetadata}
             answers={answers}
@@ -818,7 +939,7 @@ export function AutoDrillApp({
             onRetryWorksheet={retryWorksheet}
             onDifferentWorksheet={() => void generateDifferentWorksheet()}
             onPrint={() => {
-              void Promise.resolve(openWorksheetPdf(worksheet, undefined, worksheetMetadata ?? undefined)).catch(showEngineError);
+              void openWorksheetPdfLazy(worksheet, undefined, worksheetMetadata ?? undefined).catch(showEngineError);
             }}
             onBack={backToTop}
           />
@@ -1034,12 +1155,13 @@ function SettingsScreen({
           </p>
         ) : null}
       </div>
-      <p className="settings-version" aria-label="AutoDrill alpha 1.1">AutoDrill alpha 1.1</p>
+      <p className="settings-version" aria-label={AUTODRILL_VERSION_LABEL}>{AUTODRILL_VERSION_LABEL}</p>
     </section>
   );
 }
 
 type WorksheetScreenProps = {
+  worksheetUi: WorksheetUiComponents;
   worksheet: WorksheetDto;
   worksheetMetadata: WorksheetMetadata | null;
   answers: Record<string, AnswerNode>;
@@ -1063,7 +1185,8 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+  const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
   const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
@@ -1140,6 +1263,7 @@ function WorksheetScreen({ worksheet, worksheetMetadata, answers, selectedIndex,
                   <span className="problem-number">{index + 1}.</span>
                   <span className="expression"><ProblemExpression problem={problem} /></span>
                   <WorksheetAnswerField
+                    worksheetUi={worksheetUi}
                     problem={problem}
                     index={index}
                     answer={answer}

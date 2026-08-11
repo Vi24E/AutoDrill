@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm contract:check && next dev",
-    "build": "pnpm contract:check && next build",
+    "dev": "../../scripts/ensure-next-dev-cache.sh && ../../scripts/ensure-wasm.sh && pnpm contract:check && next dev",
+    "build": "../../scripts/ensure-wasm.sh && pnpm contract:check && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "pnpm contract:check && tsc --noEmit",
@@ -14,20 +14,19 @@
   "dependencies": {
     "@fontsource/noto-sans-jp": "^5.3.0",
     "mathlive": "0.110.0",
-    "next": "^14.2.30",
-    "pdf-lib": "^1.17.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "next": "^16.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^22.10.2",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "^14.2.30",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.0",
     "jsdom": "^25.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",

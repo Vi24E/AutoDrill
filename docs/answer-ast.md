@@ -63,7 +63,7 @@ Serde表現は`type` discriminatorと`value` payloadを使用する。
 
 採点はnormalized valueが等しければ正解とする。ただし期待表現と実回答表現が異なり、実回答に簡約可能な冗長性がある場合は`GradeResult.warnings`へ安定した識別子を加える。
 
-| identifier | alpha 1.1表示 | 判定 |
+| identifier | alpha 1.2表示 | 判定 |
 |---|---|---|
 | `fraction_not_reduced` | 約分 | integer分子・分母の最大公約数が1より大きい |
 | `redundant_negative` | 冗長なマイナス | `negative`が負の表現をさらに包み、マイナスが2回ある |

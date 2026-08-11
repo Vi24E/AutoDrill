@@ -3,66 +3,11 @@
 import 'mathlive';
 import { useCallback, useEffect, useRef } from 'react';
 import type { MathfieldElement } from 'mathlive';
+import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
+
+export { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
 
 export type AutoDrillMathfield = MathfieldElement;
-
-const EMPTY_PLACEHOLDER_RE = /^\\placeholder(?:\[[^\]]*\])?\{\}$/;
-
-function rangeLatex(mathfield: MathfieldElement, start: number, end: number): string {
-  return mathfield.getValue([start, end]);
-}
-
-function isStructuredRangeLatex(latex: string): boolean {
-  return latex.includes('\\frac')
-    || latex.includes('\\sqrt')
-    || latex.startsWith('-')
-    || latex.startsWith('\\pm')
-    || latex.includes(',');
-}
-
-/**
- * MathLive keeps an empty placeholder alive when deleteBackward is invoked
- * inside it. Preserve AutoDrill's prior UX by selecting the smallest MathLive
- * structural range containing the active empty placeholder and deleting that
- * range. This uses only MathLive's public model/range APIs; no DOM overlays or
- * renderer-specific geometry are involved.
- */
-export function deleteEmptyMathLiveStructureBackward(mathfield: MathfieldElement): boolean {
-  const position = mathfield.position;
-  const lastOffset = mathfield.lastOffset;
-  let promptRange: [number, number] | null = null;
-
-  for (let width = 1; width <= lastOffset; width += 1) {
-    for (let start = Math.max(0, position - width); start <= position; start += 1) {
-      const end = start + width;
-      if (end > lastOffset || position < start || position > end) continue;
-      if (EMPTY_PLACEHOLDER_RE.test(rangeLatex(mathfield, start, end))) {
-        promptRange = [start, end];
-        break;
-      }
-    }
-    if (promptRange) break;
-  }
-  if (!promptRange) return false;
-
-  const [promptStart, promptEnd] = promptRange;
-  let structureRange: [number, number] | null = null;
-  let structureWidth = Number.POSITIVE_INFINITY;
-  for (let start = 0; start <= promptStart; start += 1) {
-    for (let end = promptEnd; end <= lastOffset; end += 1) {
-      const width = end - start;
-      if (width <= 0 || width >= structureWidth) continue;
-      const latex = rangeLatex(mathfield, start, end);
-      if (!isStructuredRangeLatex(latex)) continue;
-      structureRange = [start, end];
-      structureWidth = width;
-    }
-  }
-  if (!structureRange) return false;
-
-  mathfield.selection = { ranges: [structureRange], direction: 'none' };
-  return mathfield.executeCommand('deleteBackward');
-}
 
 export function MathLiveStatic({
   latex,
@@ -159,7 +104,7 @@ export function MathLiveAnswerInput({
         class={`answer-mathfield ${selected ? 'answer-mathfield-selected' : ''}`}
         role="textbox"
         aria-label={ariaLabel}
-        aria-readonly={readOnly}
+        aria-readonly={readOnly ? 'true' : 'false'}
         read-only={readOnly ? '' : undefined}
         onFocus={readOnly ? undefined : onSelect}
         onKeyDown={(event) => {

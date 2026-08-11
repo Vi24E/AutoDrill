@@ -317,6 +317,7 @@ pub enum Operation {
     },
     OverheadPf,
     OverheadGcd,
+    OverheadGcdDivisible,
     OverheadLcm,
     OverheadNegative,
     OverheadCarryPlus,
@@ -352,6 +353,10 @@ impl Operation {
             Self::TimeTen { exponent } => (OperationKind::TimeTen, f64::from(*exponent) + 5.0),
             Self::OverheadPf => (OperationKind::OverheadPf, 1.0),
             Self::OverheadGcd => (OperationKind::OverheadGcd, 1.0),
+            // If one GCD operand divides the other, the GCD is recognized as
+            // the smaller operand without a full divisor search. Keep the same
+            // tunable weight dimension but charge only one quarter of it.
+            Self::OverheadGcdDivisible => (OperationKind::OverheadGcd, 0.25),
             Self::OverheadLcm => (OperationKind::OverheadLcm, 1.0),
             Self::OverheadNegative => (OperationKind::OverheadNegative, 1.0),
             Self::OverheadCarryPlus => (OperationKind::OverheadCarryPlus, 1.0),
@@ -468,8 +473,10 @@ pub fn linear_equation_graph(
         let solved = constant
             .divide(coefficient)
             .expect("nonzero linear coefficient");
-        if solved.denominator > 1 && rational_division_requires_reduction(constant, coefficient) {
-            operations.push(Operation::OverheadGcd);
+        if solved.denominator > 1 {
+            if let Some(operation) = rational_division_reduction_operation(constant, coefficient) {
+                operations.push(operation);
+            }
         }
     }
     operations.extend(big_num_operations(answer));
@@ -498,55 +505,58 @@ fn rational_subtraction_operations(
     if left.numerator < 0 || right.numerator < 0 {
         operations.push(Operation::OverheadNegative);
     }
-    if result.denominator > 1 && rational_subtraction_requires_reduction(left, right) {
-        operations.push(Operation::OverheadGcd);
+    if result.denominator > 1 {
+        if let Some(operation) = rational_subtraction_reduction_operation(left, right) {
+            operations.push(operation);
+        }
     }
     operations
 }
 
-fn rational_division_requires_reduction(
-    dividend: RationalCoefficient,
-    divisor: RationalCoefficient,
-) -> bool {
-    let Some(reduced) = dividend.divide(divisor) else {
-        return false;
-    };
-    if reduced.denominator == 1 {
-        return false;
+fn reduction_gcd_operation(left: i64, right: i64) -> Option<Operation> {
+    let left = left.unsigned_abs();
+    let right = right.unsigned_abs();
+    if left == 0 || right == 0 || gcd_u64(left, right) <= 1 {
+        return None;
     }
-    let Some(raw_numerator) = dividend.numerator.checked_mul(divisor.denominator) else {
-        return false;
-    };
-    let Some(raw_denominator) = dividend.denominator.checked_mul(divisor.numerator) else {
-        return false;
-    };
-    raw_denominator != 0
-        && gcd_u64(raw_numerator.unsigned_abs(), raw_denominator.unsigned_abs()) > 1
+    if left.is_multiple_of(right) || right.is_multiple_of(left) {
+        Some(Operation::OverheadGcdDivisible)
+    } else {
+        Some(Operation::OverheadGcd)
+    }
 }
 
-fn rational_subtraction_requires_reduction(
+fn rational_division_reduction_operation(
+    dividend: RationalCoefficient,
+    divisor: RationalCoefficient,
+) -> Option<Operation> {
+    let reduced = dividend.divide(divisor)?;
+    if reduced.denominator == 1 {
+        return None;
+    }
+    let raw_numerator = dividend.numerator.checked_mul(divisor.denominator)?;
+    let raw_denominator = dividend.denominator.checked_mul(divisor.numerator)?;
+    if raw_denominator == 0 {
+        return None;
+    }
+    reduction_gcd_operation(raw_numerator, raw_denominator)
+}
+
+fn rational_subtraction_reduction_operation(
     left: RationalCoefficient,
     right: RationalCoefficient,
-) -> bool {
+) -> Option<Operation> {
     let denominator_gcd = gcd_u64(left.denominator as u64, right.denominator as u64);
     let left_scale = right.denominator / denominator_gcd as i64;
     let right_scale = left.denominator / denominator_gcd as i64;
-    let Some(left_numerator) = left.numerator.checked_mul(left_scale) else {
-        return false;
-    };
-    let Some(right_numerator) = right.numerator.checked_mul(right_scale) else {
-        return false;
-    };
-    let Some(raw_numerator) = left_numerator.checked_sub(right_numerator) else {
-        return false;
-    };
-    let Some(common_denominator) = left.denominator.checked_mul(left_scale) else {
-        return false;
-    };
-    let Some(reduced) = left.subtract(right) else {
-        return false;
-    };
-    reduced.denominator > 1 && gcd_u64(raw_numerator.unsigned_abs(), common_denominator as u64) > 1
+    let left_numerator = left.numerator.checked_mul(left_scale)?;
+    let right_numerator = right.numerator.checked_mul(right_scale)?;
+    let raw_numerator = left_numerator.checked_sub(right_numerator)?;
+    let common_denominator = left.denominator.checked_mul(left_scale)?;
+    let reduced = left.subtract(right)?;
+    (reduced.denominator > 1)
+        .then(|| reduction_gcd_operation(raw_numerator, common_denominator))
+        .flatten()
 }
 
 fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
@@ -648,15 +658,31 @@ fn arithmetic_expression_operations(
                     let mut ops = if left_value.is_integer() && right_value.is_integer() {
                         vec![Operation::BaseTimes]
                     } else {
-                        vec![Operation::BaseTimes, Operation::BaseTimes]
+                        // Fraction multiplication has two elementary products: numerator
+                        // and denominator. Multiplication by ±1 is a recognition/copy
+                        // operation rather than a full one-digit multiplication. Keeping
+                        // those costs distinct gives difficulty selection information that
+                        // was previously flattened by unconditional BaseTimes × 2.
+                        vec![
+                            rational_component_multiply_operation(
+                                left_value.numerator,
+                                right_value.numerator,
+                            ),
+                            rational_component_multiply_operation(
+                                left_value.denominator,
+                                right_value.denominator,
+                            ),
+                        ]
                     };
                     if left_value.numerator < 0 || right_value.numerator < 0 {
                         ops.push(Operation::OverheadNegative);
                     }
-                    if result.denominator > 1
-                        && rational_multiplication_requires_reduction(left_value, right_value)
-                    {
-                        ops.push(Operation::OverheadGcd);
+                    if result.denominator > 1 {
+                        if let Some(operation) =
+                            rational_multiplication_reduction_operation(left_value, right_value)
+                        {
+                            ops.push(operation);
+                        }
                     }
                     (result, ops)
                 }
@@ -666,10 +692,12 @@ fn arithmetic_expression_operations(
                     if left_value.numerator < 0 || right_value.numerator < 0 {
                         ops.push(Operation::OverheadNegative);
                     }
-                    if result.denominator > 1
-                        && rational_division_requires_reduction(left_value, right_value)
-                    {
-                        ops.push(Operation::OverheadGcd);
+                    if result.denominator > 1 {
+                        if let Some(operation) =
+                            rational_division_reduction_operation(left_value, right_value)
+                        {
+                            ops.push(operation);
+                        }
                     }
                     (result, ops)
                 }
@@ -707,44 +735,44 @@ fn rational_addition_operations(
     if left.numerator < 0 || right.numerator < 0 {
         operations.push(Operation::OverheadNegative);
     }
-    if result.denominator > 1 && rational_addition_requires_reduction(left, right) {
-        operations.push(Operation::OverheadGcd);
+    if result.denominator > 1 {
+        if let Some(operation) = rational_addition_reduction_operation(left, right) {
+            operations.push(operation);
+        }
     }
     operations
 }
 
-fn rational_addition_requires_reduction(
+fn rational_addition_reduction_operation(
     left: RationalCoefficient,
     right: RationalCoefficient,
-) -> bool {
+) -> Option<Operation> {
     let denominator_gcd = gcd_u64(left.denominator as u64, right.denominator as u64);
     let left_scale = right.denominator / denominator_gcd as i64;
     let right_scale = left.denominator / denominator_gcd as i64;
     let raw_numerator = left
         .numerator
-        .checked_mul(left_scale)
-        .and_then(|value| value.checked_add(right.numerator.checked_mul(right_scale)?));
-    let common_denominator = left.denominator.checked_mul(left_scale);
-    match (raw_numerator, common_denominator) {
-        (Some(numerator), Some(denominator)) => {
-            gcd_u64(numerator.unsigned_abs(), denominator as u64) > 1
-        }
-        _ => false,
+        .checked_mul(left_scale)?
+        .checked_add(right.numerator.checked_mul(right_scale)?)?;
+    let common_denominator = left.denominator.checked_mul(left_scale)?;
+    reduction_gcd_operation(raw_numerator, common_denominator)
+}
+
+fn rational_component_multiply_operation(left: i64, right: i64) -> Operation {
+    if left.unsigned_abs() == 1 || right.unsigned_abs() == 1 {
+        Operation::Identity
+    } else {
+        Operation::BaseTimes
     }
 }
 
-fn rational_multiplication_requires_reduction(
+fn rational_multiplication_reduction_operation(
     left: RationalCoefficient,
     right: RationalCoefficient,
-) -> bool {
-    let raw_numerator = left.numerator.checked_mul(right.numerator);
-    let raw_denominator = left.denominator.checked_mul(right.denominator);
-    match (raw_numerator, raw_denominator) {
-        (Some(numerator), Some(denominator)) => {
-            gcd_u64(numerator.unsigned_abs(), denominator as u64) > 1
-        }
-        _ => false,
-    }
+) -> Option<Operation> {
+    let raw_numerator = left.numerator.checked_mul(right.numerator)?;
+    let raw_denominator = left.denominator.checked_mul(right.denominator)?;
+    reduction_gcd_operation(raw_numerator, raw_denominator)
 }
 
 fn integer_signed_addition_operations(left: i64, right: i64) -> Vec<Operation> {
@@ -850,3 +878,54 @@ fn validate_nonnegative_finite(value: f64) -> Result<(), WeightError> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("operation weight or multiplier must be finite and nonnegative")]
 pub struct WeightError;
+
+#[cfg(test)]
+mod fraction_multiplication_tests {
+    use super::*;
+
+    fn rational(numerator: i64, denominator: i64) -> RationalCoefficient {
+        RationalCoefficient::new(numerator, denominator).unwrap()
+    }
+
+    fn multiply(left: RationalCoefficient, right: RationalCoefficient) -> ArithmeticExpression {
+        ArithmeticExpression::Binary {
+            operator: ArithmeticOperator::Multiply,
+            left: Box::new(ArithmeticExpression::Rational { value: left }),
+            right: Box::new(ArithmeticExpression::Rational { value: right }),
+        }
+    }
+
+    #[test]
+    fn fraction_multiplication_treats_one_times_n_as_identity_cost() {
+        let (_, easy) =
+            arithmetic_expression_operations(&multiply(rational(1, 2), rational(1, 2))).unwrap();
+        assert_eq!(easy, vec![Operation::Identity, Operation::BaseTimes]);
+
+        let (_, harder) =
+            arithmetic_expression_operations(&multiply(rational(2, 3), rational(3, 4))).unwrap();
+        assert_eq!(
+            harder,
+            vec![
+                Operation::BaseTimes,
+                Operation::BaseTimes,
+                Operation::OverheadGcdDivisible
+            ]
+        );
+    }
+
+    #[test]
+    fn divisible_gcd_reduction_is_cheaper_than_general_gcd_reduction() {
+        let easy = reduction_gcd_operation(6, 12).unwrap();
+        let general = reduction_gcd_operation(12, 90).unwrap();
+        assert_eq!(easy, Operation::OverheadGcdDivisible);
+        assert_eq!(general, Operation::OverheadGcd);
+
+        let weights = OperationWeights::default();
+        let easy_effort = calculate_graph_effort(&operations_graph(vec![easy]), &weights).value;
+        let general_effort =
+            calculate_graph_effort(&operations_graph(vec![general]), &weights).value;
+        assert_eq!(easy_effort, weights.get(OperationKind::OverheadGcd) * 0.25);
+        assert_eq!(general_effort, weights.get(OperationKind::OverheadGcd));
+        assert!(easy_effort < general_effort);
+    }
+}

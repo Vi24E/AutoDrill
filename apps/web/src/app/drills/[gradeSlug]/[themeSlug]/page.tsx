@@ -14,7 +14,7 @@ type UnitPageParams = {
 };
 
 type UnitPageProps = {
-  params: UnitPageParams;
+  params: Promise<UnitPageParams>;
 };
 
 export const dynamicParams = false;
@@ -26,8 +26,9 @@ export function generateStaticParams(): UnitPageParams[] {
   }));
 }
 
-export function generateMetadata({ params }: UnitPageProps): Metadata {
-  const theme = findImplementedThemeByRoute(params.gradeSlug, params.themeSlug);
+export async function generateMetadata({ params }: UnitPageProps): Promise<Metadata> {
+  const { gradeSlug, themeSlug } = await params;
+  const theme = findImplementedThemeByRoute(gradeSlug, themeSlug);
   if (!theme) notFound();
   return {
     title: theme.search.title,
@@ -35,8 +36,9 @@ export function generateMetadata({ params }: UnitPageProps): Metadata {
   };
 }
 
-export default function UnitPage({ params }: UnitPageProps) {
-  const theme = findImplementedThemeByRoute(params.gradeSlug, params.themeSlug);
+export default async function UnitPage({ params }: UnitPageProps) {
+  const { gradeSlug, themeSlug } = await params;
+  const theme = findImplementedThemeByRoute(gradeSlug, themeSlug);
   if (!theme) notFound();
   return <AutoDrillApp initialWebSettings={createWebDrillSettings(theme)} />;
 }

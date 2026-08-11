@@ -43,24 +43,10 @@ export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorks
   };
 }
 
-export function getCellPosition(
-  model: SharedWorksheetLayout,
-  cell: ProblemCell,
-): { x: number; y: number; width: number; height: number } {
-  const top = getCellTopPosition(model, cell);
-  return {
-    ...top,
-    // pdf-lib uses a bottom-origin y coordinate while the shared row model
-    // (and the Web CSS grid) counts from the top. Flip the row's top-origin
-    // offset so row 0 is physically above row 9 on the PDF page.
-    y: model.page.height - top.y - top.height,
-  };
-}
-
 /**
  * Return a cell in the top-origin coordinate system used by CSS layout.
- * Keeping this beside the PDF bottom-origin conversion makes the A4 margins,
- * reserved top/bottom areas, row order, and cell sizes one shared contract.
+ * The interactive worksheet and browser-native print DOM both consume this
+ * top-origin A4 geometry, so row order, margins, and cell sizes stay in one contract.
  */
 export function getCellTopPosition(
   model: SharedWorksheetLayout,

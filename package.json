@@ -1,7 +1,10 @@
 {
   "name": "autodrill",
   "private": true,
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "pnpm --filter @autodrill/web dev",
     "build": "pnpm --filter @autodrill/web build",
@@ -10,6 +13,8 @@
     "test": "pnpm --filter @autodrill/web test",
     "verify:next-output": "./scripts/verify-next-output-isolation.sh",
     "contract:check": "node scripts/sync-web-contract.mjs",
-    "contract:generate": "node scripts/sync-web-contract.mjs --write"
+    "contract:generate": "node scripts/sync-web-contract.mjs --write",
+    "wasm:ensure": "./scripts/ensure-wasm.sh",
+    "dev:cache": "./scripts/ensure-next-dev-cache.sh"
   }
 }

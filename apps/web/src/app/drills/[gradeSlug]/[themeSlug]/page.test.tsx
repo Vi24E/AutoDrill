@@ -8,8 +8,10 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+const params = (gradeSlug: string, themeSlug: string) => Promise.resolve({ gradeSlug, themeSlug });
+
 describe('implemented unit route', () => {
-  it('pre-renders and preselects every implemented unit from the registry', () => {
+  it('pre-renders and preselects every implemented unit from the registry', async () => {
     expect(dynamicParams).toBe(false);
     expect(generateStaticParams()).toEqual([
       { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' },
@@ -25,7 +27,7 @@ describe('implemented unit route', () => {
       { gradeSlug: 'grade-7', themeSlug: 'linear-equation-2' },
     ]);
 
-    const page = UnitPage({ params: { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' } });
+    const page = await UnitPage({ params: params('grade-1', 'one-digit-addition') });
     expect(page.props.initialWebSettings).toEqual({
       schema_version: 3,
       numeric_theme_id: 1,
@@ -33,24 +35,24 @@ describe('implemented unit route', () => {
       difficulty: 3,
       seed: '',
     });
-    expect(generateMetadata({ params: { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition' } })).toMatchObject({
+    await expect(generateMetadata({ params: params('grade-1', 'one-digit-addition') })).resolves.toMatchObject({
       title: '一桁の足し算 | AutoDrill',
     });
 
-    const linear1 = UnitPage({ params: { gradeSlug: 'grade-7', themeSlug: 'linear-equation-1' } });
+    const linear1 = await UnitPage({ params: params('grade-7', 'linear-equation-1') });
     expect(linear1.props.initialWebSettings).toMatchObject({
       numeric_theme_id: 2,
       themeKey: 'jp.grade7.equation.linear.1',
     });
-    expect(generateMetadata({ params: { gradeSlug: 'grade-7', themeSlug: 'linear-equation-2' } })).toMatchObject({
+    await expect(generateMetadata({ params: params('grade-7', 'linear-equation-2') })).resolves.toMatchObject({
       title: '一次方程式(2) | AutoDrill',
     });
   });
 
-  it('404s Dummy and arbitrary unimplemented routes before metadata or UI discovery', () => {
-    const dummy = { params: { gradeSlug: 'grade-2', themeSlug: 'Dummy1' } };
-    expect(() => UnitPage(dummy)).toThrow('NEXT_NOT_FOUND');
-    expect(() => generateMetadata(dummy)).toThrow('NEXT_NOT_FOUND');
-    expect(() => UnitPage({ params: { gradeSlug: 'grade-1', themeSlug: 'missing' } })).toThrow('NEXT_NOT_FOUND');
+  it('404s Dummy and arbitrary unimplemented routes before metadata or UI discovery', async () => {
+    const dummy = { params: params('grade-2', 'Dummy1') };
+    await expect(UnitPage(dummy)).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(generateMetadata(dummy)).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(UnitPage({ params: params('grade-1', 'missing') })).rejects.toThrow('NEXT_NOT_FOUND');
   });
 });

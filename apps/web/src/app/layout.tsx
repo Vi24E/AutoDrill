@@ -9,5 +9,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ja"><body>{children}</body></html>;
+  return (
+    <html lang="ja">
+      {/* Accessibility/reading extensions can add attributes directly to body
+          before React hydrates. Those attributes are outside AutoDrill's state
+          and should not turn an otherwise valid page into a hydration warning. */}
+      <body suppressHydrationWarning>{children}</body>
+    </html>
+  );
 }

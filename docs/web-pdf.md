@@ -1,126 +1,85 @@
-# Web / PDF boundary (alpha 1.1)
+# Web / PDF boundary (alpha 1.2)
 
-The web app is a Next.js 14 client under `apps/web`. q1 supports a default
-recommended `genre → theme` selection and a `grade → genre → theme` selection
-for grades 1 through 9. Implemented themes are declared once in
-`src/domain/theme-registry.ts`; `curriculum.ts`, routes, sitemap, worksheet copy,
-layout expectations, prompt kind, answer schema kind, and input capabilities are
-derived from that registry. Recommended may regroup the same canonical themes
-without duplicating them. Unimplemented Dummy themes disable generation and
-printing and never receive a route or sitemap entry. Difficulty 1 through 5 is
-sent unchanged to Rust.
+## Theme registry
 
-The interactive client has
-three observable states: settings (q1), the answer worksheet (q2), and a
-separate browser PDF tab (q3). q1 generation enters q2; q1 print generates and
-opens q3; q2 print uses the same `openWorksheetPdf` pipeline; and TOPに戻る
-returns to q1. q2 enters with no selected problem and no keypad/control panel;
-clicking a problem row reveals the panel, and Enter advances selection while
-keeping the panel visible for the next problem.
+Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイルとして定義します。各`ThemeDefinition`がroute、学年・ジャンル、worksheet表示、input capability、Rust compatibility identityを所有し、`src/domain/theme-registry.ts`は列挙とlookupだけを担当します。
 
-The only seed input is on q1. An empty value is resolved at button-click time
-through the injectable `seedGenerator` (Web Crypto `getRandomValues` first, a
-same-alphabet/counter fallback otherwise); automatic seeds are exactly four
-characters from `1-9`, `a-z`, and `A-Z` with `I`, `l`, and `O` excluded. A valid
-non-empty value is one to sixteen characters from that alphabet and is passed
-unchanged. q1 generation and q1 print each resolve a new blank-field seed,
-while q2 print reuses the worksheet already in state. The exact resolved seed
-and the local `YYYY-MM-DD` generation date are held in `WorksheetMetadata`; q2
-has no seed input and displays this metadata in its paper footer. The Rust
-identity boundary rejects invalid characters and 17+ characters with a typed
-invalid request. Detailed q1 validation presentation remains a future UI
-refinement.
+`curriculum.ts`、単元route、sitemap、worksheet copy、layout、WASM response validationは同じdefinitionを参照します。未実装`Dummy1`は生成・印刷・route・sitemapを持ちません。
+
+## q1 / q2 / q3
+
+- q1: 設定画面。おすすめまたは学年からthemeを選択し、difficulty/Seedを指定する。
+- q2: Web回答画面。MathLiveで入力し、Rust/WASMへ解析・採点を委譲する。
+- q3: browser内で生成したPDFを別tabへ開く。
+
+空Seedはbutton click時に自動生成され、q2/PDF metadataは同じresolved Seedを保持します。
 
 ## WASM adapter
 
-`src/domain/wasm-adapter.ts` is the only production boundary for mathematical input and grading.
-It calls the generated runtime methods `generate_worksheet`, `parse_mathlive_answer`,
-`apply_editor_action`, and `grade_answer` with schema-v3 JSON DTO strings. Web editing is rendered
-by MathLive, but every MathLive LaTeX snapshot crosses `parse_mathlive_answer` before becoming an
-`AnswerNode`; MathLive is never the grading or normalization authority. `apply_editor_action` remains
-a versioned Rust editor API for compatible callers/tests, but the worksheet UI does not mirror MathLive's
-caret/model through it. The single-problem `generate_problem` export is also part of the Rust/WASM package
-for direct callers; it is not substituted for worksheet generation. The adapter unwraps
-`{schema_version, ok, data, error}` and
-maps `generation_timeout` and `generation_attempt_limit` to distinct errors.
-Worksheet grading is only sequencing: one `grade_answer` request per problem
-with `{expected: problem.canonical_answer, actual: editorState.answer, answer_schema: problem.answer_schema}`.
-The schema carries representation policy such as the reduced-fraction requirement; Web does not
-reimplement generation, normalization, effort, or correctness rules.
+`src/domain/wasm-adapter.ts`がproductionの数学境界です。schema-v3 JSON DTOを使い、以下をRust/WASMへ委譲します。
 
-All schema-v3 mathematical `i64`/`u64` payloads that may exceed JavaScript's
-safe integer range cross JSON as canonical decimal strings. This includes
-AnswerNode integer/coefficient values, integer answer-schema bounds, and
-BigNum magnitudes. The adapter validates format and range without converting
-them to JavaScript `number`; only scalar effort/vector quantities use numbers.
+- worksheet generation
+- MathLive LaTeX → AnswerNode
+- legacy typed editor action
+- grading
 
-MathLive owns Web caret movement, placeholder navigation, fraction/root layout, and editable rendering.
-Problem `input_interface` still owns capabilities: the Web palette exposes only allowed controls, and Rust
-validates every parsed `AnswerNode` against that interface. Unsupported physical input therefore cannot
-become an accepted typed answer; the UI restores the last Rust-authorized tree on adapter rejection.
-`nan_error` is the bounded Rust representation for parseable-as-text but non-numeric input and is never
-coerced to a JavaScript number. The MathLive adapter accepts the small LaTeX language represented by
-`AnswerNode`, including MathLive's canonical one-token forms such as `\frac72` and `\sqrt2`.
+Webはnormalization、正誤判定、effort、generator条件を再実装しません。
 
-The MathLive worksheet stores the Rust-authorized `AnswerNode` directly and sends that node to grading; it does
-not manufacture a legacy `EditorState` merely to satisfy the old cursor DTO. `EditorState.active_path`/`cursor`
-remain confined to the legacy `apply_editor_action` boundary and its compatibility tests, while MathLive owns
-selection. Empty structured Backspace compatibility uses MathLive's public range/selection/command API and
-explicitly re-parses the resulting field value so the stored `AnswerNode` cannot lag behind the visible field.
+`i64`/`u64`のexact payloadはcanonical decimal stringでJSON越境し、JavaScript `number`へ落としません。effort/vectorの評価値のみ有限`number`を許可します。
 
+## MathLive
 
-The runtime is intentionally injected as `window.__AUTODRILL_WASM__`. The
-`src/wasm/load-generated.ts` seam loads the ignored package emitted under
-`public/wasm/pkg` by `scripts/build-wasm.sh`; `AutoDrillApp` attaches its exports
-to the global on the client when no engine is injected. Tests use an explicit fake
-engine fixture and do not become a production fallback.
+MathLiveはcaret、placeholder、fraction/root layout、editable renderingを所有します。各input snapshotはFIFO queueでRustの`parse_mathlive_answer`へ送り、Rustが承認したAnswerNodeのみstateへ保存します。
 
-`scripts/build-wasm.sh` performs a target/tooling preflight and invokes
-`wasm-pack --mode no-install`; it never installs a Rust target or a CLI. The
-受入環境 uses Rust/Cargo 1.97.1 with `wasm32-unknown-unknown`, `wasm-pack
-0.13.1`, and `wasm-bindgen 0.2.126`; the generated package loaded in the
-browser after the wasm32 clock switched to `performance.now()`. `BrowserClock`
-latched any host-clock throw, non-finite sample, backward sample, or first-read
-failure and the generation boundary returned the typed `generation_timeout`
-envelope for those failures; native callers continue to use `SystemClock`.
+Rust parserはAnswer AST sizeに加え、raw LaTeX長・structure nestingをparse前に検査します。過度に深いinputはrecursive parserへ入る前に`answer_ast_size_limit`として拒否します。
 
-## Shared layout and PDF
+## Responsive worksheet
 
-`src/domain/layout.ts` owns A4 geometry and consumes the theme registry's
-`columns × rows` layout. One-digit addition is 2×10; both linear-equation themes
-are 2×8. The q2 paper converts the same top-origin cell positions to page-relative
-CSS percentages, while the PDF renderer converts them to pdf-lib's bottom-origin
-coordinates. Thus order, margins, row heights, and the central divider have one
-serializable source of truth. `src/domain/problem-format.ts` is the shared typed
-prompt→expression formatter used by Web and PDF, so equation text is not independently
-reimplemented. For linear equations the expression is placed at the upper-left of
-each cell and `x = [ ]` at the lower-right; the selected answer is scrolled above
-the fixed keyboard before editing. Page one has empty answer boxes; page two contains
-answers and has a 180° page rotation. Bytes are
-generated client-side with `pdf-lib`, converted to a Blob, and navigated to via
-a Blob URL. The q1 path opens a blank tab synchronously before the asynchronous
-WASM generation so normal popup blocking does not discard the result.
+PDFは固定A4 geometryを使いますが、Web回答画面は固定720px canvasを要求しません。
 
-The same metadata is passed to both PDF pages. The problem page draws its small
-ASCII `date: ... / seed: ...` footer at the unrotated bottom-right. Because the
-answer page is rotated 180°, its footer is drawn at the unrotated top-left;
-after rotation it is physically bottom-right and remains readable. The pure
-`getFooterPosition`/`getFooterPhysicalBounds` helpers make this transform
-explicit and are covered by PDF tests.
+```css
+.paper {
+  width: min(720px, 100%);
+  min-width: 0;
+}
+```
 
-Accepted MathLive input snapshots and commit operations use a FIFO queue in the q2 client. The grading
-path awaits that queue and reads the latest Rust-authorized answer ref before sending the request, so a
-delayed `parse_mathlive_answer` result cannot be omitted by an immediately-following grade click.
+cellはshared A4 modelをpercentage座標へ変換するため、viewportが狭い場合も同じ問題順を保ったまま縮みます。入力panelはfixed bottomのままsafe-areaを考慮します。
 
-## Dependencies and licensing
+## Shared math formatting
 
-- Next.js, React, MathLive, Vitest, and Testing Library: MIT. TypeScript: Apache-2.0.
-  Their upstream license metadata is retained by the package manager.
-- `pdf-lib`: MIT; used entirely in the browser, with no server or external
-  service.
-- `@fontsource/noto-sans-jp`: SIL Open Font License 1.1; bundled locally for
-  the web UI. The PDF uses the PDF standard Helvetica font, so PDF generation
-  has no runtime font fetch or network dependency.
+数式のsourceはRust DTOから`mathlive-format.ts`が作るLaTeXです。Web表示と印刷/PDFは別々の数式rendererを持たず、どちらもMathLive 0.110.0へ同じLaTeXを渡します。
 
-The `pnpm-workspace.yaml` allow-list covers only local native build helpers
-(`esbuild`, `unrs-resolver`) needed by the development toolchain.
+Webでは`ProblemExpression` / `MathLiveStatic`が`<math-span>`を使います。印刷用DOMでも**同じReact componentをそのまま再利用**します。したがってfraction、root、exponent、括弧、operator spacing、baseline等はMathLiveが一元的に所有し、PDF側にfraction lineやminus記号の座標実装はありません。将来expression ASTが複雑化しても、MathLiveが扱えるLaTeXなら印刷側の追加実装は不要です。
+
+`problem-format.ts`のsemantic tokenはaccessible plain text等には残しますが、数式のvisual renderingには使いません。
+
+## PDF / 印刷
+
+`src/pdf/worksheet-pdf.tsx`はPDF primitiveを描画せず、Webと同じshared layout/theme metadataから印刷専用の2page A4 React DOMを作ります。
+
+- page 1: 問題、Webと同系統のanswer box
+- page 2: 解答。既存の両面印刷仕様により180°rotation
+- 20問theme: 2列×10行
+- 16問theme: 2列×8行
+- title/instruction: Web ThemeDefinitionと同一
+- footer: date / Seed
+- 数式: `ProblemExpression` / `MathLiveStatic`をWebと共有
+
+MathLive custom elementのrender完了と`document.fonts.ready`を待った後、`window.print()`でブラウザ標準の印刷ダイアログを開きます。PDF保存はブラウザの「PDFに保存」を利用します。この経路により、Chrome等の印刷エンジンが実際のWeb DOM/CSS/fontをPDFへ変換します。
+
+旧`pdf-lib`、`@pdf-lib/fontkit`、`src/pdf/math-renderer.ts`、PDF専用Noto Sans JP shard/mapは削除しました。日本語もWebが通常利用している`@fontsource/noto-sans-jp`をそのまま印刷します。外部font/CDN通信はありません。
+
+印刷moduleは操作時のみdynamic importするため、設定画面のfirst paintへ印刷コードを載せません。印刷操作は直接`window.print()`へ進まず、同じ2page A4 DOMを使うin-app previewを先に表示し、preview内の「印刷する」でnative print/PDFへ進みます。
+
+## Tests
+
+unit testは全11 registered themeについて2page print DOMを生成し、各問題式・解答が`math-span`（Webと同じMathLive static element）へ投影されることを確認します。fraction代表例は`1/3 + 1/4`がslash textへflattenされずLaTeXのままMathLiveへ渡ることも確認します。browser acceptanceではactual Chromeで`Page.printToPDF`を実行し、2page PDF、全MathLive shadow render完了、数式とanswer boxのoverlap/clippingなしを確認します。
+
+印刷UIのintegration testはPDF moduleをmockせず、主要な到達経路を状態遷移ごとに通します。現在の必須経路は、設定画面→印刷preview、preview→native印刷、worksheet editing→preview→戻る、answer input選択中→preview→戻る、graded worksheet→preview→戻るです。各経路でpreview表示前に`window.print()`が呼ばれないこと、戻った後に元のworksheet状態が維持されることも確認します。
+
+## Security boundary
+
+Next responseにはCSPと基本security headersを設定します。production CSPはresource originを`self`中心に制限し、object/frame/base injectionをdenyします。MathLive/Next hydration/WASMに必要なinline script/styleと`wasm-unsafe-eval`だけを許可します。
+
+app codeはuser textを`dangerouslySetInnerHTML`へ渡しません。MathLiveのraw stringは採点authorityではなく、Rust parser/capability validationを通過したAnswerNodeだけが採点へ進みます。

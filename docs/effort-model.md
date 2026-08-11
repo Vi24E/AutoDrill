@@ -6,6 +6,8 @@ Effortは標準解法graph、denseなoperation vector、重みを分離する。
 
 算術追加テーマも同じoperationを再利用する。一桁引き算は`BaseMinus`と必要な借り`Decrement + OverheadCarryMinus`、二桁加算は各桁の`BasePlus`と1の位/10の位それぞれの繰り上がりを記録する。負の数(1)/(2)と分数加算/減算/乗算はtyped arithmetic ASTをbottom-upに評価し、各binary operationの標準cost、必要な`OverheadNegative`、通分`OverheadLCM`、約分`OverheadGCD`を加え、最後に正解ASTの`BigNum`を加える。**九九だけは製品仕様上の例外で、`BaseTimes`を記録せず正解`c`の`BigNum(c)`だけを持つため、既定重みではeffort=`log10(c)`となる。**
 
+分数の掛け算では分子同士・分母同士を別operationとして数える。通常の一桁積は`BaseTimes`だが、一方が`1`（符号を無視して`±1`）なら転記に近い操作として`Identity`を使う。 また、GCDを求める2数`a,b`について`a|b`または`b|a`なら、小さい方がそのままGCDだと認識できるため`OverheadGcd`の通常コストの1/4だけを課す。たとえば`1/2 × 1/2`の積部分は`Identity + BaseTimes`、`2/3 × 3/4`は`BaseTimes + BaseTimes`であり、後者には必要なら`OverheadGCD`も加わる。これにより旧実装の一律`BaseTimes × 2`で失われていた難易度差をoperation vectorへ残す。
+
 一次方程式`ax+b=cx+d`はcurriculum.mdの標準解法に従い、まず`A=a-c`、`B=d-b`として`Ax=B`へ整理し、最後に`x=B/A`とする。graphは`OverheadLinear`を1回、実際に辺をまたぐ非零項ごとに`Transposition`、係数・定数をまとめるexactな加減算、最後の`BaseDivide`を記録する。分母が異なる有理係数の整理には`OverheadLCM`と必要な乗算、非自明な分数簡約には`OverheadGCD`を加える。`A=0`のcandidateはgeneratorで除算前に棄却するためeffort graphへ入らない。正解の整数成分は既存の`BigNum`規則で加算する。
 
 ## Dense vector order and base weights
@@ -46,6 +48,6 @@ Parameterized operationはvector側に重みが掛かるquantityを蓄積する�
 
 ## Weight composition
 
-`WeightProfile`はgrade、theme、masteryの3つの倍率layerを持ち、`resolved = base × grade × theme × mastery`として成分ごとに合成する。Alpha 1.1は全layerをidentity 1.0とする。Registryの`operation_weight_overrides`はtheme layerだけを上書きするため、将来のテーマ調整でもgraphやvectorを複製しない。
+`WeightProfile`はgrade、theme、masteryの3つの倍率layerを持ち、`resolved = base × grade × theme × mastery`として成分ごとに合成する。Alpha 1.2は全layerをidentity 1.0とする。Registryの`operation_weight_overrides`はtheme layerだけを上書きするため、将来のテーマ調整でもgraphやvectorを複製しない。
 
 `OverheadNegative`は負号表示のcostではなく、負のoperandを含む演算ごとに1回加える。唯一の一般形の例外は、正の`a`、`b`に対する構造的な`a + (-b)`で、`a > b`、`a = b`、`a < b`のいずれでも`a - b`への読み替えとして0回とする。順序を区別するため`(-b) + a`は1回、`a - (-b)`も正の加算へ書き換えても1回、その他の負のoperandを含む演算も1回である。単独の`-0.57`は演算ではないため0で、BigNum(57)だけを数える。
