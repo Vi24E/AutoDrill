@@ -14,7 +14,7 @@ import { ALL_MATH_STRUCTURES } from '@/domain/theme-registry';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 6, 9, 11, 10, 7, 8, 2, 3]);
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 6, 13, 17, 9, 18, 11, 10, 12, 7, 8, 2, 3, 19, 14, 15, 16, 20]);
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 3,
@@ -39,26 +39,28 @@ describe('Web curriculum registry', () => {
     }
   });
 
-  it('exposes exactly the five requested Recommended sections and defaults to addition', () => {
+  it('exposes the implemented Recommended sections and defaults to addition', () => {
     expect(DEFAULT_WEB_DRILL_SETTINGS).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       numeric_theme_id: ONE_DIGIT_ADDITION_THEME.numeric_theme_id,
       themeKey: ONE_DIGIT_ADDITION_THEME.themeKey,
-      difficulty: 3,
+      difficulty: 2,
       seed: '',
     });
     expect(RECOMMENDED_GENRES.map(({ genreKey, label }) => ({ genreKey, label }))).toEqual([
       { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
       { genreKey: 'multiplication-and-division', label: '掛け算と割り算' },
+      { genreKey: 'decimals', label: '小数' },
       { genreKey: 'fractions', label: '分数' },
       { genreKey: 'negative-numbers', label: '負の数' },
       { genreKey: 'equation', label: '方程式' },
+      { genreKey: 'bonus', label: 'おまけ' },
     ]);
-    expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes)).toEqual(IMPLEMENTED_THEMES);
+    expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes).map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b));
   });
 
   it('never exposes negative input capability for elementary-school themes', () => {
-    const elementary = IMPLEMENTED_THEMES.filter((theme) => Number(theme.grade.slug.slice(6)) <= 6);
+    const elementary = IMPLEMENTED_THEMES.filter((theme) => theme.grade && Number(theme.grade.slug.slice(6)) <= 6);
     expect(elementary.length).toBeGreaterThan(0);
     for (const theme of elementary) {
       if (theme.inputInterface.type === 'simple_numeric') {
@@ -70,7 +72,7 @@ describe('Web curriculum registry', () => {
     }
   });
 
-  it('maps grade-1 through grade-9 and places equations under 中1 / 一次方程式', () => {
+  it('maps grade-1 through grade-9 with at least one implemented theme in every grade', () => {
     expect(CURRICULUM_TREE.map((grade) => grade.slug)).toEqual([
       'grade-1', 'grade-2', 'grade-3', 'grade-4', 'grade-5',
       'grade-6', 'grade-7', 'grade-8', 'grade-9',
@@ -84,16 +86,19 @@ describe('Web curriculum registry', () => {
     expect(equations.label).toBe('一次方程式');
     expect(equations.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
 
-    const dummyThemes = CURRICULUM_TREE.flatMap((grade) => grade.genres)
-      .flatMap((genre) => genre.themes)
-      .filter((theme) => !theme.implemented);
-    expect(dummyThemes).toHaveLength(9);
+    for (const grade of CURRICULUM_TREE) {
+      expect(grade.genres.length, grade.label).toBeGreaterThan(0);
+      expect(grade.genres.flatMap((genre) => genre.themes).every((theme) => theme.implemented), grade.label).toBe(true);
+    }
+    const grade8 = CURRICULUM_TREE[7]!;
+    const simultaneous = grade8.genres.find((genre) => genre.genreKey === 'simultaneous-equation')!;
+    expect(simultaneous.label).toBe('連立方程式');
+    expect(simultaneous.themes.map((theme) => theme.label)).toEqual(['連立方程式(1)']);
   });
 
   it('resolves all implemented public routes', () => {
     for (const theme of IMPLEMENTED_THEMES) {
       expect(findImplementedThemeByRoute(theme.route.gradeSlug, theme.route.themeSlug)).toBe(theme);
     }
-    expect(findImplementedThemeByRoute('grade-2', 'Dummy1')).toBeUndefined();
   });
 });

@@ -17,11 +17,10 @@ export type GradeNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type GradeSlug = `grade-${GradeNumber}`;
 
 export const DIFFICULTY_OPTIONS = [
-  { value: 1, label: '1: とてもやさしい' },
-  { value: 2, label: '2: やさしい' },
-  { value: 3, label: '3: ふつう' },
-  { value: 4, label: '4: むずかしい' },
-  { value: 5, label: '5: とてもむずかしい' },
+  { value: 1, label: 'かんたん' },
+  { value: 2, label: 'ふつう' },
+  { value: 3, label: 'むずかしい' },
+  { value: 4, label: 'ランダム' },
 ] as const satisfies readonly { value: DifficultyLevel; label: string }[];
 
 export type UnitRoute = ThemeDefinition['route'];
@@ -101,30 +100,11 @@ const GRADE_LABELS = [
   '中学3年生',
 ] as const;
 
-function createDummyGenre(grade: GradeNumber): CurriculumGenre {
-  const theme: UnimplementedCurriculumTheme = {
-    numeric_theme_id: 100 + grade,
-    themeKey: `dummy.grade-${grade}.theme-1`,
-    label: 'Dummy1',
-    implemented: false,
-    generator_revision: null,
-    problemCount: null,
-    layout: null,
-    route: null,
-    search: null,
-    compatibility: null,
-  };
-  return {
-    genreKey: `dummy-grade-${grade}-genre-1`,
-    label: 'Dummy1',
-    themes: [theme],
-  };
-}
-
 function implementedGenresForGrade(gradeSlug: GradeSlug): CurriculumGenre[] {
-  const themes = IMPLEMENTED_THEMES.filter((theme) => theme.grade.slug === gradeSlug);
+  const themes = IMPLEMENTED_THEMES.filter((theme) => theme.grade?.slug === gradeSlug);
   const groups = new Map<string, CurriculumGenre>();
   for (const theme of themes) {
+    if (!theme.gradeGenre) continue;
     const key = theme.gradeGenre.genreKey;
     const existing = groups.get(key);
     if (existing) {
@@ -142,12 +122,12 @@ export const CURRICULUM_TREE: readonly CurriculumGrade[] = GRADE_LABELS.map((lab
   return {
     slug,
     label,
-    genres: [...implementedGenresForGrade(slug), createDummyGenre(grade)],
+    genres: implementedGenresForGrade(slug),
   };
 });
 
 export const ADDITION_AND_SUBTRACTION_GENRE: CurriculumGenre = CURRICULUM_TREE[0]!.genres.find(
-  (genre) => genre.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre.genreKey,
+  (genre) => genre.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre!.genreKey,
 )!;
 
 function buildRecommendedGenres(): CurriculumGenre[] {
@@ -172,13 +152,13 @@ export const DEFAULT_WEB_DRILL_SETTINGS: WebDrillSettings = {
   schema_version: DRILL_SCHEMA_VERSION,
   numeric_theme_id: ONE_DIGIT_ADDITION_THEME.numeric_theme_id,
   themeKey: ONE_DIGIT_ADDITION_THEME.themeKey,
-  difficulty: 3,
+  difficulty: 2,
   seed: '',
 };
 
 export function createWebDrillSettings(
   theme: CurriculumTheme,
-  difficulty: DifficultyLevel = 3,
+  difficulty: DifficultyLevel = 2,
   seed = '',
 ): WebDrillSettings {
   return {
@@ -198,8 +178,8 @@ export function findCurriculumSelection(themeKey: string): CurriculumSelection {
     }
   }
 
-  const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === ONE_DIGIT_ADDITION_THEME.grade.slug)!;
-  const genre = grade.genres.find((candidate) => candidate.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre.genreKey)!;
+  const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === ONE_DIGIT_ADDITION_THEME.grade!.slug)!;
+  const genre = grade.genres.find((candidate) => candidate.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre!.genreKey)!;
   return { grade, genre, theme: ONE_DIGIT_ADDITION_THEME };
 }
 

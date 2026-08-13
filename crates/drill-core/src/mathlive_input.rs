@@ -1,4 +1,4 @@
-use crate::answer::AnswerNode;
+use crate::answer::{AnswerBinaryOperator, AnswerNode};
 use crate::editor::ensure_capability;
 use crate::error::EditorError;
 use crate::model::{AnswerInputInterface, MAX_ANSWER_AST_SIZE};
@@ -89,19 +89,16 @@ impl<'a> Parser<'a> {
         if self.at_stop(stop) {
             return Ok(AnswerNode::Empty);
         }
-
-        let first = self.parse_value(stop)?;
+        let first = self.parse_additive(stop)?;
         if self.at_stop(stop) {
             return Ok(first);
         }
-
         if !self.consume_char(',') {
             return Err(());
         }
-
         let mut values = vec![first];
         loop {
-            values.push(self.parse_value(stop)?);
+            values.push(self.parse_additive(stop)?);
             if self.at_stop(stop) {
                 break;
             }
@@ -112,42 +109,105 @@ impl<'a> Parser<'a> {
         Ok(AnswerNode::Tuple(values))
     }
 
-    fn parse_value(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
-        let prefix = if self.consume_char('-') || self.consume_char('−') {
-            Some(Prefix::Negative)
-        } else if self.consume_str("\\pm") || self.consume_char('±') {
-            Some(Prefix::PlusMinus)
-        } else {
-            None
-        };
+    fn parse_additive(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
+        let mut left = self.parse_multiplicative(stop)?;
+        loop {
+            if self.at_stop(stop) || self.peek_char() == Some(',') {
+                return Ok(left);
+            }
+            let operator = if self.consume_char('+') {
+                Some(AnswerBinaryOperator::Add)
+            } else if self.consume_char('-') || self.consume_char('−') {
+                Some(AnswerBinaryOperator::Subtract)
+            } else if self.consume_str("\\pm") || self.consume_char('±') {
+                let right = self.parse_multiplicative(stop)?;
+                left = AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Add,
+                    left: Box::new(left),
+                    right: Box::new(AnswerNode::PlusMinus(Box::new(right))),
+                };
+                continue;
+            } else {
+                return Ok(left);
+            };
+            let right = self.parse_multiplicative(stop)?;
+            left = AnswerNode::Binary {
+                operator: operator.expect("additive operator"),
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+    }
 
-        let mut value = if self.at_stop(stop) || self.peek_char() == Some(',') {
-            AnswerNode::Empty
-        } else {
-            self.parse_atom(stop)?
-        };
-
-        if matches!(value, AnswerNode::Integer(_) | AnswerNode::Empty) && self.starts_with("\\frac")
-        {
-            let fraction = self.parse_fraction()?;
-            if let AnswerNode::Fraction {
-                numerator,
-                denominator,
-            } = fraction
+    fn parse_multiplicative(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
+        let mut left = self.parse_unary(stop)?;
+        loop {
+            if self.at_stop(stop)
+                || self.peek_char() == Some(',')
+                || self.peek_char() == Some('+')
+                || self.peek_char() == Some('-')
+                || self.peek_char() == Some('−')
+                || self.starts_with("\\pm")
+                || self.peek_char() == Some('±')
             {
-                value = AnswerNode::MixedFraction {
-                    whole: Box::new(value),
+                return Ok(left);
+            }
+
+            // Preserve the established mixed-number spelling 1\frac{1}{2}.
+            if matches!(left, AnswerNode::Integer(_) | AnswerNode::Empty)
+                && self.starts_with("\\frac")
+            {
+                let fraction = self.parse_fraction()?;
+                let AnswerNode::Fraction {
+                    numerator,
+                    denominator,
+                } = fraction
+                else {
+                    unreachable!();
+                };
+                left = AnswerNode::MixedFraction {
+                    whole: Box::new(left),
                     numerator,
                     denominator,
                 };
+                continue;
             }
-        }
 
-        Ok(match prefix {
-            Some(Prefix::Negative) => AnswerNode::Negative(Box::new(value)),
-            Some(Prefix::PlusMinus) => AnswerNode::PlusMinus(Box::new(value)),
-            None => value,
-        })
+            let explicit = self.consume_str("\\times")
+                || self.consume_str("\\cdot")
+                || self.consume_char('*')
+                || self.consume_char('×');
+            if !explicit && !self.starts_atom() {
+                return Ok(left);
+            }
+            let right = self.parse_unary(stop)?;
+            left = AnswerNode::Binary {
+                operator: AnswerBinaryOperator::Multiply,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+    }
+
+    fn parse_unary(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
+        if self.consume_char('-') || self.consume_char('−') {
+            return Ok(AnswerNode::Negative(Box::new(self.parse_unary(stop)?)));
+        }
+        if self.consume_str("\\pm") || self.consume_char('±') {
+            return Ok(AnswerNode::PlusMinus(Box::new(self.parse_unary(stop)?)));
+        }
+        if self.at_stop(stop) || self.peek_char() == Some(',') {
+            return Ok(AnswerNode::Empty);
+        }
+        self.parse_atom(stop)
+    }
+
+    fn starts_atom(&self) -> bool {
+        self.starts_with("\\frac")
+            || self.starts_with("\\sqrt")
+            || self.starts_with("\\placeholder")
+            || matches!(self.peek_char(), Some('{') | Some('('))
+            || self.peek_char().is_some_and(|ch| ch.is_ascii_digit())
     }
 
     fn parse_atom(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
@@ -162,6 +222,13 @@ impl<'a> Parser<'a> {
         }
         if self.peek_char() == Some('{') {
             return self.parse_group();
+        }
+        if self.consume_char('(') {
+            let value = self.parse_expression(Some(')'))?;
+            if !self.consume_char(')') {
+                return Err(());
+            }
+            return Ok(value);
         }
         if self.at_stop(stop) {
             return Ok(AnswerNode::Empty);
@@ -318,11 +385,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-enum Prefix {
-    Negative,
-    PlusMinus,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,6 +400,7 @@ mod tests {
                 EditorStructure::Negative,
                 EditorStructure::PlusMinus,
                 EditorStructure::Tuple,
+                EditorStructure::Arithmetic,
             ],
         }
     }
@@ -414,6 +477,158 @@ mod tests {
         for (latex, expected) in cases {
             assert_eq!(parse_mathlive_answer(latex, &interface).unwrap(), expected);
         }
+    }
+
+    #[test]
+    fn distinguishes_prefix_negative_from_infix_subtraction_unambiguously() {
+        let interface = structured();
+        let cases = [
+            ("-3", AnswerNode::Negative(Box::new(AnswerNode::Integer(3)))),
+            (
+                "5-3",
+                AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Subtract,
+                    left: Box::new(AnswerNode::Integer(5)),
+                    right: Box::new(AnswerNode::Integer(3)),
+                },
+            ),
+            (
+                "5--3",
+                AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Subtract,
+                    left: Box::new(AnswerNode::Integer(5)),
+                    right: Box::new(AnswerNode::Negative(Box::new(AnswerNode::Integer(3)))),
+                },
+            ),
+            (
+                "-3-2",
+                AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Subtract,
+                    left: Box::new(AnswerNode::Negative(Box::new(AnswerNode::Integer(3)))),
+                    right: Box::new(AnswerNode::Integer(2)),
+                },
+            ),
+            (
+                "3+-2",
+                AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Add,
+                    left: Box::new(AnswerNode::Integer(3)),
+                    right: Box::new(AnswerNode::Negative(Box::new(AnswerNode::Integer(2)))),
+                },
+            ),
+        ];
+        for (latex, expected) in cases {
+            assert_eq!(
+                parse_mathlive_answer(latex, &interface).unwrap(),
+                expected,
+                "{latex}"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_quadratic_formula_answer_with_plus_minus_root_and_fraction() {
+        let interface = structured();
+        let parsed = parse_mathlive_answer(r"\frac{-3\pm2\sqrt{5}}{4}", &interface).unwrap();
+        let expected = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Binary {
+                operator: AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Negative(Box::new(AnswerNode::Integer(3)))),
+                right: Box::new(AnswerNode::PlusMinus(Box::new(AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Multiply,
+                    left: Box::new(AnswerNode::Integer(2)),
+                    right: Box::new(AnswerNode::Root {
+                        radicand: Box::new(AnswerNode::Integer(5)),
+                        index: None,
+                    }),
+                }))),
+            }),
+            denominator: Box::new(AnswerNode::Integer(4)),
+        };
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn accepts_nested_root_plus_minus_expression_within_the_ast_budget() {
+        let interface = structured();
+        let parsed = parse_mathlive_answer(r"\sqrt{57\pm\sqrt{99}}{42}", &interface).unwrap();
+        let expected = AnswerNode::Binary {
+            operator: AnswerBinaryOperator::Multiply,
+            left: Box::new(AnswerNode::Root {
+                radicand: Box::new(AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Add,
+                    left: Box::new(AnswerNode::Integer(57)),
+                    right: Box::new(AnswerNode::PlusMinus(Box::new(AnswerNode::Root {
+                        radicand: Box::new(AnswerNode::Integer(99)),
+                        index: None,
+                    }))),
+                }),
+                index: None,
+            }),
+            right: Box::new(AnswerNode::Integer(42)),
+        };
+        assert_eq!(parsed, expected);
+        assert!(parsed.size() <= MAX_ANSWER_AST_SIZE);
+    }
+
+    #[test]
+    fn quadratic_formula_mathlive_input_grades_equal_to_canonical_answer() {
+        let interface = structured();
+        let actual = parse_mathlive_answer(r"\frac{-3\pm2\sqrt{5}}{4}", &interface).unwrap();
+        let expected = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Binary {
+                operator: AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Integer(-3)),
+                right: Box::new(AnswerNode::PlusMinus(Box::new(AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Multiply,
+                    left: Box::new(AnswerNode::Integer(2)),
+                    right: Box::new(AnswerNode::Root {
+                        radicand: Box::new(AnswerNode::Integer(5)),
+                        index: None,
+                    }),
+                }))),
+            }),
+            denominator: Box::new(AnswerNode::Integer(4)),
+        };
+        assert!(crate::grade::grade_answer(&expected, &actual).is_correct);
+    }
+
+    #[test]
+    fn grades_requested_redundant_and_multi_solution_mathlive_forms() {
+        use crate::grade::grade_answer;
+        use crate::model::GradeWarning;
+
+        let interface = structured();
+        let parse = |latex: &str| parse_mathlive_answer(latex, &interface).unwrap();
+
+        let result = grade_answer(&AnswerNode::Integer(2), &parse("--2"));
+        assert!(result.is_correct);
+        assert!(result.warnings.contains(&GradeWarning::RedundantNegative));
+
+        let plus_minus_two = AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(2)));
+        let result = grade_answer(&plus_minus_two, &parse(r"\pm\pm2"));
+        assert!(result.is_correct);
+        assert!(result.warnings.contains(&GradeWarning::RedundantPlusMinus));
+
+        assert!(grade_answer(&plus_minus_two, &parse("2,-2")).is_correct);
+        assert!(grade_answer(&plus_minus_two, &parse(r"\pm2")).is_correct);
+
+        let offset_roots = AnswerNode::Tuple(vec![AnswerNode::Integer(-2), AnswerNode::Integer(6)]);
+        let result = grade_answer(&offset_roots, &parse(r"2\pm4"));
+        assert!(!result.is_correct);
+        assert!(result
+            .warnings
+            .contains(&GradeWarning::SolutionListRequired));
+        assert!(grade_answer(&offset_roots, &parse("-2,6")).is_correct);
+
+        let result = grade_answer(&AnswerNode::Integer(2), &parse("2,2"));
+        assert!(!result.is_correct);
+        assert!(result.warnings.contains(&GradeWarning::DuplicateSolution));
+        assert!(grade_answer(&AnswerNode::Integer(2), &parse("2")).is_correct);
+
+        let result = grade_answer(&AnswerNode::Integer(4), &parse(r"\sqrt{16}"));
+        assert!(result.is_correct);
+        assert!(result.warnings.contains(&GradeWarning::IntegerFormRequired));
     }
 
     #[test]

@@ -15,6 +15,7 @@ type CustomSelectProps = {
   options: readonly CustomSelectOption[];
   onChange: (value: string) => void;
   renderLabel?: (option: CustomSelectOption) => ReactNode;
+  renderOptionEnd?: (option: CustomSelectOption) => ReactNode;
 };
 
 type PopupLayout = {
@@ -31,7 +32,7 @@ const POPUP_MAX_HEIGHT = 300;
 const POPUP_MIN_USEFUL_HEIGHT = 120;
 
 /** Accessible custom combobox so option rows may contain ruby markup. */
-export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLabel }: CustomSelectProps) {
+export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLabel, renderOptionEnd }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [popupLayout, setPopupLayout] = useState<PopupLayout | null>(null);
@@ -176,8 +177,11 @@ export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLa
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => choose(index)}
             >
-              <span>{renderLabel?.(option) ?? option.label}</span>
-              {option.value === value ? <span className="custom-select-check" aria-hidden="true">✓</span> : null}
+              <span className="custom-select-option-label">{renderLabel?.(option) ?? option.label}</span>
+              <span className="custom-select-option-end">
+                {renderOptionEnd?.(option)}
+                {option.value === value ? <span className="custom-select-check" aria-hidden="true">✓</span> : <span className="custom-select-check-placeholder" aria-hidden="true" />}
+              </span>
             </div>
           ))}
         </div>,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { problemExpression, problemExpressionTokens } from './problem-format';
+import { liarStatementText, problemExpression, problemExpressionTokens } from './problem-format';
 import { fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
-import { problemExpressionLatex } from './mathlive-format';
+import { answerNodeLatex, problemExpressionLatex } from './mathlive-format';
 import type { ProblemDto, RationalCoefficient } from './drill-engine';
 
 function linearProblem(
@@ -64,6 +64,87 @@ describe('problemExpression', () => {
       { kind: 'fraction', numerator: 1, denominator: 5 },
     ]);
   });
+  it('keeps exact decimal operands in decimal notation', () => {
+    const base = fixtureWorksheet().problems[0]!;
+    const problem: ProblemDto = {
+      ...base,
+      prompt: {
+        kind: 'arithmetic',
+        expression: {
+          kind: 'binary', operator: 'subtract',
+          left: { kind: 'exact_decimal', coefficient: 42, scale: 1 },
+          right: { kind: 'exact_decimal', coefficient: 7, scale: 3 },
+        },
+      },
+    };
+    expect(problemExpression(problem)).toBe('4.2 − 0.007 =');
+    expect(problemExpressionLatex(problem)).toBe('4.2\\,-\\,0.007\\,=');
+  });
+
+  it('formats quadratic equations and bounded quadratic-formula answers for MathLive', () => {
+    const base = fixtureWorksheet().problems[0]!;
+    const problem: ProblemDto = {
+      ...base,
+      prompt: {
+        kind: 'quadratic_equation',
+        form: 'standard',
+        a: q(1, 2),
+        b: q(-3),
+        c: q(1, 4),
+      },
+      canonical_answer: {
+        type: 'fraction',
+        value: {
+          numerator: {
+            type: 'binary',
+            value: {
+              operator: 'add',
+              left: { type: 'integer', value: '-3' },
+              right: {
+                type: 'plus_minus',
+                value: {
+                  type: 'binary',
+                  value: {
+                    operator: 'multiply',
+                    left: { type: 'integer', value: '2' },
+                    right: { type: 'root', value: { radicand: { type: 'integer', value: '5' }, index: null } },
+                  },
+                },
+              },
+            },
+          },
+          denominator: { type: 'integer', value: '4' },
+        },
+      },
+    };
+    expect(problemExpression(problem)).toBe('1/2x² − 3x + 1/4 = 0');
+    const expressionLatex = problemExpressionLatex(problem);
+    expect(expressionLatex).toContain('\\frac{1}{2}');
+    expect(expressionLatex).toContain('x^2');
+    expect(expressionLatex).not.toContain('²');
+    const answerLatex = answerNodeLatex(problem.canonical_answer);
+    expect(answerLatex).toContain('\\pm');
+    expect(answerLatex).toContain('2\\sqrt{5}');
+    expect(answerLatex).toContain('\\frac');
+  });
+
+  it('formats simultaneous equations as a two-row MathLive case', () => {
+    const base = fixtureWorksheet().problems[0]!;
+    const problem: ProblemDto = {
+      ...base,
+      prompt: { kind: 'simultaneous_equation', a: 2, b: -1, c: 7, d: -1, e: 3, f: -4 },
+      answer_schema: { kind: 'ordered_pair' },
+      canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '-3' }] },
+    };
+    expect(problemExpression(problem)).toBe('2x − y = 7 / −x + 3y = −4');
+    const latex = problemExpressionLatex(problem);
+    expect(latex).toContain('\\begin{cases}');
+    expect(latex).toContain('2x\\,-\\,y\\,=\\,7');
+    expect(latex).toContain('-x\\,+\\,3y\\,=\\,-4');
+    expect(latex).toContain('\\\\');
+    expect(latex).toContain('\\end{cases}');
+  });
+
   it('formats arithmetic ASTs with exact fractions and precedence for MathLive and PDF', () => {
     const base = fixtureWorksheet().problems[0]!;
     const problem: ProblemDto = {
@@ -86,6 +167,17 @@ describe('problemExpression', () => {
     expect(problemExpression(problem)).toBe('(−1/2) × (3 + (−4)) =');
     expect(problemExpressionLatex(problem)).toBe('(-\\frac{1}{2})\\,\\times\\,\\left(3\\,+\\,(-4)\\right)\\,=');
     expect(problemExpressionTokens(problem).some((token) => token.kind === 'fraction')).toBe(true);
+  });
+
+  it('formats every liar-puzzle statement form in Japanese', () => {
+    expect(liarStatementText({ kind: 'says_liar', person: 2 })).toBe('Bさんはうそつきだ。');
+    expect(liarStatementText({ kind: 'says_not_liar', person: 3 })).toBe('Cさんはうそつきではない。');
+    expect(liarStatementText({ kind: 'exactly_one_liar', first: 1, second: 4 })).toBe('AさんとDさんのうち、うそつきは1人だけだ。');
+    expect(liarStatementText({ kind: 'exact_liar_count', count: 2 })).toBe('このなかの2人がうそつきだ。');
+    expect(liarStatementText({ kind: 'both_liar', first: 1, second: 3 })).toBe('AさんとCさんはうそつきだ。');
+    expect(liarStatementText({ kind: 'both_not_liar', first: 2, second: 4 })).toBe('BさんとDさんはうそつきではない。');
+    expect(liarStatementText({ kind: 'implication', antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false })).toBe('Aさんがうそつきなら、Cさんはうそつきではない。');
+    expect(liarStatementText({ kind: 'implication', antecedent_person: 2, antecedent_is_liar: false, consequent_person: 4, consequent_is_liar: true })).toBe('Bさんがうそつきでないなら、Dさんはうそつきだ。');
   });
 
 });

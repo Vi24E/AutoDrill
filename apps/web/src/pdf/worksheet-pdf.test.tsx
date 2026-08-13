@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
@@ -31,6 +31,15 @@ function representativePrompt(themeId: number): { prompt: ProblemPrompt; answer:
     case 9: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'add', left: { kind: 'rational', value: { numerator: 1, denominator: 3 } }, right: { kind: 'rational', value: { numerator: 1, denominator: 4 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '7' }, denominator: { type: 'integer', value: '12' } } } };
     case 10: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'rational', value: { numerator: 2, denominator: 3 } }, right: { kind: 'rational', value: { numerator: 3, denominator: 4 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '2' } } } };
     case 11: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'subtract', left: { kind: 'rational', value: { numerator: 5, denominator: 6 } }, right: { kind: 'rational', value: { numerator: 1, denominator: 3 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '2' } } } };
+    case 12: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'rational', value: { numerator: 1, denominator: 2 } }, right: { kind: 'rational', value: { numerator: 2, denominator: 3 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '3' }, denominator: { type: 'integer', value: '4' } } } };
+    case 13: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'integer', value: 56 }, right: { kind: 'integer', value: 7 } } }, answer: { type: 'integer', value: '8' } };
+    case 14: return { prompt: { kind: 'quadratic_equation', form: 'square_equals_constant', a: { numerator: 2, denominator: 1 }, b: { numerator: 0, denominator: 1 }, c: { numerator: 8, denominator: 1 } }, answer: { type: 'plus_minus', value: { type: 'integer', value: '2' } } };
+    case 15: return { prompt: { kind: 'quadratic_equation', form: 'factored_scale', a: { numerator: 2, denominator: 1 }, b: { numerator: -5, denominator: 1 }, c: { numerator: 6, denominator: 1 } }, answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] } };
+    case 16: return { prompt: { kind: 'quadratic_equation', form: 'standard', a: { numerator: 1, denominator: 1 }, b: { numerator: 3, denominator: 1 }, c: { numerator: 1, denominator: 1 } }, answer: { type: 'fraction', value: { numerator: { type: 'binary', value: { operator: 'add', left: { type: 'integer', value: '-3' }, right: { type: 'plus_minus', value: { type: 'root', value: { radicand: { type: 'integer', value: '5' }, index: null } } } } }, denominator: { type: 'integer', value: '2' } } } };
+    case 17: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'add', left: { kind: 'exact_decimal', coefficient: 12, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 35, scale: 2 } } }, answer: { type: 'exact_decimal', value: { coefficient: '155', scale: 2 } } };
+    case 18: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 12, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 5, scale: 2 } } }, answer: { type: 'exact_decimal', value: { coefficient: '6', scale: 2 } } };
+    case 19: return { prompt: { kind: 'simultaneous_equation', a: 2, b: 1, c: 7, d: 1, e: -1, f: -1 }, answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] } };
+    case 20: return { prompt: { kind: 'liar_puzzle', people_count: 4, statements: [{ kind: 'says_liar', person: 2 }, { kind: 'exact_liar_count', count: 2 }, { kind: 'both_not_liar', first: 1, second: 4 }, { kind: 'implication', antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false }] }, answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] } };
     default: throw new Error(`Missing representative print prompt for theme ${themeId}`);
   }
 }
@@ -39,7 +48,13 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
   const representative = representativePrompt(definition.numeric_theme_id);
   const answerSchema = definition.answerSchemaKind === 'integer'
     ? { kind: 'integer' as const, min: '-100', max: '100' }
-    : { kind: 'rational' as const, max_abs_numerator: 72, max_denominator: 72, require_reduced_fraction_form: true };
+    : definition.answerSchemaKind === 'rational'
+      ? { kind: 'rational' as const, max_abs_numerator: 72, max_denominator: 72, require_reduced_fraction_form: true }
+      : definition.answerSchemaKind === 'decimal'
+        ? { kind: 'decimal' as const, max_scale: 6 }
+        : definition.answerSchemaKind === 'ordered_pair'
+          ? { kind: 'ordered_pair' as const }
+          : { kind: 'algebraic' as const };
   const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
     schema_version: DRILL_SCHEMA_VERSION,
     id: index + 1,
@@ -104,11 +119,29 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
       const { container, unmount } = render(<WorksheetPrintDocument worksheet={worksheet} metadata={metadata} />);
       expect(container.querySelectorAll('[data-print-page]'), definition.label).toHaveLength(2);
       const expressions = container.querySelectorAll('math-span.problem-math-expression');
-      expect(expressions, definition.label).toHaveLength(definition.problemCount * 2);
-      expect(container.querySelectorAll('.worksheet-print-empty-answer'), definition.label).toHaveLength(definition.problemCount);
-      expect(container.querySelectorAll('math-span.worksheet-print-answer-value'), definition.label).toHaveLength(definition.problemCount);
+      if (definition.numeric_theme_id === 20) {
+        expect(expressions, definition.label).toHaveLength(0);
+        expect(container.querySelectorAll('.liar-statements'), definition.label).toHaveLength(definition.problemCount * 2);
+        expect(container.querySelectorAll('.liar-person-choice'), definition.label).toHaveLength(definition.problemCount * 4 * 2);
+        expect(container.querySelectorAll('[data-print-page="answers"] .liar-person-choice-selected'), definition.label).toHaveLength(definition.problemCount * 2);
+      } else {
+        expect(expressions, definition.label).toHaveLength(definition.problemCount * 2);
+        const answerFieldCount = definition.numeric_theme_id === 19 ? definition.problemCount * 2 : definition.problemCount;
+        expect(container.querySelectorAll('.worksheet-print-empty-answer'), definition.label).toHaveLength(answerFieldCount);
+        expect(container.querySelectorAll('math-span.worksheet-print-answer-value'), definition.label).toHaveLength(answerFieldCount);
+      }
       unmount();
     }
+  });
+
+
+  it('stacks signed-arithmetic answers below the expression without a trailing equals sign', () => {
+    const signed = representativeWorksheet(THEME_DEFINITIONS.find((definition) => definition.numeric_theme_id === 7)!);
+    const { container } = render(<WorksheetPrintDocument worksheet={signed} />);
+    const firstProblem = container.querySelector('[data-print-page="problems"] [data-print-problem-index="0"]');
+    expect(firstProblem).toHaveClass('problem-cell-answer-below');
+    expect(firstProblem?.querySelector('math-span.problem-math-expression')?.textContent).not.toContain('=');
+    expect(container.querySelector('[data-print-page="problems"] .worksheet-instruction')).toHaveTextContent('次の式を計算しなさい。');
   });
 
   it('keeps the standard unlike-denominator fraction as MathLive LaTeX instead of flattening it to slash text', () => {
@@ -125,11 +158,13 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     await openWorksheetPdf(fixtureWorksheet(), undefined, metadata);
 
     expect(print).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog', { name: '印刷プレビュー' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '印刷プレビュー' })).toBeInTheDocument();
     expect(document.querySelectorAll('[data-print-page]')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: '印刷する' }));
-    expect(print).toHaveBeenCalledTimes(1);
+    const printButton = screen.getByRole('button', { name: '印刷する' });
+    expect(printButton).toBeEnabled();
+    fireEvent.click(printButton);
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('dialog', { name: '印刷プレビュー' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '戻る' }));

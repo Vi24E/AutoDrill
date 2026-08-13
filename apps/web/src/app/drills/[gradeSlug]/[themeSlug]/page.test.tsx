@@ -18,21 +18,30 @@ describe('implemented unit route', () => {
       { gradeSlug: 'grade-1', themeSlug: 'one-digit-subtraction' },
       { gradeSlug: 'grade-2', themeSlug: 'two-digit-addition' },
       { gradeSlug: 'grade-2', themeSlug: 'multiplication-table' },
+      { gradeSlug: 'grade-3', themeSlug: 'division-1' },
+      { gradeSlug: 'grade-4', themeSlug: 'decimal-add-subtract' },
       { gradeSlug: 'grade-5', themeSlug: 'fraction-addition' },
+      { gradeSlug: 'grade-5', themeSlug: 'decimal-multiply-divide' },
       { gradeSlug: 'grade-5', themeSlug: 'fraction-subtraction' },
       { gradeSlug: 'grade-6', themeSlug: 'fraction-multiplication' },
+      { gradeSlug: 'grade-6', themeSlug: 'fraction-division' },
       { gradeSlug: 'grade-7', themeSlug: 'signed-arithmetic-1' },
       { gradeSlug: 'grade-7', themeSlug: 'signed-arithmetic-2' },
       { gradeSlug: 'grade-7', themeSlug: 'linear-equation-1' },
       { gradeSlug: 'grade-7', themeSlug: 'linear-equation-2' },
+      { gradeSlug: 'grade-8', themeSlug: 'simultaneous-equation-1' },
+      { gradeSlug: 'grade-9', themeSlug: 'quadratic-equation-1' },
+      { gradeSlug: 'grade-9', themeSlug: 'quadratic-equation-2' },
+      { gradeSlug: 'grade-9', themeSlug: 'quadratic-equation-3' },
+      { gradeSlug: 'bonus', themeSlug: 'liar-puzzle' },
     ]);
 
     const page = await UnitPage({ params: params('grade-1', 'one-digit-addition') });
     expect(page.props.initialWebSettings).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       numeric_theme_id: 1,
       themeKey: 'jp.grade1.addition.one_digit',
-      difficulty: 3,
+      difficulty: 2,
       seed: '',
     });
     await expect(generateMetadata({ params: params('grade-1', 'one-digit-addition') })).resolves.toMatchObject({
@@ -47,12 +56,15 @@ describe('implemented unit route', () => {
     await expect(generateMetadata({ params: params('grade-7', 'linear-equation-2') })).resolves.toMatchObject({
       title: '一次方程式(2) | AutoDrill',
     });
+    const simultaneous = await UnitPage({ params: params('grade-8', 'simultaneous-equation-1') });
+    expect(simultaneous.props.initialWebSettings).toMatchObject({
+      numeric_theme_id: 19,
+      themeKey: 'jp.grade8.equation.simultaneous.1',
+    });
   });
 
-  it('404s Dummy and arbitrary unimplemented routes before metadata or UI discovery', async () => {
-    const dummy = { params: params('grade-2', 'Dummy1') };
-    await expect(UnitPage(dummy)).rejects.toThrow('NEXT_NOT_FOUND');
-    await expect(generateMetadata(dummy)).rejects.toThrow('NEXT_NOT_FOUND');
+  it('404s arbitrary unimplemented routes before metadata or UI discovery', async () => {
     await expect(UnitPage({ params: params('grade-1', 'missing') })).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(generateMetadata({ params: params('grade-8', 'missing') })).rejects.toThrow('NEXT_NOT_FOUND');
   });
 });

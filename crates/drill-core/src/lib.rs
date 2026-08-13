@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(
             first.problem_set_id,
-            format!("3-1-{}-Ab3Z-3", GENERATOR_REVISION_ONE_DIGIT_ADDITION)
+            format!("4-1-{}-Ab3Z-2", GENERATOR_REVISION_ONE_DIGIT_ADDITION)
         );
         assert_eq!(
             regenerate_problem_set(&first.problem_set_id).unwrap(),
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_two_requests_and_ids_fail_closed() {
+    fn legacy_schema_requests_and_ids_fail_closed() {
         let request = GenerateWorksheetRequest {
             schema_version: 2,
             seed: "Ab3Z".to_owned(),
@@ -239,6 +239,25 @@ mod tests {
             "2-1-2-Ab3Z-3".parse::<ProblemSetIdentity>().unwrap_err(),
             IdentityError::UnsupportedSchemaVersion {
                 received: 2,
+                expected: SCHEMA_VERSION,
+            }
+        );
+        let legacy_v3 = GenerateWorksheetRequest {
+            schema_version: 3,
+            seed: "Ab3Z".to_owned(),
+            ..GenerateWorksheetRequest::default()
+        };
+        assert_eq!(
+            generate_worksheet_request(&legacy_v3).unwrap_err(),
+            GenerationError::UnsupportedSchemaVersion {
+                received: 3,
+                expected: SCHEMA_VERSION,
+            }
+        );
+        assert_eq!(
+            "3-1-3-Ab3Z-3".parse::<ProblemSetIdentity>().unwrap_err(),
+            IdentityError::UnsupportedSchemaVersion {
+                received: 3,
                 expected: SCHEMA_VERSION,
             }
         );
@@ -781,6 +800,53 @@ mod tests {
     }
 
     #[test]
+    fn grading_handles_redundant_signs_solution_sets_and_exact_square_roots() {
+        let two = AnswerNode::Integer(2);
+        let plus_minus_two = AnswerNode::PlusMinus(Box::new(two.clone()));
+
+        let double_negative =
+            AnswerNode::Negative(Box::new(AnswerNode::Negative(Box::new(two.clone()))));
+        let result = grade_answer(&two, &double_negative);
+        assert!(result.is_correct);
+        assert!(result.warnings.contains(&GradeWarning::RedundantNegative));
+
+        let double_plus_minus =
+            AnswerNode::PlusMinus(Box::new(AnswerNode::PlusMinus(Box::new(two.clone()))));
+        let result = grade_answer(&plus_minus_two, &double_plus_minus);
+        assert!(result.is_correct);
+        assert_eq!(result.warnings, vec![GradeWarning::RedundantPlusMinus]);
+
+        let explicit_symmetric_roots =
+            AnswerNode::Tuple(vec![AnswerNode::Integer(2), AnswerNode::Integer(-2)]);
+        assert!(grade_answer(&plus_minus_two, &explicit_symmetric_roots).is_correct);
+        assert!(grade_answer(&explicit_symmetric_roots, &plus_minus_two).is_correct);
+
+        let explicit_offset_roots =
+            AnswerNode::Tuple(vec![AnswerNode::Integer(-2), AnswerNode::Integer(6)]);
+        let offset_plus_minus = AnswerNode::Binary {
+            operator: crate::answer::AnswerBinaryOperator::Add,
+            left: Box::new(AnswerNode::Integer(2)),
+            right: Box::new(AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(4)))),
+        };
+        let result = grade_answer(&explicit_offset_roots, &offset_plus_minus);
+        assert!(!result.is_correct);
+        assert_eq!(result.warnings, vec![GradeWarning::SolutionListRequired]);
+
+        let duplicate_solution = AnswerNode::Tuple(vec![two.clone(), two.clone()]);
+        let result = grade_answer(&two, &duplicate_solution);
+        assert!(!result.is_correct);
+        assert_eq!(result.warnings, vec![GradeWarning::DuplicateSolution]);
+
+        let sqrt_16 = AnswerNode::Root {
+            radicand: Box::new(AnswerNode::Integer(16)),
+            index: None,
+        };
+        let result = grade_answer(&AnswerNode::Integer(4), &sqrt_16);
+        assert!(result.is_correct);
+        assert!(result.warnings.contains(&GradeWarning::IntegerFormRequired));
+    }
+
+    #[test]
     fn normalization_never_saturates_i64_min_negation() {
         let value = AnswerNode::Negative(Box::new(AnswerNode::Integer(i64::MIN)));
         assert_eq!(normalize_answer(&value), value);
@@ -948,8 +1014,8 @@ mod tests {
             denominator: Box::new(AnswerNode::Integer(4)),
         };
         let unreduced_result = grade_answer_with_schema(&expected, &unreduced, Some(&schema));
-        assert!(!unreduced_result.is_correct);
-        assert_eq!(unreduced_result.status, GradeStatus::Incorrect);
+        assert!(unreduced_result.is_correct);
+        assert_eq!(unreduced_result.status, GradeStatus::Correct);
         assert!(unreduced_result
             .warnings
             .contains(&GradeWarning::FractionNotReduced));
@@ -1120,7 +1186,7 @@ mod tests {
 
     #[test]
     fn linear_equation_difficulty_compares_the_full_candidate_pool() {
-        let means = (MIN_DIFFICULTY..=MAX_DIFFICULTY)
+        let means = (MIN_DIFFICULTY..=3)
             .map(|level| {
                 ["EqA", "EqB", "EqC", "EqD", "EqE", "EqF", "EqG", "EqH"]
                     .iter()
@@ -1298,7 +1364,7 @@ mod tests {
 
     #[test]
     fn difficulty_bias_is_monotonic_over_a_robust_seed_sample() {
-        let means: Vec<f64> = (MIN_DIFFICULTY..=MAX_DIFFICULTY)
+        let means: Vec<f64> = (MIN_DIFFICULTY..=3)
             .map(|level| {
                 let total: f64 = (1..=128)
                     .map(|seed| {
@@ -1322,12 +1388,42 @@ mod tests {
         assert!(means.windows(2).all(|pair| pair[0] < pair[1]), "{means:?}");
     }
 
+    #[test]
+    fn random_difficulty_has_no_easy_or_hard_rank_bias() {
+        let mean = |level: u8| {
+            (1..=128)
+                .map(|seed| {
+                    let request = GenerateWorksheetRequest {
+                        seed: format!("R{}", seed.to_string().replace('0', "A")),
+                        difficulty: Difficulty::try_from(level).unwrap(),
+                        ..GenerateWorksheetRequest::default()
+                    };
+                    generate_worksheet_request(&request)
+                        .unwrap()
+                        .problems
+                        .iter()
+                        .map(|problem| problem.effort)
+                        .sum::<f64>()
+                        / DEFAULT_PROBLEM_COUNT as f64
+                })
+                .sum::<f64>()
+                / 128.0
+        };
+        let easy = mean(1);
+        let random = mean(4);
+        let hard = mean(3);
+        assert!(
+            easy < random && random < hard,
+            "easy={easy}, random={random}, hard={hard}"
+        );
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(8))]
 
         #[test]
         fn difficulty_order_statistic_bias_is_monotonic_property(salt in 1_u8..=9) {
-            let means: Vec<f64> = (MIN_DIFFICULTY..=MAX_DIFFICULTY)
+            let means: Vec<f64> = (MIN_DIFFICULTY..=3)
                 .map(|level| {
                     (1..=64)
                         .map(|index| {

@@ -14,8 +14,13 @@ pub fn grade_answer_with_schema(
     let representation_differs = expected != actual;
     let normalized_expected = normalize_answer(expected);
     let normalized_actual = normalize_answer(actual);
-    let mathematically_equal = normalized_expected == normalized_actual;
-    let mut status = match (&normalized_expected, &normalized_actual) {
+    let ordered_pair = matches!(answer_schema, Some(AnswerSchema::OrderedPair));
+    let mathematically_equal = if ordered_pair {
+        normalized_expected == normalized_actual
+    } else {
+        solutions_mathematically_equal(&normalized_expected, &normalized_actual)
+    };
+    let status = match (&normalized_expected, &normalized_actual) {
         _ if contains_nan_error(&normalized_expected) || contains_nan_error(&normalized_actual) => {
             GradeStatus::Incorrect
         }
@@ -28,6 +33,15 @@ pub fn grade_answer_with_schema(
     } else {
         Vec::new()
     };
+    if !ordered_pair && has_duplicate_solution(actual) {
+        push_warning(&mut warnings, GradeWarning::DuplicateSolution);
+    }
+    if !ordered_pair
+        && matches!(normalized_expected, AnswerNode::Tuple(_))
+        && has_embedded_plus_minus(actual)
+    {
+        push_warning(&mut warnings, GradeWarning::SolutionListRequired);
+    }
 
     if mathematically_equal
         && matches!(normalized_expected, AnswerNode::Integer(_))
@@ -47,9 +61,9 @@ pub fn grade_answer_with_schema(
         )
     {
         if has_reducible_fraction(actual) {
-            // An unreduced ordinary fraction violates the explicit answer
-            // format and is intentionally incorrect even when numerically equal.
-            status = GradeStatus::Incorrect;
+            // Representation policy (warning => ○ or ×) is selected by the
+            // client. Core grading reports mathematical correctness plus a
+            // stable warning code and does not hard-code that policy.
             push_warning(&mut warnings, GradeWarning::FractionNotReduced);
         } else if !uses_simple_reduced_fraction_form(actual) {
             // Mixed fractions, exact decimals, nested fractions, roots and
@@ -66,6 +80,80 @@ pub fn grade_answer_with_schema(
         expected: normalized_expected,
         actual: normalized_actual,
         warnings,
+    }
+}
+
+fn solutions_mathematically_equal(left: &AnswerNode, right: &AnswerNode) -> bool {
+    let left = canonicalize_solution_order(left);
+    let right = canonicalize_solution_order(right);
+    if left == right {
+        return true;
+    }
+    match (&left, &right) {
+        (AnswerNode::PlusMinus(value), AnswerNode::Tuple(values))
+        | (AnswerNode::Tuple(values), AnswerNode::PlusMinus(value)) => {
+            symmetric_solution_tuple(value) == AnswerNode::Tuple(values.clone())
+        }
+        _ => false,
+    }
+}
+
+fn symmetric_solution_tuple(value: &AnswerNode) -> AnswerNode {
+    let positive = canonicalize_solution_order(value);
+    let negative = canonicalize_solution_order(&normalize_answer(&AnswerNode::Negative(Box::new(
+        value.clone(),
+    ))));
+    let mut values = vec![negative, positive];
+    values.sort();
+    AnswerNode::Tuple(values)
+}
+
+fn canonicalize_solution_order(answer: &AnswerNode) -> AnswerNode {
+    match answer {
+        AnswerNode::Tuple(values) => {
+            let mut values: Vec<_> = values.iter().map(canonicalize_solution_order).collect();
+            values.sort();
+            AnswerNode::Tuple(values)
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => AnswerNode::Fraction {
+            numerator: Box::new(canonicalize_solution_order(numerator)),
+            denominator: Box::new(canonicalize_solution_order(denominator)),
+        },
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => AnswerNode::MixedFraction {
+            whole: Box::new(canonicalize_solution_order(whole)),
+            numerator: Box::new(canonicalize_solution_order(numerator)),
+            denominator: Box::new(canonicalize_solution_order(denominator)),
+        },
+        AnswerNode::Root { radicand, index } => AnswerNode::Root {
+            radicand: Box::new(canonicalize_solution_order(radicand)),
+            index: index
+                .as_deref()
+                .map(canonicalize_solution_order)
+                .map(Box::new),
+        },
+        AnswerNode::Negative(value) => {
+            AnswerNode::Negative(Box::new(canonicalize_solution_order(value)))
+        }
+        AnswerNode::PlusMinus(value) => {
+            AnswerNode::PlusMinus(Box::new(canonicalize_solution_order(value)))
+        }
+        AnswerNode::Binary {
+            operator,
+            left,
+            right,
+        } => AnswerNode::Binary {
+            operator: *operator,
+            left: Box::new(canonicalize_solution_order(left)),
+            right: Box::new(canonicalize_solution_order(right)),
+        },
+        _ => answer.clone(),
     }
 }
 
@@ -122,6 +210,9 @@ fn contains_nan_error(answer: &AnswerNode) -> bool {
             contains_nan_error(radicand) || index.as_deref().is_some_and(contains_nan_error)
         }
         AnswerNode::Negative(value) | AnswerNode::PlusMinus(value) => contains_nan_error(value),
+        AnswerNode::Binary { left, right, .. } => {
+            contains_nan_error(left) || contains_nan_error(right)
+        }
         AnswerNode::Tuple(values) => values.iter().any(contains_nan_error),
         AnswerNode::Empty
         | AnswerNode::Integer(_)
@@ -137,6 +228,9 @@ fn representation_warnings(answer: &AnswerNode) -> Vec<GradeWarning> {
     }
     if has_redundant_negative(answer) {
         warnings.push(GradeWarning::RedundantNegative);
+    }
+    if has_redundant_plus_minus(answer) {
+        warnings.push(GradeWarning::RedundantPlusMinus);
     }
     if has_redundant_decimal(answer) {
         warnings.push(GradeWarning::RedundantDecimal);
@@ -174,6 +268,9 @@ fn has_reducible_fraction(answer: &AnswerNode) -> bool {
             has_reducible_fraction(radicand) || index.as_deref().is_some_and(has_reducible_fraction)
         }
         AnswerNode::Negative(value) | AnswerNode::PlusMinus(value) => has_reducible_fraction(value),
+        AnswerNode::Binary { left, right, .. } => {
+            has_reducible_fraction(left) || has_reducible_fraction(right)
+        }
         AnswerNode::Tuple(values) => values.iter().any(has_reducible_fraction),
         AnswerNode::Empty
         | AnswerNode::Integer(_)
@@ -203,6 +300,9 @@ fn has_redundant_negative(answer: &AnswerNode) -> bool {
             has_redundant_negative(radicand) || index.as_deref().is_some_and(has_redundant_negative)
         }
         AnswerNode::PlusMinus(value) => has_redundant_negative(value),
+        AnswerNode::Binary { left, right, .. } => {
+            has_redundant_negative(left) || has_redundant_negative(right)
+        }
         AnswerNode::Tuple(values) => values.iter().any(has_redundant_negative),
         AnswerNode::Empty
         | AnswerNode::Integer(_)
@@ -228,7 +328,116 @@ fn starts_negative(answer: &AnswerNode) -> bool {
         | AnswerNode::MixedFraction { .. }
         | AnswerNode::Root { .. }
         | AnswerNode::PlusMinus(_)
+        | AnswerNode::Binary { .. }
         | AnswerNode::Tuple(_)
+        | AnswerNode::NanError(_)
+        | AnswerNode::Variable(_) => false,
+    }
+}
+
+fn has_redundant_plus_minus(answer: &AnswerNode) -> bool {
+    match answer {
+        AnswerNode::PlusMinus(value) => {
+            matches!(value.as_ref(), AnswerNode::PlusMinus(_)) || has_redundant_plus_minus(value)
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => has_redundant_plus_minus(numerator) || has_redundant_plus_minus(denominator),
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => {
+            has_redundant_plus_minus(whole)
+                || has_redundant_plus_minus(numerator)
+                || has_redundant_plus_minus(denominator)
+        }
+        AnswerNode::Root { radicand, index } => {
+            has_redundant_plus_minus(radicand)
+                || index.as_deref().is_some_and(has_redundant_plus_minus)
+        }
+        AnswerNode::Negative(value) => has_redundant_plus_minus(value),
+        AnswerNode::Binary { left, right, .. } => {
+            has_redundant_plus_minus(left) || has_redundant_plus_minus(right)
+        }
+        AnswerNode::Tuple(values) => values.iter().any(has_redundant_plus_minus),
+        AnswerNode::Empty
+        | AnswerNode::Integer(_)
+        | AnswerNode::ExactDecimal { .. }
+        | AnswerNode::NanError(_)
+        | AnswerNode::Variable(_) => false,
+    }
+}
+
+fn has_duplicate_solution(answer: &AnswerNode) -> bool {
+    let AnswerNode::Tuple(values) = answer else {
+        return false;
+    };
+    let mut normalized: Vec<_> = values.iter().map(normalize_answer).collect();
+    normalized.sort();
+    normalized.windows(2).any(|pair| pair[0] == pair[1])
+}
+
+fn has_embedded_plus_minus(answer: &AnswerNode) -> bool {
+    match answer {
+        AnswerNode::PlusMinus(_) => false,
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => contains_plus_minus(numerator) || contains_plus_minus(denominator),
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => {
+            contains_plus_minus(whole)
+                || contains_plus_minus(numerator)
+                || contains_plus_minus(denominator)
+        }
+        AnswerNode::Root { radicand, index } => {
+            contains_plus_minus(radicand) || index.as_deref().is_some_and(contains_plus_minus)
+        }
+        AnswerNode::Negative(value) => contains_plus_minus(value),
+        AnswerNode::Binary { left, right, .. } => {
+            contains_plus_minus(left) || contains_plus_minus(right)
+        }
+        AnswerNode::Tuple(values) => values.iter().any(contains_plus_minus),
+        AnswerNode::Empty
+        | AnswerNode::Integer(_)
+        | AnswerNode::ExactDecimal { .. }
+        | AnswerNode::NanError(_)
+        | AnswerNode::Variable(_) => false,
+    }
+}
+
+fn contains_plus_minus(answer: &AnswerNode) -> bool {
+    match answer {
+        AnswerNode::PlusMinus(_) => true,
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => contains_plus_minus(numerator) || contains_plus_minus(denominator),
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => {
+            contains_plus_minus(whole)
+                || contains_plus_minus(numerator)
+                || contains_plus_minus(denominator)
+        }
+        AnswerNode::Root { radicand, index } => {
+            contains_plus_minus(radicand) || index.as_deref().is_some_and(contains_plus_minus)
+        }
+        AnswerNode::Negative(value) => contains_plus_minus(value),
+        AnswerNode::Binary { left, right, .. } => {
+            contains_plus_minus(left) || contains_plus_minus(right)
+        }
+        AnswerNode::Tuple(values) => values.iter().any(contains_plus_minus),
+        AnswerNode::Empty
+        | AnswerNode::Integer(_)
+        | AnswerNode::ExactDecimal { .. }
         | AnswerNode::NanError(_)
         | AnswerNode::Variable(_) => false,
     }
@@ -256,6 +465,9 @@ fn has_redundant_decimal(answer: &AnswerNode) -> bool {
             has_redundant_decimal(radicand) || index.as_deref().is_some_and(has_redundant_decimal)
         }
         AnswerNode::Negative(value) | AnswerNode::PlusMinus(value) => has_redundant_decimal(value),
+        AnswerNode::Binary { left, right, .. } => {
+            has_redundant_decimal(left) || has_redundant_decimal(right)
+        }
         AnswerNode::Tuple(values) => values.iter().any(has_redundant_decimal),
         AnswerNode::Empty
         | AnswerNode::Integer(_)
@@ -271,4 +483,33 @@ fn integer_gcd(mut left: u64, mut right: u64) -> u64 {
         right = remainder;
     }
     left
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ordered_pair_schema_preserves_coordinate_order_and_allows_equal_coordinates() {
+        let expected = AnswerNode::Tuple(vec![AnswerNode::Integer(2), AnswerNode::Integer(-3)]);
+        let correct =
+            grade_answer_with_schema(&expected, &expected, Some(&AnswerSchema::OrderedPair));
+        assert_eq!(correct.status, GradeStatus::Correct);
+
+        let swapped = AnswerNode::Tuple(vec![AnswerNode::Integer(-3), AnswerNode::Integer(2)]);
+        let wrong = grade_answer_with_schema(&expected, &swapped, Some(&AnswerSchema::OrderedPair));
+        assert_eq!(wrong.status, GradeStatus::Incorrect);
+
+        let equal_coordinates =
+            AnswerNode::Tuple(vec![AnswerNode::Integer(2), AnswerNode::Integer(2)]);
+        let equal_result = grade_answer_with_schema(
+            &equal_coordinates,
+            &equal_coordinates,
+            Some(&AnswerSchema::OrderedPair),
+        );
+        assert_eq!(equal_result.status, GradeStatus::Correct);
+        assert!(!equal_result
+            .warnings
+            .contains(&GradeWarning::DuplicateSolution));
+    }
 }

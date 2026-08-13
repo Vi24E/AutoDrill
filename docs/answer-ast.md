@@ -61,12 +61,20 @@ Serde表現は`type` discriminatorと`value` payloadを使用する。
 
 ## Grading warnings
 
-採点はnormalized valueが等しければ正解とする。ただし期待表現と実回答表現が異なり、実回答に簡約可能な冗長性がある場合は`GradeResult.warnings`へ安定した識別子を加える。
+Rust coreは数学的同値性と安定したwarning identifierを返し、Webは詳細設定→採点設定でwarningカテゴリを○/×のどちらとして扱うか決める。
 
-| identifier | alpha 1.2表示 | 判定 |
-|---|---|---|
-| `fraction_not_reduced` | 約分 | integer分子・分母の最大公約数が1より大きい |
-| `redundant_negative` | 冗長なマイナス | `negative`が負の表現をさらに包み、マイナスが2回ある |
-| `redundant_decimal` | 余計な小数点 | scale 0、またはcoefficient末尾0を除去できるexact decimal |
+| identifier | Web表示 |
+|---|---|
+| `fraction_not_reduced` | 約分しましょう |
+| `integer_form_required` | 整数でこたえましょう |
+| `redundant_negative` | 最後まで計算しましょう |
+| `redundant_plus_minus` | 最後まで計算しましょう |
+| `redundant_decimal` | 最後まで計算しましょう |
+| `duplicate_solution` | 最後まで計算しましょう |
+| `solution_list_required` | 最後まで計算しましょう |
+| `fraction_form_required` | 分数でこたえましょう |
 
-warningは正誤を変更せず、複数該当時は上表順で併記する。期待表現と実回答が同じ場合、または不正解の場合は出さない。UI文言はidentifierと分離し、後続版で変更できる。
+同じ表示カテゴリに複数codeが該当しても画面には1回だけ表示する。既定では「約分しましょう」「整数でこたえましょう」「最後まで計算しましょう」を×、「分数でこたえましょう」を○とする。採点設定は詳細設定からモーダルを開いて変更し、約分は「2/4 と 1/2」、整数化は「√16 と 4」、分数形式は「0.5 と 1/2」を具体例として示す。「最後まで計算しましょう」は、それら3項目以外の数学的に同値だが未整理・冗長な表記差をまとめて扱う。`fraction_form_required`は、数値としては同じでも分数指定に対して小数・帯分数など別形式で答えた場合の独立した表記警告である。
+
+
+`tuple` ASTは複数値の内部表現として共用するが、意味は`AnswerSchema`で分離する。二次方程式の複数解では順序を無視する一方、連立方程式の`ordered_pair` schemaではchild順を `(x,y)` として保持し、座標交換を同値とみなさない。連立方程式のWeb UIはtupleを直接入力させず、`x`欄と`y`欄を別々に編集してから順序付きtupleへ合成する。

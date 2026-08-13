@@ -7,10 +7,19 @@ export { MULTIPLICATION_TABLE_DEFINITION } from './themes/multiplication-table';
 export { FRACTION_ADDITION_DEFINITION } from './themes/fraction-addition';
 export { FRACTION_SUBTRACTION_DEFINITION } from './themes/fraction-subtraction';
 export { FRACTION_MULTIPLICATION_DEFINITION } from './themes/fraction-multiplication';
+export { FRACTION_DIVISION_DEFINITION } from './themes/fraction-division';
+export { DIVISION_1_DEFINITION } from './themes/division-1';
 export { SIGNED_ARITHMETIC_1_DEFINITION } from './themes/signed-arithmetic-1';
 export { SIGNED_ARITHMETIC_2_DEFINITION } from './themes/signed-arithmetic-2';
 export { LINEAR_EQUATION_1_DEFINITION } from './themes/linear-equation-1';
 export { LINEAR_EQUATION_2_DEFINITION } from './themes/linear-equation-2';
+export { QUADRATIC_EQUATION_1_DEFINITION } from './themes/quadratic-equation-1';
+export { QUADRATIC_EQUATION_2_DEFINITION } from './themes/quadratic-equation-2';
+export { QUADRATIC_EQUATION_3_DEFINITION } from './themes/quadratic-equation-3';
+export { DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/decimal-add-subtract';
+export { DECIMAL_MULTIPLY_DIVIDE_DEFINITION } from './themes/decimal-multiply-divide';
+export { SIMULTANEOUS_EQUATION_1_DEFINITION } from './themes/simultaneous-equation-1';
+export { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
 export { ALL_MATH_STRUCTURES } from './themes/theme-definition';
 export type { ThemeDefinition, ThemePromptKind } from './themes/theme-definition';
 
@@ -21,10 +30,19 @@ import { MULTIPLICATION_TABLE_DEFINITION } from './themes/multiplication-table';
 import { FRACTION_ADDITION_DEFINITION } from './themes/fraction-addition';
 import { FRACTION_SUBTRACTION_DEFINITION } from './themes/fraction-subtraction';
 import { FRACTION_MULTIPLICATION_DEFINITION } from './themes/fraction-multiplication';
+import { FRACTION_DIVISION_DEFINITION } from './themes/fraction-division';
+import { DIVISION_1_DEFINITION } from './themes/division-1';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from './themes/signed-arithmetic-1';
 import { SIGNED_ARITHMETIC_2_DEFINITION } from './themes/signed-arithmetic-2';
 import { LINEAR_EQUATION_1_DEFINITION } from './themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from './themes/linear-equation-2';
+import { QUADRATIC_EQUATION_1_DEFINITION } from './themes/quadratic-equation-1';
+import { QUADRATIC_EQUATION_2_DEFINITION } from './themes/quadratic-equation-2';
+import { QUADRATIC_EQUATION_3_DEFINITION } from './themes/quadratic-equation-3';
+import { DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/decimal-add-subtract';
+import { DECIMAL_MULTIPLY_DIVIDE_DEFINITION } from './themes/decimal-multiply-divide';
+import { SIMULTANEOUS_EQUATION_1_DEFINITION } from './themes/simultaneous-equation-1';
+import { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
 import type { ThemeDefinition } from './themes/theme-definition';
 
 /** Central registry is intentionally only enumeration + lookup; each theme owns one definition file. */
@@ -33,13 +51,22 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   ONE_DIGIT_SUBTRACTION_DEFINITION,
   TWO_DIGIT_ADDITION_DEFINITION,
   MULTIPLICATION_TABLE_DEFINITION,
+  DIVISION_1_DEFINITION,
+  DECIMAL_ADD_SUBTRACT_DEFINITION,
   FRACTION_ADDITION_DEFINITION,
+  DECIMAL_MULTIPLY_DIVIDE_DEFINITION,
   FRACTION_SUBTRACTION_DEFINITION,
   FRACTION_MULTIPLICATION_DEFINITION,
+  FRACTION_DIVISION_DEFINITION,
   SIGNED_ARITHMETIC_1_DEFINITION,
   SIGNED_ARITHMETIC_2_DEFINITION,
   LINEAR_EQUATION_1_DEFINITION,
   LINEAR_EQUATION_2_DEFINITION,
+  SIMULTANEOUS_EQUATION_1_DEFINITION,
+  QUADRATIC_EQUATION_1_DEFINITION,
+  QUADRATIC_EQUATION_2_DEFINITION,
+  QUADRATIC_EQUATION_3_DEFINITION,
+  LIAR_PUZZLE_DEFINITION,
 ];
 
 export function findThemeDefinitionByNumericId(numericThemeId: number): ThemeDefinition | undefined {

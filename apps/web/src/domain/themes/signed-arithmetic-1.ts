@@ -9,5 +9,5 @@ export const SIGNED_ARITHMETIC_1_DEFINITION = arithmeticTheme({
   route: { gradeSlug: 'grade-7', themeSlug: 'signed-arithmetic-1', pathname: '/drills/grade-7/signed-arithmetic-1' },
   search: { title: '負の数の計算(1) | AutoDrill', description: '中学1年生向けの正負の整数の加減ドリルです。' },
   compatibility: { skillId: SIGNED_ARITHMETIC_1_SKILL_ID, curriculumPath: SIGNED_ARITHMETIC_1_CURRICULUM_PATH },
-  inputInterface: SIMPLE_SIGNED, title: '負の数の計算(1)', instruction: '次の計算をしなさい。',
+  inputInterface: SIMPLE_SIGNED, title: '負の数の計算(1)', instruction: '次の式を計算しなさい。', answerPlacement: 'below',
 });

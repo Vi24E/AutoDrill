@@ -490,6 +490,69 @@ pub fn linear_equation_graph(
     SolutionGraph { steps }
 }
 
+pub fn simultaneous_equation_graph(
+    a: i64,
+    b: i64,
+    c: i64,
+    d: i64,
+    e: i64,
+    f: i64,
+    answer: &AnswerNode,
+) -> SolutionGraph {
+    debug_assert!(a != 0 && b != 0 && d != 0 && e != 0);
+    debug_assert!(a * e - b * d != 0);
+
+    fn elimination_multipliers(left: i64, right: i64) -> (u64, u64) {
+        let left = left.unsigned_abs();
+        let right = right.unsigned_abs();
+        let divisor = gcd_u64(left, right).max(1);
+        (right / divisor, left / divisor)
+    }
+
+    let x_multipliers = elimination_multipliers(a, d);
+    let y_multipliers = elimination_multipliers(b, e);
+    let multipliers = if x_multipliers.0 + x_multipliers.1 <= y_multipliers.0 + y_multipliers.1 {
+        x_multipliers
+    } else {
+        y_multipliers
+    };
+
+    let mut operations = vec![Operation::OverheadEqSystem];
+    for multiplier in [multipliers.0, multipliers.1] {
+        if multiplier > 1 {
+            // Multiplying one whole equation scales two coefficients and its constant.
+            operations.extend([
+                Operation::BaseTimes,
+                Operation::BaseTimes,
+                Operation::BaseTimes,
+            ]);
+        }
+    }
+    // Eliminate one variable, solve the remaining one, then back-substitute.
+    operations.extend([
+        Operation::BaseMinus,
+        Operation::BaseMinus,
+        Operation::BaseDivide,
+        Operation::BaseTimes,
+        Operation::BaseMinus,
+        Operation::BaseDivide,
+    ]);
+    if [a, b, c, d, e, f].iter().any(|value| *value < 0) {
+        operations.push(Operation::OverheadNegative);
+    }
+    operations.extend(big_num_operations(answer));
+
+    let steps = operations
+        .into_iter()
+        .enumerate()
+        .map(|(index, operation)| {
+            let id = index as u32;
+            step(id, operation, if id == 0 { vec![] } else { vec![id - 1] })
+        })
+        .collect();
+    SolutionGraph { steps }
+}
+
 fn rational_subtraction_operations(
     left: RationalCoefficient,
     right: RationalCoefficient,
@@ -603,6 +666,108 @@ pub fn multiplication_table_graph(answer: u8) -> SolutionGraph {
     }])
 }
 
+/// Division-table difficulty is intentionally controlled only by the dividend
+/// size, as requested by the curriculum specification.
+pub fn division_table_graph(dividend: u8) -> SolutionGraph {
+    operations_graph(vec![Operation::BigNum {
+        magnitude: u64::from(dividend),
+    }])
+}
+
+fn contains_extracted_square_factor(answer: &AnswerNode) -> bool {
+    match answer {
+        AnswerNode::Binary {
+            operator: crate::answer::AnswerBinaryOperator::Multiply,
+            left,
+            right,
+        } => {
+            matches!(left.as_ref(), AnswerNode::Integer(value) if value.unsigned_abs() > 1)
+                && matches!(right.as_ref(), AnswerNode::Root { index: None, .. })
+                || matches!(right.as_ref(), AnswerNode::Integer(value) if value.unsigned_abs() > 1)
+                    && matches!(left.as_ref(), AnswerNode::Root { index: None, .. })
+                || contains_extracted_square_factor(left)
+                || contains_extracted_square_factor(right)
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => {
+            contains_extracted_square_factor(numerator)
+                || contains_extracted_square_factor(denominator)
+        }
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => {
+            contains_extracted_square_factor(whole)
+                || contains_extracted_square_factor(numerator)
+                || contains_extracted_square_factor(denominator)
+        }
+        AnswerNode::Root { radicand, index } => {
+            contains_extracted_square_factor(radicand)
+                || index
+                    .as_deref()
+                    .is_some_and(contains_extracted_square_factor)
+        }
+        AnswerNode::Negative(value) | AnswerNode::PlusMinus(value) => {
+            contains_extracted_square_factor(value)
+        }
+        AnswerNode::Binary { left, right, .. } => {
+            contains_extracted_square_factor(left) || contains_extracted_square_factor(right)
+        }
+        AnswerNode::Tuple(values) => values.iter().any(contains_extracted_square_factor),
+        AnswerNode::Empty
+        | AnswerNode::Integer(_)
+        | AnswerNode::ExactDecimal { .. }
+        | AnswerNode::NanError(_)
+        | AnswerNode::Variable(_) => false,
+    }
+}
+
+pub fn quadratic_square_graph(answer: &AnswerNode) -> SolutionGraph {
+    let mut operations = vec![
+        Operation::OverheadQuadratic,
+        Operation::BaseDivide,
+        Operation::BaseRoot,
+    ];
+    if contains_extracted_square_factor(answer) {
+        operations.push(Operation::OverheadFactorPerfectSquare);
+    }
+    operations.extend(big_num_operations(answer));
+    operations_graph(operations)
+}
+
+pub fn quadratic_factoring_graph(answer: &AnswerNode) -> SolutionGraph {
+    let mut operations = vec![Operation::OverheadFactorGeneral];
+    operations.extend(big_num_operations(answer));
+    operations_graph(operations)
+}
+
+pub fn quadratic_formula_graph(
+    has_fraction_coefficients: bool,
+    answer: &AnswerNode,
+) -> SolutionGraph {
+    let mut operations = vec![Operation::OverheadQuadratic];
+    if has_fraction_coefficients {
+        operations.push(Operation::OverheadLcm);
+        operations.push(Operation::BaseTimes);
+    }
+    // b^2 - 4ac, square root, then divide by 2a.
+    operations.extend([
+        Operation::BaseTimes,
+        Operation::BaseTimes,
+        Operation::BaseMinus,
+        Operation::BaseRoot,
+        Operation::BaseDivide,
+    ]);
+    if contains_extracted_square_factor(answer) {
+        operations.push(Operation::OverheadFactorPerfectSquare);
+    }
+    operations.extend(big_num_operations(answer));
+    operations_graph(operations)
+}
+
 pub fn arithmetic_expression_graph(
     expression: &ArithmeticExpression,
     answer: &AnswerNode,
@@ -620,6 +785,13 @@ fn arithmetic_expression_operations(
             Some((RationalCoefficient::new(*value, 1)?, Vec::new()))
         }
         ArithmeticExpression::Rational { value } => Some((*value, Vec::new())),
+        ArithmeticExpression::ExactDecimal { coefficient, scale } => {
+            let denominator = 10_i64.checked_pow(*scale)?;
+            Some((
+                RationalCoefficient::new(*coefficient, denominator)?,
+                Vec::new(),
+            ))
+        }
         ArithmeticExpression::Binary {
             operator,
             left,
@@ -688,7 +860,23 @@ fn arithmetic_expression_operations(
                 }
                 ArithmeticOperator::Divide => {
                     let result = left_value.divide(right_value)?;
-                    let mut ops = vec![Operation::BaseDivide];
+                    let mut ops = if left_value.is_integer() && right_value.is_integer() {
+                        vec![Operation::BaseDivide]
+                    } else {
+                        // Fraction division is solved by inverting the second
+                        // operand and then using the same two component products
+                        // as fraction multiplication.
+                        vec![
+                            rational_component_multiply_operation(
+                                left_value.numerator,
+                                right_value.denominator,
+                            ),
+                            rational_component_multiply_operation(
+                                left_value.denominator,
+                                right_value.numerator,
+                            ),
+                        ]
+                    };
                     if left_value.numerator < 0 || right_value.numerator < 0 {
                         ops.push(Operation::OverheadNegative);
                     }
@@ -911,6 +1099,48 @@ mod fraction_multiplication_tests {
                 Operation::OverheadGcdDivisible
             ]
         );
+    }
+
+    #[test]
+    fn division_table_effort_depends_only_on_dividend_size() {
+        let weights = OperationWeights::default();
+        let nine = calculate_graph_effort(&division_table_graph(9), &weights).value;
+        let eighteen = calculate_graph_effort(&division_table_graph(18), &weights).value;
+        let eighty_one = calculate_graph_effort(&division_table_graph(81), &weights).value;
+        assert!(nine < eighteen && eighteen < eighty_one);
+        assert_eq!(division_table_graph(18).steps.len(), 1);
+        assert!(matches!(
+            division_table_graph(18).steps[0].operation,
+            Operation::BigNum { magnitude: 18 }
+        ));
+    }
+
+    #[test]
+    fn perfect_square_root_is_cheaper_than_extracting_a_square_factor() {
+        let weights = OperationWeights::default();
+        let sqrt_16 = AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(4)));
+        let sqrt_12 = AnswerNode::PlusMinus(Box::new(AnswerNode::Binary {
+            operator: crate::answer::AnswerBinaryOperator::Multiply,
+            left: Box::new(AnswerNode::Integer(2)),
+            right: Box::new(AnswerNode::Root {
+                radicand: Box::new(AnswerNode::Integer(3)),
+                index: None,
+            }),
+        }));
+        let easy = calculate_graph_effort(&quadratic_square_graph(&sqrt_16), &weights);
+        let harder = calculate_graph_effort(&quadratic_square_graph(&sqrt_12), &weights);
+        assert_eq!(
+            easy.operation_vector
+                .get(OperationKind::OverheadFactorPerfectSquare),
+            0.0
+        );
+        assert_eq!(
+            harder
+                .operation_vector
+                .get(OperationKind::OverheadFactorPerfectSquare),
+            1.0
+        );
+        assert!(easy.value < harder.value);
     }
 
     #[test]

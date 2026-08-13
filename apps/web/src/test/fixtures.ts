@@ -14,7 +14,7 @@ import {
   type ProblemDto,
   type WorksheetDto,
 } from '@/domain/drill-engine';
-import { ALL_MATH_STRUCTURES, LINEAR_EQUATION_1_DEFINITION, LINEAR_EQUATION_2_DEFINITION } from '@/domain/theme-registry';
+import { ALL_MATH_STRUCTURES, LIAR_PUZZLE_DEFINITION, LINEAR_EQUATION_1_DEFINITION, LINEAR_EQUATION_2_DEFINITION, SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/theme-registry';
 
 const FIXTURE_SEED = 'fixtureSeed';
 const FIXTURE_THEME_ID = 1;
@@ -50,7 +50,7 @@ export function fixtureWorksheet(): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `3-1-${ADDITION_GENERATOR_REVISION}-fixtureSeed-3`,
+    problem_set_id: `4-1-${ADDITION_GENERATOR_REVISION}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: FIXTURE_THEME_ID,
@@ -108,7 +108,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `3-${themeId}-${definition.generator_revision}-fixtureSeed-3`,
+    problem_set_id: `4-${themeId}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: themeId,
@@ -116,6 +116,80 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    skill_id: definition.compatibility.skillId,
+    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
+export function simultaneousFixtureWorksheet(): WorksheetDto {
+  const definition = SIMULTANEOUS_EQUATION_1_DEFINITION;
+  const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => {
+    const x = (index % 7) - 3;
+    const y = (index % 5) - 2;
+    const a = 1;
+    const b = 1;
+    const d = 1;
+    const e = -1;
+    return {
+      schema_version: DRILL_SCHEMA_VERSION,
+      id: index + 1,
+      problem_id: String(index + 1),
+      numeric_theme_id: definition.numeric_theme_id,
+      prompt: { kind: 'simultaneous_equation', a, b, c: a * x + b * y, d, e, f: d * x + e * y },
+      input_interface: definition.inputInterface,
+      answer_schema: { kind: 'ordered_pair', min: '-15', max: '15' },
+      canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: String(x) }, { type: 'integer', value: String(y) }] },
+      solution_graph: { steps: [] },
+      operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+      effort: 0,
+    };
+  });
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    problem_set_id: `3-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
+    identity: {
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: definition.numeric_theme_id,
+      generator_revision: definition.generator_revision,
+      seed: FIXTURE_SEED,
+      difficulty: FIXTURE_DIFFICULTY,
+    },
+    skill_id: definition.compatibility.skillId,
+    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
+export function liarFixtureWorksheet(): WorksheetDto {
+  const definition = LIAR_PUZZLE_DEFINITION;
+  const statements = [
+    { kind: 'says_liar' as const, person: 2 },
+    { kind: 'exact_liar_count' as const, count: 2 },
+    { kind: 'both_not_liar' as const, first: 2, second: 4 },
+    { kind: 'implication' as const, antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false },
+  ];
+  const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
+    schema_version: DRILL_SCHEMA_VERSION,
+    id: index + 1,
+    problem_id: String(index + 1),
+    numeric_theme_id: definition.numeric_theme_id,
+    prompt: { kind: 'liar_puzzle', people_count: 4, statements },
+    input_interface: definition.inputInterface,
+    answer_schema: { kind: 'algebraic' },
+    canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] },
+    solution_graph: { steps: [] },
+    operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+    effort: 0,
+  }));
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    problem_set_id: `4-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-2`,
+    identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: FIXTURE_SEED, difficulty: 2 },
     skill_id: definition.compatibility.skillId,
     curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,

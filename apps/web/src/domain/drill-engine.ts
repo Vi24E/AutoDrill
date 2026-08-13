@@ -16,6 +16,15 @@ const SIGNED_ARITHMETIC_2_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['8'];
 const FRACTION_ADDITION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['9'];
 const FRACTION_MULTIPLICATION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['10'];
 const FRACTION_SUBTRACTION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['11'];
+const FRACTION_DIVISION_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['12'];
+const DIVISION_1_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['13'];
+const QUADRATIC_EQUATION_1_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['14'];
+const QUADRATIC_EQUATION_2_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['15'];
+const QUADRATIC_EQUATION_3_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['16'];
+const DECIMAL_ADD_SUBTRACT_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['17'];
+const DECIMAL_MULTIPLY_DIVIDE_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['18'];
+const SIMULTANEOUS_EQUATION_1_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['19'];
+const LIAR_PUZZLE_CORE_CONTRACT = DRILL_CORE_CONTRACT.themes['20'];
 
 export const DRILL_SCHEMA_VERSION = DRILL_CORE_CONTRACT.schema_version;
 export const ADDITION_THEME_ID = ADDITION_CORE_CONTRACT.numeric_theme_id;
@@ -29,6 +38,15 @@ export const SIGNED_ARITHMETIC_2_THEME_ID = SIGNED_ARITHMETIC_2_CORE_CONTRACT.nu
 export const FRACTION_ADDITION_THEME_ID = FRACTION_ADDITION_CORE_CONTRACT.numeric_theme_id;
 export const FRACTION_MULTIPLICATION_THEME_ID = FRACTION_MULTIPLICATION_CORE_CONTRACT.numeric_theme_id;
 export const FRACTION_SUBTRACTION_THEME_ID = FRACTION_SUBTRACTION_CORE_CONTRACT.numeric_theme_id;
+export const FRACTION_DIVISION_THEME_ID = FRACTION_DIVISION_CORE_CONTRACT.numeric_theme_id;
+export const DIVISION_1_THEME_ID = DIVISION_1_CORE_CONTRACT.numeric_theme_id;
+export const QUADRATIC_EQUATION_1_THEME_ID = QUADRATIC_EQUATION_1_CORE_CONTRACT.numeric_theme_id;
+export const QUADRATIC_EQUATION_2_THEME_ID = QUADRATIC_EQUATION_2_CORE_CONTRACT.numeric_theme_id;
+export const QUADRATIC_EQUATION_3_THEME_ID = QUADRATIC_EQUATION_3_CORE_CONTRACT.numeric_theme_id;
+export const DECIMAL_ADD_SUBTRACT_THEME_ID = DECIMAL_ADD_SUBTRACT_CORE_CONTRACT.numeric_theme_id;
+export const DECIMAL_MULTIPLY_DIVIDE_THEME_ID = DECIMAL_MULTIPLY_DIVIDE_CORE_CONTRACT.numeric_theme_id;
+export const SIMULTANEOUS_EQUATION_1_THEME_ID = SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.numeric_theme_id;
+export const LIAR_PUZZLE_THEME_ID = LIAR_PUZZLE_CORE_CONTRACT.numeric_theme_id;
 export const ADDITION_SKILL_ID = ADDITION_CORE_CONTRACT.skill_id;
 export const ADDITION_GENERATOR_REVISION = ADDITION_CORE_CONTRACT.generator_revision;
 export const LINEAR_EQUATION_1_SKILL_ID = LINEAR_EQUATION_1_CORE_CONTRACT.skill_id;
@@ -51,10 +69,28 @@ export const FRACTION_MULTIPLICATION_SKILL_ID = FRACTION_MULTIPLICATION_CORE_CON
 export const FRACTION_MULTIPLICATION_GENERATOR_REVISION = FRACTION_MULTIPLICATION_CORE_CONTRACT.generator_revision;
 export const FRACTION_SUBTRACTION_SKILL_ID = FRACTION_SUBTRACTION_CORE_CONTRACT.skill_id;
 export const FRACTION_SUBTRACTION_GENERATOR_REVISION = FRACTION_SUBTRACTION_CORE_CONTRACT.generator_revision;
+export const FRACTION_DIVISION_SKILL_ID = FRACTION_DIVISION_CORE_CONTRACT.skill_id;
+export const FRACTION_DIVISION_GENERATOR_REVISION = FRACTION_DIVISION_CORE_CONTRACT.generator_revision;
+export const DIVISION_1_SKILL_ID = DIVISION_1_CORE_CONTRACT.skill_id;
+export const DIVISION_1_GENERATOR_REVISION = DIVISION_1_CORE_CONTRACT.generator_revision;
+export const QUADRATIC_EQUATION_1_SKILL_ID = QUADRATIC_EQUATION_1_CORE_CONTRACT.skill_id;
+export const QUADRATIC_EQUATION_1_GENERATOR_REVISION = QUADRATIC_EQUATION_1_CORE_CONTRACT.generator_revision;
+export const QUADRATIC_EQUATION_2_SKILL_ID = QUADRATIC_EQUATION_2_CORE_CONTRACT.skill_id;
+export const QUADRATIC_EQUATION_2_GENERATOR_REVISION = QUADRATIC_EQUATION_2_CORE_CONTRACT.generator_revision;
+export const QUADRATIC_EQUATION_3_SKILL_ID = QUADRATIC_EQUATION_3_CORE_CONTRACT.skill_id;
+export const QUADRATIC_EQUATION_3_GENERATOR_REVISION = QUADRATIC_EQUATION_3_CORE_CONTRACT.generator_revision;
+export const DECIMAL_ADD_SUBTRACT_SKILL_ID = DECIMAL_ADD_SUBTRACT_CORE_CONTRACT.skill_id;
+export const DECIMAL_ADD_SUBTRACT_GENERATOR_REVISION = DECIMAL_ADD_SUBTRACT_CORE_CONTRACT.generator_revision;
+export const DECIMAL_MULTIPLY_DIVIDE_SKILL_ID = DECIMAL_MULTIPLY_DIVIDE_CORE_CONTRACT.skill_id;
+export const DECIMAL_MULTIPLY_DIVIDE_GENERATOR_REVISION = DECIMAL_MULTIPLY_DIVIDE_CORE_CONTRACT.generator_revision;
+export const SIMULTANEOUS_EQUATION_1_SKILL_ID = SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.skill_id;
+export const SIMULTANEOUS_EQUATION_1_GENERATOR_REVISION = SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.generator_revision;
+export const LIAR_PUZZLE_SKILL_ID = LIAR_PUZZLE_CORE_CONTRACT.skill_id;
+export const LIAR_PUZZLE_GENERATOR_REVISION = LIAR_PUZZLE_CORE_CONTRACT.generator_revision;
 /** Kept as a presentation label for existing callers; never sent to Rust. */
 export const ADDITION_GENERATOR_VERSION = 'addition-one-digit-r2' as const;
 
-export type DifficultyLevel = 1 | 2 | 3 | 4 | 5;
+export type DifficultyLevel = 1 | 2 | 3 | 4;
 
 export type CurriculumPathSegment = {
   id: string;
@@ -97,6 +133,33 @@ export const SIGNED_ARITHMETIC_2_CURRICULUM_PATH = simpleCurriculumPath(SIGNED_A
 export const FRACTION_ADDITION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_ADDITION_CORE_CONTRACT, 'jp-grade-5');
 export const FRACTION_SUBTRACTION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_SUBTRACTION_CORE_CONTRACT, 'jp-grade-5');
 export const FRACTION_MULTIPLICATION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_MULTIPLICATION_CORE_CONTRACT, 'jp-grade-6');
+export const FRACTION_DIVISION_CURRICULUM_PATH = simpleCurriculumPath(FRACTION_DIVISION_CORE_CONTRACT, 'jp-grade-6');
+export const DIVISION_1_CURRICULUM_PATH = simpleCurriculumPath(DIVISION_1_CORE_CONTRACT, 'jp-grade-3');
+export const DECIMAL_ADD_SUBTRACT_CURRICULUM_PATH = simpleCurriculumPath(DECIMAL_ADD_SUBTRACT_CORE_CONTRACT, 'jp-grade-4');
+export const DECIMAL_MULTIPLY_DIVIDE_CURRICULUM_PATH = simpleCurriculumPath(DECIMAL_MULTIPLY_DIVIDE_CORE_CONTRACT, 'jp-grade-5');
+export const SIMULTANEOUS_EQUATION_1_CURRICULUM_PATH: readonly CurriculumPathSegment[] = [
+  { id: 'root', label: SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.curriculum_path[0] },
+  { id: 'jp-grade-8', label: SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.curriculum_path[1] },
+  { id: 'jp-grade-8-simultaneous-equation', label: SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.curriculum_path[2] },
+  { id: SIMULTANEOUS_EQUATION_1_SKILL_ID, label: SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.curriculum_path[3] },
+];
+export const LIAR_PUZZLE_CURRICULUM_PATH: readonly CurriculumPathSegment[] = [
+  { id: 'root', label: LIAR_PUZZLE_CORE_CONTRACT.curriculum_path[0] },
+  { id: 'bonus', label: LIAR_PUZZLE_CORE_CONTRACT.curriculum_path[1] },
+  { id: LIAR_PUZZLE_SKILL_ID, label: LIAR_PUZZLE_CORE_CONTRACT.curriculum_path[2] },
+];
+
+function quadraticCurriculumPath(core: { curriculum_path: readonly string[]; skill_id: string }): readonly CurriculumPathSegment[] {
+  return [
+    { id: 'root', label: core.curriculum_path[0]! },
+    { id: 'jp-grade-9', label: core.curriculum_path[1]! },
+    { id: 'jp-grade-9-quadratic-equation', label: core.curriculum_path[2]! },
+    { id: core.skill_id, label: core.curriculum_path[3]! },
+  ];
+}
+export const QUADRATIC_EQUATION_1_CURRICULUM_PATH = quadraticCurriculumPath(QUADRATIC_EQUATION_1_CORE_CONTRACT);
+export const QUADRATIC_EQUATION_2_CURRICULUM_PATH = quadraticCurriculumPath(QUADRATIC_EQUATION_2_CORE_CONTRACT);
+export const QUADRATIC_EQUATION_3_CURRICULUM_PATH = quadraticCurriculumPath(QUADRATIC_EQUATION_3_CORE_CONTRACT);
 
 export type WorksheetLayout = {
   problem_count: number;
@@ -115,6 +178,15 @@ export const SIGNED_ARITHMETIC_2_LAYOUT: WorksheetLayout = { ...SIGNED_ARITHMETI
 export const FRACTION_ADDITION_LAYOUT: WorksheetLayout = { ...FRACTION_ADDITION_CORE_CONTRACT.layout };
 export const FRACTION_MULTIPLICATION_LAYOUT: WorksheetLayout = { ...FRACTION_MULTIPLICATION_CORE_CONTRACT.layout };
 export const FRACTION_SUBTRACTION_LAYOUT: WorksheetLayout = { ...FRACTION_SUBTRACTION_CORE_CONTRACT.layout };
+export const FRACTION_DIVISION_LAYOUT: WorksheetLayout = { ...FRACTION_DIVISION_CORE_CONTRACT.layout };
+export const DIVISION_1_LAYOUT: WorksheetLayout = { ...DIVISION_1_CORE_CONTRACT.layout };
+export const QUADRATIC_EQUATION_1_LAYOUT: WorksheetLayout = { ...QUADRATIC_EQUATION_1_CORE_CONTRACT.layout };
+export const QUADRATIC_EQUATION_2_LAYOUT: WorksheetLayout = { ...QUADRATIC_EQUATION_2_CORE_CONTRACT.layout };
+export const QUADRATIC_EQUATION_3_LAYOUT: WorksheetLayout = { ...QUADRATIC_EQUATION_3_CORE_CONTRACT.layout };
+export const DECIMAL_ADD_SUBTRACT_LAYOUT: WorksheetLayout = { ...DECIMAL_ADD_SUBTRACT_CORE_CONTRACT.layout };
+export const DECIMAL_MULTIPLY_DIVIDE_LAYOUT: WorksheetLayout = { ...DECIMAL_MULTIPLY_DIVIDE_CORE_CONTRACT.layout };
+export const SIMULTANEOUS_EQUATION_1_LAYOUT: WorksheetLayout = { ...SIMULTANEOUS_EQUATION_1_CORE_CONTRACT.layout };
+export const LIAR_PUZZLE_LAYOUT: WorksheetLayout = { ...LIAR_PUZZLE_CORE_CONTRACT.layout };
 
 /** Exact generate_worksheet request; registry owns layout and generator revision. */
 export type DrillSettings = {
@@ -144,6 +216,7 @@ export type AnswerNode =
   | { type: 'root'; value: { radicand: AnswerNode; index: AnswerNode | null } }
   | { type: 'negative'; value: AnswerNode }
   | { type: 'plus_minus'; value: AnswerNode }
+  | { type: 'binary'; value: { operator: 'add' | 'subtract' | 'multiply'; left: AnswerNode; right: AnswerNode } }
   | { type: 'tuple'; value: AnswerNode[] }
   | { type: 'variable'; value: string };
 
@@ -164,7 +237,8 @@ export type AnswerInputStructure =
   | 'root'
   | 'negative'
   | 'plus_minus'
-  | 'tuple';
+  | 'tuple'
+  | 'arithmetic';
 
 export type AnswerInputInterface =
   | { type: 'simple_numeric'; allow_decimal: boolean; allow_negative: boolean }
@@ -220,7 +294,23 @@ export type ArithmeticOperator = 'add' | 'subtract' | 'multiply' | 'divide';
 export type ArithmeticExpression =
   | { kind: 'integer'; value: number }
   | { kind: 'rational'; value: RationalCoefficient }
+  | { kind: 'exact_decimal'; coefficient: number; scale: number }
   | { kind: 'binary'; operator: ArithmeticOperator; left: ArithmeticExpression; right: ArithmeticExpression };
+
+export type LiarStatement =
+  | { kind: 'says_liar'; person: number }
+  | { kind: 'says_not_liar'; person: number }
+  | { kind: 'exactly_one_liar'; first: number; second: number }
+  | { kind: 'exact_liar_count'; count: number }
+  | { kind: 'both_liar'; first: number; second: number }
+  | { kind: 'both_not_liar'; first: number; second: number }
+  | {
+      kind: 'implication';
+      antecedent_person: number;
+      antecedent_is_liar: boolean;
+      consequent_person: number;
+      consequent_is_liar: boolean;
+    };
 
 export type ProblemPrompt =
   | {
@@ -240,6 +330,27 @@ export type ProblemPrompt =
       d: RationalCoefficient;
       left_negative_constant_as_subtraction: boolean;
       right_negative_constant_as_subtraction: boolean;
+    }
+  | {
+      kind: 'quadratic_equation';
+      form: 'square_equals_constant' | 'square_plus_constant_zero' | 'factored_scale' | 'standard';
+      a: RationalCoefficient;
+      b: RationalCoefficient;
+      c: RationalCoefficient;
+    }
+  | {
+      kind: 'simultaneous_equation';
+      a: number;
+      b: number;
+      c: number;
+      d: number;
+      e: number;
+      f: number;
+    }
+  | {
+      kind: 'liar_puzzle';
+      people_count: number;
+      statements: LiarStatement[];
     };
 
 export type AnswerSchema =
@@ -253,7 +364,10 @@ export type AnswerSchema =
       max_abs_numerator: number;
       max_denominator: number;
       require_reduced_fraction_form: boolean;
-    };
+    }
+  | { kind: 'decimal'; max_scale: number }
+  | { kind: 'ordered_pair' }
+  | { kind: 'algebraic' };
 
 export type OperationVector = {
   values: readonly number[];
@@ -354,7 +468,7 @@ export const DEFAULT_DRILL_SETTINGS: DrillSettings = {
   schema_version: DRILL_SCHEMA_VERSION,
   // The Web curriculum registry replaces this with the selected theme ID.
   numeric_theme_id: 2,
-  difficulty: 3,
+  difficulty: 2,
   // q1 resolves a blank value to a fresh automatic seed per click.
   seed: '',
 };
@@ -390,6 +504,13 @@ export function answerNodeText(answer: AnswerNode): string {
     case 'root': return `${answer.value.index ? answerNodeText(answer.value.index) : ''}√${answerNodeText(answer.value.radicand)}`;
     case 'negative': return `−${answerNodeText(answer.value)}`;
     case 'plus_minus': return `±${answerNodeText(answer.value)}`;
+    case 'binary': {
+      if (answer.value.operator === 'add' && answer.value.right.type === 'plus_minus') {
+        return `${answerNodeText(answer.value.left)} ${answerNodeText(answer.value.right)}`;
+      }
+      const operator = answer.value.operator === 'add' ? ' + ' : answer.value.operator === 'subtract' ? ' − ' : ' × ';
+      return `${answerNodeText(answer.value.left)}${operator}${answerNodeText(answer.value.right)}`;
+    }
     case 'tuple': return answer.value.map(answerNodeText).join(', ');
     case 'variable': return answer.value;
   }

@@ -7,8 +7,8 @@ use thiserror::Error;
 use crate::model::SCHEMA_VERSION;
 
 pub const MIN_DIFFICULTY: u8 = 1;
-pub const MAX_DIFFICULTY: u8 = 5;
-pub const DEFAULT_DIFFICULTY: Difficulty = Difficulty(3);
+pub const MAX_DIFFICULTY: u8 = 4;
+pub const DEFAULT_DIFFICULTY: Difficulty = Difficulty(2);
 pub const MAX_SEED_LENGTH: usize = 16;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -166,7 +166,7 @@ pub enum IdentityError {
     InvalidNumericPart { name: &'static str },
     #[error("schema version {received} is unsupported; expected {expected}")]
     UnsupportedSchemaVersion { received: u16, expected: u16 },
-    #[error("difficulty {value} is outside 1..=5")]
+    #[error("difficulty {value} is outside 1..=4")]
     InvalidDifficulty { value: u8 },
     #[error("seed length {length} is outside 1..={max}")]
     InvalidSeedLength { length: usize, max: usize },

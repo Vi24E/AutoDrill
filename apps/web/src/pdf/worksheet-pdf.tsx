@@ -1,13 +1,13 @@
 import { createRoot, type Root } from 'react-dom/client';
-import { useEffect, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 import { MathLiveStatic } from '@/components/MathLiveMath';
 import { ProblemExpression } from '@/components/ProblemExpression';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
-import { answerNodeText, type WorksheetDto } from '@/domain/drill-engine';
+import { answerNodeText, type AnswerNode, type WorksheetDto } from '@/domain/drill-engine';
 import { answerNodeLatex } from '@/domain/mathlive-format';
-import { problemExpression } from '@/domain/problem-format';
+import { liarPersonLabel, problemExpression } from '@/domain/problem-format';
 import { findThemeDefinitionByNumericId, type ThemeDefinition } from '@/domain/theme-registry';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
 
@@ -42,7 +42,7 @@ export function buildPdfPageModel(worksheet: WorksheetDto, metadata?: WorksheetM
   const cells = layout.cells.map(({ problem }, index) => ({
     number: `${index + 1}.`,
     problem_id: problem.problem_id,
-    expression: problemExpression(problem),
+    expression: problemExpression(problem, theme.worksheet.answerPlacement !== 'below'),
     answer: answerNodeText(problem.canonical_answer) || undefined,
   }));
   const shared = {
@@ -71,6 +71,12 @@ function toPagePercent(value: number, total: number): string {
   return `${(value / total) * 100}%`;
 }
 
+function printAnswerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerNode {
+  return answer.type === 'tuple' && answer.value[coordinate]
+    ? answer.value[coordinate]
+    : ({ type: 'empty' } satisfies AnswerNode);
+}
+
 function PrintAnswer({
   problem,
   answerPrefix,
@@ -80,6 +86,42 @@ function PrintAnswer({
   answerPrefix: string | null;
   answers: boolean;
 }) {
+  if (problem.prompt.kind === 'liar_puzzle') {
+    const selected = new Set(problem.canonical_answer.type === 'tuple'
+      ? problem.canonical_answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : [])
+      : []);
+    return (
+      <span className={`problem-answer-area problem-answer-area-liar ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`}>
+        <span className="liar-person-choice-row">
+          {Array.from({ length: problem.prompt.people_count }, (_, index) => index + 1).map((person) => (
+            <span key={person} className={`liar-person-choice ${answers && selected.has(person) ? 'liar-person-choice-selected' : ''}`}>{liarPersonLabel(person)}</span>
+          ))}
+        </span>
+      </span>
+    );
+  }
+
+  if (problem.prompt.kind === 'simultaneous_equation') {
+    const xAnswer = printAnswerCoordinate(problem.canonical_answer, 0);
+    const yAnswer = printAnswerCoordinate(problem.canonical_answer, 1);
+    return (
+      <span className={`problem-answer-area problem-answer-area-simultaneous ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`} aria-hidden={answers ? undefined : 'true'}>
+        <span className="simultaneous-answer-coordinate">
+          <MathLiveStatic className="answer-prefix-label" latex="x\\,=" ariaLabel="x =" />
+          {answers
+            ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(xAnswer)} ariaLabel={answerNodeText(xAnswer)} />
+            : <span className="answer-box worksheet-print-empty-answer" />}
+        </span>
+        <span className="simultaneous-answer-coordinate">
+          <MathLiveStatic className="answer-prefix-label" latex="y\\,=" ariaLabel="y =" />
+          {answers
+            ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(yAnswer)} ariaLabel={answerNodeText(yAnswer)} />
+            : <span className="answer-box worksheet-print-empty-answer" />}
+        </span>
+      </span>
+    );
+  }
+
   if (!answers) {
     return (
       <span className="problem-answer-area worksheet-print-problem-answer" aria-hidden="true">
@@ -125,7 +167,8 @@ function WorksheetPrintPage({
 }) {
   const layout = buildSharedWorksheetLayout(worksheet);
   const theme = themeForWorksheet(worksheet);
-  const gradeBandClass = worksheetGradeBandClass(theme.grade.slug);
+  const gradeBandClass = theme.grade ? worksheetGradeBandClass(theme.grade.slug) : 'worksheet-grade-junior-high';
+  const categoryLabel = theme.grade?.label ?? 'おまけ';
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
   const dividerStyle: CSSProperties = {
@@ -146,18 +189,20 @@ function WorksheetPrintPage({
     >
       <div className={`worksheet-print-page-inner ${answers ? 'worksheet-print-page-inner-rotated' : ''}`}>
         <div className="worksheet-print-heading">
-          <span>{theme.grade.label}</span>
+          <span>{categoryLabel}</span>
           <strong>{theme.worksheet.title}{answers ? ' 解答' : ''}</strong>
         </div>
         <div className="problem-grid">
           {theme.worksheet.instruction ? (
             <p className="worksheet-instruction">{theme.worksheet.instruction}</p>
           ) : null}
-          <div className="problem-divider" style={dividerStyle} />
+          {worksheet.layout.columns > 1 ? <div className="problem-divider" style={dividerStyle} /> : null}
           {layout.cells.map((cell) => {
             const { problem, index } = cell;
             const position = getCellTopPosition(layout, cell);
-            const isLinearEquation = problem.prompt.kind === 'linear_equation';
+            const isLinearEquation = problem.prompt.kind === 'linear_equation' || problem.prompt.kind === 'quadratic_equation' || problem.prompt.kind === 'simultaneous_equation';
+            const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
+            const stackAnswerBelow = theme.worksheet.answerPlacement === 'below' && !isLinearEquation;
             const cellStyle: CSSProperties = {
               left: toPagePercent(position.x, A4_PAGE.width),
               top: toPagePercent(position.y, A4_PAGE.height),
@@ -166,13 +211,13 @@ function WorksheetPrintPage({
             };
             return (
               <div
-                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''}`}
+                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''}`}
                 data-print-problem-index={index}
                 style={cellStyle}
                 key={problem.problem_id}
               >
                 <span className="problem-number">{index + 1}.</span>
-                <span className="expression"><ProblemExpression problem={problem} /></span>
+                <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
                 <PrintAnswer
                   problem={problem}
                   answerPrefix={theme.worksheet.answerPrefix}
@@ -213,14 +258,17 @@ export function WorksheetPrintDocument({
 function WorksheetPrintPreview({
   worksheet,
   metadata,
+  host,
   onClose,
-  onPrint,
 }: {
   worksheet: WorksheetDto;
   metadata?: WorksheetMetadata;
+  host: HTMLElement;
   onClose: () => void;
-  onPrint: () => void;
 }) {
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -234,6 +282,24 @@ function WorksheetPrintPreview({
     };
   }, [onClose]);
 
+  const printNow = async () => {
+    if (printing) return;
+    setPrinting(true);
+    setPrintError(null);
+    try {
+      // Native print snapshots the DOM synchronously. Wait only after the user
+      // requests printing, then require every MathLive element to have stable,
+      // non-zero shadow content before opening the browser print dialog.
+      await prepareMathLiveForPrint(host, 5_000);
+      window.print();
+    } catch (error) {
+      console.error('Worksheet print preparation failed.', error);
+      setPrintError('数式の描画が完了しませんでした。もう一度「印刷する」を押してください。');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   return (
     <div
       className="worksheet-print-preview"
@@ -245,9 +311,17 @@ function WorksheetPrintPreview({
         <button type="button" className="worksheet-print-preview-back" onClick={onClose}>戻る</button>
         <div className="worksheet-print-preview-title-group">
           <h2 id="worksheet-print-preview-title">印刷プレビュー</h2>
-          <p>問題・解答の2ページ</p>
+          <p>{printError ?? '問題・解答の2ページ'}</p>
         </div>
-        <button type="button" className="worksheet-print-preview-print" onClick={onPrint} autoFocus>印刷する</button>
+        <button
+          type="button"
+          className="worksheet-print-preview-print"
+          onClick={() => { void printNow(); }}
+          disabled={printing}
+          autoFocus
+        >
+          {printing ? '準備中…' : '印刷する'}
+        </button>
       </header>
       <div className="worksheet-print-preview-scroll">
         <div className="worksheet-print-preview-document">
@@ -265,12 +339,56 @@ function nextAnimationFrame(): Promise<void> {
   });
 }
 
-async function prepareMathLiveForPrint(host: HTMLElement): Promise<void> {
+function mathSpanRenderSignature(element: MathSpanWithRender): string | null {
+  const content = element.shadowRoot?.querySelector<HTMLElement>('[part~="render"]');
+  if (!content) return null;
+  const rect = content.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  return `${rect.width.toFixed(2)}x${rect.height.toFixed(2)}`;
+}
+
+async function prepareMathLiveForPrint(host: HTMLElement, timeoutMs = 4_000): Promise<void> {
   if (typeof customElements !== 'undefined') await customElements.whenDefined('math-span');
-  await nextAnimationFrame();
-  for (const element of host.querySelectorAll<MathSpanWithRender>('math-span')) element.render?.();
   if (document.fonts?.ready) await document.fonts.ready;
-  await nextAnimationFrame();
+  const deadline = performance.now() + timeoutMs;
+  let previousSignature = '';
+  let stableFrames = 0;
+
+  while (performance.now() < deadline) {
+    const elements = [...host.querySelectorAll<MathSpanWithRender>('math-span')];
+    for (const element of elements) element.render?.();
+    await nextAnimationFrame();
+
+    if (elements.length === 0) return;
+    // jsdom/test doubles intentionally have no layout or MathLive shadow DOM.
+    // Production MathLive elements have measurable host rectangles once mounted.
+    const hasLayout = elements.some((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 || rect.height > 0;
+    });
+    if (!hasLayout && elements.every((element) => !element.shadowRoot)) return;
+
+    const signatures = elements.map(mathSpanRenderSignature);
+    if (signatures.every((signature): signature is string => signature !== null)) {
+      const signature = signatures.join('|');
+      stableFrames = signature === previousSignature ? stableFrames + 1 : 0;
+      previousSignature = signature;
+      // Two identical paint samples ensure fonts and all off-screen answer rows
+      // have settled before the browser takes its native print snapshot.
+      if (stableFrames >= 1) {
+        await nextAnimationFrame();
+        return;
+      }
+    } else {
+      stableFrames = 0;
+      previousSignature = '';
+    }
+  }
+
+  const total = host.querySelectorAll('math-span').length;
+  const ready = [...host.querySelectorAll<MathSpanWithRender>('math-span')]
+    .filter((element) => mathSpanRenderSignature(element) !== null).length;
+  throw new Error(`MathLive print rendering did not settle before printing (${ready}/${total} ready).`);
 }
 
 export type MountedWorksheetPrintDocument = {
@@ -341,9 +459,8 @@ export async function openWorksheetPdf(
     <WorksheetPrintPreview
       worksheet={worksheet}
       metadata={metadata}
+      host={host}
       onClose={cleanup}
-      onPrint={() => window.print()}
     />,
   );
-  await prepareMathLiveForPrint(host);
 }

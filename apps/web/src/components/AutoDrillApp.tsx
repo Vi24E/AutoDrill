@@ -36,6 +36,7 @@ import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
 import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
 import { answerNodeLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
+import { liarPersonLabel } from '@/domain/problem-format';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
@@ -122,11 +123,22 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '一桁の引き算': [["一桁", "ひとけた"], 'の', ["引", "ひ"], 'き', ["算", "ざん"]],
   '二桁の足し算': [["二桁", "ふたけた"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
   '九九': [["九九", "くく"]],
+  '割り算(1)': [["割", "わ"], 'り', ["算", "ざん"], '(1)'],
+  '小数の足し算と引き算': [["小数", "しょうすう"], 'の', ["足", "た"], 'し', ["算", "ざん"], 'と', ["引", "ひ"], 'き', ["算", "ざん"]],
+  '小数の掛け算と割り算': [["小数", "しょうすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"], 'と', ["割", "わ"], 'り', ["算", "ざん"]],
   '分数の足し算': [["分数", "ぶんすう"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
   '分数の引き算': [["分数", "ぶんすう"], 'の', ["引", "ひ"], 'き', ["算", "ざん"]],
   '分数の掛け算': [["分数", "ぶんすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"]],
+  '分数の割り算': [["分数", "ぶんすう"], 'の', ["割", "わ"], 'り', ["算", "ざん"]],
+  '二次方程式': [["二次方程式", "にじほうていしき"]],
+  '二次方程式(1)': [["二次方程式", "にじほうていしき"], '(1)'],
+  '二次方程式(2)': [["二次方程式", "にじほうていしき"], '(2)'],
+  '二次方程式(3)': [["二次方程式", "にじほうていしき"], '(3)'],
   '負の数の計算(1)': [["負", "ふ"], 'の', ["数", "すう"], 'の', ["計算", "けいさん"], '(1)'],
   '負の数の計算(2)': [["負", "ふ"], 'の', ["数", "すう"], 'の', ["計算", "けいさん"], '(2)'],
+  '連立方程式': [["連立方程式", "れんりつほうていしき"]],
+  '連立方程式(1)': [["連立方程式", "れんりつほうていしき"], '(1)'],
+  '次の連立方程式を解きなさい。': ['次の', ["連立方程式", "れんりつほうていしき"], 'を', ["解", "と"], 'きなさい。'],
   '難易度': [["難易度", "なんいど"]],
   'このテーマはまだ利用できません': ['このテーマはまだ', ["利用", "りよう"], 'できません'],
   '問題数': [["問題数", "もんだいすう"]],
@@ -149,9 +161,16 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '採点': [["採点", "さいてん"]],
   'TOPに戻る': ['TOPに', ["戻", "もど"], 'る'],
   '正解': [["正解", "せいかい"]],
-  '約分': [["約分", "やくぶん"]],
+  '約分しましょう': [["約分", "やくぶん"], 'しましょう'],
+  '整数でこたえましょう': [["整数", "せいすう"], 'でこたえましょう'],
+  '分数でこたえましょう': [["分数", "ぶんすう"], 'でこたえましょう'],
+  '最後まで計算しましょう': [["最後", "さいご"], 'まで', ["計算", "けいさん"], 'しましょう'],
+  '採点設定': [["採点設定", "さいてんせってい"]],
   '冗長なマイナス': [["冗長", "じょうちょう"], 'なマイナス'],
+  '±が重複しています': ['±が', ["重複", "ちょうふく"], 'しています'],
   '余計な小数点': [["余計", "よけい"], 'な', ["小数点", "しょうすうてん"]],
+  '同じ解が重複しています': [['同', 'おな'], 'じ', ["解", "かい"], 'が', ["重複", "ちょうふく"], 'しています'],
+  '複数の解はカンマで入力しましょう': [["複数", "ふくすう"], 'の', ["解", "かい"], 'はカンマで', ["入力", "にゅうりょく"], 'しましょう'],
   '整数で答えましょう': [["整数", "せいすう"], 'で', ["答", "こた"], 'えましょう'],
   '最も簡単な分数の形で答えましょう': [["最", "もっと"], 'も', ["簡単", "かんたん"], 'な', ["分数", "ぶんすう"], 'の', ["形", "かたち"], 'で', ["答", "こた"], 'えましょう'],
   '採点後の操作': [["採点後", "さいてんご"], 'の', ["操作", "そうさ"]],
@@ -168,14 +187,59 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
 };
 
 const GRADE_WARNING_LABELS: Readonly<Record<GradeWarningCode, string>> = {
-  fraction_not_reduced: '約分',
-  redundant_negative: '冗長なマイナス',
-  redundant_decimal: '余計な小数点',
-  fraction_form_required: '最も簡単な分数の形で答えましょう',
-  integer_form_required: '整数で答えましょう',
+  fraction_not_reduced: '約分しましょう',
+  redundant_negative: '最後まで計算しましょう',
+  redundant_plus_minus: '最後まで計算しましょう',
+  redundant_decimal: '最後まで計算しましょう',
+  duplicate_solution: '最後まで計算しましょう',
+  solution_list_required: '最後まで計算しましょう',
+  fraction_form_required: '分数でこたえましょう',
+  integer_form_required: '整数でこたえましょう',
 };
 
-const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal'>, string>> = {
+type GradingWarningCategory = 'fraction_reduction' | 'integer_form' | 'finish_calculation' | 'fraction_form';
+type WarningGradeMode = 'correct' | 'incorrect';
+type GradingSettings = Readonly<Record<GradingWarningCategory, WarningGradeMode>>;
+
+const DEFAULT_GRADING_SETTINGS: GradingSettings = {
+  fraction_reduction: 'incorrect',
+  integer_form: 'incorrect',
+  finish_calculation: 'incorrect',
+  fraction_form: 'correct',
+};
+
+const GRADING_SETTING_ROWS: readonly { category: GradingWarningCategory; label: string; description: string }[] = [
+  { category: 'fraction_reduction', label: '約分しましょう', description: '例: 2/4 と 1/2 の表記を区別します。' },
+  { category: 'integer_form', label: '整数でこたえましょう', description: '例: √16 と 4 の表記を区別します。' },
+  { category: 'fraction_form', label: '分数でこたえましょう', description: '例: 0.5 と 1/2 の表記を区別します。' },
+  { category: 'finish_calculation', label: '最後まで計算しましょう', description: '上の3項目以外の、数学的に同値だが未整理・冗長な表記の違いを区別します。' },
+];
+
+function warningCategory(warning: GradeWarningCode): GradingWarningCategory {
+  if (warning === 'fraction_not_reduced') return 'fraction_reduction';
+  if (warning === 'integer_form_required') return 'integer_form';
+  if (warning === 'fraction_form_required') return 'fraction_form';
+  return 'finish_calculation';
+}
+
+function warningMessages(warnings: readonly GradeWarningCode[]): string[] {
+  return [...new Set(warnings.map((warning) => GRADE_WARNING_LABELS[warning]))];
+}
+
+function applyGradingSettings(result: GradeResult, settings: GradingSettings): GradeResult {
+  const items = result.items.map((item) => {
+    const warningMakesIncorrect = item.warnings.some((warning) => settings[warningCategory(warning)] === 'incorrect');
+    return { ...item, correct: item.correct && !warningMakesIncorrect };
+  });
+  return {
+    ...result,
+    items,
+    correct_count: items.filter((item) => item.correct).length,
+  };
+}
+
+
+const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'>, string>> = {
   fraction: '分数',
   mixed_fraction: '帯分数',
   root: '平方根',
@@ -187,6 +251,7 @@ const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal'>
 type MathInputCommand =
   | { kind: 'insert_digit'; digit: number }
   | { kind: 'insert_structure'; structure: AnswerInputStructure }
+  | { kind: 'insert_latex'; latex: string }
   | { kind: 'move_left' }
   | { kind: 'move_right' }
   | { kind: 'delete_backward' }
@@ -222,62 +287,64 @@ function formatElapsed(startedAt: number | null, now: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-const MIN_RENDERED_ANSWER_WIDTH_LIMIT = 42;
-const MIN_RENDERED_ANSWER_HEIGHT_LIMIT = 38;
 const ANSWER_CELL_RIGHT_GUTTER = 6;
 
-function numericCssPixels(value: string): number {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function renderedMathfieldContentSize(mathfield: AutoDrillMathfield): { width: number; height: number } {
-  const hostRect = mathfield.getBoundingClientRect();
-  const content = mathfield.shadowRoot?.querySelector<HTMLElement>('[part~="content"]');
-  const contentRect = content?.getBoundingClientRect();
-  return {
-    width: Math.max(hostRect.width, mathfield.scrollWidth, contentRect?.width ?? 0),
-    height: Math.max(hostRect.height, mathfield.scrollHeight, contentRect?.height ?? 0),
-  };
-}
-
-function resizeMathfieldFrameAndCheck(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
+function mathfieldFrameFitsCell(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
   const frame = mathfield.closest<HTMLElement>('.answer-box');
   if (!frame) return true;
-  const frameStyle = window.getComputedStyle(frame);
-  const horizontalChrome = numericCssPixels(frameStyle.paddingLeft)
-    + numericCssPixels(frameStyle.paddingRight)
-    + numericCssPixels(frameStyle.borderLeftWidth)
-    + numericCssPixels(frameStyle.borderRightWidth);
-  const verticalChrome = numericCssPixels(frameStyle.paddingTop)
-    + numericCssPixels(frameStyle.paddingBottom)
-    + numericCssPixels(frameStyle.borderTopWidth)
-    + numericCssPixels(frameStyle.borderBottomWidth);
-  const contentSize = renderedMathfieldContentSize(mathfield);
-  const requiredWidth = Math.max(MIN_RENDERED_ANSWER_WIDTH_LIMIT, Math.ceil(contentSize.width + horizontalChrome));
-  const requiredHeight = Math.max(MIN_RENDERED_ANSWER_HEIGHT_LIMIT, Math.ceil(contentSize.height + verticalChrome));
+
+  // The frame is intrinsically sized by CSS (`max-content`) so MathLive and
+  // its border participate in the same browser layout pass. Do not write a
+  // JS width/height after MathLive has painted: that caused the visible
+  // one-frame flash when a root, tuple comma, or fraction changed geometry.
+  frame.style.removeProperty('width');
+  frame.style.removeProperty('height');
 
   const cell = document.querySelector<HTMLElement>(`[data-problem-index="${problemIndex}"]`);
   const cellRect = cell?.getBoundingClientRect();
-  const currentFrameRect = frame.getBoundingClientRect();
-  const maxWidth = cellRect && cellRect.width > 0 && currentFrameRect.left > 0
-    ? Math.max(MIN_RENDERED_ANSWER_WIDTH_LIMIT, cellRect.right - currentFrameRect.left - ANSWER_CELL_RIGHT_GUTTER)
-    : 180;
-  const maxHeight = cellRect && cellRect.height > 0
-    ? Math.max(MIN_RENDERED_ANSWER_HEIGHT_LIMIT, cellRect.height * 0.72)
-    : 80;
+  if (!cellRect || cellRect.width <= 0 || cellRect.height <= 0) return true;
 
-  if (requiredWidth > maxWidth || requiredHeight > maxHeight) return false;
-  frame.style.width = `${requiredWidth}px`;
-  frame.style.height = `${requiredHeight}px`;
-  return true;
+  const frameRect = frame.getBoundingClientRect();
+  const escapesHorizontally = frameRect.left < cellRect.left + ANSWER_CELL_RIGHT_GUTTER
+    || frameRect.right > cellRect.right - ANSWER_CELL_RIGHT_GUTTER;
+  const escapesVertically = frameRect.top < cellRect.top + ANSWER_CELL_RIGHT_GUTTER
+    || frameRect.bottom > cellRect.bottom - ANSWER_CELL_RIGHT_GUTTER;
+  return !escapesHorizontally && !escapesVertically;
 }
 
 function waitForMathfieldLayout(): Promise<void> {
   if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return Promise.resolve();
   return new Promise((resolve) => {
-    window.requestAnimationFrame(() => resolve());
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
   });
+}
+
+type MathfieldSlot = 'single' | 'x' | 'y';
+
+function answerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerNode {
+  return answer.type === 'tuple' && answer.value[coordinate]
+    ? answer.value[coordinate]
+    : ({ type: 'empty' } satisfies AnswerNode);
+}
+
+function mathfieldMapKey(index: number, slot: MathfieldSlot): string {
+  return `${index}:${slot}`;
+}
+
+function acceptedLatexKey(problemId: string, slot: MathfieldSlot): string {
+  return slot === 'single' ? problemId : `${problemId}:${slot}`;
+}
+
+function isCoordinateAnswer(answer: AnswerNode): boolean {
+  if (answer.type === 'empty' || answer.type === 'integer' || answer.type === 'nan_error') return true;
+  return answer.type === 'negative' && isCoordinateAnswer(answer.value);
+}
+
+function selectedPeople(answer: AnswerNode): Set<number> {
+  if (answer.type !== 'tuple') return new Set();
+  return new Set(answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : []));
 }
 
 type WorksheetAnswerFieldProps = {
@@ -286,14 +353,16 @@ type WorksheetAnswerFieldProps = {
   index: number;
   answer: AnswerNode;
   isSelected: boolean;
+  selectedSlot: MathfieldSlot;
   result: GradeResult['items'][number] | undefined;
   gradeResult: GradeResult | null;
   inputLocked: boolean;
   answerPrefix: string | null;
-  onSelect: (index: number) => void;
-  onRegisterMathfield: (index: number, mathfield: AutoDrillMathfield | null) => void;
-  onMathInput: (index: number, mathfield: AutoDrillMathfield, latex: string) => void;
-  onCommit: (index: number) => void;
+  onSelect: (index: number, slot: MathfieldSlot) => void;
+  onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
+  onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
+  onCommit: (index: number, slot: MathfieldSlot) => void;
+  onTogglePerson: (index: number, person: number) => void;
 };
 
 function WorksheetAnswerField({
@@ -302,6 +371,7 @@ function WorksheetAnswerField({
   index,
   answer,
   isSelected,
+  selectedSlot,
   result,
   gradeResult,
   inputLocked,
@@ -310,31 +380,124 @@ function WorksheetAnswerField({
   onRegisterMathfield,
   onMathInput,
   onCommit,
+  onTogglePerson,
 }: WorksheetAnswerFieldProps) {
   const { MathLiveAnswerInput, MathLiveStatic } = worksheetUi;
-  const answerText = answerNodeText(answer);
   const canonicalAnswer = answerNodeText(problem.canonical_answer);
+  const commonFrameClass = (slot: MathfieldSlot) => `answer-box ${isSelected && selectedSlot === slot ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`;
 
+  if (problem.prompt.kind === 'liar_puzzle') {
+    const chosen = selectedPeople(answer);
+    const canonical = selectedPeople(problem.canonical_answer);
+    const peopleCount = problem.prompt.people_count;
+    const renderPeople = (selection: Set<number>, interactive: boolean) => (
+      <span className="liar-person-choice-row">
+        {Array.from({ length: peopleCount }, (_, personIndex) => personIndex + 1).map((person) => (
+          <button
+            key={`${problem.problem_id}-person-${person}-${interactive ? 'input' : 'answer'}`}
+            type="button"
+            className={`liar-person-choice ${selection.has(person) ? 'liar-person-choice-selected' : ''}`}
+            aria-label={`${liarPersonLabel(person)}さん${selection.has(person) ? ' 選択中' : ''}`}
+            aria-pressed={selection.has(person)}
+            disabled={!interactive}
+            onClick={() => interactive && onTogglePerson(index, person)}
+          >{liarPersonLabel(person)}</button>
+        ))}
+      </span>
+     );
+    return (
+      <span className="problem-answer-area problem-answer-area-liar">
+        {renderPeople(chosen, !inputLocked)}
+        {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
+        {result && !result.correct ? (
+          <span className="correct-answer liar-correct-answer" aria-label={`正しい答え ${[...canonical].map(liarPersonLabel).join('、')}`}>
+            {renderPeople(canonical, false)}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+
+  if (problem.prompt.kind === 'simultaneous_equation') {
+    const xAnswer = answerCoordinate(answer, 0);
+    const yAnswer = answerCoordinate(answer, 1);
+    const canonicalX = answerCoordinate(problem.canonical_answer, 0);
+    const canonicalY = answerCoordinate(problem.canonical_answer, 1);
+    return (
+      <span className="problem-answer-area problem-answer-area-simultaneous">
+        <span className="simultaneous-answer-coordinate">
+          <MathLiveStatic className="answer-prefix-label" latex="x\\,=" ariaLabel="x =" />
+          <MathLiveAnswerInput
+            key={`${problem.problem_id}:x:${gradeResult ? 'graded' : 'editing'}`}
+            initialLatex={answerNodeLatex(xAnswer)}
+            frameClassName={commonFrameClass('x')}
+            ariaLabel={`${index + 1}番のxの答え ${answerNodeText(xAnswer) || '未入力'}`}
+            selected={isSelected && selectedSlot === 'x'}
+            readOnly={inputLocked}
+            onSelect={() => onSelect(index, 'x')}
+            onInputLatex={(mathfield, latex) => onMathInput(index, 'x', mathfield, latex)}
+            onCommit={() => onCommit(index, 'x')}
+            onRegister={(mathfield) => onRegisterMathfield(index, 'x', mathfield)}
+          />
+        </span>
+        <span className="simultaneous-answer-coordinate">
+          <MathLiveStatic className="answer-prefix-label" latex="y\\,=" ariaLabel="y =" />
+          <MathLiveAnswerInput
+            key={`${problem.problem_id}:y:${gradeResult ? 'graded' : 'editing'}`}
+            initialLatex={answerNodeLatex(yAnswer)}
+            frameClassName={commonFrameClass('y')}
+            ariaLabel={`${index + 1}番のyの答え ${answerNodeText(yAnswer) || '未入力'}`}
+            selected={isSelected && selectedSlot === 'y'}
+            readOnly={inputLocked}
+            onSelect={() => onSelect(index, 'y')}
+            onInputLatex={(mathfield, latex) => onMathInput(index, 'y', mathfield, latex)}
+            onCommit={() => onCommit(index, 'y')}
+            onRegister={(mathfield) => onRegisterMathfield(index, 'y', mathfield)}
+          />
+        </span>
+        {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
+        {result && !result.correct ? (
+          <span className="correct-answer" aria-label={`正しい答え ${canonicalAnswer}`}>
+            <MathLiveStatic
+              className="canonical-answer-math"
+              latex={`x\\,=${answerNodeLatex(canonicalX)}\\; y\\,=${answerNodeLatex(canonicalY)}`}
+              ariaLabel={`x = ${answerNodeText(canonicalX)}, y = ${answerNodeText(canonicalY)}`}
+            />
+          </span>
+        ) : null}
+        {result && result.warnings.length > 0 ? (() => {
+          const messages = warningMessages(result.warnings);
+          return (
+            <span className="grade-warnings" aria-label={`注意 ${messages.join('、')}`}>
+              {messages.map((message) => <span key={message}><RubyMessage text={message} /></span>)}
+            </span>
+          );
+        })() : null}
+      </span>
+    );
+  }
+
+  const answerText = answerNodeText(answer);
   return (
     <span className="problem-answer-area">
       {answerPrefix ? (
         <MathLiveStatic
           className="answer-prefix-label"
-          latex={answerPrefix.replaceAll(' ', '\\,')}
+          latex={answerPrefix.replaceAll(' ', '\\\\,')}
           ariaLabel={answerPrefix}
         />
       ) : null}
       <MathLiveAnswerInput
         key={`${problem.problem_id}:${gradeResult ? 'graded' : 'editing'}`}
         initialLatex={answerNodeLatex(answer)}
-        frameClassName={`answer-box ${isSelected ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`}
+        frameClassName={commonFrameClass('single')}
         ariaLabel={`${index + 1}番の答え ${answerText || '未入力'}`}
-        selected={isSelected}
+        selected={isSelected && selectedSlot === 'single'}
         readOnly={inputLocked}
-        onSelect={() => onSelect(index)}
-        onInputLatex={(mathfield, latex) => onMathInput(index, mathfield, latex)}
-        onCommit={() => onCommit(index)}
-        onRegister={(mathfield) => onRegisterMathfield(index, mathfield)}
+        onSelect={() => onSelect(index, 'single')}
+        onInputLatex={(mathfield, latex) => onMathInput(index, 'single', mathfield, latex)}
+        onCommit={() => onCommit(index, 'single')}
+        onRegister={(mathfield) => onRegisterMathfield(index, 'single', mathfield)}
       />
       {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
       {result && !result.correct ? (
@@ -346,13 +509,16 @@ function WorksheetAnswerField({
           />
         </span>
       ) : null}
-      {result && result.warnings.length > 0 ? (
-        <span className="grade-warnings" aria-label={`注意 ${result.warnings.map((warning) => GRADE_WARNING_LABELS[warning]).join('、')}`}>
-          {result.warnings.map((warning) => (
-            <span key={warning}><RubyMessage text={GRADE_WARNING_LABELS[warning]} /></span>
-          ))}
-        </span>
-      ) : null}
+      {result && result.warnings.length > 0 ? (() => {
+        const messages = warningMessages(result.warnings);
+        return (
+          <span className="grade-warnings" aria-label={`注意 ${messages.join('、')}`}>
+            {messages.map((message) => (
+              <span key={message}><RubyMessage text={message} /></span>
+            ))}
+          </span>
+        );
+      })() : null}
     </span>
   );
 }
@@ -419,6 +585,7 @@ export function AutoDrillApp({
   const [worksheetMetadata, setWorksheetMetadata] = useState<WorksheetMetadata | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerNode>>({});
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<MathfieldSlot>('single');
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -439,12 +606,14 @@ export function AutoDrillApp({
   // Default ON keeps the server and first client render identical. The saved
   // browser preference is applied only after hydration.
   const [furiganaEnabled, setFuriganaEnabled] = useState(true);
+  const [gradingSettings, setGradingSettings] = useState<GradingSettings>(DEFAULT_GRADING_SETTINGS);
   const answersRef = useRef<Record<string, AnswerNode>>({});
   const selectedIndexRef = useRef<number | null>(null);
+  const selectedSlotRef = useRef<MathfieldSlot>('single');
   const inputEnabledRef = useRef(false);
   const worksheetPhaseRef = useRef<WorksheetPhase>('editing');
   const actionQueueRef = useRef(Promise.resolve());
-  const mathfieldRefs = useRef(new Map<number, AutoDrillMathfield>());
+  const mathfieldRefs = useRef(new Map<string, AutoDrillMathfield>());
   const acceptedLatexRef = useRef<Record<string, string>>({});
   const noticeTimerRef = useRef<number | null>(null);
   const selectedTheme = findTheme(webSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
@@ -562,8 +731,10 @@ export function AutoDrillApp({
     if (mode === 'recommended') {
       const recommended = RECOMMENDED_GENRES[0]?.themes[0];
       changeTheme(recommended ?? ONE_DIGIT_ADDITION_THEME);
+    } else if (selectedTheme.implemented && selectedTheme.grade === null) {
+      changeTheme(ONE_DIGIT_ADDITION_THEME);
     }
-  }, [changeTheme]);
+  }, [changeTheme, selectedTheme]);
 
   const changeDifficulty = useCallback((difficulty: DifficultyLevel) => {
     setWebSettings((current) => ({ ...current, difficulty }));
@@ -586,6 +757,8 @@ export function AutoDrillApp({
     transitionWorksheetPhase('editing');
     setSelectedIndex(null);
     selectedIndexRef.current = null;
+    setSelectedSlot('single');
+    selectedSlotRef.current = 'single';
     inputEnabledRef.current = false;
     const timerStart = Date.now();
     setStartedAt(timerStart);
@@ -652,11 +825,13 @@ export function AutoDrillApp({
     }
   }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, selectedTheme, settings, showEngineError]);
 
-  const selectProblem = useCallback((index: number) => {
+  const selectProblem = useCallback((index: number, slot: MathfieldSlot = 'single') => {
     if (worksheetPhaseRef.current !== 'editing') return;
     inputEnabledRef.current = true;
     selectedIndexRef.current = index;
+    selectedSlotRef.current = slot;
     setSelectedIndex(index);
+    setSelectedSlot(slot);
     // The input panel is mounted by this selection. Running on the next frame
     // lets the shared viewport guard see its real top edge and keeps even a
     // bottom-aligned answer field (for example x = [...]) unobscured.
@@ -665,26 +840,31 @@ export function AutoDrillApp({
     dismissNotice();
   }, [dismissNotice]);
 
-  const registerMathfield = useCallback((index: number, mathfield: AutoDrillMathfield | null) => {
-    if (mathfield) mathfieldRefs.current.set(index, mathfield);
-    else mathfieldRefs.current.delete(index);
+  const registerMathfield = useCallback((index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => {
+    const key = mathfieldMapKey(index, slot);
+    if (mathfield) mathfieldRefs.current.set(key, mathfield);
+    else mathfieldRefs.current.delete(key);
   }, []);
 
-  const updateMathLiveAnswer = useCallback((index: number, mathfield: AutoDrillMathfield, latex: string) => {
+  const updateMathLiveAnswer = useCallback((index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current || !worksheet.problems[index]) return Promise.resolve();
     const problem = worksheet.problems[index];
     const problemId = problem.problem_id;
 
     const run = async () => {
       const previous = answersRef.current[problemId] ?? ({ type: 'empty' } satisfies AnswerNode);
-      const previousLatex = acceptedLatexRef.current[problemId] ?? answerNodeLatex(previous);
+      const latexKey = acceptedLatexKey(problemId, slot);
+      const previousPart = problem.prompt.kind === 'simultaneous_equation' && slot !== 'single'
+        ? answerCoordinate(previous, slot === 'x' ? 0 : 1)
+        : previous;
+      const previousLatex = acceptedLatexRef.current[latexKey] ?? answerNodeLatex(previousPart);
 
-      let answer: AnswerNode;
+      let parsed: AnswerNode;
       try {
         // Parse first: AST-size rejection is independent of layout and should
         // behave as an immediate NOP, without leaving the rejected value visible
         // while waiting for animation frames.
-        answer = await engine.parseMathLiveAnswer(latex, problem.input_interface);
+        parsed = await engine.parseMathLiveAnswer(latex, problem.input_interface);
       } catch (value) {
         mathfield.setValue(previousLatex, { silenceNotifications: true });
         if (value instanceof DrillEngineError && value.kind === 'answer_ast_size_limit') {
@@ -693,21 +873,32 @@ export function AutoDrillApp({
         return;
       }
 
-      // MathLive updates its shadow DOM after the input event. Measure only
-      // after layout has settled; otherwise a deeply nested fraction can look
-      // small at measurement time and overflow the frame one paint later.
+      let answer = parsed;
+      if (problem.prompt.kind === 'simultaneous_equation' && slot !== 'single') {
+        if (!isCoordinateAnswer(parsed)) {
+          mathfield.setValue(previousLatex, { silenceNotifications: true });
+          return;
+        }
+        const values: [AnswerNode, AnswerNode] = [answerCoordinate(previous, 0), answerCoordinate(previous, 1)];
+        values[slot === 'x' ? 0 : 1] = parsed;
+        answer = { type: 'tuple', value: values };
+      }
+
+      // MathLive and the intrinsic answer frame resolve in the same layout pass.
+      // Wait only to validate the settled geometry against the worksheet cell;
+      // JS no longer resizes the visible frame after paint.
       await waitForMathfieldLayout();
-      if (!resizeMathfieldFrameAndCheck(mathfield, index)) {
+      if (!mathfieldFrameFitsCell(mathfield, index)) {
         // Render-size rejection is also a true NOP. Restore the exact accepted
         // LaTeX, not a normalized/reconstructed AnswerNode representation.
         mathfield.setValue(previousLatex, { silenceNotifications: true });
         await waitForMathfieldLayout();
-        resizeMathfieldFrameAndCheck(mathfield, index);
+        mathfieldFrameFitsCell(mathfield, index);
         setNotice('式が大きすぎます！');
         return;
       }
 
-      acceptedLatexRef.current = { ...acceptedLatexRef.current, [problemId]: latex };
+      acceptedLatexRef.current = { ...acceptedLatexRef.current, [latexKey]: latex };
       const nextAnswers = { ...answersRef.current, [problemId]: answer };
       answersRef.current = nextAnswers;
       setAnswers(nextAnswers);
@@ -720,12 +911,37 @@ export function AutoDrillApp({
     return queued;
   }, [dismissNotice, engine, showEngineError, worksheet]);
 
-  const commitMathfield = useCallback((index: number) => {
+  const togglePerson = useCallback((index: number, person: number) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
+    const problem = worksheet.problems[index];
+    if (!problem || problem.prompt.kind !== 'liar_puzzle' || person < 1 || person > problem.prompt.people_count) return;
+    const current = selectedPeople(answersRef.current[problem.problem_id] ?? ({ type: 'tuple', value: [] } satisfies AnswerNode));
+    if (current.has(person)) current.delete(person);
+    else current.add(person);
+    const value = [...current].sort((left, right) => left - right).map((selected) => ({ type: 'integer', value: String(selected) } as const));
+    const nextAnswers = { ...answersRef.current, [problem.problem_id]: { type: 'tuple', value } as AnswerNode };
+    answersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
+    setError(null);
+    dismissNotice();
+  }, [dismissNotice, worksheet]);
+
+  const commitMathfield = useCallback((index: number, slot: MathfieldSlot) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing' || !worksheet.problems[index]) return Promise.resolve();
+    const problem = worksheet.problems[index];
+    if (problem.prompt.kind === 'simultaneous_equation' && slot === 'x' && inputEnabledRef.current) {
+      selectedSlotRef.current = 'y';
+      setSelectedSlot('y');
+      return actionQueueRef.current;
+    }
     if (index < worksheet.problems.length - 1 && inputEnabledRef.current) {
-      selectedIndexRef.current = index + 1;
-      setSelectedIndex(index + 1);
-      scheduleProblemScroll(index, index + 1);
+      const nextIndex = index + 1;
+      const nextSlot: MathfieldSlot = worksheet.problems[nextIndex]?.prompt.kind === 'simultaneous_equation' ? 'x' : 'single';
+      selectedIndexRef.current = nextIndex;
+      selectedSlotRef.current = nextSlot;
+      setSelectedIndex(nextIndex);
+      setSelectedSlot(nextSlot);
+      scheduleProblemScroll(index, nextIndex);
     }
 
     return actionQueueRef.current;
@@ -734,7 +950,8 @@ export function AutoDrillApp({
   const applyMathCommand = useCallback((command: MathInputCommand) => {
     const index = selectedIndexRef.current;
     if (index === null || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current) return;
-    const mathfield = mathfieldRefs.current.get(index);
+    const slot = selectedSlotRef.current;
+    const mathfield = mathfieldRefs.current.get(mathfieldMapKey(index, slot));
     if (!mathfield) return;
     mathfield.focus();
 
@@ -743,11 +960,15 @@ export function AutoDrillApp({
         mathfield.insert(String(command.digit), { selectionMode: 'after' });
         break;
       case 'insert_structure':
+        if (command.structure === 'arithmetic') break;
         if (command.structure === 'decimal') {
           mathfield.insert('.', { selectionMode: 'after' });
         } else {
           mathfield.insert(mathTemplateInsertLatex(command.structure), { selectionMode: 'placeholder' });
         }
+        break;
+      case 'insert_latex':
+        mathfield.insert(command.latex, { selectionMode: 'after' });
         break;
       case 'move_left':
         mathfield.executeCommand('moveToPreviousChar');
@@ -759,7 +980,7 @@ export function AutoDrillApp({
         if (deleteEmptyMathLiveStructureBackward(mathfield)) {
           // The helper performs a programmatic MathLive deletion, which does not
           // emit input here. Synchronize the resulting field value explicitly.
-          void updateMathLiveAnswer(index, mathfield, mathfield.value);
+          void updateMathLiveAnswer(index, slot, mathfield, mathfield.value);
         } else {
           mathfield.executeCommand('deleteBackward');
         }
@@ -771,7 +992,7 @@ export function AutoDrillApp({
         mathfield.executeCommand('deleteAll');
         break;
       case 'commit':
-        void commitMathfield(index);
+        void commitMathfield(index, slot);
         break;
     }
   }, [commitMathfield, updateMathLiveAnswer]);
@@ -792,7 +1013,9 @@ export function AutoDrillApp({
     transitionWorksheetPhase('grading');
     inputEnabledRef.current = false;
     selectedIndexRef.current = null;
+    selectedSlotRef.current = 'single';
     setSelectedIndex(null);
+    setSelectedSlot('single');
     for (const mathfield of mathfieldRefs.current.values()) {
       mathfield.readOnly = true;
       mathfield.blur();
@@ -814,7 +1037,7 @@ export function AutoDrillApp({
           answer: latestAnswers[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode),
         })),
       });
-      setGradeResult(result);
+      setGradeResult(applyGradingSettings(result, gradingSettings));
       transitionWorksheetPhase('graded');
     } catch (value) {
       // A failed grade attempt returns to the only editable state. Preserve the
@@ -834,7 +1057,7 @@ export function AutoDrillApp({
       selectedIndexRef.current = null;
       setBusy(false);
     }
-  }, [drainActionQueue, engine, finishedAt, showEngineError, startedAt, transitionWorksheetPhase, worksheet]);
+  }, [drainActionQueue, engine, finishedAt, gradingSettings, showEngineError, startedAt, transitionWorksheetPhase, worksheet]);
 
   const returnToProblems = useCallback(() => {
     if (worksheetPhaseRef.current !== 'graded') return;
@@ -847,6 +1070,8 @@ export function AutoDrillApp({
     transitionWorksheetPhase('editing');
     setSelectedIndex(null);
     selectedIndexRef.current = null;
+    setSelectedSlot('single');
+    selectedSlotRef.current = 'single';
     inputEnabledRef.current = false;
     setError(null);
     dismissNotice();
@@ -886,6 +1111,8 @@ export function AutoDrillApp({
     setScreen('settings');
     setSelectedIndex(null);
     selectedIndexRef.current = null;
+    setSelectedSlot('single');
+    selectedSlotRef.current = 'single';
     inputEnabledRef.current = false;
     setStartedAt(null);
     setFinishedAt(null);
@@ -909,11 +1136,13 @@ export function AutoDrillApp({
             curriculumMode={curriculumMode}
             webSettings={webSettings}
             furiganaEnabled={furiganaEnabled}
+            gradingSettings={gradingSettings}
             onSettingsChange={changeSettings}
             onCurriculumModeChange={changeCurriculumMode}
             onThemeChange={changeTheme}
             onDifficultyChange={changeDifficulty}
             onFuriganaChange={changeFurigana}
+            onGradingSettingsChange={setGradingSettings}
             onGenerate={() => void generate(false)}
             onPrint={() => void generate(true)}
           />
@@ -924,6 +1153,7 @@ export function AutoDrillApp({
             worksheetMetadata={worksheetMetadata}
             answers={answers}
             selectedIndex={selectedIndex}
+            selectedSlot={selectedSlot}
             elapsed={formatElapsed(startedAt, finishedAt ?? now)}
             gradeResult={gradeResult}
             worksheetPhase={worksheetPhase}
@@ -933,8 +1163,9 @@ export function AutoDrillApp({
             onSelect={selectProblem}
             onCommand={applyMathCommand}
             onRegisterMathfield={registerMathfield}
-            onMathInput={(index, mathfield, latex) => void updateMathLiveAnswer(index, mathfield, latex)}
-            onCommit={(index) => void commitMathfield(index)}
+            onMathInput={(index, slot, mathfield, latex) => void updateMathLiveAnswer(index, slot, mathfield, latex)}
+            onCommit={(index, slot) => void commitMathfield(index, slot)}
+            onTogglePerson={togglePerson}
             onGrade={() => void grade()}
             onReturnToProblems={returnToProblems}
             onRetryWorksheet={retryWorksheet}
@@ -950,6 +1181,14 @@ export function AutoDrillApp({
   );
 }
 
+function gradeTagForTheme(theme: CurriculumTheme): { label: string; className: string } | null {
+  if (!theme.implemented || !theme.grade) return null;
+  const grade = Number(theme.grade.slug.slice('grade-'.length));
+  const label = grade <= 6 ? `小${grade}` : `中${grade - 6}`;
+  const className = `grade-tag-grade-${grade}`;
+  return { label, className };
+}
+
 type SettingsScreenProps = {
   settings: DrillSettings;
   busy: boolean;
@@ -960,11 +1199,13 @@ type SettingsScreenProps = {
   curriculumMode: CurriculumMode;
   webSettings: WebDrillSettings;
   furiganaEnabled: boolean;
+  gradingSettings: GradingSettings;
   onSettingsChange: (settings: DrillSettings) => void;
   onCurriculumModeChange: (mode: CurriculumMode) => void;
   onThemeChange: (theme: CurriculumTheme) => void;
   onDifficultyChange: (difficulty: DifficultyLevel) => void;
   onFuriganaChange: (enabled: boolean) => void;
+  onGradingSettingsChange: (settings: GradingSettings) => void;
   onGenerate: () => void;
   onPrint: () => void;
 };
@@ -979,11 +1220,13 @@ function SettingsScreen({
   curriculumMode,
   webSettings,
   furiganaEnabled,
+  gradingSettings,
   onSettingsChange,
   onCurriculumModeChange,
   onThemeChange,
   onDifficultyChange,
   onFuriganaChange,
+  onGradingSettingsChange,
   onGenerate,
   onPrint,
 }: SettingsScreenProps) {
@@ -993,6 +1236,18 @@ function SettingsScreen({
     ? genres.find((genre) => genre.themes.some((theme) => theme.themeKey === webSettings.themeKey)) ?? genres[0]!
     : selection.genre;
   const unavailable = !selection.theme.implemented;
+  const [gradingSettingsOpen, setGradingSettingsOpen] = useState(false);
+  const gradingDialogCloseRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!gradingSettingsOpen) return undefined;
+    gradingDialogCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setGradingSettingsOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [gradingSettingsOpen]);
 
   const selectGrade = (gradeSlug: string) => {
     const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === gradeSlug) ?? CURRICULUM_TREE[0]!;
@@ -1074,6 +1329,13 @@ function SettingsScreen({
                 options={activeGenre.themes.map((theme) => ({ value: theme.themeKey, label: theme.label }))}
                 onChange={selectTheme}
                 renderLabel={(option) => <RubyMessage text={option.label} />}
+                renderOptionEnd={(option) => {
+                  if (curriculumMode !== 'recommended') return null;
+                  const theme = activeGenre.themes.find((candidate) => candidate.themeKey === option.value);
+                  if (!theme) return null;
+                  const tag = gradeTagForTheme(theme);
+                  return tag ? <span className={`grade-tag ${tag.className}`}>{tag.label}</span> : null;
+                }}
               />
             </div>
           </div>
@@ -1100,6 +1362,7 @@ function SettingsScreen({
             </div>
           </div>
 
+          <FuriganaContext.Provider value={false}>
           <details className="advanced-settings">
             <summary>
               <RubyMessage text="詳細設定" />
@@ -1124,8 +1387,18 @@ function SettingsScreen({
                   {settings.seed === '' ? <span className="ruby-input-placeholder" aria-hidden="true"><RubyMessage text="空欄なら毎回自動生成" /></span> : null}
                 </div>
               </div>
+              <button
+                type="button"
+                className="grading-settings-open-button"
+                aria-haspopup="dialog"
+                onClick={() => setGradingSettingsOpen(true)}
+              >
+                <RubyMessage text="採点設定" />
+                <span aria-hidden="true">›</span>
+              </button>
             </div>
           </details>
+          </FuriganaContext.Provider>
         </div>
 
         {unavailable ? <p className="unavailable-message" role="status" aria-label="このテーマはまだ利用できません"><RubyMessage text="このテーマはまだ利用できません" /></p> : null}
@@ -1156,6 +1429,59 @@ function SettingsScreen({
           </p>
         ) : null}
       </div>
+      {gradingSettingsOpen ? (
+        <FuriganaContext.Provider value={false}>
+        <div
+          className="grading-settings-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setGradingSettingsOpen(false);
+          }}
+        >
+          <section
+            className="grading-settings-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="grading-settings-title"
+          >
+            <header className="grading-settings-modal-header">
+              <h2 id="grading-settings-title"><RubyMessage text="採点設定" /></h2>
+              <button
+                ref={gradingDialogCloseRef}
+                type="button"
+                className="grading-settings-modal-close"
+                aria-label="採点設定を閉じる"
+                onClick={() => setGradingSettingsOpen(false)}
+              >×</button>
+            </header>
+            <p className="grading-settings-modal-note">○では数学的に同じ答えを正解として扱い、×では次の表記の違いを採点に反映します。</p>
+            <div className="grading-settings-modal-body">
+              {GRADING_SETTING_ROWS.map(({ category, label, description }) => (
+                <div className="grading-setting-row" key={category}>
+                  <div className="grading-setting-copy">
+                    <strong><RubyMessage text={label} /></strong>
+                    <span>{description}</span>
+                  </div>
+                  <div className="grading-setting-toggle" role="group" aria-label={`${label}の採点`}>
+                    <button
+                      type="button"
+                      aria-label={`${label}を丸にする`}
+                      aria-pressed={gradingSettings[category] === 'correct'}
+                      onClick={() => onGradingSettingsChange({ ...gradingSettings, [category]: 'correct' })}
+                    >○</button>
+                    <button
+                      type="button"
+                      aria-label={`${label}をバツにする`}
+                      aria-pressed={gradingSettings[category] === 'incorrect'}
+                      onClick={() => onGradingSettingsChange({ ...gradingSettings, [category]: 'incorrect' })}
+                    >×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+        </FuriganaContext.Provider>
+      ) : null}
       <p className="settings-version" aria-label={AUTODRILL_VERSION_LABEL}>{AUTODRILL_VERSION_LABEL}</p>
     </section>
   );
@@ -1167,17 +1493,19 @@ type WorksheetScreenProps = {
   worksheetMetadata: WorksheetMetadata | null;
   answers: Record<string, AnswerNode>;
   selectedIndex: number | null;
+  selectedSlot: MathfieldSlot;
   elapsed: string;
   gradeResult: GradeResult | null;
   worksheetPhase: WorksheetPhase;
   busy: boolean;
   error: string | null;
   notice: string | null;
-  onSelect: (index: number) => void;
+  onSelect: (index: number, slot: MathfieldSlot) => void;
   onCommand: (command: MathInputCommand) => void;
-  onRegisterMathfield: (index: number, mathfield: AutoDrillMathfield | null) => void;
-  onMathInput: (index: number, mathfield: AutoDrillMathfield, latex: string) => void;
-  onCommit: (index: number) => void;
+  onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
+  onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
+  onCommit: (index: number, slot: MathfieldSlot) => void;
+  onTogglePerson: (index: number, person: number) => void;
   onGrade: () => void;
   onReturnToProblems: () => void;
   onRetryWorksheet: () => void;
@@ -1186,17 +1514,24 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
-  const gradeBandClass = worksheetGradeBandClass(worksheetTheme.grade.slug);
+  const gradeBandClass = worksheetTheme.grade ? worksheetGradeBandClass(worksheetTheme.grade.slug) : 'worksheet-grade-junior-high';
+  const worksheetCategoryLabel = worksheetTheme.grade?.label ?? 'おまけ';
   const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
   const selectedCapabilities = selectedProblem ? inputCapabilities(selectedProblem.input_interface) : null;
+  const arithmeticOperatorsEnabled = selectedCapabilities?.allowed_structures.includes('arithmetic') ?? false;
   const visibleStructures = selectedCapabilities?.allowed_structures.filter(
-    (structure): structure is Exclude<AnswerInputStructure, 'decimal'> => structure !== 'decimal',
+    (structure): structure is Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'> => (
+      structure !== 'decimal'
+      && structure !== 'arithmetic'
+      && !(selectedProblem?.prompt.kind === 'simultaneous_equation' && structure === 'tuple')
+      && !(arithmeticOperatorsEnabled && (structure === 'negative' || structure === 'plus_minus'))
+    ),
   ) ?? [];
-  if (selectedCapabilities?.allow_negative && !visibleStructures.includes('negative')) {
+  if (selectedCapabilities?.allow_negative && !arithmeticOperatorsEnabled && !visibleStructures.includes('negative')) {
     visibleStructures.push('negative');
   }
   const resultById = new Map((gradeResult?.items ?? []).map((item) => [item.problem_id, item]));
@@ -1217,7 +1552,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
     <section className={`worksheet-screen ${selectedProblem ? 'worksheet-input-open' : ''}`} aria-labelledby="worksheet-title">
       <div className="ribbon">
         <div>
-          <p className="ribbon-label" aria-label={worksheetTheme.grade.label}><RubyMessage text={worksheetTheme.grade.label} /></p>
+          <p className="ribbon-label" aria-label={worksheetCategoryLabel}><RubyMessage text={worksheetCategoryLabel} /></p>
           <h1 id="worksheet-title">{worksheetTheme.worksheet.title}</h1>
         </div>
         <div className="ribbon-meta"><span><RubyMessage text="回答時間" /></span><strong data-testid="elapsed-time">{elapsed}</strong></div>
@@ -1246,14 +1581,16 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
             {worksheetTheme.worksheet.instruction ? (
               <p className="worksheet-instruction">{worksheetTheme.worksheet.instruction}</p>
             ) : null}
-            <div className="problem-divider" data-testid="problem-divider" style={dividerStyle} />
+            {worksheet.layout.columns > 1 ? <div className="problem-divider" data-testid="problem-divider" style={dividerStyle} /> : null}
             {sharedLayout.cells.map((cell) => {
               const { problem, index } = cell;
               const answer = answers[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
               const isSelected = selectedIndex === index;
               const result = resultById.get(problem.problem_id);
               const position = getCellTopPosition(sharedLayout, cell);
-              const isLinearEquation = problem.prompt.kind === 'linear_equation';
+              const isLinearEquation = problem.prompt.kind === 'linear_equation' || problem.prompt.kind === 'quadratic_equation' || problem.prompt.kind === 'simultaneous_equation';
+              const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
+              const stackAnswerBelow = worksheetTheme.worksheet.answerPlacement === 'below' && !isLinearEquation;
               const cellStyle: CSSProperties = {
                 left: toPagePercent(position.x, A4_PAGE.width),
                 top: toPagePercent(position.y, A4_PAGE.height),
@@ -1261,15 +1598,16 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                 height: toPagePercent(position.height, A4_PAGE.height),
               };
               return (
-                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
+                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
                   <span className="problem-number">{index + 1}.</span>
-                  <span className="expression"><ProblemExpression problem={problem} /></span>
+                  <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
                   <WorksheetAnswerField
                     worksheetUi={worksheetUi}
                     problem={problem}
                     index={index}
                     answer={answer}
                     isSelected={isSelected}
+                    selectedSlot={selectedSlot}
                     result={result}
                     gradeResult={gradeResult}
                     inputLocked={worksheetPhase !== 'editing'}
@@ -1278,6 +1616,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                     onRegisterMathfield={onRegisterMathfield}
                     onMathInput={onMathInput}
                     onCommit={onCommit}
+                    onTogglePerson={onTogglePerson}
                   />
                 </div>
               );
@@ -1293,11 +1632,13 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
 
       {selectedProblem ? (
         <div className="input-panel" aria-label="数式入力パネル">
-          <div className="input-panel-inner">
-            {visibleStructures.length > 0 ? (
-              <div className="formula-keypad" aria-label="数式テンプレート">
+          <div className={`input-panel-inner ${arithmeticOperatorsEnabled ? 'input-panel-inner-algebraic' : ''}`}>
+            {(visibleStructures.length > 0 || arithmeticOperatorsEnabled) ? (
+              <div className={`formula-keypad ${arithmeticOperatorsEnabled ? 'formula-keypad-algebraic' : ''}`} aria-label={arithmeticOperatorsEnabled ? '数式キー' : '数式テンプレート'}>
                 {visibleStructures.map((structure) => {
-                  const label = STRUCTURE_LABELS[structure];
+                  const label = structure === 'tuple' && selectedProblem.answer_schema.kind === 'ordered_pair'
+                    ? 'x, y'
+                    : STRUCTURE_LABELS[structure];
                   return (
                     <button
                       type="button"
@@ -1312,6 +1653,13 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                     </button>
                   );
                 })}
+                {arithmeticOperatorsEnabled ? (
+                  <>
+                    <button type="button" className="formula-operator-key" onClick={() => onCommand({ kind: 'insert_latex', latex: '+' })} disabled={busy} aria-label="プラスを挿入">+</button>
+                    <button type="button" className="formula-operator-key" onClick={() => onCommand({ kind: 'insert_latex', latex: '-' })} disabled={busy} aria-label="マイナスを挿入">−</button>
+                    <button type="button" className="formula-operator-key" onClick={() => onCommand({ kind: 'insert_latex', latex: '\\pm' })} disabled={busy} aria-label="プラスマイナスを挿入">±</button>
+                  </>
+                ) : null}
               </div>
             ) : null}
             <div className="keypad-numbers" aria-label="数字キー">

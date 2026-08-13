@@ -24,6 +24,15 @@ export function answerNodeLatex(answer: AnswerNode): string {
     }
     case 'negative': return `-${answerNodeLatex(answer.value)}`;
     case 'plus_minus': return `\\pm${answerNodeLatex(answer.value)}`;
+    case 'binary': {
+      const left = answerNodeLatex(answer.value.left);
+      const right = answerNodeLatex(answer.value.right);
+      if (answer.value.operator === 'add' && answer.value.right.type === 'plus_minus') return `${left}${right}`;
+      if (answer.value.operator === 'add') return `${left}+${right}`;
+      if (answer.value.operator === 'subtract') return `${left}-${right}`;
+      const implicit = answer.value.right.type === 'root';
+      return `${left}${implicit ? '' : '\\times'}${right}`;
+    }
     case 'tuple': return answer.value.map(answerNodeLatex).join(',');
     case 'variable': return answer.value;
   }
@@ -48,6 +57,11 @@ function arithmeticExpressionLatex(expression: ArithmeticExpression, parent?: Ar
   else if (expression.kind === 'rational') {
     const value = rationalLatex(expression.value);
     body = expression.value.numerator < 0 ? `(${value})` : value;
+  } else if (expression.kind === 'exact_decimal') {
+    const negative = expression.coefficient < 0;
+    const digits = String(Math.abs(expression.coefficient)).padStart(expression.scale + 1, '0');
+    const split = digits.length - expression.scale;
+    body = `${negative ? '-' : ''}${digits.slice(0, split)}.${digits.slice(split)}`;
   } else {
     const operator = expression.operator === 'add' ? '+' : expression.operator === 'subtract' ? '-' : expression.operator === 'multiply' ? '\\times' : '\\div';
     body = `${arithmeticExpressionLatex(expression.left, expression.operator)}\\,${operator}\\,${arithmeticExpressionLatex(expression.right, expression.operator, true)}`;
@@ -55,16 +69,32 @@ function arithmeticExpressionLatex(expression: ArithmeticExpression, parent?: Ar
   return parent && needsParentheses(expression, parent, rightChild) ? `\\left(${body}\\right)` : body;
 }
 
-export function problemExpressionLatex(problem: ProblemDto): string {
-  if (problem.prompt.kind === 'arithmetic') return `${arithmeticExpressionLatex(problem.prompt.expression)}\\,=`;
-  return problemExpressionTokens(problem).map((token) => {
-    if (token.kind === 'text') return token.text.replaceAll(' ', '\\,');
+
+function integerLinearEquationLatex(a: number, b: number, c: number): string {
+  const term = (value: number, variable: string, first: boolean) => {
+    const magnitude = Math.abs(value);
+    const body = `${magnitude === 1 ? '' : magnitude}${variable}`;
+    if (first) return value < 0 ? `-${body}` : body;
+    return value < 0 ? `\\,-\\,${body}` : `\\,+\\,${body}`;
+  };
+  return `${term(a, 'x', true)}${term(b, 'y', false)}\\,=\\,${c}`;
+}
+
+export function problemExpressionLatex(problem: ProblemDto, includeAnswerEquals = true): string {
+  if (problem.prompt.kind === 'liar_puzzle') return '';
+  if (problem.prompt.kind === 'simultaneous_equation') {
+    const { a, b, c, d, e, f } = problem.prompt;
+    return `\\begin{cases}${integerLinearEquationLatex(a, b, c)}\\\\${integerLinearEquationLatex(d, e, f)}\\end{cases}`;
+  }
+  if (problem.prompt.kind === 'arithmetic') return `${arithmeticExpressionLatex(problem.prompt.expression)}${includeAnswerEquals ? '\\,=' : ''}`;
+  return problemExpressionTokens(problem, includeAnswerEquals).map((token) => {
+    if (token.kind === 'text') return token.text.replaceAll('²', '^2').replaceAll(' ', '\\,');
     if (token.kind === 'minus') return '-';
     return `\\frac{${token.numerator}}{${token.denominator}}`;
   }).join('');
 }
 
-export function mathTemplateLatex(structure: Exclude<AnswerInputStructure, 'decimal'>): string {
+export function mathTemplateLatex(structure: Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'>): string {
   switch (structure) {
     case 'fraction': return '\\frac{\\square}{\\square}';
     case 'mixed_fraction': return '\\square\\frac{\\square}{\\square}';
@@ -75,7 +105,7 @@ export function mathTemplateLatex(structure: Exclude<AnswerInputStructure, 'deci
   }
 }
 
-export function mathTemplateInsertLatex(structure: Exclude<AnswerInputStructure, 'decimal'>): string {
+export function mathTemplateInsertLatex(structure: Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'>): string {
   switch (structure) {
     case 'fraction': return '\\frac{\\placeholder{}}{\\placeholder{}}';
     case 'mixed_fraction': return '\\placeholder{}\\frac{\\placeholder{}}{\\placeholder{}}';

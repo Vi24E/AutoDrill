@@ -1,12 +1,12 @@
 # AutoDrill alpha 1.2 実装状況
 
-更新日: 2026-08-11
+更新日: 2026-08-13
 
 この文書は現在のコードを対象とした実装概要です。過去の移行履歴ではなく、現行architectureと受入条件を記録します。数学・学習内容の基準は[`curriculum.md`](../curriculum.md)、境界schemaは[`problem-schema.md`](problem-schema.md)、Answer ASTは[`answer-ast.md`](answer-ast.md)、effortは[`effort-model.md`](effort-model.md)、Web/PDFは[`web-pdf.md`](web-pdf.md)を参照してください。
 
 ## 実装済みテーマ
 
-numeric theme ID 1〜11の11テーマを実装しています。
+numeric theme ID 1〜19の19テーマを実装しています。
 
 | ID | テーマ | 学年 | 問題数 |
 |---:|---|---|---:|
@@ -21,8 +21,16 @@ numeric theme ID 1〜11の11テーマを実装しています。
 | 9 | 分数の足し算 | 小5 | 16 |
 | 10 | 分数の掛け算 | 小6 | 16 |
 | 11 | 分数の引き算 | 小5 | 16 |
+| 12 | 分数の割り算 | 小6 | 16 |
+| 13 | 割り算(1) | 小3 | 20 |
+| 14 | 二次方程式(1) | 中3 | 16 |
+| 15 | 二次方程式(2) | 中3 | 16 |
+| 16 | 二次方程式(3) | 中3 | 16 |
+| 17 | 小数の足し算と引き算 | 小4 | 20 |
+| 18 | 小数の掛け算と割り算 | 小5 | 20 |
+| 19 | 連立方程式(1) | 中2 | 12 |
 
-現行`CURRICULUM_TREE`は全9学年で末尾に`Dummy1` placeholder genreを1つ追加します。そのため実装済みthemeを持つ小1・小2・小5・小6・中1にもDummyが併存します。Dummyは生成・PDFをdisabledにし、実装済み単元routeやsitemapには入りません。
+現行`CURRICULUM_TREE`は小学1年生〜中学3年生の全9学年を実装済みthemeだけで構成し、placeholder単元は公開しません。
 
 ## Source of truth
 
@@ -33,7 +41,7 @@ numeric theme ID 1〜11の11テーマを実装しています。
 - `crates/drill-core/src/answer.rs`: exact AnswerNode
 - `crates/drill-core/src/mathlive_input.rs`: MathLive LaTeX → AnswerNode
 - `crates/drill-core/src/normalize.rs`: exact normalization
-- `crates/drill-core/src/grading.rs`: grading
+- `crates/drill-core/src/grade.rs`: grading
 - `crates/drill-core/src/effort.rs`: solution graph / operation vector / effort
 - `crates/drill-wasm/src/lib.rs`: schema-v3 WASM envelope
 
@@ -53,10 +61,18 @@ apps/web/src/domain/themes/
   fraction-addition.ts
   fraction-subtraction.ts
   fraction-multiplication.ts
+  fraction-division.ts
+  division-1.ts
+  decimal-add-subtract.ts
+  decimal-multiply-divide.ts
   signed-arithmetic-1.ts
   signed-arithmetic-2.ts
   linear-equation-1.ts
   linear-equation-2.ts
+  quadratic-equation-1.ts
+  quadratic-equation-2.ts
+  quadratic-equation-3.ts
+  simultaneous-equation-1.ts
 ```
 
 各ThemeDefinitionはroute、学年・ジャンル、worksheet title/instruction、input interface、answer schema kind、Rust compatibility identityを1ファイルに集約します。`theme-registry.ts`は列挙とlookupのみです。class継承ではなくimmutable typed dataを採用し、theme metadataへlifecycleや数学ロジックを持ち込みません。
@@ -65,9 +81,9 @@ apps/web/src/domain/themes/
 
 全generatorはSeedとdifficultyに対して決定的です。candidate selectionにはbounded attempt/time budgetを持たせ、Rust/WASM境界でtyped errorにします。
 
-小学生registrationは共通境界で負数をfail closedに拒否します。分数加算・乗算は正の分数のみ、分数減算は`a,b,c>0`かつ`a-b=c`となる有限domainから生成します。
+小学生registrationは共通境界で負数をfail closedに拒否します。分数四則は正の値だけを生成します。分数割り算は第2オペランドを逆数にして掛けるモデルで、整数との組合せと整数解も許容します。小数2テーマは二進浮動小数点を使わず、1〜2桁の係数と小数位1〜3桁のExactDecimalから生成します。
 
-一次方程式は答え先行で候補を構成し、full effortでdifficultyを選択します。分数算術は有限domain全候補を直接構築するため、coupon-collector型のSeed依存遅延を起こしません。
+一次方程式は答え先行で候補を構成し、full effortでdifficultyを選択します。二次方程式は平方根帰着・因数分解・解の公式の3テーマを分離します。(1)は解を先に選び、整数解は1〜16、根号解は`√a`（非平方数`2≤a≤30`）から生成し、整数16個と非平方数の根号25個からなる41要素のanswer domainを同等に扱い、難易度差は後段のeffort選抜だけで付けます。(3)は分数係数の分母払いと`±`/根号を含むexact Answer ASTを扱い、簡約後の根号内は99以下です。分数算術は有限domain全候補を直接構築するため、coupon-collector型のSeed依存遅延を起こしません。
 
 ## Effort
 

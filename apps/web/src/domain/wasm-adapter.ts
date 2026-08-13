@@ -225,6 +225,20 @@ function validateAnswerNode(
       if (displayRemaining < 1) invalidDto('WASM returned an AnswerNode exceeding the display-size limit.', value);
       size = 1 + validateAnswerNode(value.value, validation, displayRemaining - 1);
       break;
+    case 'binary':
+      if (!isRecord(value.value) || !['add', 'subtract', 'multiply'].includes(String(value.value.operator))) {
+        invalidDto('WASM returned an invalid algebraic binary answer.', value);
+      }
+      if (displayRemaining < 1) invalidDto('WASM returned an AnswerNode exceeding the display-size limit.', value);
+      {
+        let remaining = displayRemaining - 1;
+        const leftSize = validateAnswerNode(value.value.left, validation, remaining);
+        remaining -= leftSize;
+        const rightSize = validateAnswerNode(value.value.right, validation, remaining);
+        remaining -= rightSize;
+        size = displayRemaining - remaining;
+      }
+      break;
     case 'tuple':
       if (!Array.isArray(value.value)) invalidDto('WASM returned an invalid tuple value.', value);
       if (displayRemaining < 1) invalidDto('WASM returned an AnswerNode exceeding the display-size limit.', value);
@@ -271,6 +285,7 @@ const INPUT_STRUCTURES: readonly AnswerInputStructure[] = [
   'negative',
   'plus_minus',
   'tuple',
+  'arithmetic',
 ];
 
 function assertInputInterface(value: unknown): asserts value is AnswerInputInterface {
@@ -358,6 +373,11 @@ function assertAnswerSupportsInputInterface(answer: AnswerNode, inputInterface: 
       if (!inputAllowsStructure(inputInterface, 'plus_minus')) invalidDto('WASM returned a disallowed plus-minus node.', answer);
       assertAnswerSupportsInputInterface(answer.value, inputInterface);
       return;
+    case 'binary':
+      if (!inputAllowsStructure(inputInterface, 'arithmetic')) invalidDto('WASM returned a disallowed algebraic operator.', answer);
+      assertAnswerSupportsInputInterface(answer.value.left, inputInterface);
+      assertAnswerSupportsInputInterface(answer.value.right, inputInterface);
+      return;
     case 'tuple':
       if (!inputAllowsStructure(inputInterface, 'tuple')) invalidDto('WASM returned a disallowed tuple.', answer);
       answer.value.forEach((item) => assertAnswerSupportsInputInterface(item, inputInterface));
@@ -384,6 +404,12 @@ function assertArithmeticExpression(value: unknown): void {
     assertRationalCoefficient(value.value, 'arithmetic rational');
     return;
   }
+  if (value.kind === 'exact_decimal') {
+    assertInteger(value.coefficient, 'arithmetic decimal coefficient');
+    assertU32(value.scale, 'arithmetic decimal scale');
+    if (value.scale === 0 || value.scale > 6) invalidDto('WASM returned an invalid arithmetic decimal scale.', value);
+    return;
+  }
   if (value.kind === 'binary') {
     if (!['add', 'subtract', 'multiply', 'divide'].includes(String(value.operator))) invalidDto('WASM returned an invalid arithmetic operator.', value);
     assertArithmeticExpression(value.left);
@@ -393,7 +419,7 @@ function assertArithmeticExpression(value: unknown): void {
   invalidDto('WASM returned an unsupported arithmetic expression variant.', value);
 }
 
-function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'linear_equation'): void {
+function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle'): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported prompt variant; expected ${expectedKind}.`, value);
   }
@@ -406,6 +432,48 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
     assertArithmeticExpression(value.expression);
     return;
   }
+  if (expectedKind === 'simultaneous_equation') {
+    for (const name of ['a', 'b', 'c', 'd', 'e', 'f'] as const) assertInteger(value[name], `simultaneous coefficient ${name}`);
+    return;
+  }
+  if (expectedKind === 'liar_puzzle') {
+    assertInteger(value.people_count, 'liar-puzzle people count');
+    if (value.people_count < 3 || value.people_count > 5 || !Array.isArray(value.statements) || value.statements.length !== value.people_count) {
+      invalidDto('WASM returned an invalid liar-puzzle shape.', value);
+    }
+    for (const statement of value.statements) {
+      if (!isRecord(statement)) invalidDto('WASM returned an invalid liar-puzzle statement.', statement);
+      if (statement.kind === 'says_liar' || statement.kind === 'says_not_liar') {
+        assertInteger(statement.person, 'liar-puzzle person');
+        if (statement.person < 1 || statement.person > value.people_count) invalidDto('WASM returned an out-of-range liar-puzzle person.', statement);
+      } else if (statement.kind === 'exactly_one_liar' || statement.kind === 'both_liar' || statement.kind === 'both_not_liar') {
+        assertInteger(statement.first, 'liar-puzzle first person');
+        assertInteger(statement.second, 'liar-puzzle second person');
+        if (statement.first < 1 || statement.second < 1 || statement.first > value.people_count || statement.second > value.people_count || statement.first >= statement.second) {
+          invalidDto('WASM returned invalid liar-puzzle pair targets.', statement);
+        }
+      } else if (statement.kind === 'exact_liar_count') {
+        assertInteger(statement.count, 'liar-puzzle liar count');
+        if (statement.count < 1 || statement.count >= value.people_count) invalidDto('WASM returned an invalid liar-puzzle liar count.', statement);
+      } else if (statement.kind === 'implication') {
+        assertInteger(statement.antecedent_person, 'liar-puzzle implication antecedent');
+        assertInteger(statement.consequent_person, 'liar-puzzle implication consequent');
+        if (statement.antecedent_person < 1 || statement.antecedent_person > value.people_count || statement.consequent_person < 1 || statement.consequent_person > value.people_count || statement.antecedent_person === statement.consequent_person || typeof statement.antecedent_is_liar !== 'boolean' || typeof statement.consequent_is_liar !== 'boolean') invalidDto('WASM returned an invalid liar-puzzle implication.', statement);
+      } else {
+        invalidDto('WASM returned an unsupported liar-puzzle statement.', statement);
+      }
+    }
+    return;
+  }
+  if (expectedKind === 'quadratic_equation') {
+    if (!['square_equals_constant', 'square_plus_constant_zero', 'factored_scale', 'standard'].includes(String(value.form))) {
+      invalidDto('WASM returned an invalid quadratic-equation form.', value);
+    }
+    assertRationalCoefficient(value.a, 'quadratic coefficient a');
+    assertRationalCoefficient(value.b, 'quadratic coefficient b');
+    assertRationalCoefficient(value.c, 'quadratic coefficient c');
+    return;
+  }
   assertRationalCoefficient(value.a, 'linear coefficient a');
   assertRationalCoefficient(value.b, 'linear coefficient b');
   assertRationalCoefficient(value.c, 'linear coefficient c');
@@ -416,13 +484,19 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
   }
 }
 
-function assertAnswerSchema(value: unknown, expectedKind: 'integer' | 'rational'): void {
+function assertAnswerSchema(value: unknown, expectedKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'algebraic'): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported answer schema; expected ${expectedKind}.`, value);
   }
   if (expectedKind === 'integer') {
     assertCanonicalI64String(value.min, 'answer-schema minimum');
     assertCanonicalI64String(value.max, 'answer-schema maximum');
+    return;
+  }
+  if (expectedKind === 'algebraic' || expectedKind === 'ordered_pair') return;
+  if (expectedKind === 'decimal') {
+    assertU32(value.max_scale, 'answer-schema maximum decimal scale');
+    if (value.max_scale === 0) invalidDto('WASM returned an invalid decimal answer schema.', value);
     return;
   }
   assertU32(value.max_abs_numerator, 'answer-schema maximum numerator');
@@ -443,7 +517,7 @@ function assertIdentity(value: unknown): asserts value is ProblemSetIdentity {
     invalidDto('WASM returned an invalid identity seed.', value.seed);
   }
   assertInteger(value.difficulty, 'identity difficulty');
-  if (value.difficulty < 1 || value.difficulty > 5) invalidDto('WASM returned an invalid identity difficulty.', value);
+  if (value.difficulty < 1 || value.difficulty > 4) invalidDto('WASM returned an invalid identity difficulty.', value);
 }
 
 function assertWorksheet(value: unknown): WorksheetDto {
@@ -581,6 +655,11 @@ function nodeAtEditorPath(answer: AnswerNode, path: readonly number[]): AnswerNo
         if (index !== 0) return null;
         node = node.value;
         break;
+      case 'binary':
+        if (index === 0) node = node.value.left;
+        else if (index === 1) node = node.value.right;
+        else return null;
+        break;
       case 'tuple':
         if (!node.value[index]) return null;
         node = node.value[index];
@@ -672,6 +751,7 @@ function containsNanError(value: AnswerNode): boolean {
       || (value.value.index !== null && containsNanError(value.value.index));
     case 'negative':
     case 'plus_minus': return containsNanError(value.value);
+    case 'binary': return containsNanError(value.value.left) || containsNanError(value.value.right);
     case 'tuple': return value.value.some(containsNanError);
     case 'empty':
     case 'integer':

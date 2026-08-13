@@ -10,6 +10,8 @@ Effortは標準解法graph、denseなoperation vector、重みを分離する。
 
 一次方程式`ax+b=cx+d`はcurriculum.mdの標準解法に従い、まず`A=a-c`、`B=d-b`として`Ax=B`へ整理し、最後に`x=B/A`とする。graphは`OverheadLinear`を1回、実際に辺をまたぐ非零項ごとに`Transposition`、係数・定数をまとめるexactな加減算、最後の`BaseDivide`を記録する。分母が異なる有理係数の整理には`OverheadLCM`と必要な乗算、非自明な分数簡約には`OverheadGCD`を加える。`A=0`のcandidateはgeneratorで除算前に棄却するためeffort graphへ入らない。正解の整数成分は既存の`BigNum`規則で加算する。
 
+二次方程式の平方根計算は`BaseRoot`を基礎操作とする。`√16=4`のような完全平方数は`BaseRoot`だけでよいが、`√12=2√3`のように平方因子を取り出す簡約では追加で`OverheadFactorPerfectSquare`を課す。したがって既定重みでも前者のeffortは後者より小さい。解の公式でも根号簡約が必要な場合は同じoverheadを使う。
+
 ## Dense vector order and base weights
 
 `OperationVector`と`OperationWeights`は次の固定27成分を同じ順で持つ。未使用成分も0として残る。
@@ -51,3 +53,8 @@ Parameterized operationはvector側に重みが掛かるquantityを蓄積する�
 `WeightProfile`はgrade、theme、masteryの3つの倍率layerを持ち、`resolved = base × grade × theme × mastery`として成分ごとに合成する。Alpha 1.2は全layerをidentity 1.0とする。Registryの`operation_weight_overrides`はtheme layerだけを上書きするため、将来のテーマ調整でもgraphやvectorを複製しない。
 
 `OverheadNegative`は負号表示のcostではなく、負のoperandを含む演算ごとに1回加える。唯一の一般形の例外は、正の`a`、`b`に対する構造的な`a + (-b)`で、`a > b`、`a = b`、`a < b`のいずれでも`a - b`への読み替えとして0回とする。順序を区別するため`(-b) + a`は1回、`a - (-b)`も正の加算へ書き換えても1回、その他の負のoperandを含む演算も1回である。単独の`-0.57`は演算ではないため0で、BigNum(57)だけを数える。
+
+
+## 連立方程式(1)
+
+標準解法は加減法として近似する。`OverheadEqSystem`を1回置き、x消去とy消去のうち係数をそろえるための整数倍率が小さい方を採用する。必要なら式全体の倍率計算、消去の減算、残った変数の除算、代入後の乗算・減算・除算を順にgraphへ記録する。現段階ではgenerator品質確認前の基礎modelであり、後続調整で操作分解を精密化できる。

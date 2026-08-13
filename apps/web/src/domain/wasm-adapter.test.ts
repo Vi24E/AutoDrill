@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { ADDITION_GENERATOR_REVISION, DRILL_SCHEMA_VERSION, answerNodeText, emptyEditorState } from '@/domain/drill-engine';
-import { fixtureSettings, fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
+import { fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
 
 const envelope = (data: unknown) => ({ schema_version: DRILL_SCHEMA_VERSION, ok: true, data, error: null });
 const simpleInputInterface = { type: 'simple_numeric', allow_decimal: false, allow_negative: false } as const;
@@ -59,21 +59,21 @@ describe('versioned WASM adapter', () => {
     await expect(engine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
   });
 
-  it('sends the exact schema-v3 request and preserves identity/problem-set metadata', async () => {
+  it('sends the exact schema-v4 request and preserves identity/problem-set metadata', async () => {
     const worksheet = fixtureWorksheet();
     const generate = vi.fn().mockResolvedValue(envelope(worksheet));
     const engine = createWasmDrillEngine({ generate_worksheet: generate });
 
     const result = await engine.generateWorksheet(fixtureSettings());
     expect(JSON.parse(generate.mock.calls[0]?.[0] as string)).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       numeric_theme_id: 1,
       seed: 'fixtureSeed',
       difficulty: 3,
     });
     expect(result).toMatchObject({
-      schema_version: 3,
-      problem_set_id: `3-1-${ADDITION_GENERATOR_REVISION}-fixtureSeed-3`,
+      schema_version: 4,
+      problem_set_id: `4-1-${ADDITION_GENERATOR_REVISION}-fixtureSeed-3`,
       identity: { numeric_theme_id: 1, generator_revision: ADDITION_GENERATOR_REVISION, seed: 'fixtureSeed', difficulty: 3 },
     });
     expect(new Set(result.problems.map((problem) => problem.id)).size).toBe(20);
@@ -85,7 +85,7 @@ describe('versioned WASM adapter', () => {
       const generate = vi.fn().mockResolvedValue(envelope(worksheet));
       const engine = createWasmDrillEngine({ generate_worksheet: generate });
       const result = await engine.generateWorksheet({
-        schema_version: 3,
+        schema_version: 4,
         numeric_theme_id: themeId,
         seed: 'fixtureSeed',
         difficulty: 3,
@@ -97,6 +97,26 @@ describe('versioned WASM adapter', () => {
     }
   });
 
+
+  it('accepts liar-puzzle DTOs with cardinality, pair, and implication statements', async () => {
+    const worksheet = liarFixtureWorksheet();
+    const generate = vi.fn().mockResolvedValue(envelope(worksheet));
+    const engine = createWasmDrillEngine({ generate_worksheet: generate });
+    const result = await engine.generateWorksheet({
+      schema_version: 4,
+      numeric_theme_id: 20,
+      seed: 'fixtureSeed',
+      difficulty: 2,
+    });
+    expect(result.problems).toHaveLength(6);
+    const prompt = result.problems[0]!.prompt;
+    expect(prompt.kind).toBe('liar_puzzle');
+    if (prompt.kind !== 'liar_puzzle') throw new Error('liar-puzzle prompt expected');
+    expect(prompt.statements.map((statement) => statement.kind)).toEqual([
+      'says_liar', 'exact_liar_count', 'both_not_liar', 'implication',
+    ]);
+  });
+
   it('rejects a prompt kind that disagrees with the registered linear theme', async () => {
     const worksheet = linearFixtureWorksheet(2);
     worksheet.problems = [{
@@ -105,7 +125,7 @@ describe('versioned WASM adapter', () => {
     }, ...worksheet.problems.slice(1)];
     const engine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(worksheet)) });
     await expect(engine.generateWorksheet({
-      schema_version: 3,
+      schema_version: 4,
       numeric_theme_id: 2,
       seed: 'fixtureSeed',
       difficulty: 3,
@@ -115,7 +135,7 @@ describe('versioned WASM adapter', () => {
   it('preserves distinct timeout and attempt-limit errors', async () => {
     const timeout = createWasmDrillEngine({
       generate_worksheet: vi.fn().mockResolvedValue({
-        schema_version: 3,
+        schema_version: 4,
         ok: false,
         data: null,
         error: { code: 'generation_timeout', message: 'timed out' },
@@ -125,7 +145,7 @@ describe('versioned WASM adapter', () => {
 
     const attempts = createWasmDrillEngine({
       generate_worksheet: vi.fn().mockResolvedValue({
-        schema_version: 3,
+        schema_version: 4,
         ok: false,
         data: null,
         error: { code: 'generation_attempt_limit', message: 'attempt limit' },
@@ -148,25 +168,25 @@ describe('versioned WASM adapter', () => {
 
     await engine.applyEditorAction(emptyEditorState(), { kind: 'clear' }, simpleInputInterface);
     const result = await engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({ problem_id: problem.problem_id, answer: { type: 'empty' } })),
     });
 
     expect(JSON.parse(applyEditorAction.mock.calls[0]?.[0] as string)).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       input_interface: simpleInputInterface,
       state: { answer: { type: 'empty' }, cursor: 0, active_path: [], committed: false },
       action: { type: 'clear' },
     });
     expect(gradeAnswer).toHaveBeenCalledTimes(20);
     expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string)).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       expected: worksheet.problems[0]?.canonical_answer,
       actual: { type: 'empty' },
       answer_schema: worksheet.problems[0]?.answer_schema,
     });
-    expect(result).toMatchObject({ schema_version: 3, correct_count: 20, total_count: 20 });
+    expect(result).toMatchObject({ schema_version: 4, correct_count: 20, total_count: 20 });
     expect(result.items[0]?.warnings).toEqual(['fraction_not_reduced']);
   });
 
@@ -182,7 +202,7 @@ describe('versioned WASM adapter', () => {
       value: { numerator: { type: 'integer', value: '7' }, denominator: { type: 'integer', value: '2' } },
     });
     expect(JSON.parse(parseMathLiveAnswer.mock.calls[0]?.[0] as string)).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       input_interface: structuredInputInterface,
       latex: '\\frac{7}{2}',
     });
@@ -318,7 +338,7 @@ describe('versioned WASM adapter', () => {
     expect(applyEditorAction).not.toHaveBeenCalled();
   });
 
-  it('rejects runtime grade requests that are not schema v3', async () => {
+  it('rejects runtime grade requests that are not schema v4', async () => {
     const gradeAnswer = vi.fn();
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
     await expect(engine.gradeAnswer({
@@ -345,7 +365,7 @@ describe('versioned WASM adapter', () => {
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
 
     await expect(engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
@@ -366,7 +386,7 @@ describe('versioned WASM adapter', () => {
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
 
     const result = await engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
@@ -389,7 +409,7 @@ describe('versioned WASM adapter', () => {
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
 
     const result = await engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
@@ -411,7 +431,7 @@ describe('versioned WASM adapter', () => {
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
 
     const result = await engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
@@ -440,7 +460,7 @@ describe('versioned WASM adapter', () => {
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
 
     await expect(engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
@@ -465,7 +485,7 @@ describe('versioned WASM adapter', () => {
   it('preserves the typed answer AST size error from the editor boundary', async () => {
     const runtime = {
       apply_editor_action: vi.fn().mockResolvedValue({
-        schema_version: 3,
+        schema_version: 4,
         ok: false,
         data: null,
         error: { code: 'answer_ast_size_limit', details: { max_size: 18 } },
@@ -509,7 +529,7 @@ describe('versioned WASM adapter', () => {
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
 
     const result = await engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,
@@ -541,7 +561,7 @@ describe('versioned WASM adapter', () => {
     }));
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
     const graded = await engine.gradeAnswer({
-      schema_version: 3,
+      schema_version: 4,
       worksheet,
       answers: worksheet.problems.map((problem) => ({
         problem_id: problem.problem_id,

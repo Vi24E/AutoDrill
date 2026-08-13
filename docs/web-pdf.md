@@ -4,7 +4,7 @@
 
 Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイルとして定義します。各`ThemeDefinition`がroute、学年・ジャンル、worksheet表示、input capability、Rust compatibility identityを所有し、`src/domain/theme-registry.ts`は列挙とlookupだけを担当します。
 
-`curriculum.ts`、単元route、sitemap、worksheet copy、layout、WASM response validationは同じdefinitionを参照します。未実装`Dummy1`は生成・印刷・route・sitemapを持ちません。
+`curriculum.ts`、単元route、sitemap、worksheet copy、layout、WASM response validationは同じdefinitionを参照します。全学年の公開カリキュラムは実装済みthemeだけで構成します。
 
 ## q1 / q2 / q3
 
@@ -74,7 +74,7 @@ MathLive custom elementのrender完了と`document.fonts.ready`を待った後�
 
 ## Tests
 
-unit testは全11 registered themeについて2page print DOMを生成し、各問題式・解答が`math-span`（Webと同じMathLive static element）へ投影されることを確認します。fraction代表例は`1/3 + 1/4`がslash textへflattenされずLaTeXのままMathLiveへ渡ることも確認します。browser acceptanceではactual Chromeで`Page.printToPDF`を実行し、2page PDF、全MathLive shadow render完了、数式とanswer boxのoverlap/clippingなしを確認します。
+unit testは全19 registered themeについて2page print DOMを生成し、各問題式・解答が`math-span`（Webと同じMathLive static element）へ投影されることを確認します。fraction代表例は`1/3 + 1/4`がslash textへflattenされずLaTeXのままMathLiveへ渡ることも確認します。browser acceptanceではactual Chromeで`Page.printToPDF`を実行し、2page PDF、全MathLive shadow render完了、数式とanswer boxのoverlap/clippingなしを確認します。
 
 印刷UIのintegration testはPDF moduleをmockせず、主要な到達経路を状態遷移ごとに通します。現在の必須経路は、設定画面→印刷preview、preview→native印刷、worksheet editing→preview→戻る、answer input選択中→preview→戻る、graded worksheet→preview→戻るです。各経路でpreview表示前に`window.print()`が呼ばれないこと、戻った後に元のworksheet状態が維持されることも確認します。
 

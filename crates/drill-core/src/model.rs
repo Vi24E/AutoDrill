@@ -6,7 +6,7 @@ use crate::answer::AnswerNode;
 use crate::effort::{OperationVector, SolutionGraph};
 use crate::identity::{Difficulty, ProblemSetIdentity};
 
-pub const SCHEMA_VERSION: u16 = 3;
+pub const SCHEMA_VERSION: u16 = 4;
 pub const THEME_ID_ONE_DIGIT_ADDITION: u32 = 1;
 pub const THEME_ID_LINEAR_EQUATION_1: u32 = 2;
 pub const THEME_ID_LINEAR_EQUATION_2: u32 = 3;
@@ -18,6 +18,15 @@ pub const THEME_ID_SIGNED_ARITHMETIC_2: u32 = 8;
 pub const THEME_ID_FRACTION_ADDITION: u32 = 9;
 pub const THEME_ID_FRACTION_MULTIPLICATION: u32 = 10;
 pub const THEME_ID_FRACTION_SUBTRACTION: u32 = 11;
+pub const THEME_ID_FRACTION_DIVISION: u32 = 12;
+pub const THEME_ID_DIVISION_1: u32 = 13;
+pub const THEME_ID_QUADRATIC_EQUATION_1: u32 = 14;
+pub const THEME_ID_QUADRATIC_EQUATION_2: u32 = 15;
+pub const THEME_ID_QUADRATIC_EQUATION_3: u32 = 16;
+pub const THEME_ID_DECIMAL_ADD_SUBTRACT: u32 = 17;
+pub const THEME_ID_DECIMAL_MULTIPLY_DIVIDE: u32 = 18;
+pub const THEME_ID_SIMULTANEOUS_EQUATION_1: u32 = 19;
+pub const THEME_ID_LIAR_PUZZLE: u32 = 20;
 pub const GENERATOR_REVISION_ONE_DIGIT_ADDITION: u32 = 3;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 6;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 6;
@@ -29,6 +38,15 @@ pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_2: u32 = 1;
 pub const GENERATOR_REVISION_FRACTION_ADDITION: u32 = 1;
 pub const GENERATOR_REVISION_FRACTION_MULTIPLICATION: u32 = 1;
 pub const GENERATOR_REVISION_FRACTION_SUBTRACTION: u32 = 1;
+pub const GENERATOR_REVISION_FRACTION_DIVISION: u32 = 1;
+pub const GENERATOR_REVISION_DIVISION_1: u32 = 1;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_1: u32 = 1;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 1;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_3: u32 = 1;
+pub const GENERATOR_REVISION_DECIMAL_ADD_SUBTRACT: u32 = 1;
+pub const GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE: u32 = 1;
+pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_1: u32 = 1;
+pub const GENERATOR_REVISION_LIAR_PUZZLE: u32 = 1;
 pub const SKILL_ID: &str = "jp.grade1.addition.one_digit";
 pub const SKILL_ID_LINEAR_EQUATION_1: &str = "jp.grade7.equation.linear.1";
 pub const SKILL_ID_LINEAR_EQUATION_2: &str = "jp.grade7.equation.linear.2";
@@ -40,6 +58,15 @@ pub const SKILL_ID_SIGNED_ARITHMETIC_2: &str = "jp.grade7.signed.arithmetic.2";
 pub const SKILL_ID_FRACTION_ADDITION: &str = "jp.grade5.fraction.addition";
 pub const SKILL_ID_FRACTION_MULTIPLICATION: &str = "jp.grade6.fraction.multiplication";
 pub const SKILL_ID_FRACTION_SUBTRACTION: &str = "jp.grade5.fraction.subtraction";
+pub const SKILL_ID_FRACTION_DIVISION: &str = "jp.grade6.fraction.division";
+pub const SKILL_ID_DIVISION_1: &str = "jp.grade3.division.table.1";
+pub const SKILL_ID_QUADRATIC_EQUATION_1: &str = "jp.grade9.equation.quadratic.1";
+pub const SKILL_ID_QUADRATIC_EQUATION_2: &str = "jp.grade9.equation.quadratic.2";
+pub const SKILL_ID_QUADRATIC_EQUATION_3: &str = "jp.grade9.equation.quadratic.3";
+pub const SKILL_ID_DECIMAL_ADD_SUBTRACT: &str = "jp.grade4.decimal.add_subtract";
+pub const SKILL_ID_DECIMAL_MULTIPLY_DIVIDE: &str = "jp.grade5.decimal.multiply_divide";
+pub const SKILL_ID_SIMULTANEOUS_EQUATION_1: &str = "jp.grade8.equation.simultaneous.1";
+pub const SKILL_ID_LIAR_PUZZLE: &str = "bonus.logic.liar_puzzle";
 pub const CURRICULUM_PATH: [&str; 3] = ["root", "小学1年生", "一桁の足し算"];
 pub const CURRICULUM_PATH_LINEAR_EQUATION_1: [&str; 4] =
     ["root", "中学1年生", "一次方程式", "一次方程式(1)"];
@@ -54,12 +81,33 @@ pub const CURRICULUM_PATH_FRACTION_ADDITION: [&str; 3] = ["root", "小学5年生
 pub const CURRICULUM_PATH_FRACTION_MULTIPLICATION: [&str; 3] =
     ["root", "小学6年生", "分数の掛け算"];
 pub const CURRICULUM_PATH_FRACTION_SUBTRACTION: [&str; 3] = ["root", "小学5年生", "分数の引き算"];
+pub const CURRICULUM_PATH_FRACTION_DIVISION: [&str; 3] = ["root", "小学6年生", "分数の割り算"];
+pub const CURRICULUM_PATH_DIVISION_1: [&str; 3] = ["root", "小学3年生", "割り算(1)"];
+pub const CURRICULUM_PATH_QUADRATIC_EQUATION_1: [&str; 4] =
+    ["root", "中学3年生", "二次方程式", "二次方程式(1)"];
+pub const CURRICULUM_PATH_QUADRATIC_EQUATION_2: [&str; 4] =
+    ["root", "中学3年生", "二次方程式", "二次方程式(2)"];
+pub const CURRICULUM_PATH_QUADRATIC_EQUATION_3: [&str; 4] =
+    ["root", "中学3年生", "二次方程式", "二次方程式(3)"];
+pub const CURRICULUM_PATH_DECIMAL_ADD_SUBTRACT: [&str; 3] =
+    ["root", "小学4年生", "小数の足し算と引き算"];
+pub const CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE: [&str; 3] =
+    ["root", "小学5年生", "小数の掛け算と割り算"];
+pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_1: [&str; 4] =
+    ["root", "中学2年生", "連立方程式", "連立方程式(1)"];
+pub const CURRICULUM_PATH_LIAR_PUZZLE: [&str; 3] = ["root", "おまけ", "うそつきだれだ"];
 pub const DEFAULT_PROBLEM_COUNT: usize = 20;
 pub const DEFAULT_COLUMNS: usize = 2;
 pub const DEFAULT_ROWS: usize = 10;
 pub const LINEAR_EQUATION_PROBLEM_COUNT: usize = 16;
 pub const LINEAR_EQUATION_COLUMNS: usize = 2;
 pub const LINEAR_EQUATION_ROWS: usize = 8;
+pub const SIMULTANEOUS_EQUATION_PROBLEM_COUNT: usize = 12;
+pub const SIMULTANEOUS_EQUATION_COLUMNS: usize = 2;
+pub const SIMULTANEOUS_EQUATION_ROWS: usize = 6;
+pub const LIAR_PUZZLE_PROBLEM_COUNT: usize = 6;
+pub const LIAR_PUZZLE_COLUMNS: usize = 1;
+pub const LIAR_PUZZLE_ROWS: usize = 6;
 pub const MIN_OPERAND: u8 = 1;
 pub const MAX_OPERAND: u8 = 9;
 pub const MIN_ANSWER: u8 = 1;
@@ -175,10 +223,55 @@ pub enum ArithmeticExpression {
     Rational {
         value: RationalCoefficient,
     },
+    ExactDecimal {
+        coefficient: i64,
+        scale: u32,
+    },
     Binary {
         operator: ArithmeticOperator,
         left: Box<ArithmeticExpression>,
         right: Box<ArithmeticExpression>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QuadraticEquationForm {
+    SquareEqualsConstant,
+    SquarePlusConstantZero,
+    FactoredScale,
+    Standard,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LiarStatement {
+    SaysLiar {
+        person: u8,
+    },
+    SaysNotLiar {
+        person: u8,
+    },
+    ExactlyOneLiar {
+        first: u8,
+        second: u8,
+    },
+    ExactLiarCount {
+        count: u8,
+    },
+    BothLiar {
+        first: u8,
+        second: u8,
+    },
+    BothNotLiar {
+        first: u8,
+        second: u8,
+    },
+    Implication {
+        antecedent_person: u8,
+        antecedent_is_liar: bool,
+        consequent_person: u8,
+        consequent_is_liar: bool,
     },
 }
 
@@ -199,6 +292,24 @@ pub enum ProblemPrompt {
         d: RationalCoefficient,
         left_negative_constant_as_subtraction: bool,
         right_negative_constant_as_subtraction: bool,
+    },
+    QuadraticEquation {
+        form: QuadraticEquationForm,
+        a: RationalCoefficient,
+        b: RationalCoefficient,
+        c: RationalCoefficient,
+    },
+    SimultaneousEquation {
+        a: i64,
+        b: i64,
+        c: i64,
+        d: i64,
+        e: i64,
+        f: i64,
+    },
+    LiarPuzzle {
+        people_count: u8,
+        statements: Vec<LiarStatement>,
     },
 }
 
@@ -247,6 +358,11 @@ pub enum AnswerSchema {
         max_denominator: u32,
         require_reduced_fraction_form: bool,
     },
+    Decimal {
+        max_scale: u32,
+    },
+    OrderedPair,
+    Algebraic,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -271,7 +387,11 @@ impl Problem {
     pub fn ordered_pair(&self) -> (u8, u8) {
         match self.prompt {
             ProblemPrompt::Addition { left, right } => (left, right),
-            ProblemPrompt::Arithmetic { .. } | ProblemPrompt::LinearEquation { .. } => {
+            ProblemPrompt::Arithmetic { .. }
+            | ProblemPrompt::LinearEquation { .. }
+            | ProblemPrompt::QuadraticEquation { .. }
+            | ProblemPrompt::SimultaneousEquation { .. }
+            | ProblemPrompt::LiarPuzzle { .. } => {
                 panic!("ordered_pair is addition-only")
             }
         }
@@ -360,6 +480,7 @@ pub enum EditorStructure {
     Negative,
     PlusMinus,
     Tuple,
+    Arithmetic,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -390,7 +511,10 @@ macro_rules! define_grade_warnings {
 define_grade_warnings!(
     FractionNotReduced,
     RedundantNegative,
+    RedundantPlusMinus,
     RedundantDecimal,
+    DuplicateSolution,
+    SolutionListRequired,
     FractionFormRequired,
     IntegerFormRequired,
 );

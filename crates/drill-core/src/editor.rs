@@ -155,6 +155,9 @@ fn insert_structure(
     structure: EditorStructure,
     input_interface: &AnswerInputInterface,
 ) -> Result<(), EditorError> {
+    if structure == EditorStructure::Arithmetic {
+        return Err(EditorError::InputInterfaceViolation);
+    }
     if structure == EditorStructure::Tuple {
         return insert_tuple_item(state, input_interface);
     }
@@ -191,7 +194,9 @@ fn insert_structure(
         ),
         EditorStructure::Negative => (AnswerNode::Negative(Box::new(current)), 0),
         EditorStructure::PlusMinus => (AnswerNode::PlusMinus(Box::new(current)), 0),
-        EditorStructure::Decimal | EditorStructure::Tuple => unreachable!(),
+        EditorStructure::Decimal | EditorStructure::Tuple | EditorStructure::Arithmetic => {
+            unreachable!()
+        }
     };
 
     let mut candidate_answer = state.answer.clone();
@@ -401,6 +406,11 @@ pub(crate) fn ensure_capability(
             ensure_structure_allowed(input_interface, EditorStructure::PlusMinus)?;
             ensure_capability(value, input_interface)
         }
+        AnswerNode::Binary { left, right, .. } => {
+            ensure_structure_allowed(input_interface, EditorStructure::Arithmetic)?;
+            ensure_capability(left, input_interface)?;
+            ensure_capability(right, input_interface)
+        }
         AnswerNode::Tuple(values) => {
             ensure_structure_allowed(input_interface, EditorStructure::Tuple)?;
             for value in values {
@@ -562,6 +572,10 @@ fn collect_editable_paths(
         AnswerNode::Negative(value) | AnswerNode::PlusMinus(value) => {
             collect_child(value, 0, path, output);
         }
+        AnswerNode::Binary { left, right, .. } => {
+            collect_child(left, 0, path, output);
+            collect_child(right, 1, path, output);
+        }
         AnswerNode::Tuple(values) => {
             for (index, value) in values.iter().enumerate() {
                 collect_child(value, index, path, output);
@@ -613,6 +627,8 @@ fn child_at(answer: &AnswerNode, index: usize) -> Option<&AnswerNode> {
             1,
         ) => Some(index),
         (AnswerNode::Negative(value) | AnswerNode::PlusMinus(value), 0) => Some(value),
+        (AnswerNode::Binary { left, .. }, 0) => Some(left),
+        (AnswerNode::Binary { right, .. }, 1) => Some(right),
         (AnswerNode::Tuple(values), index) => values.get(index),
         _ => None,
     }
@@ -633,6 +649,8 @@ fn child_at_mut(answer: &mut AnswerNode, index: usize) -> Option<&mut AnswerNode
             1,
         ) => Some(index),
         (AnswerNode::Negative(value) | AnswerNode::PlusMinus(value), 0) => Some(value),
+        (AnswerNode::Binary { left, .. }, 0) => Some(left),
+        (AnswerNode::Binary { right, .. }, 1) => Some(right),
         (AnswerNode::Tuple(values), index) => values.get_mut(index),
         _ => None,
     }

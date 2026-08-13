@@ -183,7 +183,7 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 }
 .custom-select-option {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 46px;
@@ -195,7 +195,20 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 }
 .custom-select-option-active { background: #edf8fa; }
 .custom-select-option[aria-selected='true'] { font-weight: 750; }
+.custom-select-option-label { min-width: 0; }
+.custom-select-option-end { display: inline-flex; gap: 7px; align-items: center; justify-content: flex-end; min-width: 22px; }
+.custom-select-check, .custom-select-check-placeholder { display: inline-grid; width: 14px; height: 14px; flex: 0 0 14px; place-items: center; }
 .custom-select-check { color: var(--lobby-cyan-dark); font-size: 13px; text-align: center; }
+.grade-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 19px; padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font-size: 10px; font-weight: 800; line-height: 1; white-space: nowrap; }
+.grade-tag-grade-1 { color: #866300; background: #fff4b8; }
+.grade-tag-grade-2 { color: #56661e; background: #eff4c8; }
+.grade-tag-grade-3 { color: #26693c; background: #dff3d8; }
+.grade-tag-grade-4 { color: #1f695b; background: #dcf3e8; }
+.grade-tag-grade-5 { color: #17687a; background: #d9f3f7; }
+.grade-tag-grade-6 { color: #206389; background: #dbeff9; }
+.grade-tag-grade-7 { color: #285d98; background: #dceafa; }
+.grade-tag-grade-8 { color: #4c5194; background: #e3e3f9; }
+.grade-tag-grade-9 { color: #70458f; background: #eadcf7; }
 .settings-screen :is(button, select, input):focus-visible { outline: 3px solid rgba(8, 169, 196, .32); outline-offset: 2px; border-color: var(--lobby-cyan-dark); }
 .field-note, .muted-message { margin: 0; color: var(--muted); font-size: 12px; }
 .advanced-settings { border-top: 1px solid #dbe3e5; }
@@ -217,7 +230,88 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .advanced-settings > summary:hover { color: #20343b; }
 .advanced-settings-chevron { width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; transition: rotate .16s ease; }
 .advanced-settings[open] .advanced-settings-chevron { rotate: 180deg; }
-.advanced-settings-body { padding: 8px 0 1px; }
+.advanced-settings-body { display: grid; gap: 12px; padding: 8px 0 1px; }
+.grading-settings-open-button {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 2px;
+  border: 0;
+  border-top: 1px solid #e4e9eb;
+  color: #40565e;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
+}
+.grading-settings-open-button:hover { color: #20343b; }
+.grading-settings-open-button > span:last-child { font-size: 21px; font-weight: 500; line-height: 1; }
+.grading-settings-modal-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  background: rgba(26, 38, 43, .48);
+  place-items: center;
+}
+.grading-settings-modal {
+  width: min(620px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  border: 1px solid #9eacb1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(20, 37, 43, .28);
+}
+.grading-settings-modal-header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #dfe6e8;
+  background: #fff;
+}
+.grading-settings-modal-header h2 { margin: 0; color: #20343b; font-size: 19px; }
+.grading-settings-modal-close {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #b8c2c6;
+  border-radius: 6px;
+  color: #334950;
+  background: #fff;
+  cursor: pointer;
+  font-size: 21px;
+  line-height: 1;
+}
+.grading-settings-modal-note { margin: 0; padding: 14px 20px 2px; color: #52656c; font-size: 12px; line-height: 1.7; }
+.grading-settings-modal-body { display: grid; padding: 10px 20px 20px; }
+.grading-setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  min-height: 72px;
+  padding: 11px 0;
+  border-bottom: 1px solid #edf0f1;
+  font-size: 12px;
+}
+.grading-setting-row:last-child { border-bottom: 0; }
+.grading-setting-copy { display: grid; gap: 5px; min-width: 0; }
+.grading-setting-copy strong { color: #2d444c; font-size: 13px; }
+.grading-setting-copy > span { color: #607178; line-height: 1.65; }
+.grading-setting-toggle { display: grid; grid-template-columns: repeat(2, 42px); overflow: hidden; border: 1px solid #9aa7ac; border-radius: 5px; }
+.grading-setting-toggle button { min-height: 36px; border: 0; border-right: 1px solid #c4cccf; background: #fff; cursor: pointer; font-size: 18px; font-weight: 750; }
+.grading-setting-toggle button:last-child { border-right: 0; }
+.grading-setting-toggle button[aria-pressed='true'] { color: #102f37; background: #dff5f8; box-shadow: inset 0 0 0 1px #4aaabc; }
 .seed-field { display: grid; gap: 8px; }
 .seed-label { display: flex; flex-wrap: wrap; gap: 3px; align-items: baseline; }
 .seed-label > span { margin-left: 0; }
@@ -339,6 +433,9 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: visible; padding: 0 2%; }
 .worksheet-instruction { position: absolute; top: 5.3%; right: 7%; left: 7%; margin: 0; font-size: 15px; line-height: 1.35; }
 .problem-answer-area { display: inline-flex; min-width: 0; align-items: center; }
+.problem-answer-area-simultaneous { gap: 9px; }
+.simultaneous-answer-coordinate { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.problem-answer-area-simultaneous .answer-box { min-width: 34px; }
 .answer-prefix-label { margin-right: 5px; font-size: 17px; font-weight: 600; white-space: nowrap; }
 .problem-cell-linear-equation { display: block; padding: 0; }
 .problem-cell-linear-equation .problem-number { position: absolute; top: 14%; left: 4%; width: auto; }
@@ -346,14 +443,34 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-cell-linear-equation .problem-answer-area { position: absolute; right: 6%; bottom: 11%; }
 .problem-cell-linear-equation .answer-box { margin-left: 0; }
 .problem-cell-linear-equation .grade-warnings { right: 0; bottom: -20px; left: auto; }
+.problem-cell-answer-below { display: block; padding: 0; }
+.problem-cell-answer-below .problem-number { position: absolute; top: 11%; left: 4%; width: auto; }
+.problem-cell-answer-below .expression { position: absolute; top: 8%; right: 5%; left: 15%; max-width: 80%; }
+.problem-cell-answer-below .problem-answer-area { position: absolute; right: 7%; bottom: 7%; }
+.problem-cell-answer-below .answer-box { min-width: 34px; min-height: 27px; margin-left: 0; padding: 3px 6px; }
+.problem-cell-answer-below .grade-warnings { right: 0; bottom: -18px; left: auto; }
+.problem-cell-liar { display: block; padding: 0; }
+.problem-cell-liar .problem-number { position: absolute; top: 9%; left: 2.5%; width: auto; }
+.problem-cell-liar .expression { position: absolute; top: 8%; right: 3%; left: 9%; max-width: none; white-space: normal; font-size: 12.5px; }
+.liar-statements { display: flex; flex-direction: column; gap: 2px; line-height: 1.28; white-space: normal; }
+.liar-statement-row { display: block; }
+.problem-cell-liar .problem-answer-area { position: absolute; right: 4%; bottom: 7%; }
+.problem-answer-area-liar { gap: 8px; }
+.liar-person-choice-row { display: inline-flex; align-items: center; gap: 8px; }
+.liar-person-choice { min-width: 27px; min-height: 22px; padding: 1px 7px 2px; border: 1.5px solid transparent; border-radius: 50%; background: transparent; color: inherit; font: inherit; font-weight: 650; line-height: 1.1; cursor: pointer; }
+.liar-person-choice:hover:not(:disabled) { border-color: #9aa2a5; }
+.liar-person-choice-selected { border-color: #222; }
+.liar-person-choice:disabled { opacity: 1; cursor: default; }
+.liar-correct-answer { display: inline-flex; align-items: center; }
 .worksheet-footer { position: absolute; color: var(--muted); font-size: 7px; line-height: 1; white-space: nowrap; }
 .problem-number { flex: 0 0 15%; color: #484848; font-size: var(--worksheet-problem-number-font-size); font-weight: 700; font-variant-numeric: tabular-nums; }
 .expression { flex: 0 0 auto; white-space: nowrap; font-size: var(--worksheet-expression-font-size); font-variant-numeric: tabular-nums; }
 .problem-math-expression { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
 .answer-box {
   display: inline-flex;
+  width: max-content;
+  height: max-content;
   min-width: 42px;
-  max-width: 100%;
   min-height: 38px;
   box-sizing: border-box;
   align-items: center;
@@ -438,13 +555,18 @@ button:disabled { cursor: wait; opacity: .5; }
   box-shadow: 0 -5px 22px rgba(0, 0, 0, .12);
 }
 .input-panel-inner { display: grid; grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); gap: 10px; width: min(780px, 100%); margin: 0 auto; }
+.input-panel-inner-algebraic { grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); width: min(780px, 100%); }
 .formula-keypad, .keypad-numbers, .keypad-controls { display: grid; gap: 6px; }
 .formula-keypad { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.formula-keypad-algebraic { grid-template-columns: repeat(3, minmax(82px, 1fr)); }
+.formula-keypad-algebraic button { height: 64px; min-height: 64px; }
+.formula-keypad-algebraic .formula-key-symbol { min-height: 38px; }
 .keypad-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .keypad-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .formula-keypad button, .keypad-numbers button, .keypad-controls button { min-height: 42px; border: 1px solid #8d969a; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 650; }
 .formula-keypad button { display: grid; gap: 1px; min-height: 58px; place-items: center; padding: 4px 3px 3px; color: #243d45; background: #fafdfe; }
 .formula-keypad button:hover:not(:disabled), .keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
+.formula-keypad .formula-operator-key { display: grid; min-height: 58px; place-items: center; padding: 4px 3px 3px; color: #243d45; background: #fafdfe; font-size: 23px; line-height: 1; }
 .formula-key-symbol { display: flex; min-height: 44px; align-items: center; justify-content: center; padding-block: 3px; overflow: visible; }
 .math-template-icon { display: inline-block; margin: 0; overflow: visible; font-size: 24px; line-height: normal; vertical-align: middle; }
 .formula-key-label { color: #53676e; font-family: 'Noto Sans JP', system-ui, sans-serif; font-size: 9px; font-weight: 700; line-height: 1; }
@@ -482,8 +604,11 @@ button:disabled { cursor: wait; opacity: .5; }
   .problem-cell-linear-equation .answer-prefix-label { font-size: 14px; }
   .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 6px; }
   .correct-answer { margin-left: 3px; font-size: 13px; }
-  .input-panel-inner { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 7px; }
-  .formula-keypad { grid-column: 1 / -1; grid-template-columns: repeat(6, minmax(70px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
+  .input-panel { overflow-x: auto; }
+  .input-panel-inner { grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); gap: 7px; min-width: 680px; }
+  .input-panel-inner-algebraic { grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); min-width: 680px; }
+  .formula-keypad { grid-template-columns: repeat(3, minmax(70px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
+  .formula-keypad-algebraic { grid-template-columns: repeat(3, minmax(82px, 1fr)); }
   .formula-keypad, .keypad-numbers, .keypad-controls { gap: 5px; }
   .formula-keypad button { min-height: 52px; }
   .keypad-numbers button, .keypad-controls button { min-height: 39px; }
@@ -595,9 +720,17 @@ button:disabled { cursor: wait; opacity: .5; }
 .worksheet-print-answer-area { min-width: 0; }
 .worksheet-print-answer-value { display: inline-block; margin-left: 6px; font-size: 23px; line-height: 1; }
 .worksheet-print-page .problem-cell-linear-equation .worksheet-print-answer-value { margin-left: 0; font-size: var(--worksheet-linear-expression-font-size); }
+.worksheet-print-page .problem-cell-answer-below .worksheet-print-empty-answer { width: 34px; min-width: 34px; height: 27px; min-height: 27px; }
+.worksheet-print-page .problem-cell-answer-below .worksheet-print-answer-value { margin-left: 0; font-size: 16px; }
 .worksheet-print-page .worksheet-footer { color: #626262; font-size: 7px; }
 
 @media (max-width: 760px) {
+  .grading-settings-modal-backdrop { padding: 12px; }
+  .grading-settings-modal { max-height: calc(100vh - 24px); }
+  .grading-settings-modal-header { padding: 15px 16px 12px; }
+  .grading-settings-modal-note { padding-inline: 16px; }
+  .grading-settings-modal-body { padding-inline: 16px; }
+  .grading-setting-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
   .worksheet-print-preview-toolbar { grid-template-columns: auto 1fr auto; gap: 8px; padding-inline: 12px; }
   .worksheet-print-preview-toolbar button { min-height: 38px; padding-inline: 12px; }
   .worksheet-print-preview-title-group h2 { font-size: 15px; }

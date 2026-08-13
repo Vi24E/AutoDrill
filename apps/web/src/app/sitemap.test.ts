@@ -11,15 +11,23 @@ describe('sitemap discovery', () => {
       '/drills/grade-1/one-digit-subtraction',
       '/drills/grade-2/two-digit-addition',
       '/drills/grade-2/multiplication-table',
+      '/drills/grade-3/division-1',
+      '/drills/grade-4/decimal-add-subtract',
       '/drills/grade-5/fraction-addition',
+      '/drills/grade-5/decimal-multiply-divide',
       '/drills/grade-5/fraction-subtraction',
       '/drills/grade-6/fraction-multiplication',
+      '/drills/grade-6/fraction-division',
       '/drills/grade-7/signed-arithmetic-1',
       '/drills/grade-7/signed-arithmetic-2',
       '/drills/grade-7/linear-equation-1',
       '/drills/grade-7/linear-equation-2',
+      '/drills/grade-8/simultaneous-equation-1',
+      '/drills/grade-9/quadratic-equation-1',
+      '/drills/grade-9/quadratic-equation-2',
+      '/drills/grade-9/quadratic-equation-3',
+      '/drills/bonus/liar-puzzle',
     ]);
-    expect(paths.some((path) => path.includes('Dummy'))).toBe(false);
   });
 
   it('includes the GitHub Pages project base path in alpha deployment URLs', () => {

@@ -6,9 +6,17 @@ use crate::model::MAX_ANSWER_AST_SIZE;
 // constraints even though they currently share the same numeric maximum.
 const MAX_VALIDATED_AST_NODES: usize = MAX_ANSWER_AST_SIZE;
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnswerBinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+}
+
 /// Exact, typed answer syntax shared by editing, grading, and every generator.
 /// Mathematical values deliberately contain no binary floating-point fields.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum AnswerNode {
     #[default]
@@ -35,6 +43,11 @@ pub enum AnswerNode {
     },
     Negative(Box<AnswerNode>),
     PlusMinus(Box<AnswerNode>),
+    Binary {
+        operator: AnswerBinaryOperator,
+        left: Box<AnswerNode>,
+        right: Box<AnswerNode>,
+    },
     Tuple(Vec<AnswerNode>),
     Variable(String),
 }
@@ -147,6 +160,14 @@ impl AnswerNode {
                 let child_size = value.bounded_input_size(visited_nodes, remaining)?;
                 display_remaining - remaining.checked_sub(child_size)?
             }
+            Self::Binary { left, right, .. } => {
+                let mut remaining = display_remaining.checked_sub(1)?;
+                let left_size = left.bounded_input_size(visited_nodes, remaining)?;
+                remaining = remaining.checked_sub(left_size)?;
+                let right_size = right.bounded_input_size(visited_nodes, remaining)?;
+                remaining = remaining.checked_sub(right_size)?;
+                display_remaining - remaining
+            }
             Self::Tuple(values) => {
                 let mut remaining = display_remaining.checked_sub(1)?;
                 for value in values {
@@ -242,6 +263,16 @@ impl AnswerNode {
             Self::Negative(value) | Self::PlusMinus(value) => {
                 1usize.saturating_add(value.size_capped(cap - 1)).min(cap)
             }
+            Self::Binary { left, right, .. } => {
+                let mut total = 1usize;
+                total = total.saturating_add(left.size_capped(cap - total)).min(cap);
+                if total == cap {
+                    return total;
+                }
+                total
+                    .saturating_add(right.size_capped(cap - total))
+                    .min(cap)
+            }
             Self::Tuple(values) => {
                 let mut total = 1usize;
                 for value in values {
@@ -289,6 +320,10 @@ impl AnswerNode {
             }
             Self::Negative(value) | Self::PlusMinus(value) => {
                 value.exact_integer_magnitudes(output);
+            }
+            Self::Binary { left, right, .. } => {
+                left.exact_integer_magnitudes(output);
+                right.exact_integer_magnitudes(output);
             }
             Self::Tuple(values) => {
                 for value in values {

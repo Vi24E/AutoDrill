@@ -1,4 +1,4 @@
-use crate::answer::AnswerNode;
+use crate::answer::{AnswerBinaryOperator, AnswerNode};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ExactRational {
@@ -34,6 +34,17 @@ impl ExactRational {
         let right = other.numerator.checked_mul(self.denominator)?;
         Self::new(
             left.checked_add(right)?,
+            self.denominator.checked_mul(other.denominator)?,
+        )
+    }
+
+    fn subtract(self, other: Self) -> Option<Self> {
+        self.add(other.negate()?)
+    }
+
+    fn multiply(self, other: Self) -> Option<Self> {
+        Self::new(
+            self.numerator.checked_mul(other.numerator)?,
             self.denominator.checked_mul(other.denominator)?,
         )
     }
@@ -139,7 +150,34 @@ pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
             AnswerNode::Negative(inner) => *inner,
             value => AnswerNode::Negative(Box::new(value)),
         },
-        AnswerNode::PlusMinus(value) => AnswerNode::PlusMinus(Box::new(normalize_answer(value))),
+        AnswerNode::PlusMinus(value) => match normalize_answer(value) {
+            AnswerNode::PlusMinus(inner) => AnswerNode::PlusMinus(inner),
+            value => AnswerNode::PlusMinus(Box::new(value)),
+        },
+        AnswerNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let left = normalize_answer(left);
+            let right = normalize_answer(right);
+            match (operator, &left, &right) {
+                (AnswerBinaryOperator::Add, AnswerNode::Integer(0), _) => right,
+                (AnswerBinaryOperator::Add, _, AnswerNode::Integer(0)) => left,
+                (AnswerBinaryOperator::Subtract, _, AnswerNode::Integer(0)) => left,
+                (AnswerBinaryOperator::Multiply, AnswerNode::Integer(0), _)
+                | (AnswerBinaryOperator::Multiply, _, AnswerNode::Integer(0)) => {
+                    AnswerNode::Integer(0)
+                }
+                (AnswerBinaryOperator::Multiply, AnswerNode::Integer(1), _) => right,
+                (AnswerBinaryOperator::Multiply, _, AnswerNode::Integer(1)) => left,
+                _ => AnswerNode::Binary {
+                    operator: *operator,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+            }
+        }
         AnswerNode::Tuple(values) => {
             AnswerNode::Tuple(values.iter().map(normalize_answer).collect())
         }
@@ -165,6 +203,19 @@ fn exact_rational(answer: &AnswerNode) -> Option<ExactRational> {
         } => exact_rational(whole)?
             .add(exact_rational(numerator)?.divide(exact_rational(denominator)?)?),
         AnswerNode::Negative(value) => exact_rational(value)?.negate(),
+        AnswerNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let left = exact_rational(left)?;
+            let right = exact_rational(right)?;
+            match operator {
+                AnswerBinaryOperator::Add => left.add(right),
+                AnswerBinaryOperator::Subtract => left.subtract(right),
+                AnswerBinaryOperator::Multiply => left.multiply(right),
+            }
+        }
         AnswerNode::Root {
             radicand,
             index: None,

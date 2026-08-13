@@ -55,8 +55,10 @@ describe('print flow integration paths', () => {
     renderApp();
     fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
     await expectPreviewOpen(printSpy);
-    fireEvent.click(screen.getByRole('button', { name: '印刷する' }));
-    expect(printSpy).toHaveBeenCalledTimes(1);
+    const printButton = screen.getByRole('button', { name: '印刷する' });
+    expect(printButton).toBeEnabled();
+    fireEvent.click(printButton);
+    await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('dialog', { name: '印刷プレビュー' })).toBeInTheDocument();
     await closePreview();
   });
