@@ -6,7 +6,7 @@ import { ProblemExpression } from '@/components/ProblemExpression';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { answerNodeText, type AnswerNode, type WorksheetDto } from '@/domain/drill-engine';
-import { answerNodeLatex } from '@/domain/mathlive-format';
+import { answerNodeLatex, answerPrefixLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel, problemExpression } from '@/domain/problem-format';
 import { findThemeDefinitionByNumericId, type ThemeDefinition } from '@/domain/theme-registry';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
@@ -128,7 +128,7 @@ function PrintAnswer({
         {answerPrefix ? (
           <MathLiveStatic
             className="answer-prefix-label"
-            latex={answerPrefix.replaceAll(' ', '\\,')}
+            latex={answerPrefixLatex(answerPrefix)}
             ariaLabel={answerPrefix}
           />
         ) : null}
@@ -143,7 +143,7 @@ function PrintAnswer({
       {answerPrefix ? (
         <MathLiveStatic
           className="answer-prefix-label"
-          latex={answerPrefix.replaceAll(' ', '\\,')}
+          latex={answerPrefixLatex(answerPrefix)}
           ariaLabel={answerPrefix}
         />
       ) : null}

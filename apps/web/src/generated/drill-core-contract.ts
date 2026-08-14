@@ -3,10 +3,11 @@
 
 export const DRILL_CORE_CONTRACT = {
   "schema_version": 4,
+  "operation_kind_count": 31,
   "themes": {
     "1": {
       "numeric_theme_id": 1,
-      "generator_revision": 3,
+      "generator_revision": 5,
       "skill_id": "jp.grade1.addition.one_digit",
       "curriculum_path": [
         "root",
@@ -21,7 +22,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "2": {
       "numeric_theme_id": 2,
-      "generator_revision": 6,
+      "generator_revision": 8,
       "skill_id": "jp.grade7.equation.linear.1",
       "curriculum_path": [
         "root",
@@ -37,7 +38,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "3": {
       "numeric_theme_id": 3,
-      "generator_revision": 6,
+      "generator_revision": 8,
       "skill_id": "jp.grade7.equation.linear.2",
       "curriculum_path": [
         "root",
@@ -53,7 +54,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "4": {
       "numeric_theme_id": 4,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade1.subtraction.one_digit",
       "curriculum_path": [
         "root",
@@ -68,7 +69,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "5": {
       "numeric_theme_id": 5,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade2.addition.two_digit",
       "curriculum_path": [
         "root",
@@ -83,7 +84,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "6": {
       "numeric_theme_id": 6,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade2.multiplication.table",
       "curriculum_path": [
         "root",
@@ -98,7 +99,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "7": {
       "numeric_theme_id": 7,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade7.signed.arithmetic.1",
       "curriculum_path": [
         "root",
@@ -113,7 +114,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "8": {
       "numeric_theme_id": 8,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade7.signed.arithmetic.2",
       "curriculum_path": [
         "root",
@@ -128,7 +129,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "9": {
       "numeric_theme_id": 9,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade5.fraction.addition",
       "curriculum_path": [
         "root",
@@ -143,7 +144,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "10": {
       "numeric_theme_id": 10,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade6.fraction.multiplication",
       "curriculum_path": [
         "root",
@@ -158,7 +159,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "11": {
       "numeric_theme_id": 11,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade5.fraction.subtraction",
       "curriculum_path": [
         "root",
@@ -173,7 +174,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "12": {
       "numeric_theme_id": 12,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade6.fraction.division",
       "curriculum_path": [
         "root",
@@ -188,7 +189,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "13": {
       "numeric_theme_id": 13,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade3.division.table.1",
       "curriculum_path": [
         "root",
@@ -203,7 +204,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "14": {
       "numeric_theme_id": 14,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade9.equation.quadratic.1",
       "curriculum_path": [
         "root",
@@ -219,7 +220,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "15": {
       "numeric_theme_id": 15,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade9.equation.quadratic.2",
       "curriculum_path": [
         "root",
@@ -235,7 +236,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "16": {
       "numeric_theme_id": 16,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade9.equation.quadratic.3",
       "curriculum_path": [
         "root",
@@ -251,7 +252,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "17": {
       "numeric_theme_id": 17,
-      "generator_revision": 1,
+      "generator_revision": 4,
       "skill_id": "jp.grade4.decimal.add_subtract",
       "curriculum_path": [
         "root",
@@ -266,7 +267,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "18": {
       "numeric_theme_id": 18,
-      "generator_revision": 1,
+      "generator_revision": 5,
       "skill_id": "jp.grade5.decimal.multiply_divide",
       "curriculum_path": [
         "root",
@@ -281,7 +282,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "19": {
       "numeric_theme_id": 19,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade8.equation.simultaneous.1",
       "curriculum_path": [
         "root",
@@ -297,7 +298,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "20": {
       "numeric_theme_id": 20,
-      "generator_revision": 1,
+      "generator_revision": 4,
       "skill_id": "bonus.logic.liar_puzzle",
       "curriculum_path": [
         "root",

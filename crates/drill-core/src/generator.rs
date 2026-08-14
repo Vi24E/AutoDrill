@@ -5,11 +5,10 @@ use std::time::{Duration, Instant};
 
 use crate::answer::{AnswerBinaryOperator, AnswerNode};
 use crate::effort::{
-    arithmetic_expression_graph, calculate_graph_effort, division_table_graph,
-    linear_equation_graph, multiplication_table_graph, one_digit_addition_graph,
-    one_digit_subtraction_graph, quadratic_factoring_graph, quadratic_formula_graph,
-    quadratic_square_graph, simultaneous_equation_graph, two_digit_addition_graph, Operation,
-    OperationWeights, SolutionGraph, SolutionStep,
+    arithmetic_expression_graph, calculate_graph_effort, linear_equation_graph,
+    one_digit_addition_graph, one_digit_subtraction_graph, quadratic_factoring_graph,
+    quadratic_formula_graph, quadratic_square_graph, simultaneous_equation_graph,
+    two_digit_addition_graph, OperationWeights,
 };
 use crate::error::GenerationError;
 use crate::identity::{validate_seed, ProblemSetIdentity};
@@ -21,6 +20,7 @@ use crate::model::{
 };
 use crate::registry::{active_registration, registration, resolved_weights, ThemeRegistration};
 use crate::rng::DeterministicRng;
+use crate::themes::{division_table, liar_puzzle as liar_puzzle_theme, multiplication_table};
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
 pub const DEFAULT_MAX_ATTEMPTS: u64 = 10_000;
@@ -708,6 +708,12 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
         loop {
             let mut candidate_pool = Vec::with_capacity(pool_size);
             let mut distinct = HashSet::with_capacity(pool_size);
+            let balance_liar_population =
+                registration.numeric_theme_id == crate::model::THEME_ID_LIAR_PUZZLE;
+            let liar_population_quota = pool_size / 2;
+            let mut liar_three_person_count = 0_usize;
+            let mut liar_four_person_count = 0_usize;
+            debug_assert!(!balance_liar_population || pool_size.is_multiple_of(2));
             while candidate_pool.len() < pool_size {
                 // When a generator exposes an answer domain, sample the answer
                 // exactly once for this candidate. If construction fails, retry
@@ -738,6 +744,17 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
                     {
                         continue;
                     }
+                    if balance_liar_population {
+                        match &problem.prompt {
+                            ProblemPrompt::LiarPuzzle {
+                                people_count: 3, ..
+                            } if liar_three_person_count < liar_population_quota => {}
+                            ProblemPrompt::LiarPuzzle {
+                                people_count: 4, ..
+                            } if liar_four_person_count < liar_population_quota => {}
+                            _ => continue,
+                        }
+                    }
                     let key = problem_key(&problem);
                     if unique_finite_pool {
                         if !distinct.insert(key) {
@@ -746,11 +763,30 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
                     } else {
                         distinct.insert(key);
                     }
+                    if balance_liar_population {
+                        match &problem.prompt {
+                            ProblemPrompt::LiarPuzzle {
+                                people_count: 3, ..
+                            } => {
+                                liar_three_person_count += 1;
+                            }
+                            ProblemPrompt::LiarPuzzle {
+                                people_count: 4, ..
+                            } => {
+                                liar_four_person_count += 1;
+                            }
+                            _ => unreachable!("liar-puzzle balance was validated above"),
+                        }
+                    }
                     candidate_pool.push(problem);
                     break;
                 }
             }
             check_timeout(started, clock, config)?;
+            if balance_liar_population {
+                debug_assert_eq!(liar_three_person_count, liar_population_quota);
+                debug_assert_eq!(liar_four_person_count, liar_population_quota);
+            }
             if distinct.len() >= required_diversity {
                 break candidate_pool;
             }
@@ -830,10 +866,22 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
             .collect()
     };
 
-    // Fisher-Yates using the same deterministic RNG stream.
-    for upper in (1..selected.len()).rev() {
-        let swap_with = rng.next_bounded((upper + 1) as u64) as usize;
-        selected.swap(upper, swap_with);
+    if identity.difficulty.value() <= 2 {
+        // Easy and normal worksheets should progress from lower to higher effort
+        // so the sheet itself has a pedagogical difficulty ramp. Keep the same
+        // deterministic tie-breakers used during candidate selection.
+        selected.sort_by(|left, right| {
+            left.effort
+                .total_cmp(&right.effort)
+                .then_with(|| problem_key(left).cmp(&problem_key(right)))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+    } else {
+        // Hard and random worksheets retain the existing shuffled presentation.
+        for upper in (1..selected.len()).rev() {
+            let swap_with = rng.next_bounded((upper + 1) as u64) as usize;
+            selected.swap(upper, swap_with);
+        }
     }
     for (index, problem) in selected.iter_mut().enumerate() {
         problem.id = (index + 1) as u32;
@@ -1079,17 +1127,6 @@ fn liar_statement_truth(statement: &LiarStatement, mask: u32) -> bool {
     }
 }
 
-fn liar_statement_effort(statement: &LiarStatement, people_count: u8) -> u32 {
-    match statement {
-        LiarStatement::SaysLiar { .. } | LiarStatement::SaysNotLiar { .. } => 1,
-        LiarStatement::ExactlyOneLiar { .. }
-        | LiarStatement::BothLiar { .. }
-        | LiarStatement::BothNotLiar { .. }
-        | LiarStatement::Implication { .. } => 2,
-        LiarStatement::ExactLiarCount { .. } => u32::from(people_count),
-    }
-}
-
 fn liar_puzzle_solutions(people_count: u8, statements: &[LiarStatement]) -> Vec<u32> {
     let mut solutions = Vec::new();
     for mask in 0_u32..(1_u32 << people_count) {
@@ -1128,10 +1165,10 @@ fn liar_puzzle_problem(
     id: u32,
     weights: &OperationWeights,
 ) -> Option<Problem> {
-    let people_count = 3 + rng.next_bounded(3) as u8;
+    let people_count = 3 + rng.next_bounded(2) as u8;
     let mut statements = Vec::with_capacity(usize::from(people_count));
     for speaker in 1..=people_count {
-        let statement = match rng.next_bounded(7) {
+        let statement = match rng.next_bounded(6) {
             0 => LiarStatement::SaysLiar {
                 person: draw_other_person(rng, people_count, speaker),
             },
@@ -1149,19 +1186,9 @@ fn liar_puzzle_problem(
                 let (first, second) = draw_two_other_people(rng, people_count, speaker);
                 LiarStatement::BothLiar { first, second }
             }
-            5 => {
+            _ => {
                 let (first, second) = draw_two_other_people(rng, people_count, speaker);
                 LiarStatement::BothNotLiar { first, second }
-            }
-            _ => {
-                let (antecedent_person, consequent_person) =
-                    draw_two_other_people(rng, people_count, speaker);
-                LiarStatement::Implication {
-                    antecedent_person,
-                    antecedent_is_liar: rng.next_bounded(2) == 0,
-                    consequent_person,
-                    consequent_is_liar: rng.next_bounded(2) == 0,
-                }
             }
         };
         statements.push(statement);
@@ -1182,24 +1209,13 @@ fn liar_puzzle_problem(
         .collect::<Vec<_>>();
     let canonical_answer = AnswerNode::Tuple(liars);
 
-    // SAT effort is exactly the formula length requested by the curriculum:
-    // unary literals cost 1; binary relations and implications cost 2; an
-    // exact-cardinality statement over the whole group costs the group size.
-    // Identity has default weight 1, so one graph node per formula symbol keeps
-    // the standard effort machinery while making effort equal to this length.
+    // SAT-length effort is an explicit theme exception and lives in the
+    // liar-puzzle theme module rather than the reusable arithmetic model.
     let formula_length = statements
         .iter()
-        .map(|statement| liar_statement_effort(statement, people_count))
+        .map(|statement| liar_puzzle_theme::statement_effort(statement, people_count))
         .sum::<u32>();
-    let solution_graph = SolutionGraph {
-        steps: (1..=formula_length)
-            .map(|step_id| SolutionStep {
-                id: step_id,
-                operation: Operation::Identity,
-                depends_on: vec![],
-            })
-            .collect(),
-    };
+    let solution_graph = liar_puzzle_theme::solution_graph(&statements, people_count);
     let effort = calculate_graph_effort(&solution_graph, weights);
     debug_assert_eq!(effort.value, f64::from(formula_length));
     Some(Problem {
@@ -1576,8 +1592,12 @@ fn fraction_arithmetic_operand_domain() -> &'static [RationalCoefficient] {
     static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     VALUES.get_or_init(|| {
         let mut values = Vec::new();
-        for denominator in 2_i64..=9 {
-            for numerator in 1_i64..=(10 - denominator) {
+        // Keep elementary fraction operands compact by bounding the sum of the
+        // reduced numerator and denominator. The previous <= 10 bound left only
+        // 22 values and made the finite subtraction/multiplication populations
+        // too small; <= 15 gives 57 distinct non-integer positive fractions.
+        for denominator in 2_i64..=14 {
+            for numerator in 1_i64..=(15 - denominator) {
                 let Some(value) = RationalCoefficient::new(numerator, denominator) else {
                     continue;
                 };
@@ -1615,6 +1635,17 @@ fn fraction_arithmetic_domain(
         let mut triples = Vec::new();
         for &left in operand_domain {
             for &right in operand_domain {
+                // Addition and multiplication are canonicalized by problem_key.
+                // Enumerate only one operand order here so the finite domain is
+                // already distinct instead of constructing then discarding the
+                // commutative mirror of every candidate.
+                if matches!(
+                    operator,
+                    ArithmeticOperator::Add | ArithmeticOperator::Multiply
+                ) && right < left
+                {
+                    continue;
+                }
                 let result = match operator {
                     ArithmeticOperator::Add => left.checked_add(right),
                     ArithmeticOperator::Subtract => left.subtract(right),
@@ -1627,21 +1658,22 @@ fn fraction_arithmetic_domain(
                 if result.numerator <= 0 {
                     continue;
                 }
-                // Fraction addition is a grade-5 unlike-denominator topic. Its
-                // result must not be constrained to the coefficient domain used
-                // by linear equations; doing so accidentally rejected standard
-                // examples such as 1/3 + 1/4 = 7/12 and heavily biased the pool
-                // toward equal denominators. Keep the existing operand bounds,
-                // but accept every positive non-integer sum they can produce.
+                // Addition deliberately uses an answer bound independent of the
+                // operand domain. Requiring the sum itself to satisfy n + d <= 15
+                // leaves only 139 commutative-distinct problems and recreates a
+                // strong equal-denominator bias. Subtraction and multiplication
+                // stay closed over the compact operand domain.
                 let result_allowed = match mode {
-                    ArithmeticThemeMode::FractionAddition => result.denominator > 1,
+                    ArithmeticThemeMode::FractionAddition => {
+                        result.denominator > 1 && result.numerator <= 65 && result.denominator <= 72
+                    }
                     ArithmeticThemeMode::FractionSubtraction
                     | ArithmeticThemeMode::FractionMultiplication => {
                         operand_domain.contains(&result)
                     }
-                    ArithmeticThemeMode::FractionDivision => {
-                        result.numerator <= 72 && result.denominator <= 72
-                    }
+                    ArithmeticThemeMode::FractionDivision => unreachable!(
+                        "fraction division builds its integer-inclusive domain separately"
+                    ),
                     _ => unreachable!(),
                 };
                 if result_allowed {
@@ -1672,8 +1704,12 @@ fn fraction_arithmetic_domain(
             )
         }),
         ArithmeticThemeMode::FractionDivision => DIVISION.get_or_init(|| {
-            let mut operands = fraction_arithmetic_operand_domain().to_vec();
-            operands.extend((1_i64..=9).map(|value| RationalCoefficient::new(value, 1).unwrap()));
+            let fraction_domain = fraction_arithmetic_operand_domain();
+            let mut operands = fraction_domain.to_vec();
+            let integer_domain = (1_i64..=9)
+                .map(|value| RationalCoefficient::new(value, 1).unwrap())
+                .collect::<Vec<_>>();
+            operands.extend(integer_domain.iter().copied());
             operands.sort_unstable();
             operands.dedup();
             let mut triples = Vec::new();
@@ -1685,7 +1721,16 @@ fn fraction_arithmetic_domain(
                     let Some(result) = left.divide(right) else {
                         continue;
                     };
-                    if result.numerator > 0 && result.numerator <= 72 && result.denominator <= 72 {
+                    // Division keeps integer operands because fraction/integer and
+                    // integer/fraction are both elementary curriculum cases. The
+                    // old <= 72 numerator/denominator bound admitted almost every
+                    // ordered pair (3,873 candidates at n+d<=15). Close answers
+                    // over the compact fraction domain plus one-digit integers
+                    // instead; this preserves all three operand archetypes and
+                    // integer quotients without letting the finite pool explode.
+                    if result.numerator > 0
+                        && (fraction_domain.contains(&result) || integer_domain.contains(&result))
+                    {
                         triples.push((left, right, result));
                     }
                 }
@@ -1739,23 +1784,18 @@ fn fraction_theme_problem(
         prompt: ProblemPrompt::Arithmetic { expression },
         input_interface: fraction_input_interface(),
         answer_schema: match mode {
-            // With the current positive operand domain, every non-integer sum
-            // is bounded by numerator <= 65 and denominator <= 72. These are
-            // grading bounds, not an additional generation filter.
+            // Addition uses an explicit result bound independent of the operand
+            // domain so unlike-denominator sums remain well represented.
             ArithmeticThemeMode::FractionAddition => AnswerSchema::Rational {
                 max_abs_numerator: 65,
                 max_denominator: 72,
                 require_reduced_fraction_form: true,
             },
             ArithmeticThemeMode::FractionSubtraction
-            | ArithmeticThemeMode::FractionMultiplication => AnswerSchema::Rational {
-                max_abs_numerator: 8,
-                max_denominator: 9,
-                require_reduced_fraction_form: true,
-            },
-            ArithmeticThemeMode::FractionDivision => AnswerSchema::Rational {
-                max_abs_numerator: 72,
-                max_denominator: 72,
+            | ArithmeticThemeMode::FractionMultiplication
+            | ArithmeticThemeMode::FractionDivision => AnswerSchema::Rational {
+                max_abs_numerator: 13,
+                max_denominator: 14,
                 require_reduced_fraction_form: true,
             },
             _ => unreachable!(),
@@ -1824,7 +1864,7 @@ fn arithmetic_theme_problem(
             (
                 expression,
                 answer,
-                multiplication_table_graph(c as u8),
+                multiplication_table::solution_graph(c as u8),
                 simple_integer_input(false),
                 AnswerSchema::Integer { min: 1, max: 81 },
             )
@@ -1842,68 +1882,36 @@ fn arithmetic_theme_problem(
             (
                 expression,
                 answer,
-                division_table_graph(dividend as u8),
+                division_table::solution_graph(dividend as u8),
                 simple_integer_input(false),
                 AnswerSchema::Integer { min: 1, max: 9 },
             )
         }
-        ArithmeticThemeMode::DecimalAddSubtract | ArithmeticThemeMode::DecimalMultiplyDivide => {
-            let (left_coefficient, left_scale) = draw_decimal_operand(rng);
-            let (right_coefficient, right_scale) = draw_decimal_operand(rng);
-            let left_value = exact_decimal_rational(left_coefficient, left_scale)?;
-            let right_value = exact_decimal_rational(right_coefficient, right_scale)?;
-            let operator = match mode {
-                ArithmeticThemeMode::DecimalAddSubtract => {
-                    if rng.next_bounded(2) == 0 {
-                        ArithmeticOperator::Add
-                    } else {
-                        ArithmeticOperator::Subtract
-                    }
-                }
-                ArithmeticThemeMode::DecimalMultiplyDivide => {
-                    if rng.next_bounded(2) == 0 {
-                        ArithmeticOperator::Multiply
-                    } else {
-                        ArithmeticOperator::Divide
-                    }
-                }
-                _ => unreachable!(),
+        ArithmeticThemeMode::DecimalAddSubtract => {
+            // Grade 4: addition/subtraction with decimals. Keep operands at
+            // at most three significant digits and at most three decimal places.
+            let (mut left_coefficient, mut left_scale) = draw_decimal_operand(rng, 3, 3);
+            let (mut right_coefficient, mut right_scale) = draw_decimal_operand(rng, 3, 3);
+            let mut left_value = exact_decimal_rational(left_coefficient, left_scale)?;
+            let mut right_value = exact_decimal_rational(right_coefficient, right_scale)?;
+            let operator = if rng.next_bounded(2) == 0 {
+                ArithmeticOperator::Add
+            } else {
+                ArithmeticOperator::Subtract
             };
-            let (
-                left_coefficient,
-                left_scale,
-                right_coefficient,
-                right_scale,
-                left_value,
-                right_value,
-            ) = if operator == ArithmeticOperator::Subtract
+            if operator == ArithmeticOperator::Subtract
                 && rational_less_than(left_value, right_value)
             {
-                (
-                    right_coefficient,
-                    right_scale,
-                    left_coefficient,
-                    left_scale,
-                    right_value,
-                    left_value,
-                )
-            } else {
-                (
-                    left_coefficient,
-                    left_scale,
-                    right_coefficient,
-                    right_scale,
-                    left_value,
-                    right_value,
-                )
-            };
+                std::mem::swap(&mut left_coefficient, &mut right_coefficient);
+                std::mem::swap(&mut left_scale, &mut right_scale);
+                std::mem::swap(&mut left_value, &mut right_value);
+            }
             let result_value = match operator {
                 ArithmeticOperator::Add => left_value.checked_add(right_value)?,
                 ArithmeticOperator::Subtract => left_value.subtract(right_value)?,
-                ArithmeticOperator::Multiply => left_value.multiply(right_value)?,
-                ArithmeticOperator::Divide => left_value.divide(right_value)?,
+                _ => unreachable!(),
             };
-            let answer = rational_to_exact_decimal_answer(result_value, 6)?;
+            let answer = rational_to_exact_decimal_answer(result_value, 3)?;
             let expression = binary_expression(
                 operator,
                 exact_decimal_expression(left_coefficient, left_scale),
@@ -1915,7 +1923,92 @@ fn arithmetic_theme_problem(
                 answer,
                 graph,
                 simple_decimal_input(),
-                AnswerSchema::Decimal { max_scale: 6 },
+                AnswerSchema::Decimal { max_scale: 3 },
+            )
+        }
+        ArithmeticThemeMode::DecimalMultiplyDivide => {
+            // Grade 5: build on the Grade 4 decimal-by-integer cases and sample
+            // them with equal source probability alongside decimal-by-decimal cases. Decimal operands use at
+            // most two significant digits and at most two decimal places.
+            let operator = if rng.next_bounded(2) == 0 {
+                ArithmeticOperator::Multiply
+            } else {
+                ArithmeticOperator::Divide
+            };
+            let use_integer_second_operand = rng.next_bounded(2) == 0;
+
+            let (expression, answer) = match operator {
+                ArithmeticOperator::Multiply => {
+                    let (left_coefficient, left_scale) = draw_decimal_operand(rng, 2, 2);
+                    let left_value = exact_decimal_rational(left_coefficient, left_scale)?;
+                    let (right_expression, right_value) = if use_integer_second_operand {
+                        let value = 1_i64 + rng.next_bounded(9) as i64;
+                        (
+                            integer_expression(value),
+                            RationalCoefficient::new(value, 1)?,
+                        )
+                    } else {
+                        let (coefficient, scale) = draw_decimal_operand(rng, 2, 2);
+                        (
+                            exact_decimal_expression(coefficient, scale),
+                            exact_decimal_rational(coefficient, scale)?,
+                        )
+                    };
+                    let result_value = left_value.multiply(right_value)?;
+                    let answer = rational_to_exact_decimal_answer(result_value, 4)?;
+                    (
+                        binary_expression(
+                            ArithmeticOperator::Multiply,
+                            exact_decimal_expression(left_coefficient, left_scale),
+                            right_expression,
+                        ),
+                        answer,
+                    )
+                }
+                ArithmeticOperator::Divide => {
+                    // Reverse-generate from an exact quotient. This avoids
+                    // repeating decimals while retaining both decimal/integer
+                    // and decimal/decimal curriculum cases.
+                    let (quotient_coefficient, quotient_scale) = draw_decimal_operand(rng, 2, 2);
+                    let quotient_value =
+                        exact_decimal_rational(quotient_coefficient, quotient_scale)?;
+                    let answer = rational_to_exact_decimal_answer(quotient_value, 2)?;
+                    let (divisor_expression, divisor_value) = if use_integer_second_operand {
+                        let value = 1_i64 + rng.next_bounded(9) as i64;
+                        (
+                            integer_expression(value),
+                            RationalCoefficient::new(value, 1)?,
+                        )
+                    } else {
+                        let (coefficient, scale) = draw_decimal_operand(rng, 2, 2);
+                        (
+                            exact_decimal_expression(coefficient, scale),
+                            exact_decimal_rational(coefficient, scale)?,
+                        )
+                    };
+                    let dividend_value = quotient_value.multiply(divisor_value)?;
+                    let dividend_expression = rational_to_arithmetic_expression(dividend_value, 4)?;
+                    if arithmetic_leaf_significant_digits(&dividend_expression)? > 3 {
+                        return None;
+                    }
+                    (
+                        binary_expression(
+                            ArithmeticOperator::Divide,
+                            dividend_expression,
+                            divisor_expression,
+                        ),
+                        answer,
+                    )
+                }
+                _ => unreachable!(),
+            };
+            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            (
+                expression,
+                answer,
+                graph,
+                simple_decimal_input(),
+                AnswerSchema::Decimal { max_scale: 4 },
             )
         }
         ArithmeticThemeMode::SignedArithmetic1 => {
@@ -2017,16 +2110,29 @@ fn simple_decimal_input() -> AnswerInputInterface {
     }
 }
 
-fn draw_decimal_operand(rng: &mut DeterministicRng) -> (i64, u32) {
-    let scale = 1 + rng.next_bounded(3) as u32;
+fn draw_decimal_operand(
+    rng: &mut DeterministicRng,
+    max_significant_digits: u32,
+    max_scale: u32,
+) -> (i64, u32) {
+    debug_assert!(max_significant_digits >= 1);
+    debug_assert!(max_scale >= 1);
+    let significant_digits = 1 + rng.next_bounded(u64::from(max_significant_digits)) as u32;
+    let lower = if significant_digits == 1 {
+        1_i64
+    } else {
+        10_i64.pow(significant_digits - 1)
+    };
+    let upper = 10_i64.pow(significant_digits) - 1;
     let coefficient = loop {
-        let candidate = 1_i64 + rng.next_bounded(99) as i64;
-        // Avoid visually redundant spellings such as 1.20 while keeping one-
-        // and two-significant-digit operands across 10^-1..10^-3 places.
+        let candidate = lower + rng.next_bounded((upper - lower + 1) as u64) as i64;
+        // Keep the coefficient canonical: trailing zeroes would create visually
+        // redundant spellings such as 1.20 and inflate the apparent digit count.
         if candidate % 10 != 0 {
             break candidate;
         }
     };
+    let scale = 1 + rng.next_bounded(u64::from(max_scale)) as u32;
     (coefficient, scale)
 }
 
@@ -2042,6 +2148,28 @@ fn exact_decimal_rational(coefficient: i64, scale: u32) -> Option<RationalCoeffi
 fn rational_less_than(left: RationalCoefficient, right: RationalCoefficient) -> bool {
     i128::from(left.numerator) * i128::from(right.denominator)
         < i128::from(right.numerator) * i128::from(left.denominator)
+}
+
+fn arithmetic_leaf_significant_digits(expression: &ArithmeticExpression) -> Option<usize> {
+    let magnitude = match expression {
+        ArithmeticExpression::Integer { value } => value.unsigned_abs(),
+        ArithmeticExpression::ExactDecimal { coefficient, .. } => coefficient.unsigned_abs(),
+        _ => return None,
+    };
+    Some(magnitude.to_string().len())
+}
+
+fn rational_to_arithmetic_expression(
+    value: RationalCoefficient,
+    max_scale: u32,
+) -> Option<ArithmeticExpression> {
+    match rational_to_exact_decimal_answer(value, max_scale)? {
+        AnswerNode::Integer(value) => Some(integer_expression(value)),
+        AnswerNode::ExactDecimal { coefficient, scale } => {
+            Some(exact_decimal_expression(coefficient, scale))
+        }
+        _ => None,
+    }
 }
 
 fn rational_to_exact_decimal_answer(
@@ -2332,7 +2460,7 @@ fn simultaneous_equation_problem(
     let (d, e, f) = second_equations[rng.next_bounded(second_equations.len() as u64) as usize];
 
     let canonical_answer = AnswerNode::Tuple(vec![AnswerNode::Integer(x), AnswerNode::Integer(y)]);
-    let solution_graph = simultaneous_equation_graph(a, b, c, d, e, f, &canonical_answer);
+    let solution_graph = simultaneous_equation_graph(a, b, c, d, e, f, &canonical_answer, weights);
     let effort = calculate_graph_effort(&solution_graph, weights);
     Some(Problem {
         schema_version: SCHEMA_VERSION,
@@ -2372,15 +2500,10 @@ fn quadratic_equation_problem(
             } else {
                 a_int.checked_mul(square_value)?.checked_neg()?
             };
-            let graph = quadratic_square_graph(&answer);
-            (
-                form,
-                RationalCoefficient::new(a_int, 1)?,
-                RationalCoefficient::zero(),
-                RationalCoefficient::new(constant, 1)?,
-                answer,
-                graph,
-            )
+            let a = RationalCoefficient::new(a_int, 1)?;
+            let c = RationalCoefficient::new(constant, 1)?;
+            let graph = quadratic_square_graph(form, a, c, &answer);
+            (form, a, RationalCoefficient::zero(), c, answer, graph)
         }
         QuadraticEquationMode::Factoring => {
             let first = draw_signed_integer(rng, 9);
@@ -2397,7 +2520,7 @@ fn quadratic_equation_problem(
             let mut roots = vec![AnswerNode::Integer(first), AnswerNode::Integer(second)];
             roots.sort();
             let answer = AnswerNode::Tuple(roots);
-            let graph = quadratic_factoring_graph(&answer);
+            let graph = quadratic_factoring_graph(b_int, c_int, &answer);
             (
                 QuadraticEquationForm::FactoredScale,
                 RationalCoefficient::new(scale, 1)?,
@@ -2460,8 +2583,7 @@ fn quadratic_equation_problem(
             let a = RationalCoefficient::new(a_int, denominator_scale)?;
             let b = RationalCoefficient::new(b_int, denominator_scale)?;
             let c = RationalCoefficient::new(c_int, denominator_scale)?;
-            let has_fraction = !a.is_integer() || !b.is_integer() || !c.is_integer();
-            let graph = quadratic_formula_graph(has_fraction, &answer);
+            let graph = quadratic_formula_graph(a, b, c, &answer);
             (QuadraticEquationForm::Standard, a, b, c, answer, graph)
         }
     };
@@ -2855,66 +2977,291 @@ mod tests {
         }
     }
 
-    fn assert_decimal_operand(expression: &ArithmeticExpression) {
-        let ArithmeticExpression::ExactDecimal { coefficient, scale } = expression else {
-            panic!("decimal theme operand must be exact decimal");
-        };
-        assert!((1..=99).contains(coefficient));
-        assert!((1..=3).contains(scale));
-        assert_ne!(coefficient % 10, 0);
+    #[test]
+    fn broad_seed_effort_invariants_hold_for_every_registered_theme() {
+        const SEEDS: [&str; 8] = [
+            "A1b2", "C3d4", "E5f6", "G7h8", "J9k1", "L2m3", "N4p5", "Q6r7",
+        ];
+        let repaired_themes = std::collections::HashSet::from([
+            crate::model::THEME_ID_LINEAR_EQUATION_1,
+            crate::model::THEME_ID_LINEAR_EQUATION_2,
+            crate::model::THEME_ID_SIGNED_ARITHMETIC_1,
+            crate::model::THEME_ID_SIGNED_ARITHMETIC_2,
+            crate::model::THEME_ID_FRACTION_ADDITION,
+            crate::model::THEME_ID_FRACTION_MULTIPLICATION,
+            crate::model::THEME_ID_FRACTION_SUBTRACTION,
+            crate::model::THEME_ID_FRACTION_DIVISION,
+            crate::model::THEME_ID_QUADRATIC_EQUATION_1,
+            crate::model::THEME_ID_QUADRATIC_EQUATION_2,
+            crate::model::THEME_ID_QUADRATIC_EQUATION_3,
+            crate::model::THEME_ID_DECIMAL_ADD_SUBTRACT,
+            crate::model::THEME_ID_DECIMAL_MULTIPLY_DIVIDE,
+            crate::model::THEME_ID_SIMULTANEOUS_EQUATION_1,
+        ]);
+
+        for registration in crate::registry::GENERATOR_REGISTRY {
+            let mut distinct_vectors = std::collections::HashSet::<Vec<u64>>::new();
+            for seed in SEEDS {
+                for difficulty_value in 1_u8..=4 {
+                    let request = GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: registration.numeric_theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty_value)
+                            .unwrap(),
+                        timeout_ms: None,
+                        max_attempts: None,
+                    };
+                    let first = generate_worksheet_request(&request).unwrap_or_else(|error| {
+                        panic!(
+                            "theme {} seed {seed} difficulty {difficulty_value} failed: {error}",
+                            registration.numeric_theme_id
+                        )
+                    });
+                    let second = generate_worksheet_request(&request).unwrap();
+                    assert_eq!(first, second, "same seed/revision must be deterministic");
+                    assert_eq!(
+                        first.identity.generator_revision,
+                        registration.generator_revision
+                    );
+                    assert_eq!(
+                        regenerate_problem_set(&first.problem_set_id).unwrap(),
+                        first,
+                        "problem_set_id regeneration must preserve the same revision identity"
+                    );
+                    if difficulty_value <= 2 {
+                        assert!(
+                            first
+                                .problems
+                                .windows(2)
+                                .all(|pair| pair[0].effort <= pair[1].effort),
+                            "theme {} difficulty {difficulty_value} lost easy/normal effort sort",
+                            registration.numeric_theme_id
+                        );
+                    }
+                    for problem in &first.problems {
+                        assert!(problem.effort.is_finite() && problem.effort >= 0.0);
+                        assert!(problem.operation_vector.is_nonnegative_finite());
+                        assert_eq!(
+                            problem.solution_graph.operation_vector(),
+                            problem.operation_vector,
+                            "stored operation vector must equal the graph projection"
+                        );
+                        distinct_vectors.insert(
+                            problem
+                                .operation_vector
+                                .as_array()
+                                .iter()
+                                .map(|value| value.to_bits())
+                                .collect(),
+                        );
+                    }
+                }
+            }
+            if repaired_themes.contains(&registration.numeric_theme_id) {
+                assert!(
+                    distinct_vectors.len() >= 4,
+                    "theme {} collapsed to only {} operation vectors across broad seeds",
+                    registration.numeric_theme_id,
+                    distinct_vectors.len()
+                );
+            }
+        }
     }
 
     #[test]
-    fn decimal_themes_use_one_or_two_significant_digits_across_one_to_three_decimal_places() {
-        for (theme_id, allowed) in [
-            (
-                crate::model::THEME_ID_DECIMAL_ADD_SUBTRACT,
-                [ArithmeticOperator::Add, ArithmeticOperator::Subtract],
-            ),
-            (
-                crate::model::THEME_ID_DECIMAL_MULTIPLY_DIVIDE,
-                [ArithmeticOperator::Multiply, ArithmeticOperator::Divide],
-            ),
-        ] {
-            let mut seen = std::collections::HashSet::new();
-            for seed in ["A1b2", "M7x9", "Q4r6", "Z8k3"] {
+    fn easy_and_normal_worksheets_are_presented_in_nondecreasing_effort_order() {
+        for registration in crate::registry::GENERATOR_REGISTRY {
+            for difficulty_value in [1_u8, 2_u8] {
                 let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
                     schema_version: SCHEMA_VERSION,
-                    numeric_theme_id: theme_id,
-                    seed: seed.to_owned(),
-                    difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
-                    timeout_ms: None,
-                    max_attempts: None,
+                    numeric_theme_id: registration.numeric_theme_id,
+                    seed: "EfrtRder".to_owned(),
+                    difficulty: crate::identity::Difficulty::try_from(difficulty_value).unwrap(),
+                    timeout_ms: Some(1_000),
+                    max_attempts: Some(50_000),
                 })
-                .unwrap();
-                for problem in worksheet.problems {
-                    let ProblemPrompt::Arithmetic {
-                        expression:
-                            ArithmeticExpression::Binary {
-                                operator,
-                                left,
-                                right,
-                            },
-                    } = problem.prompt
-                    else {
-                        panic!("decimal theme must be a binary arithmetic expression");
-                    };
-                    assert!(allowed.contains(&operator));
-                    seen.insert(operator);
-                    assert_decimal_operand(&left);
-                    assert_decimal_operand(&right);
-                    assert!(matches!(
-                        problem.canonical_answer,
-                        AnswerNode::Integer(_) | AnswerNode::ExactDecimal { .. }
-                    ));
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "theme {} difficulty {difficulty_value} failed: {error}",
+                        registration.numeric_theme_id
+                    )
+                });
+                assert!(
+                    worksheet
+                        .problems
+                        .windows(2)
+                        .all(|pair| pair[0].effort <= pair[1].effort),
+                    "theme {} difficulty {difficulty_value} was not effort-sorted: {:?}",
+                    registration.numeric_theme_id,
+                    worksheet
+                        .problems
+                        .iter()
+                        .map(|problem| problem.effort)
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+
+    fn assert_decimal_operand(
+        expression: &ArithmeticExpression,
+        max_significant_digits: usize,
+        max_scale: u32,
+    ) -> (i64, u32) {
+        let ArithmeticExpression::ExactDecimal { coefficient, scale } = expression else {
+            panic!("expected exact decimal operand");
+        };
+        assert!(*coefficient > 0);
+        assert!((1..=max_scale).contains(scale));
+        assert_ne!(coefficient % 10, 0);
+        assert!(coefficient.to_string().len() <= max_significant_digits);
+        (*coefficient, *scale)
+    }
+
+    #[test]
+    fn decimal_add_subtract_matches_grade_four_digit_and_place_value_bounds() {
+        let mut seen_operators = std::collections::HashSet::new();
+        let mut seen_scales = std::collections::HashSet::new();
+        let mut saw_different_places = false;
+        for seed in ["A1b2", "M7x9", "Q4r6", "Z8k3"] {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: crate::model::THEME_ID_DECIMAL_ADD_SUBTRACT,
+                seed: seed.to_owned(),
+                difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
+                timeout_ms: None,
+                max_attempts: None,
+            })
+            .unwrap();
+            for problem in worksheet.problems {
+                let ProblemPrompt::Arithmetic {
+                    expression:
+                        ArithmeticExpression::Binary {
+                            operator,
+                            left,
+                            right,
+                        },
+                } = problem.prompt
+                else {
+                    panic!("decimal add/subtract theme must be binary arithmetic");
+                };
+                assert!(matches!(
+                    operator,
+                    ArithmeticOperator::Add | ArithmeticOperator::Subtract
+                ));
+                seen_operators.insert(operator);
+                let (_, left_scale) = assert_decimal_operand(&left, 3, 3);
+                let (_, right_scale) = assert_decimal_operand(&right, 3, 3);
+                seen_scales.insert(left_scale);
+                seen_scales.insert(right_scale);
+                saw_different_places |= left_scale != right_scale;
+                match problem.canonical_answer {
+                    AnswerNode::Integer(value) => assert!(value >= 0),
+                    AnswerNode::ExactDecimal { coefficient, scale } => {
+                        assert!(coefficient >= 0);
+                        assert!((1..=3).contains(&scale));
+                    }
+                    _ => panic!("decimal add/subtract answer must be finite decimal"),
                 }
             }
-            assert_eq!(
-                seen.len(),
-                2,
-                "both operations should be represented across stable samples"
-            );
         }
+        assert_eq!(seen_operators.len(), 2);
+        assert_eq!(
+            seen_scales,
+            std::collections::HashSet::from([1_u32, 2_u32, 3_u32])
+        );
+        assert!(
+            saw_different_places,
+            "mixed-place addition/subtraction should be represented"
+        );
+    }
+
+    #[test]
+    fn decimal_multiply_divide_matches_grade_five_progression_and_exact_quotients() {
+        let mut seen_operators = std::collections::HashSet::new();
+        let mut saw_integer_second = false;
+        let mut saw_decimal_second = false;
+        for seed in ["A1b2", "M7x9", "Q4r6", "Z8k3", "D3c5", "N6p8"] {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: crate::model::THEME_ID_DECIMAL_MULTIPLY_DIVIDE,
+                seed: seed.to_owned(),
+                difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
+                timeout_ms: None,
+                max_attempts: None,
+            })
+            .unwrap();
+            for problem in worksheet.problems {
+                let ProblemPrompt::Arithmetic {
+                    expression:
+                        ArithmeticExpression::Binary {
+                            operator,
+                            left,
+                            right,
+                        },
+                } = &problem.prompt
+                else {
+                    panic!("decimal multiply/divide theme must be binary arithmetic");
+                };
+                assert!(matches!(
+                    operator,
+                    ArithmeticOperator::Multiply | ArithmeticOperator::Divide
+                ));
+                seen_operators.insert(*operator);
+                match right.as_ref() {
+                    ArithmeticExpression::Integer { value } => {
+                        saw_integer_second = true;
+                        assert!((1..=9).contains(value));
+                    }
+                    decimal @ ArithmeticExpression::ExactDecimal { .. } => {
+                        saw_decimal_second = true;
+                        assert_decimal_operand(decimal, 2, 2);
+                    }
+                    _ => panic!("second operand must be a positive integer or bounded decimal"),
+                }
+                if *operator == ArithmeticOperator::Multiply {
+                    assert_decimal_operand(left, 2, 2);
+                    match problem.canonical_answer {
+                        AnswerNode::Integer(value) => assert!(value >= 0),
+                        AnswerNode::ExactDecimal { coefficient, scale } => {
+                            assert!(coefficient >= 0);
+                            assert!((1..=4).contains(&scale));
+                        }
+                        _ => panic!("decimal multiplication answer must be finite decimal"),
+                    }
+                } else {
+                    match left.as_ref() {
+                        ArithmeticExpression::Integer { value } => {
+                            assert!(*value > 0);
+                            assert!(value.unsigned_abs().to_string().len() <= 3);
+                        }
+                        ArithmeticExpression::ExactDecimal { coefficient, scale } => {
+                            assert!(*coefficient > 0);
+                            assert!((1..=4).contains(scale));
+                            assert_ne!(coefficient % 10, 0);
+                            assert!(coefficient.to_string().len() <= 3);
+                        }
+                        _ => panic!("division dividend must be terminating decimal"),
+                    }
+                    let AnswerNode::ExactDecimal { coefficient, scale } = problem.canonical_answer
+                    else {
+                        panic!("reverse-generated decimal division quotient must be decimal");
+                    };
+                    assert!(coefficient > 0);
+                    assert!((1..=2).contains(&scale));
+                }
+            }
+        }
+        assert_eq!(seen_operators.len(), 2);
+        assert!(
+            saw_integer_second,
+            "Grade 4 decimal-by-integer foundation should remain represented"
+        );
+        assert!(
+            saw_decimal_second,
+            "Grade 5 decimal-by-decimal cases should be represented"
+        );
     }
 
     #[test]
@@ -2954,6 +3301,27 @@ mod tests {
         let domain = fraction_arithmetic_domain(ArithmeticThemeMode::FractionDivision);
         assert!(domain.contains(&(one_third, two, one_sixth)));
         assert!(domain.iter().any(|(_, _, result)| result.is_integer()));
+    }
+
+    #[test]
+    fn multiplication_table_exceptions_stay_in_theme_modules() {
+        let multiplication = multiplication_table::solution_graph(56).operation_vector();
+        assert_eq!(
+            multiplication.get(crate::effort::OperationKind::BaseTimes),
+            0.0
+        );
+        assert_eq!(
+            multiplication.get(crate::effort::OperationKind::BigNum),
+            56_f64.log10()
+        );
+
+        let division = division_table::solution_graph(56).operation_vector();
+        assert_eq!(division.get(crate::effort::OperationKind::BaseTimes), 3.0);
+        assert_eq!(division.get(crate::effort::OperationKind::BaseDivide), 0.0);
+        assert_eq!(
+            division.get(crate::effort::OperationKind::BigNum),
+            56_f64.log10()
+        );
     }
 
     #[test]
@@ -3190,6 +3558,60 @@ mod tests {
     }
 
     #[test]
+    fn fraction_arithmetic_domains_are_broad_but_bounded() {
+        let operands = fraction_arithmetic_operand_domain();
+        assert_eq!(operands.len(), 57);
+        assert!(operands.iter().all(|value| {
+            !value.is_integer() && value.numerator > 0 && value.numerator + value.denominator <= 15
+        }));
+
+        assert_eq!(
+            fraction_arithmetic_domain(ArithmeticThemeMode::FractionAddition).len(),
+            1_071
+        );
+        assert_eq!(
+            fraction_arithmetic_domain(ArithmeticThemeMode::FractionSubtraction).len(),
+            244
+        );
+        assert_eq!(
+            fraction_arithmetic_domain(ArithmeticThemeMode::FractionMultiplication).len(),
+            291
+        );
+        assert_eq!(
+            fraction_arithmetic_domain(ArithmeticThemeMode::FractionDivision).len(),
+            1_068
+        );
+    }
+
+    #[test]
+    fn fraction_division_closes_answers_over_compact_fraction_or_integer_domain() {
+        let fraction_domain = fraction_arithmetic_operand_domain();
+        let domain = fraction_arithmetic_domain(ArithmeticThemeMode::FractionDivision);
+        let mut saw_fraction_by_fraction = false;
+        let mut saw_fraction_by_integer = false;
+        let mut saw_integer_by_fraction = false;
+        let mut saw_integer_answer = false;
+
+        for &(left, right, result) in domain {
+            assert!(!(left.is_integer() && right.is_integer()));
+            assert!(
+                fraction_domain.contains(&result)
+                    || (result.is_integer() && (1..=9).contains(&result.numerator)),
+                "unexpected division result outside compact domain: {left:?} / {right:?} = {result:?}"
+            );
+            saw_fraction_by_fraction |= !left.is_integer() && !right.is_integer();
+            saw_fraction_by_integer |= !left.is_integer() && right.is_integer();
+            saw_integer_by_fraction |= left.is_integer() && !right.is_integer();
+            saw_integer_answer |= result.is_integer();
+        }
+
+        assert!(saw_fraction_by_fraction);
+        assert!(saw_fraction_by_integer);
+        assert!(saw_integer_by_fraction);
+        assert!(saw_integer_answer);
+    }
+
+    #[test]
     fn fraction_addition_domain_includes_standard_unlike_denominator_examples() {
         let one_third = RationalCoefficient::new(1, 3).unwrap();
         let one_fourth = RationalCoefficient::new(1, 4).unwrap();
@@ -3324,8 +3746,9 @@ mod tests {
     }
 
     #[test]
-    fn liar_puzzle_supports_all_statement_forms_and_has_exactly_one_nontrivial_solution() {
-        let mut seen = [false; 7];
+    fn liar_puzzle_generates_only_the_six_non_implication_statement_forms_with_three_or_four_people(
+    ) {
+        let mut seen = [false; 6];
         for seed in [
             "A1b2", "M7x9", "Q4r6", "Z8k3", "L1aR", "T2uV", "P3qX", "H4mN", "C5dK", "R6sW", "B7fJ",
             "G8vY",
@@ -3351,11 +3774,11 @@ mod tests {
                 else {
                     panic!("liar puzzle prompt");
                 };
-                assert!((3..=5).contains(people_count));
+                assert!((3..=4).contains(people_count));
                 assert_eq!(statements.len(), usize::from(*people_count));
                 let expected_effort = statements
                     .iter()
-                    .map(|statement| liar_statement_effort(statement, *people_count))
+                    .map(|statement| liar_puzzle_theme::statement_effort(statement, *people_count))
                     .sum::<u32>();
                 assert_eq!(problem.effort, f64::from(expected_effort));
                 assert_eq!(problem.solution_graph.steps.len(), expected_effort as usize);
@@ -3397,15 +3820,8 @@ mod tests {
                             assert_person(first);
                             assert_person(second);
                         }
-                        LiarStatement::Implication {
-                            antecedent_person,
-                            consequent_person,
-                            ..
-                        } => {
-                            seen[6] = true;
-                            assert_person(antecedent_person);
-                            assert_person(consequent_person);
-                            assert_ne!(antecedent_person, consequent_person);
+                        LiarStatement::Implication { .. } => {
+                            panic!("liar-puzzle generation must not emit implications");
                         }
                     }
                 }
@@ -3475,15 +3891,15 @@ mod tests {
         ));
 
         assert_eq!(
-            liar_statement_effort(&LiarStatement::SaysLiar { person: 1 }, 5),
+            liar_puzzle_theme::statement_effort(&LiarStatement::SaysLiar { person: 1 }, 5),
             1
         );
         assert_eq!(
-            liar_statement_effort(&LiarStatement::ExactLiarCount { count: 2 }, 5),
+            liar_puzzle_theme::statement_effort(&LiarStatement::ExactLiarCount { count: 2 }, 5),
             5
         );
         assert_eq!(
-            liar_statement_effort(
+            liar_puzzle_theme::statement_effort(
                 &LiarStatement::Implication {
                     antecedent_person: 1,
                     antecedent_is_liar: true,

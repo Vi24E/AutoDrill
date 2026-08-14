@@ -1,60 +1,118 @@
 # Effort model
 
-Effortは標準解法graph、denseなoperation vector、重みを分離する。同じgraph/vectorを保持したまま重みだけを差し替えて再評価できる。
+Effortは、標準解法を人間が定数時間で実行できるprimitiveへ分解した回数vectorと、その重みの内積である。
 
-`SolutionGraph.steps`の各nodeはtyped `Operation`とdependency IDを持つ。Vector化ではgraph nodeを一度だけ数え、複数nodeから参照されるdependencyを再帰的に重複加算しない。一桁の足し算graphは答えの正確な`BigNum(left + right)`と`BasePlus`を持ち、繰り上がり時には`Increment`と`OverheadCarryPlus`を別nodeとして追加する。被演算子を個別のBigNumとして二重計上しない。
+`effort = operation_counts · operation_weights`
 
-算術追加テーマも同じoperationを再利用する。一桁引き算は`BaseMinus`と必要な借り`Decrement + OverheadCarryMinus`、二桁加算は各桁の`BasePlus`と1の位/10の位それぞれの繰り上がりを記録する。負の数(1)/(2)と分数加算/減算/乗算はtyped arithmetic ASTをbottom-upに評価し、各binary operationの標準cost、必要な`OverheadNegative`、通分`OverheadLCM`、約分`OverheadGCD`を加え、最後に正解ASTの`BigNum`を加える。**九九だけは製品仕様上の例外で、`BaseTimes`を記録せず正解`c`の`BigNum(c)`だけを持つため、既定重みではeffort=`log10(c)`となる。**
+## 実装境界
 
-分数の掛け算では分子同士・分母同士を別operationとして数える。通常の一桁積は`BaseTimes`だが、一方が`1`（符号を無視して`±1`）なら転記に近い操作として`Identity`を使う。 また、GCDを求める2数`a,b`について`a|b`または`b|a`なら、小さい方がそのままGCDだと認識できるため`OverheadGcd`の通常コストの1/4だけを課す。たとえば`1/2 × 1/2`の積部分は`Identity + BaseTimes`、`2/3 × 3/4`は`BaseTimes + BaseTimes`であり、後者には必要なら`OverheadGCD`も加わる。これにより旧実装の一律`BaseTimes × 2`で失われていた難易度差をoperation vectorへ残す。
+再利用可能な計算モデルは`crates/drill-core/src/effort.rs`へ集約する。テーマ側は標準解法を選び、共通builderを呼ぶだけにする。整数四則、分数、LCM/GCD/PF、小数、一次・連立・二次方程式のeffortをテーマごとに再実装してはならない。
 
-一次方程式`ax+b=cx+d`はcurriculum.mdの標準解法に従い、まず`A=a-c`、`B=d-b`として`Ax=B`へ整理し、最後に`x=B/A`とする。graphは`OverheadLinear`を1回、実際に辺をまたぐ非零項ごとに`Transposition`、係数・定数をまとめるexactな加減算、最後の`BaseDivide`を記録する。分母が異なる有理係数の整理には`OverheadLCM`と必要な乗算、非自明な分数簡約には`OverheadGCD`を加える。`A=0`のcandidateはgeneratorで除算前に棄却するためeffort graphへ入らない。正解の整数成分は既存の`BigNum`規則で加算する。
+九九、九九の逆算、「うそつきだれだ」のように一般primitiveモデルを意図的に外れるものだけは`crates/drill-core/src/themes/<theme>.rs`側に置く。
 
-二次方程式の平方根計算は`BaseRoot`を基礎操作とする。`√16=4`のような完全平方数は`BaseRoot`だけでよいが、`√12=2√3`のように平方因子を取り出す簡約では追加で`OverheadFactorPerfectSquare`を課す。したがって既定重みでも前者のeffortは後者より小さい。解の公式でも根号簡約が必要な場合は同じoverheadを使う。
+`Overhead*`は追加costであり、探索・筆算そのものの代用品ではない。`BigNum`は正解の読み書き・保持costだけを表す。
 
-## Dense vector order and base weights
+## Primitive
 
-`OperationVector`と`OperationWeights`は次の固定27成分を同じ順で持つ。未使用成分も0として残る。
+頭の中に1〜9の加算表・乗算表があり、lookupは双方向に使えると仮定する。
 
-| index | operation | base weight |
-|---:|---|---:|
-| 0 | Identity | 1 |
-| 1 | Count | 0.2 |
-| 2 | Increment | 1 |
-| 3 | Decrement | 1 |
-| 4 | BasePlus | 3 |
-| 5 | BaseMinus | 3.1 |
-| 6 | BaseTimes | 3.5 |
-| 7 | BaseDivide | 4 |
-| 8 | BigNum | 1 |
-| 9 | Round | 1 |
-| 10 | TimeTen | 0.2 |
-| 11 | OverheadPF | 2 |
-| 12 | OverheadGCD | 4 |
-| 13 | OverheadLCM | 4 |
-| 14 | OverheadNegative | 1.5 |
-| 15 | OverheadCarryPlus | 0.5 |
-| 16 | OverheadCarryMinus | 0.5 |
-| 17 | OverheadCarryMult | 0.5 |
-| 18 | Transposition | 2 |
-| 19 | OverheadLinear | 2 |
-| 20 | OverheadDistribution | 2 |
-| 21 | OverheadEqSystem | 4 |
-| 22 | OverheadFactorPerfectSquare | 3 |
-| 23 | OverheadFactorDifferenceOfSquares | 2 |
-| 24 | OverheadFactorGeneral | 5 |
-| 25 | OverheadQuadratic | 6 |
-| 26 | BaseRoot | 3 |
+| operation | weight | 意味 |
+|---|---:|---|
+| Identity | 1 | 転記・演算不要の構造変換 |
+| Count(n) | 0.2n | n個を列挙・数える |
+| Increment / Decrement | 1 | 既存値への±1 |
+| BasePlus | 3 | 加算表の正方向lookup |
+| BaseMinus | 3.1 | 加算表の逆方向lookup。例 `13-5=8` |
+| BaseTimes | 3.5 | 乗算表の正方向lookup |
+| BaseDivide | 4 | 乗算表の逆方向lookup。例 `56÷7=8` |
+| BaseFractionCancel | 1 | `k/n × n -> k` 型の構造消去 |
+| BaseRootSquareCancel | 1 | `(sqrt(n))^2 -> n` 型の構造消去 |
+| BaseRoot | 3 | 一桁の完全平方根lookup |
+| Compare | 1 | 大小・等値判定 |
+| Reciprocal | 1 | 逆数取得 |
+| BigNum(n) | log10(n) | 正解整数成分の読み書き・保持 |
+| TimeTen(n) | 1+0.2n | 小数点を10^nだけ移動 |
 
-Parameterized operationはvector側に重みが掛かるquantityを蓄積する。Count(n)はn、BigNum(n)は正確な整数magnitudeから計算した安全な`log10(n)`（n=0は0）、TimeTen(n)は`n+5`（`0.2(n+5)=1+0.2n`）、Distribution(n)はnである。数学値そのものは整数/ASTに残り、Floatは最終log10とscalar effortだけに使う。BigNum magnitudeはJSON/WASM境界ではcanonical unsigned decimal stringとして保持する。
+その他の既存primitiveは`Round`, `Transposition`, `OverheadPF/GCD/LCM/Negative/Carry*`, `OverheadLinear/Distribution/EqSystem/Factor*/Quadratic`である。既定weightは`OperationWeights::default()`を正とする。
 
-## Weight composition
+OperationVectorは31次元。既存index 0〜28を維持し、29=`BaseFractionCancel`, 30=`BaseRootSquareCancel`を末尾追加する。
 
-`WeightProfile`はgrade、theme、masteryの3つの倍率layerを持ち、`resolved = base × grade × theme × mastery`として成分ごとに合成する。Alpha 1.2は全layerをidentity 1.0とする。Registryの`operation_weight_overrides`はtheme layerだけを上書きするため、将来のテーマ調整でもgraphやvectorを複製しない。
+## 共通整数builder
 
-`OverheadNegative`は負号表示のcostではなく、負のoperandを含む演算ごとに1回加える。唯一の一般形の例外は、正の`a`、`b`に対する構造的な`a + (-b)`で、`a > b`、`a = b`、`a < b`のいずれでも`a - b`への読み替えとして0回とする。順序を区別するため`(-b) + a`は1回、`a - (-b)`も正の加算へ書き換えても1回、その他の負のoperandを含む演算も1回である。単独の`-0.57`は演算ではないため0で、BigNum(57)だけを数える。
+### 加算
 
+右から列ごとに処理する。両方に非零digitがあれば`BasePlus`。片方しかなければ転記なので`Identity`。前列からcarryが既存digitへ入る場合だけ`Increment`を数える。
 
-## 連立方程式(1)
+carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新しく出たcarryは足す相手がないので`Identity`であり`Increment`ではない。
 
-標準解法は加減法として近似する。`OverheadEqSystem`を1回置き、x消去とy消去のうち係数をそろえるための整数倍率が小さい方を採用する。必要なら式全体の倍率計算、消去の減算、残った変数の除算、代入後の乗算・減算・除算を順にgraphへ記録する。現段階ではgenerator品質確認前の基礎modelであり、後続調整で操作分解を精密化できる。
+例: `97+86`は`BasePlus×2 + Increment + OverheadCarryPlus×2 + Identity`。
+
+### 減算
+
+加算表の逆lookupで直接決まる形は`BaseMinus`一回とする。したがって`13-5`も一回。筆算が必要なら各列を同じlookupへ分解し、borrowごとに`Decrement + OverheadCarryMinus`を加える。0を引くだけの列は`Identity`。
+
+### 乗算
+
+各非零digit pairを`BaseTimes`で引く。carryが出れば`OverheadCarryMult`。carryを次の実在する積へ足す場合だけ`Increment`または加算builderを使い、最後に残るcarryは`Identity`。部分積同士の和は共通加算builderを使う。
+
+### 除算
+
+`divisor × quotient = dividend`が9×9乗算表の逆lookupで直接得られるなら`BaseDivide`一回。例: `56÷7=8`。
+
+それ以外の商digit探索は、余りの有無を含め九九上の二分探索相当として`BaseTimes×3`とする。積との差が非零なら共通減算builderで余りを求める。桁下ろしは`Identity`、大小判定は`Compare`。
+
+九九の逆算テーマだけは例外で、割り切れる問題でも常に`BaseTimes×3`で探索する。
+
+## PF / GCD / LCM / 平方根
+
+### 素因数分解
+
+`OverheadPF`を追加する。nが9×9乗算表上の積として認識できる場合、因数分解部分はoverheadだけで済む。それ以外は`2,3,5,7,...`の素数を試し、必要な範囲まで試し割りする。試し割り自体は共通除算builderを使う。
+
+### GCD
+
+`OverheadGCD`を追加し、両数を上記PFで分解して共通素因数を`Compare`で突き合わせる。旧`OverheadGcdDivisible` shortcutは削除する。
+
+### LCM
+
+`OverheadLCM`を追加し、2本の倍数列を最初の一致まで列挙する。倍率計算は共通乗算builder、列比較は`Compare`。
+
+### 平方根の簡約
+
+一桁完全平方なら`BaseRoot`。それ以外は`OverheadFactorPerfectSquare`を加え、`2^2, 3^2, 5^2, 7^2, ...`でradicandを試し割りして平方因子を探す。外へ出した因子が複数なら共通乗算builderで掛け合わせる。一般PFへ置き換えない。
+
+`(sqrt(n))^2`そのものは探索不要で`BaseRootSquareCancel`一回。
+
+## 分数・小数
+
+分数加減はLCM→分子scale→共通加減→必要なGCD約分を使う。分数乗算は共通乗算→GCD約分。除算は`Reciprocal`後に同じ乗算モデル。`k/n × n`は`BaseFractionCancel`を使う。
+
+小数は分数へ変換してeffortを計算しない。小数点位置合わせ・移動だけdecimal固有処理とし、桁の加減乗除は上記共通整数builderを再利用する。
+
+## 方程式
+
+一次方程式は`ax+b=cx+d -> Ax=B -> x=B/A`。係数整理・除算は共通整数/有理数builderへ委譲する。
+
+連立方程式はx消去・y消去の完全な加減法graphを両方作り、weight適用後の小さい方を採用する。内部四則はすべて共通builder。
+
+二次方程式(1)はformと係数を見て移項・除算・平方根modelを組み合わせる。
+
+二次方程式(2)の一般形`x^2+bx+c=0`は、`c`をPFし、そこから重複しない因数対を列挙し、各`p+q`を共通加算で計算して`b`と`Compare`する。一致した時点で探索を終了する。平方差・完全平方は専用strategy。
+
+二次方程式(3)は分母払い後、`b^2`, `ac`, `4ac`, `D`, `sqrt(D)`, `2a`, `1/(2a)`、根号/分数簡約を共通builderで構成する。
+
+## 負数
+
+`OverheadNegative`は負数operandを含む演算ごとに追加する。単なる負号表示には付けない。正のa,bに対する構造的`a+(-b)`だけは`a-b`への直接読み替えとして例外扱いする。
+
+## 明示的なテーマ例外
+
+- 九九: `log10(answer)`による既存特殊difficulty。
+- 九九の逆算: `BaseTimes×3 + BigNum(dividend)`。一般の`BaseDivide` shortcutを使わない。
+- うそつきだれだ: SAT式が参照するliteral数。
+
+これらの実装は`effort.rs`ではなく`crates/drill-core/src/themes/<theme>.rs`側に置く。
+
+## Versioning
+
+今回31次元化によりserialized Worksheetが全テーマで変わるため、schema v4は維持したまま全themeのgenerator revisionを1段上げる。Webのvector長はRust `WebContract.operation_kind_count`から生成同期する。

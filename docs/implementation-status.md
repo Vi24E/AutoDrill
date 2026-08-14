@@ -81,17 +81,17 @@ apps/web/src/domain/themes/
 
 全generatorはSeedとdifficultyに対して決定的です。candidate selectionにはbounded attempt/time budgetを持たせ、Rust/WASM境界でtyped errorにします。
 
-小学生registrationは共通境界で負数をfail closedに拒否します。分数四則は正の値だけを生成します。分数割り算は第2オペランドを逆数にして掛けるモデルで、整数との組合せと整数解も許容します。小数2テーマは二進浮動小数点を使わず、1〜2桁の係数と小数位1〜3桁のExactDecimalから生成します。
+小学生registrationは共通境界で負数をfail closedに拒否します。分数四則は正の値だけを生成します。分数割り算は第2オペランドを逆数にして掛けるモデルで、整数との組合せと整数解も許容します。小数は二進浮動小数点を使わずExactDecimalで生成します。小4の加減は1〜3有効数字・小数第1〜3位、減法は非負。小5の乗除は小数側を1〜2有効数字・小数第1〜2位とし、小4の小数と整数の乗除と、小5の小数同士の乗除を混在させます。除法は有限小数の商から逆生成して循環小数を出しません。
 
 一次方程式は答え先行で候補を構成し、full effortでdifficultyを選択します。二次方程式は平方根帰着・因数分解・解の公式の3テーマを分離します。(1)は解を先に選び、整数解は1〜16、根号解は`√a`（非平方数`2≤a≤30`）から生成し、整数16個と非平方数の根号25個からなる41要素のanswer domainを同等に扱い、難易度差は後段のeffort選抜だけで付けます。(3)は分数係数の分母払いと`±`/根号を含むexact Answer ASTを扱い、簡約後の根号内は99以下です。分数算術は有限domain全候補を直接構築するため、coupon-collector型のSeed依存遅延を起こしません。
 
 ## Effort
 
-operation vectorは27次元です。解決weightは`base × grade × theme × mastery`です。
+operation vectorは31次元です（既存29成分の末尾にBaseFractionCancel/BaseRootSquareCancelを追加）。解決weightは`base × grade × theme × mastery`です。
 
-alpha 1.2では分数掛け算について、分子・分母の乗算を常に`BaseTimes × 2`とする旧評価を修正しました。`1×n`または`n×1`は`Identity`、通常の一桁乗算は`BaseTimes`として別に数えます。約分の`OverheadGcd`は従来どおり必要なcandidateだけに加算します。これにより「1が多い簡単な掛け算」と通常の掛け算をdifficulty selectionが区別できます。
+一般のeffort計算は`crates/drill-core/src/effort.rs`へ集約しています。整数四則、分数、GCD/LCM/PF、小数、方程式は共通builderを再利用し、九九・九九逆算・うそつきだれだだけを`crates/drill-core/src/themes/`の各theme moduleへ置く明示的例外とします。GCDは両数の素因数分解と共通因子比較で評価し、旧`OverheadGcdDivisible` shortcutは削除済みです。
 
-可換な単純算術では、`a+b`と`b+a`、`a×b`と`b×a`をworksheet内の同一問題として扱い、両方を同時に選びません。一桁足し算と九九は母集団が小さいため順序違いを別問題として許可します。GCD簡約では、一方の対象数が他方を割り切る場合の探索コストを通常の`OverheadGcd`の1/4として扱います。
+可換な単純算術では、`a+b`と`b+a`、`a×b`と`b×a`をworksheet内の同一問題として扱い、両方を同時に選びません。一桁足し算と九九は母集団が小さいため順序違いを別問題として許可します。
 
 3項計算は現時点では導入していません。2項domainでの再測定結果を優先し、それでも5段階の分離が不十分な場合にgenerator domain拡張として検討します。
 

@@ -35,7 +35,7 @@ import {
 import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
 import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
-import { answerNodeLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
+import { answerNodeLatex, answerPrefixLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel } from '@/domain/problem-format';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
@@ -115,6 +115,15 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '中学1年生': [["中学", "ちゅうがく"], '1', ["年生", "ねんせい"]],
   '中学2年生': [["中学", "ちゅうがく"], '2', ["年生", "ねんせい"]],
   '中学3年生': [["中学", "ちゅうがく"], '3', ["年生", "ねんせい"]],
+  '小1': [["小1", "しょう"]],
+  '小2': [["小2", "しょう"]],
+  '小3': [["小3", "しょう"]],
+  '小4': [["小4", "しょう"]],
+  '小5': [["小5", "しょう"]],
+  '小6': [["小6", "しょう"]],
+  '中1': [["中1", "ちゅう"]],
+  '中2': [["中2", "ちゅう"]],
+  '中3': [["中3", "ちゅう"]],
   '足し算と引き算': [["足", "た"], 'し', ["算", "ざん"], 'と', ["引", "ひ"], 'き', ["算", "ざん"]],
   '掛け算と割り算': [["掛", "か"], 'け', ["算", "ざん"], 'と', ["割", "わ"], 'り', ["算", "ざん"]],
   '負の数': [["負", "ふ"], 'の', ["数", "すう"]],
@@ -483,7 +492,7 @@ function WorksheetAnswerField({
       {answerPrefix ? (
         <MathLiveStatic
           className="answer-prefix-label"
-          latex={answerPrefix.replaceAll(' ', '\\\\,')}
+          latex={answerPrefixLatex(answerPrefix)}
           ariaLabel={answerPrefix}
         />
       ) : null}
@@ -1329,6 +1338,16 @@ function SettingsScreen({
                 options={activeGenre.themes.map((theme) => ({ value: theme.themeKey, label: theme.label }))}
                 onChange={selectTheme}
                 renderLabel={(option) => <RubyMessage text={option.label} />}
+                renderValue={(option) => {
+                  const theme = activeGenre.themes.find((candidate) => candidate.themeKey === option.value);
+                  const tag = curriculumMode === 'recommended' && theme ? gradeTagForTheme(theme) : null;
+                  return (
+                    <span className="theme-select-value-content">
+                      <RubyMessage text={option.label} />
+                      {tag ? <span className={`grade-tag ${tag.className}`}>{tag.label}</span> : null}
+                    </span>
+                  );
+                }}
                 renderOptionEnd={(option) => {
                   if (curriculumMode !== 'recommended') return null;
                   const theme = activeGenre.themes.find((candidate) => candidate.themeKey === option.value);

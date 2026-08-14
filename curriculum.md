@@ -182,49 +182,98 @@
 具体例はすべて編集上のイラストであり、特定の教科書順・問題数・必須数値を規定しない。図形・測定・データ・確率の例は、将来のドリル生成で扱える操作や入力形式を示す代表例である。
 
 ## effort
+
+Effortは、標準解法を人間が定数時間で実行できるprimitive operationへ分解して得たoperation count vectorと、その重みの内積で定義する。
+
+`effort = operation_counts · operation_weights`
+
+値が大きいことや「難しそう」であることを理由に、標準計算手順を`log`等の代理指標へ置き換えない。`Overhead*`は追加costであり、探索・筆算・列挙等の計算本体の代用品ではない。明示的な例外は九九、九九の逆算、「うそつきだれだ」等の別モデルを仕様化したテーマだけとする。`BigNum`は正解の読み書き・保持costであり、多桁計算のprimitive回数の代用には使わない。
+
+### primitive operations
+
 Base: (重み)
-Identity: 恒等演算(1)
-Count(n): n個数える(0.2n)
-Increment: +1をおこなう(1)
-Decrement: -1をおこなう(1)
-BasePlus: 一桁の足し算(3)
-BaseMinus: 一桁の引き算(3.1)
-BaseTimes: 一桁の掛け算(3.5)
-BaseDivide: 一桁の割り算(4)
-BigNum(n): 答えの大きさに伴う読み書き・保持のコスト(log_10(n))。nは被演算子ではなく正解ASTから取り、Float化した表示から復元せず、正確な十進係数や分数の整数成分から得る
-Round: 四捨五入(1)
-TimeTen(n): 10^n倍する、10^nで割る(1+0.2n)
-OverheadPF: 素因数分解のためのオーバーヘッド(2)
-OverheadGCD: GCDのためのオーバーヘッド(4)
-OverheadLCM: LCMのためのオーバーヘッド(4)
-OverheadNegative: 負の数を含んだ演算のためのオーバーヘッド(1.5)
-OverheadCarryPlus: 足し算の繰り上がりに伴うオーバーヘッド(0.5)
-OverheadCarryMinus: 引き算の繰り下がりに伴うオーバーヘッド(0.5)
-OverheadCarryMult: 掛け算の繰り上がりに伴うオーバーヘッド(0.5)
-Transposition: 移項(2)
-OverheadLinear: 一次方程式のためのオーバーヘッド(2)
-OverheadDistribution(n): n項に対する分配法則のためのオーバーヘッド(2n)
-OverheadEqSystem: 連立方程式のためのオーバーヘッド(4)
-OverheadFactor(k): 因数分解のためのオーバーヘッド(kはモードで、1: x^2+2ax+a^2, 2: x^2-a^2, 3: x^2+bx+c)、(3, 2, 5)
-OverheadQuadratic: 二次方程式のためのオーバーヘッド(6)
-BaseRoot: 結果が一桁の平方根の計算(3)
 
-複合演算:
-足し算/引き算/掛け算: 単純な筆算
-割り算: 単純な筆算、位を立てる時は九九上を二分探索するとみなし、4単位分のBaseTimesを行う
-あまりのある割り算: 1桁でも二分探索が発生するとする
-分数: 通分にLCM, 約分にGCDを行うとする。約分は1/n以外の形で試みられる。
-素因数分解: \sqrt{n}までの素数で割り切れるかを調べる試し割法をするとする
-LCM: nとmの最小公倍数を調べる時、nとmの倍数を必要なまで列挙するとする
-GCD: nとmの最大公約数を調べる時、nとmの約数を全て列挙するとする
-一次方程式: ax + b = 0の形にした後、移項と除算を行う
-比例方程式: a : b = c : dの時、bc = adを解くとする
-文字を含んだ式の整理: n項の式に対してCount(n)のコストがかかった上で、同類項をまとめる
-連立方程式: xについて整理した時の解き方と、yについて整理した時の解き方のminを取る。方法は加減法とする。
-平方根を簡単にする: \sqrt(n^2)でnが一桁の場合はBaseRoot、そうでないなら素因数分解が行われる
-因数分解: x^2 + 2ax + a^2やx^2 - a^2では平方根が呼ばれ、そうでないx^2 + bx + cではcの素因数分解が行われた上でその和がbかを調べるとする
-二次方程式: 因数分解が可能な場合は因数分解のコストが、そうでない場合は解の公式とそれを簡略化するためのコストが発生する
+- Identity: 恒等演算・単純な転記(1)
+- Count(n): n個数える(0.2n)
+- Increment: +1を行う(1)
+- Decrement: -1を行う(1)
+- BasePlus: 1〜9の加算lookup(3)
+- BaseMinus: 加算lookupの逆演算(3.1)。`13-5=8`等も1回
+- BaseTimes: 1〜9の乗算lookup(3.5)
+- BaseDivide: 乗算lookupの逆演算(4)。`56÷7=8`等も1回
+- Compare: 標準解法中の大小・等値確認(1)。因数対の和が係数と一致するか等の判定を表す
+- Reciprocal: 分数除法で逆数を取る操作(1)
+- BaseFractionCancel: `k/n × n -> k`の構造消去(1)
+- BaseRootSquareCancel: `(sqrt(n))^2 -> n`の構造消去(1)
+- BigNum(n): 答えの大きさに伴う読み書き・保持のcost(log_10(n))。nは被演算子ではなく正解ASTの正確な整数成分から得る
+- Round: 四捨五入(1)
+- TimeTen(n): 10^n倍する、または10^nで割る(1+0.2n)
+- OverheadPF: 素因数分解の追加overhead(2)
+- OverheadGCD: GCD探索の追加overhead(4)
+- OverheadLCM: LCM探索の追加overhead(4)
+- OverheadNegative: 負数operandを含む演算の追加overhead(1.5)
+- OverheadCarryPlus: 足し算の繰り上がりの追加overhead(0.5)
+- OverheadCarryMinus: 引き算の繰り下がりの追加overhead(0.5)
+- OverheadCarryMult: 掛け算の繰り上がりの追加overhead(0.5)
+- Transposition: 移項(2)
+- OverheadLinear: 一次方程式の追加overhead(2)
+- OverheadDistribution(n): n項に対する分配法則の追加overhead(2n)
+- OverheadEqSystem: 連立方程式の追加overhead(4)
+- OverheadFactorPerfectSquare: 完全平方型の因数分解overhead(3)
+- OverheadFactorDifferenceOfSquares: 平方差型の因数分解overhead(2)
+- OverheadFactorGeneral: 一般の`x^2+bx+c`因数分解overhead(5)
+- OverheadQuadratic: 二次方程式の追加overhead(6)
+- BaseRoot: 結果が一桁で直ちに分かる平方根の計算(3)
 
-`OverheadNegative`は負数の表示自体ではなく、負数operandを含む演算ごとに1回発生する。単独の`-0.57`は演算ではないため発生せず、BigNumコストは`BigNum(57)`だけとする。
+### 共通多桁演算
 
-負数の標準解法では、a、bを正数として符号を先に整理する。`a + (-b)`は、`a > b`なら`a - b`、`a = b`なら`0`、`a < b`なら`-(b - a)`へ変換する。大小関係によらず、この一般形だけは多くの人が誤りなく`a - b`へ読み替えられる例外として`OverheadNegative`を加えない。operand順序を区別し、`(-b) + a`には加える。`a - (-b)`は`a + b`へ変換して計算するが、例外ではないため`OverheadNegative`を加える。その他の負数operandを含む演算にも原則として加える。
+- 整数加算: 両側に非零digitがある列だけ`BasePlus`。片側しかなければ`Identity`。carryが既存digitへ入るときだけ`Increment`を数え、carryごとに`OverheadCarryPlus`を追加する。最上位へ新しく出たcarryは`Identity`。
+- 整数減算: 加算表の逆lookupで直接得られる形は`BaseMinus`一回。その他は筆算へ分解し、0を引くだけの列は`Identity`、borrowごとに`Decrement + OverheadCarryMinus`を追加する。
+- 整数乗算: 非零digit pairを`BaseTimes`として数える。carryごとに`OverheadCarryMult`を加え、次の実在する積へ足す場合だけ加算/`Increment`を数える。最後に残るcarryは`Identity`。部分積の和は共通整数加算。
+- 整数除算: `divisor × quotient = dividend`が9×9乗算表の逆lookupで得られる場合は`BaseDivide`一回。それ以外の商digit探索は`BaseTimes × 3`とし、必要なら積との差を共通減算で求める。桁下ろしは`Identity`、大小判定は`Compare`。
+- 符号処理は絶対値部分の筆算と分離する。負数operandを含む各演算に、下記の例外を除いて`OverheadNegative`を1回加える。
+
+### 分数
+
+- 加減: 異分母ならLCMを実際に求め、各分子を必要な倍率で拡大し、その後に共通多桁加減を行う。倍率1はfull multiplicationではなく`Identity`とする。最後に約分を試みる。
+- 乗算: 分子×分子、分母×分母を共通整数乗算で数える。ただし±1倍は`Identity`とする。最後に約分を試みる。
+- 除算: 除数の逆数取得を`Reciprocal`として1回数え、その後は分数乗算と同じモデルを使う。
+- 約分: 分子が±1でない分数ではGCDを求める手順を実行し、GCD=1であっても「約分できないことを確認する探索」はcountする。GCD>1なら分子・分母を共通整数除算で割る。
+
+### GCD / LCM / 素因数分解
+
+- GCD: `OverheadGCD`を追加し、両数を素因数分解して共通素因数を`Compare`で突き合わせる。
+- LCM: `OverheadLCM`を追加した上で、2数の倍数列を最小公倍数へ到達するまで列挙する。列挙・積・比較を`Count`、`Identity`/`BaseTimes`、`Compare`等として数える。
+- 素因数分解: `OverheadPF`を追加する。nが9×9乗算表上の積として認識できる場合はoverheadだけ。それ以外は`2,3,5,7,...`の素数を必要な範囲まで試し割りし、除算は共通builderで数える。
+
+### 小数
+
+小数を既約分数へ変換してeffortを評価してはならない。十進筆算を標準解法とする。
+
+- 小数加減: 小数点位置をそろえ、不足桁の位置合わせを数えた後、整数筆算と同様に各桁の`BasePlus`/`BaseMinus`とcarry/borrowを数える。LCM/GCDは発生しない。
+- 小数乗算: 小数点を無視して整数筆算を行い、最後に小数点位置を`TimeTen`で決める。
+- 小数除算: 除数を整数化するために10の冪だけ小数点を移動し、被除数にも同じ移動を行う。その後は共通長除法を使い、必要なら商の小数点位置を`TimeTen`で表す。
+
+### 方程式
+
+- 一次方程式: `ax+b=cx+d -> Ax=B -> x=B/A`を標準戦略とする。移項を`Transposition`で数え、`A=a-c`、`B=d-b`、`B/A`は整数・有理数の共通builderへ分解する。異分母整理や約分も上記LCM/GCDモデルを使う。
+- 連立方程式: 加減法を標準解法とする。x消去とy消去の**完全なSolutionGraphを両方構築し、重み適用後のeffortが小さい方**を採用する。係数調整、消去、残った一次方程式、代入をすべて共通多桁演算へ分解する。`OverheadNegative`は負数を含む個々の演算ごとに数える。
+
+### 二次方程式
+
+- 二次方程式(1): `form`, `a`, `c`を見て標準手順を決める。`x^2=c`で`a=1`なら係数除算は不要、`ax^2=c`なら係数除算、`ax^2+c=0`ならまず移項を行う。平方根簡約が必要なら、`2^2,3^2,5^2,...`による共通平方因子探索を数える。
+- 二次方程式(2): `x^2+bx+c=0`の一般形は`c`を上記PFで分解し、そこから重複しない因数対を列挙する。各`p+q`を共通加算で計算して`b`と`Compare`し、一致した時点で探索を終了する。平方差・完全平方は別strategy。
+- 二次方程式(3): 必要なら分母を実際に払い、その後`b^2`, `a*c`, `4ac`, `b^2-4ac`, `sqrt(D)`, `2a`, 最終的な`1/(2a)`、根号・分数の簡約をそれぞれprimitiveへ分解する。最終的な代数的除算は除数`2a`の逆数取得を`Reciprocal`として表し、整数の長除法へ誤って置き換えない。
+- 平方根簡約: 一桁完全平方根は`BaseRoot`。それ以外は`OverheadFactorPerfectSquare`に加え、`2^2,3^2,5^2,7^2,...`で試し割りして平方因子を探し、複数の外出し因子は共通乗算でまとめる。`(sqrt(n))^2`は`BaseRootSquareCancel`一回。
+
+### 負数の例外規則
+
+`OverheadNegative`は負数の表示自体ではなく、負数operandを含む演算ごとに1回発生する。単独の`-0.57`は演算ではないため発生せず、BigNumは`BigNum(57)`だけを数える。
+
+正のa,bに対する構造的な`a + (-b)`だけは、`a-b`への読み替えとして`OverheadNegative`を加えない。`(-b)+a`、`a-(-b)`、その他の負数operandを含む演算には原則として加える。
+
+### 明示的な別モデル
+
+- 九九: `BaseTimes`を一般筆算として数えず、既存の九九difficultyモデルを維持する。
+- 九九の逆算: 習熟前モデルとして、割り切れる場合も九九を`BaseTimes×3`で探索する。
+- うそつきだれだ: SAT式が参照するliteral数をeffortとする既存特殊モデルを維持する。

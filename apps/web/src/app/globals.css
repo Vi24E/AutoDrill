@@ -167,6 +167,7 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
 .custom-select-trigger:hover { border-color: #6f858c; background: #fff; }
 .custom-select-trigger[aria-expanded='true'] { border-color: var(--lobby-cyan-dark); box-shadow: 0 0 0 2px rgba(8, 169, 196, .12); }
 .custom-select-value { overflow: visible; line-height: 1.35; white-space: nowrap; }
+.theme-select-value-content { display: flex; width: 100%; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; }
 .custom-select-chevron { width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; transition: rotate .16s ease; }
 .custom-select-trigger[aria-expanded='true'] .custom-select-chevron { rotate: 180deg; }
 .custom-select-listbox {
@@ -459,7 +460,8 @@ button:disabled { cursor: wait; opacity: .5; }
 .liar-person-choice-row { display: inline-flex; align-items: center; gap: 8px; }
 .liar-person-choice { min-width: 27px; min-height: 22px; padding: 1px 7px 2px; border: 1.5px solid transparent; border-radius: 50%; background: transparent; color: inherit; font: inherit; font-weight: 650; line-height: 1.1; cursor: pointer; }
 .liar-person-choice:hover:not(:disabled) { border-color: #9aa2a5; }
-.liar-person-choice-selected { border-color: #222; }
+.liar-person-choice:active:not(:disabled),
+.liar-person-choice-selected { border-color: #222; background: #222; color: #fff; }
 .liar-person-choice:disabled { opacity: 1; cursor: default; }
 .liar-correct-answer { display: inline-flex; align-items: center; }
 .worksheet-footer { position: absolute; color: var(--muted); font-size: 7px; line-height: 1; white-space: nowrap; }

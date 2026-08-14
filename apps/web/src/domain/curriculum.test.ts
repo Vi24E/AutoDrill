@@ -17,7 +17,7 @@ describe('Web curriculum registry', () => {
     expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 6, 13, 17, 9, 18, 11, 10, 12, 7, 8, 2, 3, 19, 14, 15, 16, 20]);
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
-      generator_revision: 3,
+      generator_revision: 5,
       recommendedGenre: { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
       problemCount: 20,
       layout: { problem_count: 20, columns: 2, rows: 10 },

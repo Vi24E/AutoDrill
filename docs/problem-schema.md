@@ -38,9 +38,11 @@ ID形式は次の可逆なASCII表現である。
 {schema_version}-{numeric_theme_id}-{generator_revision}-{seed}-{difficulty}
 ```
 
-例は`4-1-3-Ab3Z-2`。Seedは1〜16文字で、`1-9`、`a-z`、`A-Z`から`I`、`l`、`O`を除いた集合だけを許可する。`-`を許可しないため分割は曖昧にならない。decodeした`ProblemSetIdentity`と保存済みrevisionのgeneratorで同じ問題セットを再生成できる。
+例は`4-1-5-Ab3Z-2`。Seedは1〜16文字で、`1-9`、`a-z`、`A-Z`から`I`、`l`、`O`を除いた集合だけを許可する。`-`を許可しないため分割は曖昧にならない。decodeした`ProblemSetIdentity`と保存済みrevisionのgeneratorで同じ問題セットを再生成できる。
 
-Worksheetは`problem_set_id`に加えてdecode済み`identity`、registry由来のskill/curriculum/layout、registry所定個数のProblemを持つ。Problemはversion、通し番号、numeric theme ID、型付きprompt、`answer_schema`、それとは直交するtyped `input_interface`、正解AnswerNode、標準解法graph、固定長operation vector、解決済み重みによるeffortを持つ。数学値は整数またはAnswerNodeの正確な十進表現で保持し、binary floatは使用しない。JSON/WASM境界のAnswerNode integer/coefficientとanswer-schema bounds（`i64`）、BigNum magnitude（`u64`）はcanonical decimal stringとし、JavaScriptの安全整数範囲を超える18桁値も可逆にする。`effort`とoperation vector quantityだけは評価結果なので`f64`を許可する。
+Worksheetは`problem_set_id`に加えてdecode済み`identity`、registry由来のskill/curriculum/layout、registry所定個数のProblemを持つ。Problemはversion、通し番号、numeric theme ID、型付きprompt、`answer_schema`、それとは直交するtyped `input_interface`、正解AnswerNode、標準解法graph、固定長31次元operation vector、解決済み重みによるeffortを持つ。operation vectorの既存27成分のindexは維持し、index 27/28の`Compare`/`Reciprocal`を維持し、末尾29/30に`BaseFractionCancel`/`BaseRootSquareCancel`を追加している。
+
+31次元化ではrequest/envelopeやProblemのfield構成自体は変えないため`schema_version = 4`を維持し、固定長はRust `WebContract.operation_kind_count`からWebへ同期する。一方、serialized Worksheetは変化するため、再生成identityを保つ目的で全登録themeの`generator_revision`を更新する。数学値は整数またはAnswerNodeの正確な十進表現で保持し、binary floatは使用しない。JSON/WASM境界のAnswerNode integer/coefficientとanswer-schema bounds（`i64`）、BigNum magnitude（`u64`）はcanonical decimal stringとし、JavaScriptの安全整数範囲を超える18桁値も可逆にする。`effort`とoperation vector quantityだけは評価結果なので`f64`を許可する。
 
 `input_interface`の例:
 

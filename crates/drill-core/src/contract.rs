@@ -2,12 +2,14 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::effort::OPERATION_KIND_COUNT;
 use crate::model::{GradeWarning, SCHEMA_VERSION};
 use crate::registry::GENERATOR_REGISTRY;
 
 #[derive(Debug, Serialize)]
 pub struct WebContract<'a> {
     pub schema_version: u16,
+    pub operation_kind_count: usize,
     pub themes: BTreeMap<u32, WebThemeContract<'a>>,
     pub grade_warning_codes: Vec<String>,
 }
@@ -66,6 +68,7 @@ pub fn web_contract() -> WebContract<'static> {
 
     WebContract {
         schema_version: SCHEMA_VERSION,
+        operation_kind_count: OPERATION_KIND_COUNT,
         themes,
         grade_warning_codes,
     }

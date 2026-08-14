@@ -225,7 +225,7 @@ function expectVisibleKanjiToUseRuby(container: HTMLElement) {
       .filter((node): node is Text => node.nodeType === Node.TEXT_NODE)
       .filter((node) => /\p{Script=Han}/u.test(node.textContent ?? ''))
       .filter((node) => !element.closest('ruby'))
-      .filter((node) => !element.closest('.advanced-settings, .grading-settings-modal'))
+      .filter((node) => !element.closest('.advanced-settings, .grading-settings-modal, .grade-tag'))
       .map((node) => node.textContent?.trim()),
   );
   expect(offenders).toEqual([]);
@@ -356,12 +356,17 @@ describe('AutoDrillApp', () => {
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
   });
 
-  it('places color-coded grade tags immediately before the option checkmark in Recommended theme options', () => {
+  it('shows the color-coded grade tag in the selected Recommended theme and before option checkmarks', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
-    fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
+    const themeSelect = screen.getByRole('combobox', { name: 'テーマ' });
+    expect(themeSelect.querySelector('.grade-tag')).toHaveTextContent('小1');
+    expect(themeSelect.querySelector('.grade-tag')).toHaveClass('grade-tag-grade-1');
+    expect(themeSelect.querySelector('.grade-tag ruby')).toBeNull();
+    fireEvent.click(themeSelect);
     const grade1 = screen.getByRole('option', { name: '一桁の足し算' });
     expect(grade1.querySelector('.grade-tag')).toHaveTextContent('小1');
     expect(grade1.querySelector('.grade-tag')).toHaveClass('grade-tag-grade-1');
+    expect(grade1.querySelector('.grade-tag ruby')).toBeNull();
     expect(screen.getByRole('option', { name: '二桁の足し算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-2');
     const end = grade1.querySelector('.custom-select-option-end');
     expect(end?.children[0]).toHaveClass('grade-tag');
@@ -377,6 +382,8 @@ describe('AutoDrillApp', () => {
 
     fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
     fireEvent.click(screen.getByRole('option', { name: '小数' }));
+    expect(screen.getByRole('combobox', { name: 'テーマ' }).querySelector('.grade-tag')).toHaveTextContent('小4');
+    expect(screen.getByRole('combobox', { name: 'テーマ' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-4');
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
     expect(screen.getByRole('option', { name: '小数の足し算と引き算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-4');
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'テーマ' }), { key: 'Escape' });

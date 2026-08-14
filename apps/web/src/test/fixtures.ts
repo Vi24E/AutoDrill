@@ -2,6 +2,7 @@ import {
   ADDITION_CURRICULUM_PATH,
   ADDITION_GENERATOR_REVISION,
   ADDITION_LAYOUT,
+  DRILL_OPERATION_KIND_COUNT,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
   type AnswerNode,
@@ -44,7 +45,7 @@ export function fixtureWorksheet(): WorksheetDto {
       answer_schema: { kind: 'integer', min: '1', max: '18' },
       canonical_answer: answer,
       solution_graph: { steps: [] },
-      operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+      operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
       effort: 0,
     };
   });
@@ -102,7 +103,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
         : { kind: 'rational', max_abs_numerator: 20, max_denominator: 12, require_reduced_fraction_form: true },
       canonical_answer: canonicalAnswer,
       solution_graph: { steps: [] },
-      operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+      operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
       effort: 0,
     };
   });
@@ -143,7 +144,7 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       answer_schema: { kind: 'ordered_pair', min: '-15', max: '15' },
       canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: String(x) }, { type: 'integer', value: String(y) }] },
       solution_graph: { steps: [] },
-      operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+      operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
       effort: 0,
     };
   });
@@ -183,7 +184,7 @@ export function liarFixtureWorksheet(): WorksheetDto {
     answer_schema: { kind: 'algebraic' },
     canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] },
     solution_graph: { steps: [] },
-    operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
     effort: 0,
   }));
   return {

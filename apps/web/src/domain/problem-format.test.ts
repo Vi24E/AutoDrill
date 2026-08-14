@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { liarStatementText, problemExpression, problemExpressionTokens } from './problem-format';
 import { fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
-import { answerNodeLatex, problemExpressionLatex } from './mathlive-format';
+import { answerNodeLatex, answerPrefixLatex, problemExpressionLatex } from './mathlive-format';
 import type { ProblemDto, RationalCoefficient } from './drill-engine';
 
 function linearProblem(
@@ -31,6 +31,10 @@ function linearProblem(
 const q = (numerator: number, denominator = 1): RationalCoefficient => ({ numerator, denominator });
 
 describe('problemExpression', () => {
+  it('formats answer prefixes with exactly one MathLive spacing command', () => {
+    expect(answerPrefixLatex('x =')).toBe(String.raw`x\,=`);
+  });
+
   it('omits zero terms and coefficient 1 while retaining coefficient -1', () => {
     expect(problemExpression(linearProblem(q(0), q(3), q(1), q(0)))).toBe('3 = x');
     expect(problemExpression(linearProblem(q(-1), q(0), q(2), q(0)))).toBe('−x = 2x');

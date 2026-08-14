@@ -15,6 +15,7 @@ type CustomSelectProps = {
   options: readonly CustomSelectOption[];
   onChange: (value: string) => void;
   renderLabel?: (option: CustomSelectOption) => ReactNode;
+  renderValue?: (option: CustomSelectOption) => ReactNode;
   renderOptionEnd?: (option: CustomSelectOption) => ReactNode;
 };
 
@@ -32,7 +33,7 @@ const POPUP_MAX_HEIGHT = 300;
 const POPUP_MIN_USEFUL_HEIGHT = 120;
 
 /** Accessible custom combobox so option rows may contain ruby markup. */
-export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLabel, renderOptionEnd }: CustomSelectProps) {
+export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLabel, renderValue, renderOptionEnd }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [popupLayout, setPopupLayout] = useState<PopupLayout | null>(null);
@@ -153,7 +154,7 @@ export function CustomSelect({ id, ariaLabel, value, options, onChange, renderLa
         onClick={() => open ? setOpen(false) : openAt(selectedIndex)}
         onKeyDown={onKeyDown}
       >
-        <span className="custom-select-value">{selected ? (renderLabel?.(selected) ?? selected.label) : null}</span>
+        <span className="custom-select-value">{selected ? (renderValue?.(selected) ?? renderLabel?.(selected) ?? selected.label) : null}</span>
         <svg className="custom-select-chevron" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" /></svg>
       </button>
       {open && popupLayout && typeof document !== 'undefined' ? createPortal(

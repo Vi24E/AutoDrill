@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
-import { DRILL_SCHEMA_VERSION, type AnswerNode, type ProblemDto, type ProblemPrompt, type WorksheetDto } from '@/domain/drill-engine';
+import { DRILL_OPERATION_KIND_COUNT, DRILL_SCHEMA_VERSION, type AnswerNode, type ProblemDto, type ProblemPrompt, type WorksheetDto } from '@/domain/drill-engine';
 import { THEME_DEFINITIONS, type ThemeDefinition } from '@/domain/theme-registry';
 import {
   buildPdfPageModel,
@@ -65,7 +65,7 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
     answer_schema: answerSchema,
     canonical_answer: representative.answer,
     solution_graph: { steps: [] },
-    operation_vector: { values: Array.from({ length: 27 }, () => 0) },
+    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
     effort: 0,
   }));
   return {

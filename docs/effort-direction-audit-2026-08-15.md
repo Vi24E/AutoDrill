@@ -1,0 +1,461 @@
+# Effort direction / difficulty sampling audit — 2026-08-15
+
+## 0. Scope and conclusion
+
+This document records the independent audit of how scalar `effort = w · x` difficulty selection changes the distribution of the underlying operation vector `x`.
+
+The audit did **not** modify production code. Instrumentation was placed only in a repository-external copy.
+
+### Main conclusion
+
+The originally suspected catastrophic loss of operation-vector diversity was **not** observed as a general problem.
+
+- `normal` and especially `hard` usually concentrate operation-vector directions more than `random`, because selecting by scalar effort necessarily favors a narrower family of operation compositions.
+- `easy` does not consistently concentrate directions; in several themes it becomes more directionally diverse because there are several different cheap strategies.
+- This concentration is often educationally intended: e.g. carry/borrow, reduction, factor search, or longer arithmetic legitimately becomes more common at higher difficulty.
+- Therefore a generic vector-diversity optimizer is **not currently justified**.
+
+The practical problems found are narrower and should be addressed by:
+
+1. fixing generator populations where the source population is already biased or too small;
+2. stratifying pedagogically distinct problem archetypes before applying scalar effort selection;
+3. splitting themes that are actually separate curriculum units.
+
+### New known issue added after the audit
+
+**Decimal multiplication and decimal division should be separate themes.**
+
+The current `DecimalMultiplyDivide` theme combines two curriculum units that should not be treated as merely two archetypes of one worksheet. This is therefore a **theme-definition / curriculum issue**, not a diversity-sampler issue. Future implementation should split the existing theme into separate decimal multiplication and decimal division registrations, UI entries, tests, and generator modes.
+
+---
+
+## 1. Audit method
+
+The production working tree was copied to:
+
+`/Users/koharayu/Desktop/AutoDrill-effort-audit-tmp`
+
+Only that copy was instrumented to expose the candidate population immediately before difficulty selection.
+
+Measured sample:
+
+- 20 themes
+- 4 difficulties: easy / normal / hard / random
+- 300 seeds per theme/difficulty
+- 410,400 final worksheet problems
+- 668,395 raw candidate problems
+
+For each problem, the following directions were analyzed:
+
+- raw operation direction: `u = x / ||x||₂`
+- weighted contribution direction: `v = (w ⊙ x) / ||w ⊙ x||₂`
+- versions excluding `BigNum`
+- auxiliary core-arithmetic versions excluding `BigNum` and overhead-family dimensions
+
+Metrics included:
+
+- pairwise cosine similarity distribution
+- centroid concentration `||mean(u)||₂`
+- centered covariance participation ratio / effective rank / principal-component share
+- per-operation prevalence and mean count
+- operation-count correlation with scalar effort
+- generator-format prevalence
+- raw population vs random
+- exact-same-effort and narrow-effort-band direction diversity
+- paired seed-block bootstrap confidence intervals
+
+`cargo test -p drill-core` in the external copy: **93 passed, 0 failed**.
+
+---
+
+## 2. Current difficulty sampler
+
+The current sampler remains scalar-effort based.
+
+For an N-problem worksheet:
+
+- ordinary generators build an `8N` candidate pool;
+- finite fraction generators enumerate their finite candidate domain;
+- `random` samples uniformly from the unsorted candidate pool, rejecting only duplicate prompts;
+- easy/normal/hard sort by scalar effort;
+- five candidate indices are sampled repeatedly;
+  - easy: minimum of 5
+  - normal: median of 5
+  - hard: maximum of 5
+- `N + 4` candidates are selected;
+- the two lowest and two highest selected efforts are trimmed;
+- the remaining N candidates form the worksheet.
+
+The random mode is a good empirical proxy for the raw generator population. Across themes, the difference between raw and random centroid concentration was at most about 0.006 in this audit.
+
+---
+
+## 3. Direction-diversity result
+
+Ignoring the three explicit special models (multiplication table, inverse multiplication-table division, liar puzzle), 17 ordinary vector-model themes remain.
+
+Raw-direction centroid concentration relative to random:
+
+- normal increased in **17/17** themes;
+- hard increased in **16/17** themes;
+- easy increased in only **7/17** themes.
+
+Weighted-contribution direction:
+
+- hard increased in **17/17** themes.
+
+Thus the hypothesis "all selected difficulties are less diverse than random" is false in that simple form. A more accurate statement is:
+
+> Scalar selection tends to make normal/hard operation composition more directional, but easy may either concentrate or disperse. The important question is not direction concentration itself, but whether a pedagogically important problem archetype disappears from a difficulty level.
+
+This distinction is important. For example, an easy worksheet having fewer carry/reduction operations is intended; an easy worksheet becoming almost entirely one arithmetic operator when the theme is supposed to teach two operators is not.
+
+---
+
+## 4. Major observed distribution effects
+
+### Signed arithmetic (2)
+
+The raw generator population already underproduces division because every AST node must evaluate to an integer.
+
+Approximate raw operator-node shares:
+
+- addition: 30.7%
+- subtraction: 30.3%
+- multiplication: 30.5%
+- division: **8.5%**
+
+This is primarily a **generator population** issue, not a sampler issue.
+
+### Fraction multiplication
+
+The finite source population is very small and strongly constrained. Unit fractions are already common in the raw domain and easy selection amplifies them heavily.
+
+Integer operands are absent entirely.
+
+This is primarily a **generator-domain** issue.
+
+### Fraction subtraction
+
+The finite source population is even smaller. Same-denominator prevalence changes approximately as follows:
+
+- random: 47.7%
+- easy: 78.4%
+- normal: 45.0%
+- hard: 12.0%
+
+The global effort ordering is correctly recognizing unlike-denominator work as more expensive, but because the source domain is tiny, the difficulty label also becomes close to a denominator-format classifier.
+
+### Quadratic equation (2)
+
+The effort graph itself has been repaired and now models PF/factor-pair search and the special factorization strategies. Remaining coverage issues include:
+
+- repeated roots are not generated;
+- the external scale is greater than one about 80% of the time despite being mostly redundant for the solution strategy;
+- difference-of-squares problems exist in the raw population but become approximately 30% of easy and 0% of normal/hard.
+
+The special form being easier is correct; complete disappearance from other difficulty levels is a coverage concern.
+
+### Decimal addition/subtraction
+
+The raw source population is almost exactly 50:50 addition/subtraction, but scalar selection changes the mix strongly:
+
+- easy: about 73.9% addition / 26.1% subtraction
+- normal: about 54.2% / 45.8%
+- hard: about 22.2% / 77.8%
+
+This is a clear example where **selection**, rather than generation, makes the difficulty label partially synonymous with the archetype.
+
+### Liar puzzle
+
+31-dimensional direction analysis is not meaningful because the explicit special effort model is just a formula-length number represented as repeated `Identity` operations.
+
+The raw candidate pool is intentionally balanced 3-person:4-person = 1:1, but final selection changes it to approximately:
+
+- easy: 90.4% 3-person
+- normal: 50.3% 3-person
+- hard: 92.6% 4-person
+
+This is a direct sampler-induced archetype bias.
+
+---
+
+## 5. Recommended solution for layered / archetypal themes
+
+### Principle
+
+Do **not** optimize generic vector diversity directly.
+
+Instead, distinguish between:
+
+1. **separate curriculum units** — split into separate themes;
+2. **archetypes that belong in the same worksheet** — stratify by archetype, then use the existing scalar effort sampler inside each stratum.
+
+Decimal multiplication vs decimal division is case (1): split the theme.
+
+Decimal addition vs subtraction, quadratic factorization forms, liar population size, etc. are candidates for case (2).
+
+### Proposed model: archetype-stratified effort sampling
+
+A theme may optionally declare a small finite set of pedagogical sampling strata, e.g.:
+
+- decimal add/sub: `Addition`, `Subtraction`
+- quadratic factoring: `DifferenceOfSquares`, `PerfectSquare`, `General`
+- liar puzzle: `People3`, `People4`
+
+The common sampler should then:
+
+1. determine the target number of final worksheet problems for each stratum;
+2. build enough candidate population **inside each stratum**;
+3. apply the existing easy/normal/hard scalar order-statistic sampler independently inside each stratum;
+4. for random, sample uniformly inside each stratum;
+5. merge the selected strata and apply the usual presentation ordering/shuffle.
+
+This makes difficulty conditional on archetype:
+
+> "easy general factorization" vs "hard general factorization",
+> rather than globally allowing every difference-of-squares problem to consume the easy tail and disappear from hard.
+
+### Why this is preferable to cosine/PCA diversity selection
+
+- keeps `effort = w · x` as the sole difficulty metric;
+- is transparent and testable;
+- encodes curriculum intent directly;
+- does not require thresholds in 31-dimensional vector space;
+- does not force unrelated operation directions merely to maximize geometric spread;
+- handles special-model themes such as liar puzzle where vector direction is meaningless.
+
+### Suggested implementation shape
+
+The exact Rust API can be chosen later, but conceptually `ProblemGenerator` should optionally expose something equivalent to:
+
+- a finite list of required sampling strata;
+- `sampling_stratum(problem) -> key`;
+- optional quota weights for those strata.
+
+This should remain **internal sampler metadata**, not part of the public worksheet schema unless UI/explanation later needs it.
+
+Default policy should be equal coverage when no stronger curriculum ratio is specified. For N problems and K strata, distribute `N / K` approximately equally and deterministically distribute the remainder.
+
+Do not create a Cartesian product of every observable feature. A theme should have one primary pedagogical stratification axis unless there is a strong curriculum reason otherwise. Otherwise the number of required cells explodes.
+
+### Important limitation
+
+Stratification cannot create a missing archetype. For example, quadratic(2) currently generates no repeated-root / perfect-square cases. The generator must first be expanded before that archetype can receive a quota.
+
+Likewise, if an archetype has almost no internal effort range, easy/normal/hard within that archetype may legitimately look nearly identical. Coverage should take precedence over manufacturing artificial difficulty.
+
+### Tests that should accompany this mechanism
+
+For every stratified theme:
+
+- every required archetype appears at every difficulty;
+- final per-archetype counts match the declared quota;
+- duplicate-prompt guarantees remain intact;
+- deterministic regeneration remains exact;
+- easy/normal/hard effort separation is checked **within each archetype**;
+- raw source imbalance cannot starve a required stratum;
+- finite domains fail clearly if a stratum does not contain enough distinct problems.
+
+---
+
+## 6. Current fraction generator population
+
+### 6.1 Operand domain
+
+`fraction_arithmetic_operand_domain()` currently constructs positive non-integer reduced fractions using:
+
+- denominator `2..=9`
+- numerator `1..=(10 - denominator)`
+- integer-valued reductions removed
+- then sort/dedup
+
+This yields only **22 distinct fraction operands**:
+
+`1/9, 1/8, 1/7, 1/6, 1/5, 1/4, 2/7, 1/3, 2/5, 3/7, 1/2, 3/5, 2/3, 3/4, 4/5, 5/4, 4/3, 3/2, 5/3, 7/3, 5/2, 7/2`
+
+Composition:
+
+- 8/22 = **36.4% unit fractions**
+- 15 proper fractions
+- 7 improper fractions
+
+The constraint is effectively `numerator + denominator <= 10` before reduction. This is a small coefficient-style domain and is much more restrictive than necessary for a general drill population.
+
+### 6.2 Current finite population sizes
+
+For addition/subtraction/multiplication the generator begins with `22 × 22 = 484` ordered operand pairs.
+
+| operation | current result restriction | domain triples before common `problem_key` dedup | actually distinct selectable prompts |
+|---|---|---:|---:|
+| addition | positive, non-integer result; result need not be in operand domain | 448 | **233** |
+| subtraction | positive result **and result must itself be one of the 22 operands** | 36 | **36** |
+| multiplication | positive result **and result must itself be one of the 22 operands** | 94 | **48** |
+| division | operands expanded with integers 1..9; no integer/integer; answer numerator/denominator <=72 | 878 | **878** |
+
+Addition and multiplication are commutative-canonicalized by `problem_key`, which approximately halves the ordered population.
+
+Fraction worksheets contain 16 problems, so the effective population-to-sheet ratios are approximately:
+
+- addition: 233 / 16 = 14.6
+- subtraction: 36 / 16 = **2.25**
+- multiplication: 48 / 16 = **3.0**
+- division: 878 / 16 = 54.9
+
+The subtraction and multiplication domains are therefore genuinely too small for robust difficulty sampling.
+
+### 6.3 Root cause
+
+The key problem is not merely the 22-element operand set. The largest loss comes from this rule for subtraction and multiplication:
+
+> the reduced answer must also belong to the same 22-element operand domain.
+
+Addition has already been changed to avoid this closure constraint, which is why its domain is much healthier.
+
+Division also uses a separate, broader answer bound and therefore has a much larger population.
+
+Thus the four fraction generators currently use inconsistent philosophies:
+
+- addition: bounded operands, broad valid answer space;
+- subtraction/multiplication: bounded operands **and answer forced back into operand domain**;
+- division: broader operands and broad answer bounds.
+
+The subtraction/multiplication closure constraint should not be preserved unless there is an explicit curriculum reason for it.
+
+---
+
+## 7. Recommended fraction-generator repair
+
+### Step 1 — decouple operand and answer domains
+
+This should be done before enlarging the operand set.
+
+Keep the current 22 fraction operands temporarily, but stop requiring subtraction/multiplication answers to be members of the operand domain.
+
+With exactly the current operands:
+
+#### subtraction
+
+If all positive differences `left > right` are allowed:
+
+- distinct problems increase from **36 to 231**;
+- exact maximum reduced answer numerator: 61;
+- exact maximum denominator: 72.
+
+#### multiplication
+
+If all positive products are allowed:
+
+- commutative-distinct fraction×fraction problems increase from **48 to 253**;
+- exact maximum reduced answer numerator: 49;
+- exact maximum denominator: 81.
+
+This change alone removes most of the population-size problem without changing operand pedagogy.
+
+### Step 2 — add integer operands to fraction multiplication
+
+The current multiplication domain contains **zero integer operands**, despite integer×fraction being a basic part of the fraction-multiplication progression.
+
+If integers `1..=9` are added to the 22 fraction operands, while excluding pure integer×integer problems:
+
+- there are 31 operand values total;
+- commutative-distinct products with at least one fraction become **451 problems**;
+- exact maximum reduced answer numerator under this domain is 63;
+- maximum denominator remains 81.
+
+This is already a comfortable finite population for a 16-problem worksheet.
+
+The multiplication theme can then use archetype stratification if desired, e.g. fraction×integer vs fraction×fraction, so both remain present at every difficulty.
+
+### Step 3 — reconsider the 22-value operand domain only after Step 1/2
+
+The current `numerator + denominator <= 10` rule is still somewhat artificial and unit-fraction-heavy. However, after removing answer closure:
+
+- subtraction would have 231 problems;
+- multiplication would have 253 fraction-only or 451 including integer operands;
+- addition already has 233;
+- division has 878.
+
+These may already be sufficient for alpha.
+
+Therefore the simplest path is:
+
+1. remove result-domain closure;
+2. add integer multiplication operands;
+3. remeasure distributions;
+4. only then decide whether the operand range itself needs expansion.
+
+Avoid simultaneously expanding every bound unless data still shows inadequate coverage. This keeps arithmetic sizes and effort behavior controlled.
+
+### Answer schema consequence
+
+The current subtraction/multiplication `AnswerSchema::Rational` bounds (`max_abs_numerator: 8`, `max_denominator: 9`) are a direct consequence of forcing answers back into the 22-value operand domain.
+
+Removing that closure requires broadening those grading bounds. Bounds should be derived/tested against the actual finite domain rather than retaining the current values accidentally.
+
+For the unchanged 22-value operands, exact observed maxima are:
+
+- subtraction: numerator 61, denominator 72;
+- multiplication fraction×fraction: numerator 49, denominator 81;
+- multiplication including integers 1..9: numerator 63, denominator 81.
+
+---
+
+## 8. Recommended priority
+
+1. **Split decimal multiplication and decimal division into separate themes.**
+2. **Repair fraction subtraction/multiplication domain closure.**
+3. **Add integer operands to fraction multiplication.**
+4. Introduce a small, generic **archetype-stratified scalar sampler** for same-theme archetypes that must survive every difficulty.
+5. Apply it first where the audit demonstrated a real coverage problem:
+   - decimal add/sub if kept as one theme;
+   - quadratic factoring forms after missing forms are generated;
+   - liar 3-person/4-person population.
+6. Do not add generic cosine/PCA/farthest-point diversity sampling unless future measurements show a problem that archetype stratification cannot express.
+
+The scalar effort model remains a useful and simple foundation. The audit suggests that the main missing abstraction is **curriculum-aware archetype coverage**, not geometric operation-vector diversity.
+
+## 14. Fraction-domain follow-up implementation — 2026-08-15
+
+A follow-up experiment tested expanding the elementary fraction operand domain from reduced fractions satisfying `numerator + denominator <= 10` to `<= 15`.
+
+### Decision
+
+The `<= 15` operand domain is adopted. It contains 57 distinct positive non-integer reduced fractions instead of 22. This is sufficient to remove the finite-population bottleneck in subtraction and multiplication without relaxing their result closure.
+
+The resulting finite domains are:
+
+- addition: 1,071 commutative-distinct candidates;
+- subtraction: 244 candidates;
+- multiplication: 291 commutative-distinct candidates;
+- division: 1,068 ordered candidates.
+
+Addition is intentionally **not** closed over the same `n+d<=15` operand domain. Doing so leaves only 139 commutative-distinct additions and makes 54.7% of the population equal-denominator, recreating the bias that the earlier addition fix removed. Instead addition keeps its independent result bound `numerator <= 65`, `denominator <= 72`.
+
+### Division investigation
+
+The previous division population became 3,873 candidates after the operand expansion because division used 57 fractions plus integers 1 through 9 as operands and accepted almost every non-integer/integer ordered pair whose result satisfied only `numerator <= 72`, `denominator <= 72`. The large count therefore came from an asymmetric and overly loose result-domain rule, not from the scalar difficulty sampler.
+
+Integer operands remain intentional curriculum coverage: fraction/fraction, fraction/integer, and integer/fraction division should all remain representable, and integer quotients should remain possible. Division results are now closed over the compact 57-fraction operand domain plus positive one-digit integers. This reduces the domain to 1,068 candidates while preserving all three operand archetypes and integer answers.
+
+For subtraction, multiplication, and division, the answer schema now reflects the compact domain (`max_abs_numerator = 13`, `max_denominator = 14`). Addition retains its independent `65/72` answer bound.
+
+Commutative addition and multiplication are canonicalized while constructing the finite domain rather than enumerating both operand orders and relying on later `problem_key` deduplication. This changes no source distribution but makes `finite_distinct_candidate_count()` describe the actual distinct population and avoids redundant effort-graph construction.
+
+Regression tests pin the operand-domain size, all four finite-domain counts, division result closure, and preservation of fraction/fraction, fraction/integer, integer/fraction, and integer-result division cases. `cargo test -p drill-core` passes 95/95 after the change.
+
+## 15. New issue: mixed-number curriculum handling and legacy improper-fraction summary theme
+
+### Issue
+
+As a curriculum rule for the elementary-school fraction units, mixed numbers should be treated as the default representation where an improper fraction would ordinarily be converted to a mixed number. The current fraction arithmetic implementation is built around improper-fraction answers and therefore should not remain the canonical implementation of the individual elementary-school addition/subtraction/multiplication/division units.
+
+### Required follow-up
+
+- Future curriculum-specific fraction themes should support the expected mixed-number representation and grading behavior.
+- The current four implementations (fraction addition, subtraction, multiplication, division) must **not be deleted**. Preserve them together as a separate layered theme tentatively named **`分数総まとめ(仮分数)`**.
+- `分数総まとめ(仮分数)` is intentionally a mixed-archetype theme containing all four operators: addition / subtraction / multiplication / division. It should therefore use the layered/archetype coverage mechanism described above so that all four operator types remain represented at every difficulty instead of scalar effort selection collapsing the worksheet toward only some operators.
+- This legacy summary theme explicitly uses improper fractions, so its title/UI should make that distinction visible rather than presenting it as the standard curriculum-specific fraction unit.
+
+This issue is separate from the finite-domain repair in Section 14. The expanded `n+d<=15` populations remain useful for the preserved improper-fraction summary theme.
+

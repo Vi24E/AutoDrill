@@ -1,6 +1,10 @@
 import type { AnswerInputStructure, AnswerNode, ArithmeticExpression, ArithmeticOperator, ProblemDto, RationalCoefficient } from './drill-engine';
 import { problemExpressionTokens } from './problem-format';
 
+export function answerPrefixLatex(answerPrefix: string): string {
+  return answerPrefix.replaceAll(' ', '\\,');
+}
+
 export function answerNodeLatex(answer: AnswerNode): string {
   switch (answer.type) {
     case 'empty': return '';

@@ -1,4 +1,5 @@
 import {
+  DRILL_OPERATION_KIND_COUNT,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
   answerNodeText,
@@ -585,7 +586,7 @@ function assertWorksheet(value: unknown): WorksheetDto {
       if (!Array.isArray(step.depends_on)) invalidDto('WASM returned invalid solution dependencies.', step);
       step.depends_on.forEach((dependency) => assertInteger(dependency, 'solution dependency'));
     });
-    if (!isRecord(problem.operation_vector) || !Array.isArray(problem.operation_vector.values) || problem.operation_vector.values.length !== 27) invalidDto('WASM returned an invalid operation vector.', problem);
+    if (!isRecord(problem.operation_vector) || !Array.isArray(problem.operation_vector.values) || problem.operation_vector.values.length !== DRILL_OPERATION_KIND_COUNT) invalidDto('WASM returned an invalid operation vector.', problem);
     problem.operation_vector.values.forEach((item) => assertFiniteNumber(item, 'operation-vector value'));
     assertFiniteNumber(problem.effort, 'problem effort');
     return {

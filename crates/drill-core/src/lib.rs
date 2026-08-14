@@ -14,17 +14,20 @@ mod model;
 mod normalize;
 mod registry;
 mod rng;
+mod themes;
 
 pub use answer::{AnswerNode, AnswerRepresentation};
 pub use contract::{web_contract, WebContract, WebLayoutContract, WebThemeContract};
 pub use editor::apply_editor_action;
 pub use effort::{
     arithmetic_expression_graph, big_num_operations, calculate_effort, calculate_graph_effort,
-    default_effort, linear_equation_graph, multiplication_table_graph, one_digit_addition_graph,
-    one_digit_subtraction_graph, signed_addition_graph, signed_subtraction_graph,
-    two_digit_addition_graph, EffortResult, EffortWeights, Operation, OperationKind,
-    OperationVector, OperationWeights, SolutionGraph, SolutionStep, WeightError, WeightMultipliers,
-    WeightProfile, OPERATION_KIND_COUNT,
+    default_effort, integer_addition_graph, integer_division_graph, integer_multiplication_graph,
+    integer_subtraction_graph, linear_equation_graph, one_digit_addition_graph,
+    one_digit_subtraction_graph, quadratic_factoring_graph, quadratic_formula_graph,
+    quadratic_square_graph, signed_addition_graph, signed_subtraction_graph,
+    simultaneous_equation_graph, two_digit_addition_graph, EffortResult, EffortWeights, Operation,
+    OperationKind, OperationVector, OperationWeights, SolutionGraph, SolutionStep, WeightError,
+    WeightMultipliers, WeightProfile, OPERATION_KIND_COUNT,
 };
 pub use error::{EditorError, GenerationError};
 pub use generator::{
@@ -940,7 +943,8 @@ mod tests {
         assert_eq!(vector.get(OperationKind::OverheadCarryPlus), 1.0);
         let generated = one_digit_addition_graph(8, 9).operation_vector();
         assert_eq!(generated.get(OperationKind::BasePlus), 1.0);
-        assert_eq!(generated.get(OperationKind::Increment), 1.0);
+        assert_eq!(generated.get(OperationKind::Increment), 0.0);
+        assert_eq!(generated.get(OperationKind::Identity), 1.0);
         assert_eq!(generated.get(OperationKind::OverheadCarryPlus), 1.0);
         assert_eq!(generated.get(OperationKind::BigNum), 17f64.log10());
         let magnitudes: Vec<_> = one_digit_addition_graph(8, 9)
@@ -990,7 +994,9 @@ mod tests {
             hard.value
         );
         assert_eq!(easy.operation_vector.get(OperationKind::OverheadGcd), 0.0);
-        assert_eq!(hard.operation_vector.get(OperationKind::OverheadGcd), 0.0);
+        // 13/12 is already irreducible, but the standard reduction procedure
+        // still performs the GCD search to certify that fact.
+        assert_eq!(hard.operation_vector.get(OperationKind::OverheadGcd), 1.0);
         assert!(
             hard.operation_vector.get(OperationKind::BigNum)
                 > easy.operation_vector.get(OperationKind::BigNum)
@@ -1337,7 +1343,7 @@ mod tests {
         let weights = OperationWeights::default();
         let expected = [
             1.0, 0.2, 1.0, 1.0, 3.0, 3.1, 3.5, 4.0, 1.0, 1.0, 0.2, 2.0, 4.0, 4.0, 1.5, 0.5, 0.5,
-            0.5, 2.0, 2.0, 2.0, 4.0, 3.0, 2.0, 5.0, 6.0, 3.0,
+            0.5, 2.0, 2.0, 2.0, 4.0, 3.0, 2.0, 5.0, 6.0, 3.0, 1.0, 1.0,
         ];
         for (kind, expected) in OperationKind::ALL.into_iter().zip(expected) {
             assert_eq!(weights.get(kind), expected, "{kind:?}");
