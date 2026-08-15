@@ -757,3 +757,555 @@ button:disabled { cursor: wait; opacity: .5; }
   .worksheet-print-preview .worksheet-print-page { margin: 0; box-shadow: none; }
   .worksheet-print-page { box-shadow: none; }
 }
+
+/* Column-arithmetic themes are designed first as printable practice sheets.
+   A single A4-relative square grid is shared by Web, print problems, and answers. */
+.paper,
+.worksheet-print-page {
+  container-type: inline-size;
+  --worksheet-grid-cell: 3.27577cqw;
+}
+
+.print-recommended-note {
+  margin: -2px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid #b7b7b7;
+  background: #fafafa;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.problem-grid-column-arithmetic::before {
+  position: absolute;
+  z-index: 0;
+  top: 10.6903%;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  content: '';
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(58, 83, 92, .105) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(58, 83, 92, .105) 1px, transparent 1px);
+  background-size: var(--worksheet-grid-cell) var(--worksheet-grid-cell);
+  background-position: 0 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.problem-grid-column-arithmetic > .worksheet-instruction,
+.problem-grid-column-arithmetic > .problem-cell,
+.problem-grid-column-arithmetic > .worksheet-footer {
+  z-index: 1;
+}
+.problem-grid-column-arithmetic > .worksheet-footer {
+  padding: 2px 3px;
+  background: rgba(255, 255, 255, .9);
+}
+
+.problem-cell-column-arithmetic {
+  --column-digit-cell: var(--worksheet-grid-cell);
+  --column-operator-width: var(--worksheet-grid-cell);
+  --column-digit-width: calc(5 * var(--worksheet-grid-cell));
+  --column-total-width: calc(var(--column-operator-width) + var(--column-digit-width));
+  --column-font-size: calc(1.08 * var(--worksheet-grid-cell));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--column-total-width) var(--column-lane-right-offset, 0px);
+  grid-template-rows:
+    var(--column-expression-top-offset, var(--worksheet-grid-cell))
+    auto
+    calc(.35 * var(--worksheet-grid-cell))
+    var(--worksheet-grid-cell)
+    minmax(0, 1fr);
+  align-items: start;
+  justify-items: stretch;
+  overflow: hidden;
+  padding: 0;
+}
+.problem-cell-column-arithmetic .problem-number {
+  position: absolute;
+  top: 4%;
+  left: 4%;
+  width: auto;
+  font-size: 14px;
+}
+.problem-cell-column-arithmetic .expression {
+  position: static;
+  grid-column: 2;
+  grid-row: 2;
+  display: block;
+  width: var(--column-total-width);
+  max-width: none;
+  align-self: start;
+  justify-self: stretch;
+  font-size: var(--column-font-size);
+}
+.problem-cell-column-arithmetic .problem-answer-area {
+  position: static;
+  grid-column: 2;
+  grid-row: 4;
+  display: flex;
+  width: var(--column-total-width);
+  justify-content: flex-end;
+  align-self: start;
+}
+.problem-cell-column-arithmetic .answer-box {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  width: var(--column-total-width);
+  min-width: 0;
+  min-height: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  margin-left: 0;
+  padding: 0;
+  justify-content: flex-end;
+  overflow: hidden;
+  border-color: rgba(70, 70, 70, .45);
+  background: rgba(255, 255, 255, .28);
+}
+.problem-cell-column-arithmetic .answer-mathfield {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  height: 100%;
+  padding: 0;
+  font-size: var(--column-font-size);
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: 1;
+  text-align: right;
+}
+.problem-cell-column-arithmetic .answer-mathfield::part(container) {
+  width: 100%;
+  height: 100%;
+  justify-content: flex-end;
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+.problem-cell-column-arithmetic .answer-mathfield::part(content) {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.column-arithmetic {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  width: var(--column-total-width);
+  min-width: var(--column-total-width);
+  flex-direction: column;
+  color: #111;
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: 1;
+}
+.column-arithmetic-row {
+  display: grid;
+  grid-template-columns: var(--column-operator-width) var(--column-digit-width);
+  align-items: center;
+  min-height: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+}
+.column-arithmetic-operator,
+.column-arithmetic-operator-placeholder {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: var(--column-operator-width);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.column-arithmetic-value {
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  min-width: 0;
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+.column-arithmetic-digit-cell {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: var(--column-digit-cell);
+  min-width: var(--column-digit-cell);
+  height: var(--worksheet-grid-cell);
+  flex: 0 0 var(--column-digit-cell);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.column-arithmetic-digit-cell-empty { color: transparent; }
+.column-arithmetic-decimal-marker {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  min-width: 0;
+  height: var(--worksheet-grid-cell);
+  flex: 0 0 0;
+  overflow: visible;
+}
+.column-arithmetic-decimal-marker::after {
+  position: absolute;
+  z-index: 2;
+  left: -2px;
+  bottom: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #111;
+  content: '';
+}
+.column-arithmetic-value-decimal {
+  display: flex;
+  width: var(--column-digit-width);
+  justify-content: flex-end;
+  text-align: initial;
+}
+.column-arithmetic-rule,
+.column-arithmetic-final-rule {
+  display: block;
+  box-sizing: border-box;
+  width: var(--column-total-width);
+  margin-top: 0;
+  border-top: 1.6px solid currentColor;
+}
+.column-arithmetic-work-space { display: block; }
+.column-arithmetic-work-space-multiply { min-height: calc(1.45 * var(--worksheet-grid-cell)); }
+
+/* Completed multiplication keeps the mathematically necessary final rule.
+   The unsolved problem has only the rule directly below the multiplier. */
+.column-multiply-partials {
+  display: flex;
+  width: var(--column-total-width);
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: calc(.2 * var(--worksheet-grid-cell));
+}
+.column-multiply-partial {
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-total-width);
+  min-height: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+.column-arithmetic-solution-result {
+  margin-top: calc(.15 * var(--worksheet-grid-cell));
+}
+.worksheet-print-page-answers .column-arithmetic-multiply-solution .column-arithmetic-final-rule,
+.problem-cell-column-arithmetic-multiply.problem-cell-graded .column-arithmetic-final-rule {
+  margin-top: calc(.15 * var(--worksheet-grid-cell));
+}
+
+/* Long division is compact: divisor cells + the exact number of dividend cells.
+   This prevents four-column worksheets from clipping the dividend. */
+.problem-cell-column-arithmetic-divide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--column-total-width) var(--column-lane-right-offset, 0px);
+  grid-template-rows:
+    var(--column-expression-top-offset, var(--worksheet-grid-cell))
+    var(--worksheet-grid-cell)
+    0
+    auto
+    var(--worksheet-grid-cell)
+    var(--worksheet-grid-cell)
+    minmax(0, 1fr);
+  align-items: start;
+  justify-items: stretch;
+}
+.problem-cell-column-arithmetic-divide .expression {
+  position: static;
+  grid-column: 2;
+  grid-row: 4;
+  align-self: start;
+  justify-self: stretch;
+  width: var(--column-total-width);
+  max-width: none;
+  font-size: var(--column-font-size);
+}
+.column-arithmetic-division {
+  display: block;
+  width: var(--column-total-width);
+  min-width: var(--column-total-width);
+}
+.column-division-body {
+  display: grid;
+  grid-template-columns: var(--column-operator-width) var(--column-digit-width);
+  width: var(--column-total-width);
+  align-items: start;
+}
+.column-division-divisor {
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-operator-width);
+  min-width: var(--column-operator-width);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+.column-division-bracket {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  min-width: var(--column-digit-width);
+  height: var(--worksheet-grid-cell);
+  border-top: 1.6px solid currentColor;
+}
+.column-division-bracket-mark {
+  position: absolute;
+  top: -1.6px;
+  left: calc(-.30 * var(--worksheet-grid-cell));
+  width: calc(.30 * var(--worksheet-grid-cell));
+  height: var(--worksheet-grid-cell);
+  overflow: visible;
+  pointer-events: none;
+}
+.column-division-bracket-mark path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.column-division-dividend {
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  min-width: var(--column-digit-width);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+.column-division-work-space {
+  display: block;
+  width: var(--column-total-width);
+  min-height: calc(2.6 * var(--worksheet-grid-cell));
+}
+
+.problem-cell-column-arithmetic-divide .problem-answer-area-column-division {
+  position: static;
+  inset: auto;
+  display: contents;
+  width: auto;
+  font-size: 12px;
+  pointer-events: none;
+}
+.problem-cell-column-arithmetic-divide .problem-answer-area-column-division .column-division-answer-coordinate {
+  position: static;
+  pointer-events: auto;
+}
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: var(--column-operator-width) var(--column-digit-width);
+  width: var(--column-total-width);
+  height: var(--worksheet-grid-cell);
+  align-self: end;
+}
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .answer-box,
+.worksheet-print-page-problems .problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .worksheet-print-empty-answer {
+  grid-column: 2;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  height: var(--worksheet-grid-cell);
+}
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder {
+  grid-column: 2;
+  grid-row: 6;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(2 * var(--worksheet-grid-cell));
+  column-gap: calc(.25 * var(--worksheet-grid-cell));
+  width: var(--column-total-width);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  align-self: start;
+}
+.column-division-answer-coordinate-quotient .column-division-answer-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.column-division-answer-coordinate-remainder .column-division-answer-label {
+  grid-column: 1;
+  justify-self: end;
+  font-size: calc(.48 * var(--worksheet-grid-cell));
+  font-weight: 600;
+  white-space: nowrap;
+}
+.problem-answer-area-column-division .answer-box {
+  min-width: 0;
+  min-height: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  padding: 0;
+}
+.column-division-answer-coordinate-remainder .answer-box {
+  grid-column: 2;
+  width: calc(2 * var(--worksheet-grid-cell));
+}
+.column-division-correct-answer { display: none; }
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .answer-mathfield,
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder .answer-mathfield {
+  width: 100%;
+  height: 100%;
+  font-size: var(--column-font-size);
+}
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .answer-mathfield {
+  padding-right: var(--column-division-quotient-trailing-width, 0);
+}
+
+/* Completed algorithms start on the same page-grid row and use the same font. */
+.problem-cell-column-arithmetic.problem-cell-graded .expression,
+.worksheet-print-page-answers .problem-cell-column-arithmetic .expression {
+  grid-column: 2;
+  grid-row: 2 / 7;
+  width: var(--column-total-width);
+  height: auto;
+  font-size: var(--column-font-size);
+}
+.column-division-solution {
+  display: block;
+  width: var(--column-total-width);
+  min-width: var(--column-total-width);
+  height: auto;
+  line-height: 1;
+}
+.column-division-solution-grid {
+  display: grid;
+  grid-template-columns: var(--column-operator-width) var(--column-digit-width);
+  grid-template-rows: var(--worksheet-grid-cell) auto;
+  width: var(--column-total-width);
+  align-items: start;
+}
+.column-division-solution-quotient-spacer { grid-column: 1; grid-row: 1; }
+.column-division-solution-quotient {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+.column-division-solution-grid > .column-division-divisor {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+}
+.column-division-solution-right {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  width: var(--column-digit-width);
+  min-width: var(--column-digit-width);
+  flex-direction: column;
+}
+.column-division-solution-work {
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  flex-direction: column;
+  align-items: stretch;
+}
+.column-division-solution-step { display: contents; }
+.column-division-solution-product,
+.column-division-solution-after {
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-digit-width);
+  min-height: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+.column-division-solution-product-value,
+.column-division-solution-after > span {
+  display: inline-flex;
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+.column-division-solution-minus {
+  display: inline-flex;
+  width: var(--column-digit-cell);
+  min-width: var(--column-digit-cell);
+  height: var(--worksheet-grid-cell);
+  flex: 0 0 var(--column-digit-cell);
+  align-items: center;
+  justify-content: center;
+  margin-right: 0;
+}
+.column-division-solution-rule {
+  display: block;
+  align-self: flex-end;
+  margin-top: 0;
+  margin-bottom: 0;
+  border-top: 1px solid currentColor;
+}
+
+/* Print problem pages deliberately have no boxed final-answer areas. The
+   page-wide grid supplies writable space everywhere below the instruction. */
+.worksheet-print-page .problem-cell-column-arithmetic { padding-inline: 0; }
+.worksheet-print-page .problem-cell-column-arithmetic .problem-number { font-size: 14px; }
+.worksheet-print-page .problem-cell-column-arithmetic .expression { font-size: var(--column-font-size); }
+.worksheet-print-page-problems .problem-cell-column-arithmetic .worksheet-print-empty-answer {
+  width: 100%;
+  min-width: 0;
+  height: var(--worksheet-grid-cell);
+  min-height: var(--worksheet-grid-cell);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.worksheet-print-page-problems .problem-cell-column-arithmetic .problem-answer-area {
+  opacity: 0;
+}
+.worksheet-print-page-problems .problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient {
+  opacity: 1;
+}
+.worksheet-print-page-problems .problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .worksheet-print-empty-answer {
+  border: 0;
+  background: transparent;
+  opacity: 0;
+}
+.worksheet-print-page .problem-cell-column-arithmetic .worksheet-print-answer-value {
+  display: block;
+  width: 100%;
+  margin-left: 0;
+  font-size: var(--column-font-size);
+  line-height: 1;
+  text-align: right;
+}

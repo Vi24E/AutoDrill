@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize, resolve } from 'node:path';
 import net from 'node:net';
@@ -13,6 +13,8 @@ const SEEDS = ['A1b2', 'M7x9'];
 const EXTRA_SIGNED_SEEDS = ['Q4r6', 'Z8k3'];
 const VIEWPORT = { width: 1600, height: 800, deviceScaleFactor: 1, mobile: false };
 const PRINT_ONLY = process.env.AUTODRILL_PRINT_ONLY === 'true';
+const ROUTE_FILTER = process.env.AUTODRILL_ROUTE_FILTER ?? '';
+
 
 if (!existsSync(join(OUT, 'index.html'))) {
   throw new Error('apps/web/out is missing. Run the GitHub Pages build before browser layout verification.');
@@ -239,34 +241,59 @@ function worksheetProbe(seed) {
     await document.fonts.ready;
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
-    const divider = paper.querySelector('.problem-divider')?.getBoundingClientRect() ?? null;
     const cells = [...paper.querySelectorAll('.problem-cell')];
     const crossings = [];
+    const columnGridMismatches = [];
     for (const cell of cells) {
       const column = Number(cell.dataset.layoutColumn);
-      // Measure the layout boxes that own visible worksheet content. MathLive's
-      // internal shadow parts use their own coordinate space in some browser
-      // versions, so measuring those directly creates false divider crossings.
-      // The expression/answer hosts expand with the rendered MathLive content.
-      const rects = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .liar-statements, .problem-answer-area')]
+      // Check every cell boundary rather than a single center divider so 4-column
+      // printable themes get the same clipping guarantees as legacy 2-column themes.
+      const rects = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .liar-statements, .problem-answer-area')]
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
       if (rects.length === 0) continue;
+      const cellRect = cell.getBoundingClientRect();
       const minLeft = Math.min(...rects.map((rect) => rect.left));
       const maxRight = Math.max(...rects.map((rect) => rect.right));
-      const overflow = divider ? (column === 0 ? maxRight - divider.left : divider.right - minLeft) : Math.max(cell.getBoundingClientRect().left - minLeft, maxRight - cell.getBoundingClientRect().right);
+      const overflow = Math.max(cellRect.left - minLeft, maxRight - cellRect.right);
       if (overflow > 1) {
         crossings.push({
           problem: Number(cell.dataset.problemIndex) + 1,
           column,
           overflow: Math.round(overflow * 10) / 10,
           expression: cell.querySelector('math-span')?.getAttribute('aria-label') ?? cell.querySelector('.expression')?.textContent ?? '',
+          promptAria: cell.querySelector('.column-arithmetic')?.getAttribute('aria-label') ?? null,
+          cellWidth: Math.round(cellRect.width * 10) / 10,
+          expressionWidth: Math.round((cell.querySelector('.column-arithmetic')?.getBoundingClientRect().width ?? 0) * 10) / 10,
+          operatorWidth: getComputedStyle(cell).getPropertyValue('--column-operator-width').trim(),
+          digitWidth: getComputedStyle(cell).getPropertyValue('--column-digit-width').trim(),
+          laneRightOffset: getComputedStyle(cell).getPropertyValue('--column-lane-right-offset').trim(),
         });
+      }
+      if (cell.classList.contains('problem-cell-column-arithmetic')) {
+        const divide = cell.classList.contains('problem-cell-column-arithmetic-divide');
+        const reference = divide
+          ? cell.querySelector('.column-division-bracket')?.getBoundingClientRect()
+          : (cell.querySelector('.column-arithmetic-final-rule') ?? cell.querySelector('.column-arithmetic-rule'))?.getBoundingClientRect();
+        const answer = divide
+          ? cell.querySelector('.column-division-answer-coordinate-quotient .answer-box')?.getBoundingClientRect()
+          : cell.querySelector('.problem-answer-area .answer-box')?.getBoundingClientRect();
+        if (reference && answer) {
+          const leftDelta = Math.abs(reference.left - answer.left);
+          const rightDelta = Math.abs(reference.right - answer.right);
+          if (leftDelta > 1 || rightDelta > 1) {
+            columnGridMismatches.push({
+              problem: Number(cell.dataset.problemIndex) + 1,
+              leftDelta: Math.round(leftDelta * 10) / 10,
+              rightDelta: Math.round(rightDelta * 10) / 10,
+            });
+          }
+        }
       }
     }
     const gradeClass = [...paper.classList].find((name) => name.startsWith('worksheet-grade-')) ?? null;
     const fontSize = getComputedStyle(paper.querySelector('.expression')).fontSize;
-    return { crossings, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
+    return { crossings, columnGridMismatches, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
   })()`;
 }
 
@@ -374,6 +401,85 @@ function simultaneousInputProbe() {
       xValue: xField.value,
       yValue: yField.value,
       notice: document.querySelector('.worksheet-toast')?.textContent?.trim() ?? null,
+    };
+  })()`;
+}
+
+
+function columnAdditionInputProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 300; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const fields = await waitFor(() => {
+      const values = [...document.querySelectorAll('math-field.answer-mathfield')];
+      return values.length === 16 ? values : null;
+    }, '16 column addition answer fields');
+    const field = fields[0];
+    field.click();
+    const panel = await waitFor(() => document.querySelector('.input-panel'), 'column addition input panel');
+    for (const digit of ['1', '6', '4']) {
+      [...panel.querySelectorAll('.keypad-numbers button')].find((button) => button.textContent?.trim() === digit)?.click();
+      await sleep(60);
+    }
+    const cell = field.closest('.problem-cell-column-arithmetic');
+    const rule = cell.querySelector('.column-arithmetic-rule').getBoundingClientRect();
+    const frame = field.closest('.answer-box').getBoundingClientRect();
+    const expression = cell.querySelector('.column-arithmetic');
+    const content = field.shadowRoot?.querySelector('[part~="content"]');
+    const numericGlyph = field.shadowRoot?.querySelector('.ML__cmr');
+    return {
+      fieldCount: fields.length,
+      value: field.value,
+      gap: Math.round((frame.top - rule.bottom) * 10) / 10,
+      leftDelta: Math.round((frame.left - rule.left) * 10) / 10,
+      rightDelta: Math.round((frame.right - rule.right) * 10) / 10,
+      expressionFont: getComputedStyle(expression).fontFamily,
+      fieldFont: getComputedStyle(field).fontFamily,
+      contentFont: content ? getComputedStyle(content).fontFamily : null,
+      glyphFont: numericGlyph ? getComputedStyle(numericGlyph).fontFamily : null,
+      expressionFontSize: getComputedStyle(expression).fontSize,
+      fieldFontSize: getComputedStyle(field).fontSize,
+    };
+  })()`;
+}
+
+function columnDivisionInputProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 300; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const fields = await waitFor(() => {
+      const values = [...document.querySelectorAll('math-field.answer-mathfield')];
+      return values.length === 24 ? values : null;
+    }, '24 quotient/remainder fields');
+    const quotient = fields[0];
+    const remainder = fields[1];
+    const labels = [quotient, remainder].map((field) => ({
+      aria: field.getAttribute('aria-label'),
+      label: field.closest('.column-division-answer-coordinate')?.querySelector('.column-division-answer-label')?.textContent?.trim() ?? null,
+    }));
+    quotient.click();
+    const panel = await waitFor(() => document.querySelector('.input-panel'), 'column division input panel');
+    const formulaLabels = [...panel.querySelectorAll('.formula-keypad button')].map((button) => button.getAttribute('aria-label'));
+    const digit2 = [...panel.querySelectorAll('.keypad-numbers button')].find((button) => button.textContent?.trim() === '2');
+    digit2?.click();
+    await sleep(80);
+    remainder.click();
+    const digit3 = [...panel.querySelectorAll('.keypad-numbers button')].find((button) => button.textContent?.trim() === '3');
+    digit3?.click();
+    await sleep(80);
+    return {
+      fieldCount: fields.length,
+      labels,
+      formulaLabels,
+      quotientValue: quotient.value,
+      remainderValue: remainder.value,
+      notice: document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null,
     };
   })()`;
 }
@@ -523,21 +629,71 @@ function printPreviewProbe(seed) {
     const problemPage = preview.querySelector('[data-print-page="problems"]');
     const stacked = [...problemPage.querySelectorAll('.problem-cell-answer-below')];
     const equalsCount = stacked.filter((cell) => cell.querySelector('math-span.problem-math-expression')?.getAttribute('aria-label')?.includes('=')).length;
-    const divider = problemPage.querySelector('.problem-divider').getBoundingClientRect();
-    const crossings = [...problemPage.querySelectorAll('.problem-cell')].filter((cell) => {
-      const index = Number(cell.dataset.printProblemIndex ?? 0);
-      const column = index >= 10 ? 1 : 0;
-      const rects = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .problem-answer-area')]
-        .map((element) => element.getBoundingClientRect())
-        .filter((rect) => rect.width > 0 && rect.height > 0);
-      if (rects.length === 0) return false;
-      const minLeft = Math.min(...rects.map((rect) => rect.left));
-      const maxRight = Math.max(...rects.map((rect) => rect.right));
-      return column === 0 ? maxRight > divider.left + 1 : minLeft < divider.right - 1;
+    const cells = [...problemPage.querySelectorAll('.problem-cell')];
+    const crossingDetails = cells.flatMap((cell) => {
+      const cellRect = cell.getBoundingClientRect();
+      const entries = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .problem-answer-area')]
+        .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.width > 0 && rect.height > 0);
+      if (entries.length === 0) return [];
+      const minLeft = Math.min(...entries.map(({ rect }) => rect.left));
+      const maxRight = Math.max(...entries.map(({ rect }) => rect.right));
+      if (minLeft >= cellRect.left - 1 && maxRight <= cellRect.right + 1) return [];
+      return [{
+        problem: Number(cell.dataset.printProblemIndex ?? 0) + 1,
+        leftOverflow: Math.max(0, Math.round((cellRect.left - minLeft) * 10) / 10),
+        rightOverflow: Math.max(0, Math.round((maxRight - cellRect.right) * 10) / 10),
+        offenders: entries
+          .filter(({ rect }) => rect.left < cellRect.left - 1 || rect.right > cellRect.right + 1)
+          .map(({ element, rect }) => ({
+            className: typeof element.className === 'string' ? element.className : element.tagName,
+            left: Math.round(rect.left * 10) / 10,
+            right: Math.round(rect.right * 10) / 10,
+            width: Math.round(rect.width * 10) / 10,
+          })),
+        cell: { left: Math.round(cellRect.left * 10) / 10, right: Math.round(cellRect.right * 10) / 10, width: Math.round(cellRect.width * 10) / 10 },
+        laneRightOffset: getComputedStyle(cell).getPropertyValue('--column-lane-right-offset').trim(),
+      }];
+    });
+    const crossings = crossingDetails.length;
+    const dividerCount = problemPage.querySelectorAll('.problem-divider').length;
+    const columnCells = problemPage.querySelectorAll('.problem-cell-column-arithmetic').length;
+    const columnExpressions = problemPage.querySelectorAll('[data-column-arithmetic]').length;
+    const emptyAnswers = problemPage.querySelectorAll('.worksheet-print-empty-answer').length;
+    const answerPage = preview.querySelector('[data-print-page=\"answers\"]');
+    const answerSolutions = [...(answerPage?.querySelectorAll('[data-column-solution=\"true\"]') ?? [])];
+    const completedSolutions = answerSolutions.length;
+    const visibleCompletedSolutions = answerSolutions.filter((solution) => {
+      const rect = solution.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
     }).length;
+    const divisionSolutionSteps = answerPage?.querySelectorAll('.column-division-solution-step').length ?? 0;
+    const multiplicationPartials = answerPage?.querySelectorAll('.column-multiply-partial').length ?? 0;
+    const answerPageEmptyAnswers = answerPage?.querySelectorAll('.worksheet-print-empty-answer').length ?? 0;
+    const answerCrossingDetails = [...(answerPage?.querySelectorAll('.problem-cell-column-arithmetic') ?? [])].flatMap((cell) => {
+      const cellRect = cell.getBoundingClientRect();
+      const solution = cell.querySelector('[data-column-solution=\"true\"]');
+      if (!solution) return [];
+      const rect = solution.getBoundingClientRect();
+      const leftOverflow = Math.max(0, cellRect.left - rect.left);
+      const rightOverflow = Math.max(0, rect.right - cellRect.right);
+      const topOverflow = Math.max(0, cellRect.top - rect.top);
+      const bottomOverflow = Math.max(0, rect.bottom - cellRect.bottom);
+      if (Math.max(leftOverflow, rightOverflow, topOverflow, bottomOverflow) <= 1) return [];
+      return [{
+        problem: Number(cell.dataset.printProblemIndex ?? 0) + 1,
+        leftOverflow: Math.round(leftOverflow * 10) / 10,
+        rightOverflow: Math.round(rightOverflow * 10) / 10,
+        topOverflow: Math.round(topOverflow * 10) / 10,
+        bottomOverflow: Math.round(bottomOverflow * 10) / 10,
+      }];
+    });
+    const answerCrossings = answerCrossingDetails.length;
+    const divisionProblemFontSizes = [...new Set([...problemPage.querySelectorAll('.problem-cell-column-arithmetic-divide .expression')].map((expression) => getComputedStyle(expression).fontSize))];
+    const divisionAnswerFontSizes = [...new Set([...(answerPage?.querySelectorAll('.column-division-solution') ?? [])].map((solution) => getComputedStyle(solution).fontSize))];
     printButton.click();
     const result = await waitFor(() => window.__AUTODRILL_PRINT_PROBE__, 'native print callback', 320);
-    return { ...result, initialDisabled, stacked: stacked.length, equalsCount, crossings };
+    return { ...result, initialDisabled, stacked: stacked.length, equalsCount, crossings, crossingDetails, answerCrossings, answerCrossingDetails, dividerCount, columnCells, columnExpressions, emptyAnswers, completedSolutions, visibleCompletedSolutions, divisionSolutionSteps, divisionProblemFontSizes, divisionAnswerFontSizes, multiplicationPartials, answerPageEmptyAnswers };
   })()`;
 }
 
@@ -632,7 +788,8 @@ try {
   const sitemap = readFileSync(join(OUT, 'sitemap.xml'), 'utf8');
   const routes = [...sitemap.matchAll(/<loc>[^<]+\/AutoDrill([^<]*)<\/loc>/g)]
     .map((match) => match[1] || '/')
-    .filter((pathname) => pathname !== '/');
+    .filter((pathname) => pathname !== '/')
+    .filter((pathname) => !ROUTE_FILTER || pathname.includes(ROUTE_FILTER));
   const failures = [];
   let worksheetSampleCount = 0;
   if (!PRINT_ONLY) {
@@ -654,8 +811,12 @@ try {
           console.warn(`[layout] divider crossing: ${route} seed=${seed} problem=${crossing.problem} overflow=${crossing.overflow}px expression=${crossing.expression}`);
           failures.push({ route, seed, ...crossing });
         }
+        for (const mismatch of result.columnGridMismatches ?? []) {
+          console.warn(`[layout] column grid mismatch: ${route} seed=${seed} problem=${mismatch.problem} left=${mismatch.leftDelta}px right=${mismatch.rightDelta}px`);
+          failures.push({ route, seed, reason: `column arithmetic answer is not on the shared digit grid`, ...mismatch });
+        }
         if (cdp.consoleErrors.length > 0) failures.push({ route, seed, reason: `console errors: ${cdp.consoleErrors.join(' | ')}` });
-        console.log(`[layout] ${route} seed=${seed}: ${result.count} problems, ${result.gradeClass}, expression ${result.fontSize}, crossings=${result.crossings.length}`);
+        console.log(`[layout] ${route} seed=${seed}: ${result.count} problems, ${result.gradeClass}, expression ${result.fontSize}, crossings=${result.crossings.length}, gridMismatches=${result.columnGridMismatches?.length ?? 0}`);
         if (route.endsWith('/simultaneous-equation-1') && seed === SEEDS[0]) {
           const input = await cdp.evaluate(simultaneousInputProbe());
           if (
@@ -669,6 +830,36 @@ try {
           }
           if (input.notice === '式が大きすぎます！') {
             failures.push({ route, seed, reason: `simultaneous coordinate input was rejected as too large: ${JSON.stringify(input)}` });
+          }
+        }
+        if (route.endsWith('/column-addition-two-digit') && seed === SEEDS[0]) {
+          const input = await cdp.evaluate(columnAdditionInputProbe());
+          if (input.value !== '164' || input.fieldCount !== 16 || input.gap < 2 || input.gap > 12 || Math.abs(input.leftDelta) > 1 || Math.abs(input.rightDelta) > 1 || input.expressionFontSize !== input.fieldFontSize || !input.glyphFont?.includes('Noto Sans JP')) {
+            failures.push({ route, seed, reason: `column addition answer alignment mismatch: ${JSON.stringify(input)}` });
+          }
+          if (process.env.AUTODRILL_CAPTURE_COLUMN_INPUT_SCREENSHOT) {
+            const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+            writeFileSync(process.env.AUTODRILL_CAPTURE_COLUMN_INPUT_SCREENSHOT, Buffer.from(screenshot.data, 'base64'));
+          }
+          console.log(`[input] column-addition-two-digit: ${JSON.stringify(input)}`);
+        }
+        if (route.endsWith('/column-division-one-digit') && seed === SEEDS[0]) {
+          const input = await cdp.evaluate(columnDivisionInputProbe());
+          if (process.env.AUTODRILL_CAPTURE_DIVISION_INPUT_SCREENSHOT) {
+            const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+            writeFileSync(process.env.AUTODRILL_CAPTURE_DIVISION_INPUT_SCREENSHOT, Buffer.from(screenshot.data, 'base64'));
+          }
+          if (
+            input.fieldCount !== 24
+            || JSON.stringify(input.labels.map((item) => item.label)) !== JSON.stringify(['商', 'あまり'])
+            || input.quotientValue !== '2'
+            || input.remainderValue !== '3'
+            || input.formulaLabels.length !== 0
+          ) {
+            failures.push({ route, seed, reason: `column division final-answer input mismatch: ${JSON.stringify(input)}` });
+          }
+          if (input.notice === '式が大きすぎます！') {
+            failures.push({ route, seed, reason: `column division coordinate input was rejected as too large: ${JSON.stringify(input)}` });
           }
         }
         if (route.endsWith('/quadratic-equation-1') && seed === SEEDS[0]) {
@@ -713,8 +904,65 @@ try {
   if (printResult.ready !== printResult.total) failures.push({ route: 'signed-arithmetic-1', seed: 'A1b2', reason: `native print was called with ${printResult.ready}/${printResult.total} MathLive spans ready; missing=${printResult.missing.join(' | ')}` });
   console.log(`[print] signed-arithmetic-1 seed=A1b2: MathLive ready ${printResult.ready}/${printResult.total}, stacked=${printResult.stacked}, equals=${printResult.equalsCount}, crossings=${printResult.crossings}`);
 
+  await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-4/column-decimal-add-subtract/`);
+  const columnPrint = await cdp.evaluate(printPreviewProbe('A1b2'));
+  if (columnPrint.generationFailed) throw new Error(`Column print probe could not generate worksheet: ${JSON.stringify(columnPrint)}`);
+  if (columnPrint.columnCells !== 16 || columnPrint.columnExpressions !== 16 || columnPrint.dividerCount !== 0 || columnPrint.emptyAnswers !== 16 || columnPrint.completedSolutions !== 16 || columnPrint.visibleCompletedSolutions !== 16 || columnPrint.answerPageEmptyAnswers !== 0) {
+    failures.push({ route: 'column-decimal-add-subtract', seed: 'A1b2', reason: `4x4 print structure mismatch: ${JSON.stringify(columnPrint)}` });
+  }
+  if (columnPrint.crossings !== 0) failures.push({ route: 'column-decimal-add-subtract', seed: 'A1b2', reason: `column print preview has ${columnPrint.crossings} cell crossing(s)` });
+  if (columnPrint.ready !== columnPrint.total) failures.push({ route: 'column-decimal-add-subtract', seed: 'A1b2', reason: `column native print was called with ${columnPrint.ready}/${columnPrint.total} MathLive spans ready` });
+  if (process.env.AUTODRILL_CAPTURE_SCREENSHOT) {
+    const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+    writeFileSync(process.env.AUTODRILL_CAPTURE_SCREENSHOT, Buffer.from(screenshot.data, 'base64'));
+  }
+  if (process.env.AUTODRILL_CAPTURE_ANSWER_SCREENSHOT) {
+    await cdp.evaluate(`(() => { document.querySelector('[data-print-page=\"answers\"]')?.scrollIntoView({ block: 'start' }); return true; })()`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    writeFileSync(process.env.AUTODRILL_CAPTURE_ANSWER_SCREENSHOT, Buffer.from(screenshot.data, 'base64'));
+  }
+  const printed = await cdp.send('Page.printToPDF', { printBackground: true, preferCSSPageSize: true });
+  const pdf = Buffer.from(printed.data, 'base64');
+  const pageCount = (pdf.toString('latin1').match(/\/Type\s*\/Page\b/g) ?? []).length;
+  if (pdf.length < 10_000 || pdf.subarray(0, 4).toString('ascii') !== '%PDF' || pageCount !== 2) {
+    failures.push({ route: 'column-decimal-add-subtract', seed: 'A1b2', reason: `actual Chrome PDF invalid: bytes=${pdf.length}, pages=${pageCount}` });
+  }
+  console.log(`[print] column-decimal-add-subtract seed=A1b2: 4x4 cells=${columnPrint.columnCells}, dividers=${columnPrint.dividerCount}, crossings=${columnPrint.crossings}, actual PDF bytes=${pdf.length}, pages=${pageCount}`);
+
+  await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-3/column-multiplication-two-digit/`);
+  const multiplicationPrint = await cdp.evaluate(printPreviewProbe('A1b2'));
+  if (multiplicationPrint.generationFailed) throw new Error(`Column multiplication print probe could not generate worksheet: ${JSON.stringify(multiplicationPrint)}`);
+  if (multiplicationPrint.columnCells !== 16 || multiplicationPrint.columnExpressions !== 16 || multiplicationPrint.dividerCount !== 0 || multiplicationPrint.emptyAnswers !== 16 || multiplicationPrint.completedSolutions !== 16 || multiplicationPrint.visibleCompletedSolutions !== 16 || multiplicationPrint.multiplicationPartials !== 32 || multiplicationPrint.answerPageEmptyAnswers !== 0) {
+    failures.push({ route: 'column-multiplication-two-digit', seed: 'A1b2', reason: `4x4 multiplication print structure mismatch: ${JSON.stringify(multiplicationPrint)}` });
+  }
+  if (multiplicationPrint.crossings !== 0) failures.push({ route: 'column-multiplication-two-digit', seed: 'A1b2', reason: `multiplication print preview has ${multiplicationPrint.crossings} cell crossing(s): ${JSON.stringify(multiplicationPrint.crossingDetails)}` });
+  console.log(`[print] column-multiplication-two-digit seed=A1b2: partials=${multiplicationPrint.multiplicationPartials}, completed=${multiplicationPrint.completedSolutions}, crossings=${multiplicationPrint.crossings}`);
+
+  await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-4/column-division-two-digit/`);
+  const divisionPrint = await cdp.evaluate(printPreviewProbe('A1b2'));
+  if (divisionPrint.generationFailed) throw new Error(`Column division print probe could not generate worksheet: ${JSON.stringify(divisionPrint)}`);
+  if (divisionPrint.columnCells !== 12 || divisionPrint.columnExpressions !== 12 || divisionPrint.dividerCount !== 0 || divisionPrint.emptyAnswers !== 12 || divisionPrint.completedSolutions !== 12 || divisionPrint.visibleCompletedSolutions !== 12 || divisionPrint.divisionSolutionSteps < 12 || divisionPrint.answerPageEmptyAnswers !== 0 || divisionPrint.answerCrossings !== 0 || JSON.stringify(divisionPrint.divisionAnswerFontSizes) !== JSON.stringify(divisionPrint.divisionProblemFontSizes)) {
+    failures.push({ route: 'column-division-two-digit', seed: 'A1b2', reason: `4x3 division print structure mismatch: ${JSON.stringify(divisionPrint)}` });
+  }
+  if (divisionPrint.crossings !== 0) failures.push({ route: 'column-division-two-digit', seed: 'A1b2', reason: `division print preview has ${divisionPrint.crossings} cell crossing(s)` });
+  if (divisionPrint.ready !== divisionPrint.total) failures.push({ route: 'column-division-two-digit', seed: 'A1b2', reason: `division native print was called with ${divisionPrint.ready}/${divisionPrint.total} MathLive spans ready` });
+  if (process.env.AUTODRILL_CAPTURE_DIVISION_ANSWER_SCREENSHOT) {
+    await cdp.evaluate(`(() => { document.querySelector('[data-print-page=\"answers\"]')?.scrollIntoView({ block: 'start' }); return true; })()`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    writeFileSync(process.env.AUTODRILL_CAPTURE_DIVISION_ANSWER_SCREENSHOT, Buffer.from(screenshot.data, 'base64'));
+  }
+  const divisionPrinted = await cdp.send('Page.printToPDF', { printBackground: true, preferCSSPageSize: true });
+  const divisionPdf = Buffer.from(divisionPrinted.data, 'base64');
+  const divisionPageCount = (divisionPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) ?? []).length;
+  if (divisionPdf.length < 10_000 || divisionPdf.subarray(0, 4).toString('ascii') !== '%PDF' || divisionPageCount !== 2) {
+    failures.push({ route: 'column-division-two-digit', seed: 'A1b2', reason: `actual division Chrome PDF invalid: bytes=${divisionPdf.length}, pages=${divisionPageCount}` });
+  }
+  console.log(`[print] column-division-two-digit seed=A1b2: 4x3 cells=${divisionPrint.columnCells}, dividers=${divisionPrint.dividerCount}, blankAnswerSlots=${divisionPrint.emptyAnswers}, solutionSteps=${divisionPrint.divisionSolutionSteps}, crossings=${divisionPrint.crossings}, actual PDF bytes=${divisionPdf.length}, pages=${divisionPageCount}`);
+
   if (failures.length > 0) { console.error(JSON.stringify(failures, null, 2)); throw new Error(`Browser worksheet layout verification failed with ${failures.length} issue(s).`); }
-  console.log(`Browser layout verified: dropdowns selectable, ${worksheetSampleCount} worksheet samples do not cross the center divider, and native print waits for stable MathLive rendering.`);
+  console.log(`Browser layout verified: dropdowns selectable, ${worksheetSampleCount} worksheet samples stay within their cell boundaries, and native print waits for stable MathLive rendering.`);
 } finally {
   try { cdp?.ws.close(); } catch {}
   if (chrome.exitCode === null) {

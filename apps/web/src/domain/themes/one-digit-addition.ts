@@ -1,14 +1,13 @@
 import { ADDITION_CURRICULUM_PATH, ADDITION_GENERATOR_REVISION, ADDITION_LAYOUT, ADDITION_SKILL_ID, ADDITION_THEME_ID } from '../drill-engine';
-import { SIMPLE_POSITIVE, type ThemeDefinition } from './theme-definition';
+import { defineTheme, SIMPLE_POSITIVE } from './theme-definition';
 
-export const ONE_DIGIT_ADDITION_DEFINITION: ThemeDefinition = {
+export const ONE_DIGIT_ADDITION_DEFINITION = defineTheme({
   numeric_theme_id: ADDITION_THEME_ID,
   generator_revision: ADDITION_GENERATOR_REVISION,
   themeKey: 'jp.grade1.addition.one_digit',
   label: '一桁の足し算',
   grade: { slug: 'grade-1', label: '小学1年生' },
-  gradeGenre: { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
-  recommendedGenre: { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
+  tags: ['addition'],
   problemCount: ADDITION_LAYOUT.problem_count,
   layout: ADDITION_LAYOUT,
   route: { gradeSlug: 'grade-1', themeSlug: 'one-digit-addition', pathname: '/drills/grade-1/one-digit-addition' },
@@ -18,4 +17,4 @@ export const ONE_DIGIT_ADDITION_DEFINITION: ThemeDefinition = {
   answerSchemaKind: 'integer',
   inputInterface: SIMPLE_POSITIVE,
   worksheet: { title: '1けたのたしざん(1)', instruction: '', answerPrefix: null },
-};
+});

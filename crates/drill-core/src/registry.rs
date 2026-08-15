@@ -31,6 +31,42 @@ const fn standard_registration(
     }
 }
 
+const fn column_arithmetic_registration(
+    numeric_theme_id: u32,
+    generator_revision: u32,
+    skill_id: &'static str,
+    curriculum_path: &'static [&'static str],
+) -> ThemeRegistration {
+    ThemeRegistration {
+        numeric_theme_id,
+        generator_revision,
+        skill_id,
+        curriculum_path,
+        problem_count: COLUMN_ARITHMETIC_PROBLEM_COUNT,
+        columns: COLUMN_ARITHMETIC_COLUMNS,
+        rows: COLUMN_ARITHMETIC_ROWS,
+        operation_weight_overrides: &[],
+    }
+}
+
+const fn column_division_registration(
+    numeric_theme_id: u32,
+    generator_revision: u32,
+    skill_id: &'static str,
+    curriculum_path: &'static [&'static str],
+) -> ThemeRegistration {
+    ThemeRegistration {
+        numeric_theme_id,
+        generator_revision,
+        skill_id,
+        curriculum_path,
+        problem_count: COLUMN_DIVISION_PROBLEM_COUNT,
+        columns: COLUMN_DIVISION_COLUMNS,
+        rows: COLUMN_DIVISION_ROWS,
+        operation_weight_overrides: &[],
+    }
+}
+
 pub const ONE_DIGIT_ADDITION_REGISTRATION: ThemeRegistration = standard_registration(
     THEME_ID_ONE_DIGIT_ADDITION,
     GENERATOR_REVISION_ONE_DIGIT_ADDITION,
@@ -128,6 +164,54 @@ pub const FRACTION_DIVISION_REGISTRATION: ThemeRegistration = ThemeRegistration 
     rows: LINEAR_EQUATION_ROWS,
     operation_weight_overrides: &[],
 };
+
+pub const FRACTION_INTEGER_MULTIPLICATION_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    numeric_theme_id: THEME_ID_FRACTION_INTEGER_MULTIPLICATION,
+    generator_revision: GENERATOR_REVISION_FRACTION_INTEGER_MULTIPLICATION,
+    skill_id: SKILL_ID_FRACTION_INTEGER_MULTIPLICATION,
+    curriculum_path: &CURRICULUM_PATH_FRACTION_INTEGER_MULTIPLICATION,
+    problem_count: LINEAR_EQUATION_PROBLEM_COUNT,
+    columns: LINEAR_EQUATION_COLUMNS,
+    rows: LINEAR_EQUATION_ROWS,
+    operation_weight_overrides: &[],
+};
+pub const FRACTION_INTEGER_DIVISION_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    numeric_theme_id: THEME_ID_FRACTION_INTEGER_DIVISION,
+    generator_revision: GENERATOR_REVISION_FRACTION_INTEGER_DIVISION,
+    skill_id: SKILL_ID_FRACTION_INTEGER_DIVISION,
+    curriculum_path: &CURRICULUM_PATH_FRACTION_INTEGER_DIVISION,
+    problem_count: LINEAR_EQUATION_PROBLEM_COUNT,
+    columns: LINEAR_EQUATION_COLUMNS,
+    rows: LINEAR_EQUATION_ROWS,
+    operation_weight_overrides: &[],
+};
+pub const FRACTION_SUMMARY_IMPROPER_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    numeric_theme_id: THEME_ID_FRACTION_SUMMARY_IMPROPER,
+    generator_revision: GENERATOR_REVISION_FRACTION_SUMMARY_IMPROPER,
+    skill_id: SKILL_ID_FRACTION_SUMMARY_IMPROPER,
+    curriculum_path: &CURRICULUM_PATH_FRACTION_SUMMARY_IMPROPER,
+    problem_count: LINEAR_EQUATION_PROBLEM_COUNT,
+    columns: LINEAR_EQUATION_COLUMNS,
+    rows: LINEAR_EQUATION_ROWS,
+    operation_weight_overrides: &[],
+};
+pub const FRACTION_ADDITION_LEGACY_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    generator_revision: GENERATOR_REVISION_FRACTION_ADDITION_LEGACY,
+    ..FRACTION_ADDITION_REGISTRATION
+};
+pub const FRACTION_SUBTRACTION_LEGACY_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    generator_revision: GENERATOR_REVISION_FRACTION_SUBTRACTION_LEGACY,
+    ..FRACTION_SUBTRACTION_REGISTRATION
+};
+pub const FRACTION_MULTIPLICATION_LEGACY_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    generator_revision: GENERATOR_REVISION_FRACTION_MULTIPLICATION_LEGACY,
+    ..FRACTION_MULTIPLICATION_REGISTRATION
+};
+pub const FRACTION_DIVISION_LEGACY_REGISTRATION: ThemeRegistration = ThemeRegistration {
+    generator_revision: GENERATOR_REVISION_FRACTION_DIVISION_LEGACY,
+    ..FRACTION_DIVISION_REGISTRATION
+};
+
 pub const DIVISION_1_REGISTRATION: ThemeRegistration = standard_registration(
     THEME_ID_DIVISION_1,
     GENERATOR_REVISION_DIVISION_1,
@@ -176,6 +260,101 @@ pub const DECIMAL_MULTIPLY_DIVIDE_REGISTRATION: ThemeRegistration = standard_reg
     SKILL_ID_DECIMAL_MULTIPLY_DIVIDE,
     &CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE,
 );
+pub const DECIMAL_MULTIPLY_DIVIDE_LEGACY_REGISTRATION: ThemeRegistration = standard_registration(
+    THEME_ID_DECIMAL_MULTIPLY_DIVIDE,
+    GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE_LEGACY,
+    "jp.grade5.decimal.multiply_divide",
+    &CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE_LEGACY,
+);
+pub const DECIMAL_DIVISION_REGISTRATION: ThemeRegistration = standard_registration(
+    THEME_ID_DECIMAL_DIVISION,
+    GENERATOR_REVISION_DECIMAL_DIVISION,
+    SKILL_ID_DECIMAL_DIVISION,
+    &CURRICULUM_PATH_DECIMAL_DIVISION,
+);
+
+pub const COLUMN_ADD_2DIGIT_REGISTRATION: ThemeRegistration = column_arithmetic_registration(
+    THEME_ID_COLUMN_ADD_2DIGIT,
+    GENERATOR_REVISION_COLUMN_ADD_2DIGIT,
+    SKILL_ID_COLUMN_ADD_2DIGIT,
+    &CURRICULUM_PATH_COLUMN_ADD_2DIGIT,
+);
+pub const COLUMN_SUBTRACT_2DIGIT_REGISTRATION: ThemeRegistration = column_arithmetic_registration(
+    THEME_ID_COLUMN_SUBTRACT_2DIGIT,
+    GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT,
+    SKILL_ID_COLUMN_SUBTRACT_2DIGIT,
+    &CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT,
+);
+pub const COLUMN_ADD_3_4DIGIT_REGISTRATION: ThemeRegistration = column_arithmetic_registration(
+    THEME_ID_COLUMN_ADD_3_4DIGIT,
+    GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT,
+    SKILL_ID_COLUMN_ADD_3_4DIGIT,
+    &CURRICULUM_PATH_COLUMN_ADD_3_4DIGIT,
+);
+pub const COLUMN_SUBTRACT_3_4DIGIT_REGISTRATION: ThemeRegistration = column_arithmetic_registration(
+    THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
+    GENERATOR_REVISION_COLUMN_SUBTRACT_3_4DIGIT,
+    SKILL_ID_COLUMN_SUBTRACT_3_4DIGIT,
+    &CURRICULUM_PATH_COLUMN_SUBTRACT_3_4DIGIT,
+);
+pub const COLUMN_MULTIPLY_1DIGIT_REGISTRATION: ThemeRegistration = column_arithmetic_registration(
+    THEME_ID_COLUMN_MULTIPLY_1DIGIT,
+    GENERATOR_REVISION_COLUMN_MULTIPLY_1DIGIT,
+    SKILL_ID_COLUMN_MULTIPLY_1DIGIT,
+    &CURRICULUM_PATH_COLUMN_MULTIPLY_1DIGIT,
+);
+pub const COLUMN_MULTIPLY_2DIGIT_REGISTRATION: ThemeRegistration = column_arithmetic_registration(
+    THEME_ID_COLUMN_MULTIPLY_2DIGIT,
+    GENERATOR_REVISION_COLUMN_MULTIPLY_2DIGIT,
+    SKILL_ID_COLUMN_MULTIPLY_2DIGIT,
+    &CURRICULUM_PATH_COLUMN_MULTIPLY_2DIGIT,
+);
+pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration = column_division_registration(
+    THEME_ID_COLUMN_DIVIDE_1DIGIT,
+    GENERATOR_REVISION_COLUMN_DIVIDE_1DIGIT,
+    SKILL_ID_COLUMN_DIVIDE_1DIGIT,
+    &CURRICULUM_PATH_COLUMN_DIVIDE_1DIGIT,
+);
+pub const COLUMN_DIVIDE_2DIGIT_REGISTRATION: ThemeRegistration = column_division_registration(
+    THEME_ID_COLUMN_DIVIDE_2DIGIT,
+    GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT,
+    SKILL_ID_COLUMN_DIVIDE_2DIGIT,
+    &CURRICULUM_PATH_COLUMN_DIVIDE_2DIGIT,
+);
+pub const COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
+    column_arithmetic_registration(
+        THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
+        GENERATOR_REVISION_COLUMN_DECIMAL_ADD_SUBTRACT,
+        SKILL_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
+        &CURRICULUM_PATH_COLUMN_DECIMAL_ADD_SUBTRACT,
+    );
+pub const COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION: ThemeRegistration =
+    column_arithmetic_registration(
+        THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+        GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+        SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+        &CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+    );
+pub const COLUMN_DECIMAL_DIVIDE_INTEGER_REGISTRATION: ThemeRegistration =
+    column_division_registration(
+        THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
+        GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER,
+        SKILL_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
+        &CURRICULUM_PATH_COLUMN_DECIMAL_DIVIDE_INTEGER,
+    );
+pub const COLUMN_DECIMAL_MULTIPLICATION_REGISTRATION: ThemeRegistration =
+    column_arithmetic_registration(
+        THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
+        GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION,
+        SKILL_ID_COLUMN_DECIMAL_MULTIPLICATION,
+        &CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLICATION,
+    );
+pub const COLUMN_DECIMAL_DIVISION_REGISTRATION: ThemeRegistration = column_division_registration(
+    THEME_ID_COLUMN_DECIMAL_DIVISION,
+    GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION,
+    SKILL_ID_COLUMN_DECIMAL_DIVISION,
+    &CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION,
+);
 
 pub const SIMULTANEOUS_EQUATION_1_REGISTRATION: ThemeRegistration = ThemeRegistration {
     numeric_theme_id: THEME_ID_SIMULTANEOUS_EQUATION_1,
@@ -199,7 +378,7 @@ pub const LIAR_PUZZLE_REGISTRATION: ThemeRegistration = ThemeRegistration {
     operation_weight_overrides: &[],
 };
 
-pub const GENERATOR_REGISTRY: [ThemeRegistration; 20] = [
+pub const GENERATOR_REGISTRY: [ThemeRegistration; 37] = [
     ONE_DIGIT_ADDITION_REGISTRATION,
     LINEAR_EQUATION_1_REGISTRATION,
     LINEAR_EQUATION_2_REGISTRATION,
@@ -220,22 +399,62 @@ pub const GENERATOR_REGISTRY: [ThemeRegistration; 20] = [
     DECIMAL_MULTIPLY_DIVIDE_REGISTRATION,
     SIMULTANEOUS_EQUATION_1_REGISTRATION,
     LIAR_PUZZLE_REGISTRATION,
+    FRACTION_INTEGER_MULTIPLICATION_REGISTRATION,
+    FRACTION_INTEGER_DIVISION_REGISTRATION,
+    FRACTION_SUMMARY_IMPROPER_REGISTRATION,
+    DECIMAL_DIVISION_REGISTRATION,
+    COLUMN_ADD_2DIGIT_REGISTRATION,
+    COLUMN_SUBTRACT_2DIGIT_REGISTRATION,
+    COLUMN_ADD_3_4DIGIT_REGISTRATION,
+    COLUMN_SUBTRACT_3_4DIGIT_REGISTRATION,
+    COLUMN_MULTIPLY_1DIGIT_REGISTRATION,
+    COLUMN_MULTIPLY_2DIGIT_REGISTRATION,
+    COLUMN_DIVIDE_1DIGIT_REGISTRATION,
+    COLUMN_DIVIDE_2DIGIT_REGISTRATION,
+    COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION,
+    COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION,
+    COLUMN_DECIMAL_DIVIDE_INTEGER_REGISTRATION,
+    COLUMN_DECIMAL_MULTIPLICATION_REGISTRATION,
+    COLUMN_DECIMAL_DIVISION_REGISTRATION,
 ];
 
 pub fn active_registration(numeric_theme_id: u32) -> Option<&'static ThemeRegistration> {
     GENERATOR_REGISTRY
         .iter()
-        .find(|registration| registration.numeric_theme_id == numeric_theme_id)
+        .filter(|registration| registration.numeric_theme_id == numeric_theme_id)
+        .max_by_key(|registration| registration.generator_revision)
 }
 
 pub fn registration(
     numeric_theme_id: u32,
     generator_revision: u32,
 ) -> Option<&'static ThemeRegistration> {
-    GENERATOR_REGISTRY.iter().find(|registration| {
-        registration.numeric_theme_id == numeric_theme_id
-            && registration.generator_revision == generator_revision
-    })
+    GENERATOR_REGISTRY
+        .iter()
+        .find(|registration| {
+            registration.numeric_theme_id == numeric_theme_id
+                && registration.generator_revision == generator_revision
+        })
+        .or_else(|| match (numeric_theme_id, generator_revision) {
+            (THEME_ID_FRACTION_ADDITION, GENERATOR_REVISION_FRACTION_ADDITION_LEGACY) => {
+                Some(&FRACTION_ADDITION_LEGACY_REGISTRATION)
+            }
+            (THEME_ID_FRACTION_SUBTRACTION, GENERATOR_REVISION_FRACTION_SUBTRACTION_LEGACY) => {
+                Some(&FRACTION_SUBTRACTION_LEGACY_REGISTRATION)
+            }
+            (
+                THEME_ID_FRACTION_MULTIPLICATION,
+                GENERATOR_REVISION_FRACTION_MULTIPLICATION_LEGACY,
+            ) => Some(&FRACTION_MULTIPLICATION_LEGACY_REGISTRATION),
+            (THEME_ID_FRACTION_DIVISION, GENERATOR_REVISION_FRACTION_DIVISION_LEGACY) => {
+                Some(&FRACTION_DIVISION_LEGACY_REGISTRATION)
+            }
+            (
+                THEME_ID_DECIMAL_MULTIPLY_DIVIDE,
+                GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE_LEGACY,
+            ) => Some(&DECIMAL_MULTIPLY_DIVIDE_LEGACY_REGISTRATION),
+            _ => None,
+        })
 }
 
 pub fn resolved_weights(registration: &ThemeRegistration) -> OperationWeights {

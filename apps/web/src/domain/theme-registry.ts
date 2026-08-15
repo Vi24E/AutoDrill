@@ -8,6 +8,9 @@ export { FRACTION_ADDITION_DEFINITION } from './themes/fraction-addition';
 export { FRACTION_SUBTRACTION_DEFINITION } from './themes/fraction-subtraction';
 export { FRACTION_MULTIPLICATION_DEFINITION } from './themes/fraction-multiplication';
 export { FRACTION_DIVISION_DEFINITION } from './themes/fraction-division';
+export { FRACTION_INTEGER_MULTIPLICATION_DEFINITION } from './themes/fraction-integer-multiplication';
+export { FRACTION_INTEGER_DIVISION_DEFINITION } from './themes/fraction-integer-division';
+export { FRACTION_SUMMARY_IMPROPER_DEFINITION } from './themes/fraction-summary-improper';
 export { DIVISION_1_DEFINITION } from './themes/division-1';
 export { SIGNED_ARITHMETIC_1_DEFINITION } from './themes/signed-arithmetic-1';
 export { SIGNED_ARITHMETIC_2_DEFINITION } from './themes/signed-arithmetic-2';
@@ -17,10 +20,24 @@ export { QUADRATIC_EQUATION_1_DEFINITION } from './themes/quadratic-equation-1';
 export { QUADRATIC_EQUATION_2_DEFINITION } from './themes/quadratic-equation-2';
 export { QUADRATIC_EQUATION_3_DEFINITION } from './themes/quadratic-equation-3';
 export { DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/decimal-add-subtract';
-export { DECIMAL_MULTIPLY_DIVIDE_DEFINITION } from './themes/decimal-multiply-divide';
+export { DECIMAL_MULTIPLICATION_DEFINITION } from './themes/decimal-multiplication';
+export { DECIMAL_DIVISION_DEFINITION } from './themes/decimal-division';
 export { SIMULTANEOUS_EQUATION_1_DEFINITION } from './themes/simultaneous-equation-1';
 export { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
-export { ALL_MATH_STRUCTURES } from './themes/theme-definition';
+export { COLUMN_ADD_2DIGIT_DEFINITION } from './themes/column-add-two-digit';
+export { COLUMN_SUBTRACT_2DIGIT_DEFINITION } from './themes/column-subtract-two-digit';
+export { COLUMN_ADD_3_4DIGIT_DEFINITION } from './themes/column-add-three-four-digit';
+export { COLUMN_SUBTRACT_3_4DIGIT_DEFINITION } from './themes/column-subtract-three-four-digit';
+export { COLUMN_MULTIPLY_1DIGIT_DEFINITION } from './themes/column-multiply-one-digit';
+export { COLUMN_MULTIPLY_2DIGIT_DEFINITION } from './themes/column-multiply-two-digit';
+export { COLUMN_DIVIDE_1DIGIT_DEFINITION } from './themes/column-divide-one-digit';
+export { COLUMN_DIVIDE_2DIGIT_DEFINITION } from './themes/column-divide-two-digit';
+export { COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/column-decimal-add-subtract';
+export { COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION } from './themes/column-decimal-multiply-integer';
+export { COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION } from './themes/column-decimal-divide-integer';
+export { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from './themes/column-decimal-multiplication';
+export { COLUMN_DECIMAL_DIVISION_DEFINITION } from './themes/column-decimal-division';
+export { ALL_MATH_STRUCTURES, derivedGradeTag, hasThemeTag, taxonomyTags } from './themes/theme-definition';
 export type { ThemeDefinition, ThemePromptKind } from './themes/theme-definition';
 
 import { ONE_DIGIT_ADDITION_DEFINITION } from './themes/one-digit-addition';
@@ -31,6 +48,9 @@ import { FRACTION_ADDITION_DEFINITION } from './themes/fraction-addition';
 import { FRACTION_SUBTRACTION_DEFINITION } from './themes/fraction-subtraction';
 import { FRACTION_MULTIPLICATION_DEFINITION } from './themes/fraction-multiplication';
 import { FRACTION_DIVISION_DEFINITION } from './themes/fraction-division';
+import { FRACTION_INTEGER_MULTIPLICATION_DEFINITION } from './themes/fraction-integer-multiplication';
+import { FRACTION_INTEGER_DIVISION_DEFINITION } from './themes/fraction-integer-division';
+import { FRACTION_SUMMARY_IMPROPER_DEFINITION } from './themes/fraction-summary-improper';
 import { DIVISION_1_DEFINITION } from './themes/division-1';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from './themes/signed-arithmetic-1';
 import { SIGNED_ARITHMETIC_2_DEFINITION } from './themes/signed-arithmetic-2';
@@ -40,9 +60,23 @@ import { QUADRATIC_EQUATION_1_DEFINITION } from './themes/quadratic-equation-1';
 import { QUADRATIC_EQUATION_2_DEFINITION } from './themes/quadratic-equation-2';
 import { QUADRATIC_EQUATION_3_DEFINITION } from './themes/quadratic-equation-3';
 import { DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/decimal-add-subtract';
-import { DECIMAL_MULTIPLY_DIVIDE_DEFINITION } from './themes/decimal-multiply-divide';
+import { DECIMAL_MULTIPLICATION_DEFINITION } from './themes/decimal-multiplication';
+import { DECIMAL_DIVISION_DEFINITION } from './themes/decimal-division';
 import { SIMULTANEOUS_EQUATION_1_DEFINITION } from './themes/simultaneous-equation-1';
 import { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
+import { COLUMN_ADD_2DIGIT_DEFINITION } from './themes/column-add-two-digit';
+import { COLUMN_SUBTRACT_2DIGIT_DEFINITION } from './themes/column-subtract-two-digit';
+import { COLUMN_ADD_3_4DIGIT_DEFINITION } from './themes/column-add-three-four-digit';
+import { COLUMN_SUBTRACT_3_4DIGIT_DEFINITION } from './themes/column-subtract-three-four-digit';
+import { COLUMN_MULTIPLY_1DIGIT_DEFINITION } from './themes/column-multiply-one-digit';
+import { COLUMN_MULTIPLY_2DIGIT_DEFINITION } from './themes/column-multiply-two-digit';
+import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from './themes/column-divide-one-digit';
+import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from './themes/column-divide-two-digit';
+import { COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/column-decimal-add-subtract';
+import { COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION } from './themes/column-decimal-multiply-integer';
+import { COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION } from './themes/column-decimal-divide-integer';
+import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from './themes/column-decimal-multiplication';
+import { COLUMN_DECIMAL_DIVISION_DEFINITION } from './themes/column-decimal-division';
 import type { ThemeDefinition } from './themes/theme-definition';
 
 /** Central registry is intentionally only enumeration + lookup; each theme owns one definition file. */
@@ -50,14 +84,31 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   ONE_DIGIT_ADDITION_DEFINITION,
   ONE_DIGIT_SUBTRACTION_DEFINITION,
   TWO_DIGIT_ADDITION_DEFINITION,
+  COLUMN_ADD_2DIGIT_DEFINITION,
+  COLUMN_SUBTRACT_2DIGIT_DEFINITION,
+  COLUMN_ADD_3_4DIGIT_DEFINITION,
+  COLUMN_SUBTRACT_3_4DIGIT_DEFINITION,
   MULTIPLICATION_TABLE_DEFINITION,
   DIVISION_1_DEFINITION,
+  COLUMN_MULTIPLY_1DIGIT_DEFINITION,
+  COLUMN_MULTIPLY_2DIGIT_DEFINITION,
+  COLUMN_DIVIDE_1DIGIT_DEFINITION,
+  COLUMN_DIVIDE_2DIGIT_DEFINITION,
   DECIMAL_ADD_SUBTRACT_DEFINITION,
+  COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION,
+  COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION,
+  COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION,
   FRACTION_ADDITION_DEFINITION,
-  DECIMAL_MULTIPLY_DIVIDE_DEFINITION,
+  DECIMAL_MULTIPLICATION_DEFINITION,
+  DECIMAL_DIVISION_DEFINITION,
+  COLUMN_DECIMAL_MULTIPLICATION_DEFINITION,
+  COLUMN_DECIMAL_DIVISION_DEFINITION,
   FRACTION_SUBTRACTION_DEFINITION,
   FRACTION_MULTIPLICATION_DEFINITION,
   FRACTION_DIVISION_DEFINITION,
+  FRACTION_INTEGER_MULTIPLICATION_DEFINITION,
+  FRACTION_INTEGER_DIVISION_DEFINITION,
+  FRACTION_SUMMARY_IMPROPER_DEFINITION,
   SIGNED_ARITHMETIC_1_DEFINITION,
   SIGNED_ARITHMETIC_2_DEFINITION,
   LINEAR_EQUATION_1_DEFINITION,

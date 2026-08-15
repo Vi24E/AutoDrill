@@ -19,6 +19,8 @@ export type SharedWorksheetLayout = {
   page: typeof A4_PAGE;
   layout: WorksheetLayout;
   cells: readonly ProblemCell[];
+  /** All internal vertical boundaries; dividerX remains the first for legacy callers. */
+  dividerXs: readonly number[];
   dividerX: number;
 };
 
@@ -26,19 +28,25 @@ export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorks
   const { columns, rows } = worksheet.layout;
   const contentWidth = A4_PAGE.width - A4_PAGE.margin * 2;
   const columnWidth = contentWidth / columns;
+  const rowMajor = worksheet.problems.length > 0
+    && worksheet.problems.every((problem) => problem.prompt.kind === 'column_arithmetic');
   const cells = worksheet.problems.map((problem, index) => ({
     index,
     problem,
-    // Worksheets are read vertically: 1–10 down the left column, then
-    // 11–20 down the right. Web and PDF consume this same placement model.
-    column: Math.floor(index / rows),
-    row: index % rows,
+    // Ordinary worksheets keep the historical vertical reading order.
+    // Printable column arithmetic follows the conventional worksheet order:
+    // 1–4 across the first row, then 5–8, 9–12, and 13–16.
+    column: rowMajor ? index % columns : Math.floor(index / rows),
+    row: rowMajor ? Math.floor(index / columns) : index % rows,
   }));
 
   return {
     page: A4_PAGE,
     layout: worksheet.layout,
     cells,
+    dividerXs: Array.from({ length: Math.max(0, columns - 1) }, (_, index) => (
+      A4_PAGE.margin + columnWidth * (index + 1)
+    )),
     dividerX: A4_PAGE.margin + columnWidth,
   };
 }

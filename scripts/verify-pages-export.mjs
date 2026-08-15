@@ -23,7 +23,7 @@ if (!root.includes(`${basePath}/_next/`)) fail('Next assets do not use the proje
 if (root.includes('href="/_next/') || root.includes('src="/_next/')) fail('root-relative Next asset escaped the project base path');
 
 const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-if (locations.length !== 21) fail(`expected 21 sitemap URLs, found ${locations.length}`);
+if (locations.length !== 38) fail(`expected 38 sitemap URLs, found ${locations.length}`);
 for (const url of locations) {
   if (!url.startsWith(`${origin}${basePath}/`)) fail(`sitemap URL escaped project site: ${url}`);
   const pathname = new URL(url).pathname.slice(`${basePath}/`.length);

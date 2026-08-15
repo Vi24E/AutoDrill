@@ -10,14 +10,15 @@ import {
   RECOMMENDED_GENRES,
   findImplementedThemeByRoute,
 } from '@/domain/curriculum';
-import { ALL_MATH_STRUCTURES } from '@/domain/theme-registry';
+import { ALL_MATH_STRUCTURES, taxonomyTags } from '@/domain/theme-registry';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 6, 13, 17, 9, 18, 11, 10, 12, 7, 8, 2, 3, 19, 14, 15, 16, 20]);
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 25, 26, 27, 28, 6, 13, 29, 30, 31, 32, 17, 33, 34, 35, 9, 18, 24, 36, 37, 11, 10, 12, 21, 22, 23, 7, 8, 2, 3, 19, 14, 15, 16, 20]);
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
+      tags: ['addition'],
       recommendedGenre: { genreKey: 'addition-and-subtraction', label: '足し算と引き算' },
       problemCount: 20,
       layout: { problem_count: 20, columns: 2, rows: 10 },
@@ -57,6 +58,28 @@ describe('Web curriculum registry', () => {
       { genreKey: 'bonus', label: 'おまけ' },
     ]);
     expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes).map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b));
+  });
+
+  it('derives grade and UI classification from typed taxonomy tags', () => {
+    const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.tags.includes('column_arithmetic'));
+    expect(columnThemes).toHaveLength(13);
+    for (const theme of columnThemes) {
+      expect(theme.tags).toContain('print_recommended');
+      const isDivision = theme.tags.includes('division');
+      expect(theme.problemCount).toBe(isDivision ? 12 : 16);
+      expect(theme.layout).toEqual(isDivision
+        ? { problem_count: 12, columns: 4, rows: 3 }
+        : { problem_count: 16, columns: 4, rows: 4 });
+      expect(theme.gradeGenre).not.toBeNull();
+      expect(theme.recommendedGenre).not.toBeNull();
+      const tags = taxonomyTags(theme);
+      expect(tags.some((tag) => tag.startsWith('grade_') || tag.startsWith('junior_high_'))).toBe(true);
+    }
+    const grade2 = columnThemes.find((theme) => theme.numeric_theme_id === 25)!;
+    expect(taxonomyTags(grade2)).toContain('grade_2');
+    expect(grade2.gradeGenre).toEqual({ genreKey: 'addition-and-subtraction', label: '足し算と引き算' });
+    const decimal = columnThemes.find((theme) => theme.numeric_theme_id === 33)!;
+    expect(decimal.recommendedGenre).toEqual({ genreKey: 'decimals', label: '小数' });
   });
 
   it('never exposes negative input capability for elementary-school themes', () => {

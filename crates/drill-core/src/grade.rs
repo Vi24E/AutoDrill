@@ -44,6 +44,13 @@ pub fn grade_answer_with_schema(
     }
 
     if mathematically_equal
+        && matches!(expected, AnswerNode::MixedFraction { .. })
+        && !matches!(actual, AnswerNode::MixedFraction { .. })
+    {
+        push_warning(&mut warnings, GradeWarning::MixedFractionFormRequired);
+    }
+
+    if mathematically_equal
         && matches!(normalized_expected, AnswerNode::Integer(_))
         && !uses_integer_display_form(actual)
     {
@@ -52,6 +59,7 @@ pub fn grade_answer_with_schema(
 
     if mathematically_equal
         && matches!(normalized_expected, AnswerNode::Fraction { .. })
+        && !matches!(expected, AnswerNode::MixedFraction { .. })
         && matches!(
             answer_schema,
             Some(AnswerSchema::Rational {
@@ -83,29 +91,229 @@ pub fn grade_answer_with_schema(
     }
 }
 
+const MAX_SOLUTION_BRANCHES: usize = 4;
+
 fn solutions_mathematically_equal(left: &AnswerNode, right: &AnswerNode) -> bool {
     let left = canonicalize_solution_order(left);
     let right = canonicalize_solution_order(right);
     if left == right {
         return true;
     }
-    match (&left, &right) {
-        (AnswerNode::PlusMinus(value), AnswerNode::Tuple(values))
-        | (AnswerNode::Tuple(values), AnswerNode::PlusMinus(value)) => {
-            symmetric_solution_tuple(value) == AnswerNode::Tuple(values.clone())
+    let one_is_tuple = matches!(left, AnswerNode::Tuple(_)) ^ matches!(right, AnswerNode::Tuple(_));
+    if one_is_tuple {
+        let non_tuple = if matches!(left, AnswerNode::Tuple(_)) {
+            &right
+        } else {
+            &left
+        };
+        if !contains_plus_minus(non_tuple) {
+            return false;
         }
+    }
+    match (solution_set(&left), solution_set(&right)) {
+        (Some(left), Some(right)) => left == right,
         _ => false,
     }
 }
 
-fn symmetric_solution_tuple(value: &AnswerNode) -> AnswerNode {
-    let positive = canonicalize_solution_order(value);
-    let negative = canonicalize_solution_order(&normalize_answer(&AnswerNode::Negative(Box::new(
-        value.clone(),
-    ))));
-    let mut values = vec![negative, positive];
+fn solution_set(answer: &AnswerNode) -> Option<Vec<AnswerNode>> {
+    let mut values = Vec::new();
+    match answer {
+        AnswerNode::Tuple(items) => {
+            for item in items {
+                values.extend(expand_plus_minus(item)?);
+                if values.len() > MAX_SOLUTION_BRANCHES {
+                    return None;
+                }
+            }
+        }
+        _ => values.extend(expand_plus_minus(answer)?),
+    }
+    values = values
+        .into_iter()
+        .map(|value| canonicalize_algebraic_signs(&normalize_answer(&value)))
+        .map(|value| normalize_answer(&value))
+        .collect();
     values.sort();
-    AnswerNode::Tuple(values)
+    Some(values)
+}
+
+fn expand_plus_minus(answer: &AnswerNode) -> Option<Vec<AnswerNode>> {
+    match answer {
+        AnswerNode::PlusMinus(value) => {
+            let expanded = expand_plus_minus(value)?;
+            let mut values = Vec::with_capacity(expanded.len().saturating_mul(2));
+            for value in expanded {
+                values.push(value.clone());
+                values.push(AnswerNode::Negative(Box::new(value)));
+                if values.len() > MAX_SOLUTION_BRANCHES {
+                    return None;
+                }
+            }
+            Some(values)
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => combine_branches(
+            expand_plus_minus(numerator)?,
+            expand_plus_minus(denominator)?,
+            |numerator, denominator| AnswerNode::Fraction {
+                numerator: Box::new(numerator),
+                denominator: Box::new(denominator),
+            },
+        ),
+        AnswerNode::MixedFraction {
+            whole,
+            numerator,
+            denominator,
+        } => {
+            let wholes = expand_plus_minus(whole)?;
+            let numerators = expand_plus_minus(numerator)?;
+            let denominators = expand_plus_minus(denominator)?;
+            let mut values = Vec::new();
+            for whole in wholes {
+                for numerator in &numerators {
+                    for denominator in &denominators {
+                        values.push(AnswerNode::MixedFraction {
+                            whole: Box::new(whole.clone()),
+                            numerator: Box::new(numerator.clone()),
+                            denominator: Box::new(denominator.clone()),
+                        });
+                        if values.len() > MAX_SOLUTION_BRANCHES {
+                            return None;
+                        }
+                    }
+                }
+            }
+            Some(values)
+        }
+        AnswerNode::Root { radicand, index } => {
+            let radicands = expand_plus_minus(radicand)?;
+            let indices = match index {
+                Some(index) => expand_plus_minus(index)?,
+                None => vec![AnswerNode::Empty],
+            };
+            let mut values = Vec::new();
+            for radicand in radicands {
+                for index in &indices {
+                    values.push(AnswerNode::Root {
+                        radicand: Box::new(radicand.clone()),
+                        index: (!matches!(index, AnswerNode::Empty))
+                            .then(|| Box::new(index.clone())),
+                    });
+                    if values.len() > MAX_SOLUTION_BRANCHES {
+                        return None;
+                    }
+                }
+            }
+            Some(values)
+        }
+        AnswerNode::Negative(value) => Some(
+            expand_plus_minus(value)?
+                .into_iter()
+                .map(|value| AnswerNode::Negative(Box::new(value)))
+                .collect(),
+        ),
+        AnswerNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let left_values = expand_plus_minus(left)?;
+            let right_values = expand_plus_minus(right)?;
+            combine_branches(left_values, right_values, |left, right| {
+                AnswerNode::Binary {
+                    operator: *operator,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }
+            })
+        }
+        AnswerNode::Tuple(values) => {
+            let mut expanded_items = Vec::new();
+            for value in values {
+                expanded_items.extend(expand_plus_minus(value)?);
+                if expanded_items.len() > MAX_SOLUTION_BRANCHES {
+                    return None;
+                }
+            }
+            Some(vec![AnswerNode::Tuple(expanded_items)])
+        }
+        _ => Some(vec![answer.clone()]),
+    }
+}
+
+fn combine_branches<F>(
+    left: Vec<AnswerNode>,
+    right: Vec<AnswerNode>,
+    mut build: F,
+) -> Option<Vec<AnswerNode>>
+where
+    F: FnMut(AnswerNode, AnswerNode) -> AnswerNode,
+{
+    let mut values = Vec::new();
+    for left in left {
+        for right in &right {
+            values.push(build(left.clone(), right.clone()));
+            if values.len() > MAX_SOLUTION_BRANCHES {
+                return None;
+            }
+        }
+    }
+    Some(values)
+}
+
+fn canonicalize_algebraic_signs(answer: &AnswerNode) -> AnswerNode {
+    match answer {
+        AnswerNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let left = canonicalize_algebraic_signs(left);
+            let right = canonicalize_algebraic_signs(right);
+            match (operator, right) {
+                (crate::answer::AnswerBinaryOperator::Add, AnswerNode::Negative(value)) => {
+                    AnswerNode::Binary {
+                        operator: crate::answer::AnswerBinaryOperator::Subtract,
+                        left: Box::new(left),
+                        right: value,
+                    }
+                }
+                (crate::answer::AnswerBinaryOperator::Subtract, AnswerNode::Negative(value)) => {
+                    AnswerNode::Binary {
+                        operator: crate::answer::AnswerBinaryOperator::Add,
+                        left: Box::new(left),
+                        right: value,
+                    }
+                }
+                (operator, right) => AnswerNode::Binary {
+                    operator: *operator,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+            }
+        }
+        AnswerNode::Fraction {
+            numerator,
+            denominator,
+        } => AnswerNode::Fraction {
+            numerator: Box::new(canonicalize_algebraic_signs(numerator)),
+            denominator: Box::new(canonicalize_algebraic_signs(denominator)),
+        },
+        AnswerNode::Root { radicand, index } => AnswerNode::Root {
+            radicand: Box::new(canonicalize_algebraic_signs(radicand)),
+            index: index
+                .as_deref()
+                .map(canonicalize_algebraic_signs)
+                .map(Box::new),
+        },
+        AnswerNode::Negative(value) => {
+            AnswerNode::Negative(Box::new(canonicalize_algebraic_signs(value)))
+        }
+        _ => answer.clone(),
+    }
 }
 
 fn canonicalize_solution_order(answer: &AnswerNode) -> AnswerNode {
@@ -511,5 +719,85 @@ mod tests {
         assert!(!equal_result
             .warnings
             .contains(&GradeWarning::DuplicateSolution));
+    }
+
+    #[test]
+    fn embedded_plus_minus_expands_to_exact_solution_set() {
+        let expected = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Binary {
+                operator: crate::answer::AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Integer(2)),
+                right: Box::new(AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(4)))),
+            }),
+            denominator: Box::new(AnswerNode::Integer(3)),
+        };
+        let actual = AnswerNode::Tuple(vec![
+            AnswerNode::Fraction {
+                numerator: Box::new(AnswerNode::Integer(-2)),
+                denominator: Box::new(AnswerNode::Integer(3)),
+            },
+            AnswerNode::Integer(2),
+        ]);
+        assert!(grade_answer(&expected, &actual).is_correct);
+        assert!(grade_answer(&expected, &expected).is_correct);
+    }
+
+    #[test]
+    fn embedded_plus_minus_preserves_exact_radical_semantics() {
+        let root_five = AnswerNode::Root {
+            radicand: Box::new(AnswerNode::Integer(5)),
+            index: None,
+        };
+        let expected = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Binary {
+                operator: crate::answer::AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Integer(1)),
+                right: Box::new(AnswerNode::PlusMinus(Box::new(root_five.clone()))),
+            }),
+            denominator: Box::new(AnswerNode::Integer(2)),
+        };
+        let minus = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Binary {
+                operator: crate::answer::AnswerBinaryOperator::Subtract,
+                left: Box::new(AnswerNode::Integer(1)),
+                right: Box::new(root_five.clone()),
+            }),
+            denominator: Box::new(AnswerNode::Integer(2)),
+        };
+        let plus = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Binary {
+                operator: crate::answer::AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Integer(1)),
+                right: Box::new(root_five),
+            }),
+            denominator: Box::new(AnswerNode::Integer(2)),
+        };
+        assert!(grade_answer(&expected, &AnswerNode::Tuple(vec![minus, plus])).is_correct);
+    }
+
+    #[test]
+    fn mixed_fraction_is_preferred_but_improper_equivalent_stays_mathematically_correct() {
+        let expected = AnswerNode::MixedFraction {
+            whole: Box::new(AnswerNode::Integer(1)),
+            numerator: Box::new(AnswerNode::Integer(1)),
+            denominator: Box::new(AnswerNode::Integer(2)),
+        };
+        let actual = AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Integer(3)),
+            denominator: Box::new(AnswerNode::Integer(2)),
+        };
+        let schema = AnswerSchema::Rational {
+            max_abs_numerator: 10,
+            max_denominator: 10,
+            require_reduced_fraction_form: true,
+        };
+        let result = grade_answer_with_schema(&expected, &actual, Some(&schema));
+        assert!(result.is_correct);
+        assert!(result
+            .warnings
+            .contains(&GradeWarning::MixedFractionFormRequired));
+        assert!(!result
+            .warnings
+            .contains(&GradeWarning::FractionFormRequired));
     }
 }

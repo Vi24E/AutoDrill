@@ -615,7 +615,7 @@ mod tests {
 
         let offset_roots = AnswerNode::Tuple(vec![AnswerNode::Integer(-2), AnswerNode::Integer(6)]);
         let result = grade_answer(&offset_roots, &parse(r"2\pm4"));
-        assert!(!result.is_correct);
+        assert!(result.is_correct);
         assert!(result
             .warnings
             .contains(&GradeWarning::SolutionListRequired));

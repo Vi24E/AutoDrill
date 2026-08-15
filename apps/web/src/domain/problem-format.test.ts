@@ -173,6 +173,38 @@ describe('problemExpression', () => {
     expect(problemExpressionTokens(problem).some((token) => token.kind === 'fraction')).toBe(true);
   });
 
+  it('renders improper values as mixed numbers only in the standard elementary fraction units', () => {
+    const base = fixtureWorksheet().problems[0]!;
+    const expression = {
+      kind: 'binary' as const,
+      operator: 'multiply' as const,
+      left: { kind: 'rational' as const, value: q(7, 3) },
+      right: { kind: 'rational' as const, value: q(3, 1) },
+    };
+    const standard: ProblemDto = {
+      ...base,
+      numeric_theme_id: 10,
+      prompt: { kind: 'arithmetic', expression },
+    };
+    const summary: ProblemDto = {
+      ...standard,
+      numeric_theme_id: 23,
+    };
+
+    expect(problemExpression(standard)).toBe('21/3 × 3 =');
+    expect(problemExpressionTokens(standard)).toEqual([
+      { kind: 'text', text: '2' },
+      { kind: 'fraction', numerator: 1, denominator: 3 },
+      { kind: 'text', text: ' × 3 =' },
+    ]);
+    expect(problemExpressionLatex(standard)).toBe('2\\frac{1}{3}\\,\\times\\,3\\,=');
+    expect(problemExpressionTokens(summary)).toEqual([
+      { kind: 'fraction', numerator: 7, denominator: 3 },
+      { kind: 'text', text: ' × 3 =' },
+    ]);
+    expect(problemExpressionLatex(summary)).toBe('\\frac{7}{3}\\,\\times\\,3\\,=');
+  });
+
   it('formats every liar-puzzle statement form in Japanese', () => {
     expect(liarStatementText({ kind: 'says_liar', person: 2 })).toBe('Bさんはうそつきだ。');
     expect(liarStatementText({ kind: 'says_not_liar', person: 3 })).toBe('Cさんはうそつきではない。');

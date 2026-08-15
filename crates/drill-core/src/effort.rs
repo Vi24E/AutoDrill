@@ -2048,6 +2048,20 @@ pub fn integer_division_graph(dividend: i64, divisor: i64) -> SolutionGraph {
     operations_graph(divide_or_identity_operations(dividend, divisor))
 }
 
+/// Long division with a quotient/remainder final answer. The arithmetic work is
+/// exactly the shared integer-division model; the tuple contributes only the
+/// normal answer read/write cost.
+pub fn integer_division_with_remainder_graph(
+    dividend: i64,
+    divisor: i64,
+    answer: &AnswerNode,
+) -> SolutionGraph {
+    debug_assert_ne!(divisor, 0);
+    let mut operations = divide_or_identity_operations(dividend, divisor);
+    operations.extend(big_num_operations(answer));
+    operations_graph(operations)
+}
+
 fn step(id: u32, operation: Operation, depends_on: Vec<u32>) -> SolutionStep {
     SolutionStep {
         id,

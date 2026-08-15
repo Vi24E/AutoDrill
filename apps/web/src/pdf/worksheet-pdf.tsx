@@ -8,6 +8,7 @@ import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { answerNodeText, type AnswerNode, type WorksheetDto } from '@/domain/drill-engine';
 import { answerNodeLatex, answerPrefixLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel, problemExpression } from '@/domain/problem-format';
+import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
 import { findThemeDefinitionByNumericId, type ThemeDefinition } from '@/domain/theme-registry';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
 
@@ -101,6 +102,22 @@ function PrintAnswer({
     );
   }
 
+  if (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide') {
+    const quotient = problem.answer_schema.kind === 'ordered_pair'
+      ? printAnswerCoordinate(problem.canonical_answer, 0)
+      : problem.canonical_answer;
+    return (
+      <span className={`problem-answer-area problem-answer-area-column-division ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`} aria-hidden={answers ? undefined : 'true'}>
+        <span className="column-division-answer-coordinate column-division-answer-coordinate-quotient">
+          <span className="column-division-answer-label">商</span>
+          {answers
+            ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(quotient)} ariaLabel={answerNodeText(quotient)} />
+            : <span className="answer-box worksheet-print-empty-answer" />}
+        </span>
+      </span>
+    );
+  }
+
   if (problem.prompt.kind === 'simultaneous_equation') {
     const xAnswer = printAnswerCoordinate(problem.canonical_answer, 0);
     const yAnswer = printAnswerCoordinate(problem.canonical_answer, 1);
@@ -166,16 +183,18 @@ function WorksheetPrintPage({
   answers: boolean;
 }) {
   const layout = buildSharedWorksheetLayout(worksheet);
+  const isColumnArithmeticWorksheet = worksheet.problems.length > 0
+    && worksheet.problems.every((problem) => problem.prompt.kind === 'column_arithmetic');
   const theme = themeForWorksheet(worksheet);
   const gradeBandClass = theme.grade ? worksheetGradeBandClass(theme.grade.slug) : 'worksheet-grade-junior-high';
   const categoryLabel = theme.grade?.label ?? 'おまけ';
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
-  const dividerStyle: CSSProperties = {
-    left: toPagePercent(layout.dividerX, A4_PAGE.width),
+  const dividerStyles: readonly CSSProperties[] = (isColumnArithmeticWorksheet ? [] : layout.dividerXs).map((dividerX) => ({
+    left: toPagePercent(dividerX, A4_PAGE.width),
     top: toPagePercent(contentTop, A4_PAGE.height),
     height: toPagePercent(contentHeight, A4_PAGE.height),
-  };
+  }));
   const footerStyle: CSSProperties = {
     right: toPagePercent(A4_PAGE.margin, A4_PAGE.width),
     bottom: toPagePercent(A4_PAGE.margin, A4_PAGE.height),
@@ -192,37 +211,43 @@ function WorksheetPrintPage({
           <span>{categoryLabel}</span>
           <strong>{theme.worksheet.title}{answers ? ' 解答' : ''}</strong>
         </div>
-        <div className="problem-grid">
+        <div className={`problem-grid ${isColumnArithmeticWorksheet ? 'problem-grid-column-arithmetic' : ''}`}>
           {theme.worksheet.instruction ? (
             <p className="worksheet-instruction">{theme.worksheet.instruction}</p>
           ) : null}
-          {worksheet.layout.columns > 1 ? <div className="problem-divider" style={dividerStyle} /> : null}
+          {dividerStyles.map((style, index) => (
+            <div className="problem-divider" style={style} key={`divider-${index}`} />
+          ))}
           {layout.cells.map((cell) => {
             const { problem, index } = cell;
             const position = getCellTopPosition(layout, cell);
             const isLinearEquation = problem.prompt.kind === 'linear_equation' || problem.prompt.kind === 'quadratic_equation' || problem.prompt.kind === 'simultaneous_equation';
             const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
+            const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
             const stackAnswerBelow = theme.worksheet.answerPlacement === 'below' && !isLinearEquation;
             const cellStyle: CSSProperties = {
               left: toPagePercent(position.x, A4_PAGE.width),
               top: toPagePercent(position.y, A4_PAGE.height),
               width: toPagePercent(position.width, A4_PAGE.width),
               height: toPagePercent(position.height, A4_PAGE.height),
+              ...(isColumnArithmetic ? columnArithmeticGridVariables(problem, position) : {}),
             };
             return (
               <div
-                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''}`}
+                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''}`}
                 data-print-problem-index={index}
                 style={cellStyle}
                 key={problem.problem_id}
               >
                 <span className="problem-number">{index + 1}.</span>
-                <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
-                <PrintAnswer
-                  problem={problem}
-                  answerPrefix={theme.worksheet.answerPrefix}
-                  answers={answers}
-                />
+                <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} solution={answers && isColumnArithmetic} /></span>
+                {answers && isColumnArithmetic ? null : (
+                  <PrintAnswer
+                    problem={problem}
+                    answerPrefix={theme.worksheet.answerPrefix}
+                    answers={answers}
+                  />
+                )}
               </div>
             );
           })}

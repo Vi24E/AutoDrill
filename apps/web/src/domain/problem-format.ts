@@ -37,11 +37,18 @@ function appendText(tokens: MathToken[], text: string): void {
   else tokens.push({ kind: 'text', text });
 }
 function appendMinus(tokens: MathToken[]): void { tokens.push({ kind: 'minus' }); }
-function appendRational(tokens: MathToken[], value: RationalCoefficient, absolute = false): void {
+function appendRational(tokens: MathToken[], value: RationalCoefficient, absolute = false, mixed = false): void {
   const numerator = absolute ? Math.abs(value.numerator) : value.numerator;
+  const magnitude = Math.abs(numerator);
   if (numerator < 0) appendMinus(tokens);
-  if (value.denominator === 1) appendText(tokens, String(Math.abs(numerator)));
-  else tokens.push({ kind: 'fraction', numerator: Math.abs(numerator), denominator: value.denominator });
+  if (value.denominator === 1) { appendText(tokens, String(magnitude)); return; }
+  if (mixed && magnitude > value.denominator) {
+    appendText(tokens, String(Math.floor(magnitude / value.denominator)));
+    const remainder = magnitude % value.denominator;
+    if (remainder !== 0) tokens.push({ kind: 'fraction', numerator: remainder, denominator: value.denominator });
+    return;
+  }
+  tokens.push({ kind: 'fraction', numerator: magnitude, denominator: value.denominator });
 }
 
 function operatorPrecedence(operator: ArithmeticOperator): number {
@@ -81,7 +88,7 @@ function exactDecimalExpressionText(coefficient: number, scale: number): string 
   const split = padded.length - scale;
   return `${negative ? '−' : ''}${padded.slice(0, split)}.${padded.slice(split)}`;
 }
-function appendArithmeticExpression(tokens: MathToken[], expression: ArithmeticExpression, parent?: ArithmeticOperator, rightChild = false): void {
+function appendArithmeticExpression(tokens: MathToken[], expression: ArithmeticExpression, parent?: ArithmeticOperator, rightChild = false, mixedFractions = false): void {
   const parens = parent ? needsParentheses(expression, parent, rightChild) : false;
   if (parens) appendText(tokens, '(');
   if (expression.kind === 'integer') {
@@ -91,15 +98,23 @@ function appendArithmeticExpression(tokens: MathToken[], expression: ArithmeticE
   } else if (expression.kind === 'rational') {
     if (expression.value.numerator < 0) {
       appendText(tokens, '('); appendMinus(tokens); appendRational(tokens, expression.value, true); appendText(tokens, ')');
-    } else appendRational(tokens, expression.value);
+    } else appendRational(tokens, expression.value, false, mixedFractions);
   } else if (expression.kind === 'exact_decimal') {
     appendText(tokens, exactDecimalExpressionText(expression.coefficient, expression.scale));
   } else {
-    appendArithmeticExpression(tokens, expression.left, expression.operator, false);
+    appendArithmeticExpression(tokens, expression.left, expression.operator, false, mixedFractions);
     appendOperator(tokens, expression.operator);
-    appendArithmeticExpression(tokens, expression.right, expression.operator, true);
+    appendArithmeticExpression(tokens, expression.right, expression.operator, true, mixedFractions);
   }
   if (parens) appendText(tokens, ')');
+}
+
+export function arithmeticLeafText(expression: ArithmeticExpression): string {
+  if (expression.kind === 'integer') return String(expression.value);
+  if (expression.kind === 'exact_decimal') return exactDecimalExpressionText(expression.coefficient, expression.scale);
+  const tokens: MathToken[] = [];
+  appendArithmeticExpression(tokens, expression);
+  return mathTokensText(tokens);
 }
 
 function appendCoefficientTerm(tokens: MathToken[], value: RationalCoefficient): boolean {
@@ -185,13 +200,25 @@ function quadraticExpressionTokens(problem: ProblemDto): readonly MathToken[] {
   return tokens;
 }
 
+const MIXED_FRACTION_THEME_IDS = new Set([9, 10, 11, 12, 21, 22]);
+
+export function usesMixedFractionPresentation(problem: ProblemDto): boolean {
+  return MIXED_FRACTION_THEME_IDS.has(problem.numeric_theme_id);
+}
+
 export function problemExpressionTokens(problem: ProblemDto, includeAnswerEquals = true): readonly MathToken[] {
   if (problem.prompt.kind === 'addition') return [{ kind: 'text', text: `${problem.prompt.left} + ${problem.prompt.right}${includeAnswerEquals ? ' =' : ''}` }];
   if (problem.prompt.kind === 'arithmetic') {
     const tokens: MathToken[] = [];
-    appendArithmeticExpression(tokens, problem.prompt.expression);
+    appendArithmeticExpression(tokens, problem.prompt.expression, undefined, false, usesMixedFractionPresentation(problem));
     if (includeAnswerEquals) appendText(tokens, ' =');
     return tokens;
+  }
+  if (problem.prompt.kind === 'column_arithmetic') {
+    const operator = problem.prompt.operator === 'add' ? '+'
+      : problem.prompt.operator === 'subtract' ? '−'
+        : problem.prompt.operator === 'multiply' ? '×' : '÷';
+    return [{ kind: 'text', text: `${arithmeticLeafText(problem.prompt.left)} ${operator} ${arithmeticLeafText(problem.prompt.right)}${includeAnswerEquals ? ' =' : ''}` }];
   }
   if (problem.prompt.kind === 'quadratic_equation') return quadraticExpressionTokens(problem);
   if (problem.prompt.kind === 'simultaneous_equation') {

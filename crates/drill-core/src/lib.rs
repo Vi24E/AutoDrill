@@ -832,7 +832,7 @@ mod tests {
             right: Box::new(AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(4)))),
         };
         let result = grade_answer(&explicit_offset_roots, &offset_plus_minus);
-        assert!(!result.is_correct);
+        assert!(result.is_correct);
         assert_eq!(result.warnings, vec![GradeWarning::SolutionListRequired]);
 
         let duplicate_solution = AnswerNode::Tuple(vec![two.clone(), two.clone()]);

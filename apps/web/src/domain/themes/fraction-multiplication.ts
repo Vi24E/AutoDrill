@@ -4,7 +4,7 @@ import { arithmeticTheme, FRACTION_INPUT, FRACTION_INSTRUCTION } from './theme-d
 export const FRACTION_MULTIPLICATION_DEFINITION = arithmeticTheme({
   numeric_theme_id: FRACTION_MULTIPLICATION_THEME_ID, generator_revision: FRACTION_MULTIPLICATION_GENERATOR_REVISION,
   themeKey: 'jp.grade6.fraction.multiplication', label: '分数の掛け算', grade: { slug: 'grade-6', label: '小学6年生' },
-  gradeGenre: { genreKey: 'fractions', label: '分数' }, recommendedGenre: { genreKey: 'fractions', label: '分数' },
+  tags: ['fractions', 'multiplication'],
   problemCount: FRACTION_MULTIPLICATION_LAYOUT.problem_count, layout: FRACTION_MULTIPLICATION_LAYOUT,
   route: { gradeSlug: 'grade-6', themeSlug: 'fraction-multiplication', pathname: '/drills/grade-6/fraction-multiplication' },
   search: { title: '分数の掛け算 | AutoDrill', description: '小学6年生向けの分数の掛け算ドリルです。' },

@@ -420,7 +420,7 @@ function assertArithmeticExpression(value: unknown): void {
   invalidDto('WASM returned an unsupported arithmetic expression variant.', value);
 }
 
-function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle'): void {
+function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'column_arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle'): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported prompt variant; expected ${expectedKind}.`, value);
   }
@@ -431,6 +431,18 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
   }
   if (expectedKind === 'arithmetic') {
     assertArithmeticExpression(value.expression);
+    return;
+  }
+  if (expectedKind === 'column_arithmetic') {
+    if (!['add', 'subtract', 'multiply', 'divide'].includes(String(value.operator))) invalidDto('WASM returned an invalid column-arithmetic operator.', value);
+    const left = value.left;
+    const right = value.right;
+    assertArithmeticExpression(left);
+    assertArithmeticExpression(right);
+    if (!isRecord(left) || !isRecord(right)) invalidDto('WASM returned invalid column-arithmetic operands.', value);
+    if (left.kind === 'binary' || left.kind === 'rational' || right.kind === 'binary' || right.kind === 'rational') {
+      invalidDto('WASM returned an unsupported column-arithmetic operand.', value);
+    }
     return;
   }
   if (expectedKind === 'simultaneous_equation') {

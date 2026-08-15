@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Favicon-oriented reconstruction of v4: same deliberately skewed three-part metal drill. -->
+  <rect width="64" height="64" rx="12" fill="#f7f4ed"/>
+  <polygon points="49,6 37,14 47,31" fill="#f39a2f"/>
+  <polygon points="32,17 44,37 44,52 23,27" fill="#173f54"/>
+  <polygon points="19,33 41,57 40,61 9,44" fill="#173f54"/>
+</svg>

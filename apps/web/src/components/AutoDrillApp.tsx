@@ -37,10 +37,12 @@ import { CustomSelect } from '@/components/CustomSelect';
 import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
 import { answerNodeLatex, answerPrefixLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel } from '@/domain/problem-format';
+import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
+import { hasThemeTag } from '@/domain/theme-registry';
 import { generateAutomaticSeed } from '@/domain/seed';
 import { AUTODRILL_VERSION_LABEL } from '@/domain/version';
 import {
@@ -134,11 +136,28 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '九九': [["九九", "くく"]],
   '割り算(1)': [["割", "わ"], 'り', ["算", "ざん"], '(1)'],
   '小数の足し算と引き算': [["小数", "しょうすう"], 'の', ["足", "た"], 'し', ["算", "ざん"], 'と', ["引", "ひ"], 'き', ["算", "ざん"]],
-  '小数の掛け算と割り算': [["小数", "しょうすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"], 'と', ["割", "わ"], 'り', ["算", "ざん"]],
+  '小数の掛け算': [["小数", "しょうすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"]],
+  '小数の割り算': [["小数", "しょうすう"], 'の', ["割", "わ"], 'り', ["算", "ざん"]],
+  '二桁の足し算の筆算': [["二桁", "ふたけた"], 'の', ["足", "た"], 'し', ["算", "ざん"], 'の', ["筆算", "ひっさん"]],
+  '二桁の引き算の筆算': [["二桁", "ふたけた"], 'の', ["引", "ひ"], 'き', ["算", "ざん"], 'の', ["筆算", "ひっさん"]],
+  '三・四桁の足し算の筆算': [['三', 'さん'], '・', ['四桁', 'よんけた'], 'の', ['足', 'た'], 'し', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '三・四桁の引き算の筆算': [['三', 'さん'], '・', ['四桁', 'よんけた'], 'の', ['引', 'ひ'], 'き', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '一桁をかける掛け算の筆算': [['一桁', 'ひとけた'], 'をかける', ['掛', 'か'], 'け', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '二桁をかける掛け算の筆算': [['二桁', 'ふたけた'], 'をかける', ['掛', 'か'], 'け', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '一桁で割る割り算の筆算': [['一桁', 'ひとけた'], 'で', ['割', 'わ'], 'る', ['割', 'わ'], 'り', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '二桁で割る割り算の筆算': [['二桁', 'ふたけた'], 'で', ['割', 'わ'], 'る', ['割', 'わ'], 'り', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '小数の足し算と引き算の筆算': [['小数', 'しょうすう'], 'の', ['足', 'た'], 'し', ['算', 'ざん'], 'と', ['引', 'ひ'], 'き', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '小数と整数の掛け算の筆算': [['小数', 'しょうすう'], 'と', ['整数', 'せいすう'], 'の', ['掛', 'か'], 'け', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '小数と整数の割り算の筆算': [['小数', 'しょうすう'], 'と', ['整数', 'せいすう'], 'の', ['割', 'わ'], 'り', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '小数の掛け算の筆算': [['小数', 'しょうすう'], 'の', ['掛', 'か'], 'け', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
+  '小数の割り算の筆算': [['小数', 'しょうすう'], 'の', ['割', 'わ'], 'り', ['算', 'ざん'], 'の', ['筆算', 'ひっさん']],
   '分数の足し算': [["分数", "ぶんすう"], 'の', ["足", "た"], 'し', ["算", "ざん"]],
   '分数の引き算': [["分数", "ぶんすう"], 'の', ["引", "ひ"], 'き', ["算", "ざん"]],
   '分数の掛け算': [["分数", "ぶんすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"]],
   '分数の割り算': [["分数", "ぶんすう"], 'の', ["割", "わ"], 'り', ["算", "ざん"]],
+  '分数と整数の掛け算': [["分数", "ぶんすう"], 'と', ["整数", "せいすう"], 'の', ["掛", "か"], 'け', ["算", "ざん"]],
+  '分数と整数の割り算': [["分数", "ぶんすう"], 'と', ["整数", "せいすう"], 'の', ["割", "わ"], 'り', ["算", "ざん"]],
+  '分数総まとめ(仮分数)': [["分数", "ぶんすう"], ["総", "そう"], 'まとめ(', ["仮分数", "かぶんすう"], ')'],
   '二次方程式': [["二次方程式", "にじほうていしき"]],
   '二次方程式(1)': [["二次方程式", "にじほうていしき"], '(1)'],
   '二次方程式(2)': [["二次方程式", "にじほうていしき"], '(2)'],
@@ -165,6 +184,7 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   'PDFを準備中…': ['PDFを', ["準備中", "じゅんびちゅう"], '…'],
   '問題を生成しています。しばらくお待ちください。': [["問題", "もんだい"], 'を', ["生成", "せいせい"], 'しています。しばらくお', ["待", "ま"], 'ちください。'],
   '印刷用PDFを準備しています。しばらくお待ちください。': [["印刷用", "いんさつよう"], 'PDFを', ["準備", "じゅんび"], 'しています。しばらくお', ["待", "ま"], 'ちください。'],
+  'この問題は紙に印刷して解くことをおすすめします。': ['この', ['問題', 'もんだい'], 'は', ['紙', 'かみ'], 'に', ['印刷', 'いんさつ'], 'して', ['解', 'と'], 'くことをおすすめします。'],
   '問題の生成・入力状態・採点は Rust/WASM が担当します。': [["問題", "もんだい"], 'の', ["生成", "せいせい"], '・', ["入力状態", "にゅうりょくじょうたい"], '・', ["採点", "さいてん"], 'は Rust/WASM が', ["担当", "たんとう"], 'します。'],
   '回答時間': [["回答時間", "かいとうじかん"]],
   '採点': [["採点", "さいてん"]],
@@ -203,6 +223,7 @@ const GRADE_WARNING_LABELS: Readonly<Record<GradeWarningCode, string>> = {
   duplicate_solution: '最後まで計算しましょう',
   solution_list_required: '最後まで計算しましょう',
   fraction_form_required: '分数でこたえましょう',
+  mixed_fraction_form_required: '帯分数でこたえましょう',
   integer_form_required: '整数でこたえましょう',
 };
 
@@ -227,7 +248,7 @@ const GRADING_SETTING_ROWS: readonly { category: GradingWarningCategory; label: 
 function warningCategory(warning: GradeWarningCode): GradingWarningCategory {
   if (warning === 'fraction_not_reduced') return 'fraction_reduction';
   if (warning === 'integer_form_required') return 'integer_form';
-  if (warning === 'fraction_form_required') return 'fraction_form';
+  if (warning === 'fraction_form_required' || warning === 'mixed_fraction_form_required') return 'fraction_form';
   return 'finish_calculation';
 }
 
@@ -330,7 +351,7 @@ function waitForMathfieldLayout(): Promise<void> {
   });
 }
 
-type MathfieldSlot = 'single' | 'x' | 'y';
+type MathfieldSlot = 'single' | 'x' | 'y' | 'quotient' | 'remainder';
 
 function answerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerNode {
   return answer.type === 'tuple' && answer.value[coordinate]
@@ -427,6 +448,66 @@ function WorksheetAnswerField({
     );
   }
 
+  if (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide') {
+    const hasRemainder = problem.answer_schema.kind === 'ordered_pair';
+    const quotientValue = hasRemainder ? answerCoordinate(answer, 0) : answer;
+    const canonicalQuotient = hasRemainder ? answerCoordinate(problem.canonical_answer, 0) : problem.canonical_answer;
+    const quotientSlot: MathfieldSlot = hasRemainder ? 'quotient' : 'single';
+    const remainderValue = hasRemainder ? answerCoordinate(answer, 1) : null;
+    const canonicalRemainder = hasRemainder ? answerCoordinate(problem.canonical_answer, 1) : null;
+    const coordinate = (slot: MathfieldSlot, label: string, value: AnswerNode) => (
+      <span className={`column-division-answer-coordinate column-division-answer-coordinate-${slot === 'single' ? 'quotient' : slot}`}>
+        <span className="column-division-answer-label">{label}</span>
+        <MathLiveAnswerInput
+          key={`${problem.problem_id}:${slot}:${gradeResult ? 'graded' : 'editing'}`}
+          initialLatex={answerNodeLatex(value)}
+          frameClassName={commonFrameClass(slot)}
+          ariaLabel={`${index + 1}番の${label} ${answerNodeText(value) || '未入力'}`}
+          selected={isSelected && selectedSlot === slot}
+          readOnly={inputLocked}
+          numericSansFont
+          onSelect={() => onSelect(index, slot)}
+          onInputLatex={(mathfield, latex) => onMathInput(index, slot, mathfield, latex)}
+          onCommit={() => onCommit(index, slot)}
+          onRegister={(mathfield) => onRegisterMathfield(index, slot, mathfield)}
+        />
+      </span>
+    );
+    return (
+      <span className="problem-answer-area problem-answer-area-column-division">
+        {coordinate(quotientSlot, '商', quotientValue)}
+        {hasRemainder && remainderValue ? coordinate('remainder', 'あまり', remainderValue) : null}
+        {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
+        {result && !result.correct ? (
+          <span
+            className="correct-answer column-division-correct-answer"
+            aria-label={hasRemainder && canonicalRemainder
+              ? `正しい答え 商 ${answerNodeText(canonicalQuotient)} あまり ${answerNodeText(canonicalRemainder)}`
+              : `正しい答え ${answerNodeText(canonicalQuotient)}`}
+          >
+            {hasRemainder && canonicalRemainder ? (
+              <>
+                商 <MathLiveStatic className="canonical-answer-math" latex={answerNodeLatex(canonicalQuotient)} ariaLabel={answerNodeText(canonicalQuotient)} />
+                <span> あまり </span>
+                <MathLiveStatic className="canonical-answer-math" latex={answerNodeLatex(canonicalRemainder)} ariaLabel={answerNodeText(canonicalRemainder)} />
+              </>
+            ) : (
+              <MathLiveStatic className="canonical-answer-math" latex={answerNodeLatex(canonicalQuotient)} ariaLabel={answerNodeText(canonicalQuotient)} />
+            )}
+          </span>
+        ) : null}
+        {result && result.warnings.length > 0 ? (() => {
+          const messages = warningMessages(result.warnings);
+          return (
+            <span className="grade-warnings" aria-label={`注意 ${messages.join('、')}`}>
+              {messages.map((message) => <span key={message}><RubyMessage text={message} /></span>)}
+            </span>
+          );
+        })() : null}
+      </span>
+    );
+  }
+
   if (problem.prompt.kind === 'simultaneous_equation') {
     const xAnswer = answerCoordinate(answer, 0);
     const yAnswer = answerCoordinate(answer, 1);
@@ -503,6 +584,7 @@ function WorksheetAnswerField({
         ariaLabel={`${index + 1}番の答え ${answerText || '未入力'}`}
         selected={isSelected && selectedSlot === 'single'}
         readOnly={inputLocked}
+        numericSansFont={problem.prompt.kind === 'column_arithmetic'}
         onSelect={() => onSelect(index, 'single')}
         onInputLatex={(mathfield, latex) => onMathInput(index, 'single', mathfield, latex)}
         onCommit={() => onCommit(index, 'single')}
@@ -863,8 +945,12 @@ export function AutoDrillApp({
     const run = async () => {
       const previous = answersRef.current[problemId] ?? ({ type: 'empty' } satisfies AnswerNode);
       const latexKey = acceptedLatexKey(problemId, slot);
-      const previousPart = problem.prompt.kind === 'simultaneous_equation' && slot !== 'single'
-        ? answerCoordinate(previous, slot === 'x' ? 0 : 1)
+      const isCoordinateSlot = slot !== 'single' && (
+        problem.prompt.kind === 'simultaneous_equation'
+        || (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide' && problem.answer_schema.kind === 'ordered_pair')
+      );
+      const previousPart = isCoordinateSlot
+        ? answerCoordinate(previous, slot === 'x' || slot === 'quotient' ? 0 : 1)
         : previous;
       const previousLatex = acceptedLatexRef.current[latexKey] ?? answerNodeLatex(previousPart);
 
@@ -883,13 +969,13 @@ export function AutoDrillApp({
       }
 
       let answer = parsed;
-      if (problem.prompt.kind === 'simultaneous_equation' && slot !== 'single') {
+      if (isCoordinateSlot) {
         if (!isCoordinateAnswer(parsed)) {
           mathfield.setValue(previousLatex, { silenceNotifications: true });
           return;
         }
         const values: [AnswerNode, AnswerNode] = [answerCoordinate(previous, 0), answerCoordinate(previous, 1)];
-        values[slot === 'x' ? 0 : 1] = parsed;
+        values[slot === 'x' || slot === 'quotient' ? 0 : 1] = parsed;
         answer = { type: 'tuple', value: values };
       }
 
@@ -943,9 +1029,19 @@ export function AutoDrillApp({
       setSelectedSlot('y');
       return actionQueueRef.current;
     }
+    if (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide' && slot === 'quotient' && inputEnabledRef.current) {
+      selectedSlotRef.current = 'remainder';
+      setSelectedSlot('remainder');
+      return actionQueueRef.current;
+    }
     if (index < worksheet.problems.length - 1 && inputEnabledRef.current) {
       const nextIndex = index + 1;
-      const nextSlot: MathfieldSlot = worksheet.problems[nextIndex]?.prompt.kind === 'simultaneous_equation' ? 'x' : 'single';
+      const nextProblem = worksheet.problems[nextIndex];
+      const nextSlot: MathfieldSlot = nextProblem?.prompt.kind === 'simultaneous_equation'
+        ? 'x'
+        : nextProblem?.prompt.kind === 'column_arithmetic' && nextProblem.prompt.operator === 'divide'
+          ? 'quotient'
+          : 'single';
       selectedIndexRef.current = nextIndex;
       selectedSlotRef.current = nextSlot;
       setSelectedIndex(nextIndex);
@@ -1381,6 +1477,12 @@ function SettingsScreen({
             </div>
           </div>
 
+          {selection.theme.implemented && hasThemeTag(selection.theme, 'print_recommended') ? (
+            <p className="print-recommended-note" role="note" aria-label="この問題は紙に印刷して解くことをおすすめします。">
+              <RubyMessage text="この問題は紙に印刷して解くことをおすすめします。" />
+            </p>
+          ) : null}
+
           <FuriganaContext.Provider value={false}>
           <details className="advanced-settings">
             <summary>
@@ -1536,6 +1638,8 @@ type WorksheetScreenProps = {
 function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
+  const isColumnArithmeticWorksheet = worksheet.problems.length > 0
+    && worksheet.problems.every((problem) => problem.prompt.kind === 'column_arithmetic');
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
   const gradeBandClass = worksheetTheme.grade ? worksheetGradeBandClass(worksheetTheme.grade.slug) : 'worksheet-grade-junior-high';
   const worksheetCategoryLabel = worksheetTheme.grade?.label ?? 'おまけ';
@@ -1547,6 +1651,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       structure !== 'decimal'
       && structure !== 'arithmetic'
       && !(selectedProblem?.prompt.kind === 'simultaneous_equation' && structure === 'tuple')
+      && !(selectedProblem?.prompt.kind === 'column_arithmetic' && selectedProblem.prompt.operator === 'divide' && structure === 'tuple')
       && !(arithmeticOperatorsEnabled && (structure === 'negative' || structure === 'plus_minus'))
     ),
   ) ?? [];
@@ -1557,11 +1662,11 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
   const toPagePercent = (value: number, total: number) => `${(value / total) * 100}%`;
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
-  const dividerStyle: CSSProperties = {
-    left: toPagePercent(sharedLayout.dividerX, A4_PAGE.width),
+  const dividerStyles: readonly CSSProperties[] = (isColumnArithmeticWorksheet ? [] : sharedLayout.dividerXs).map((dividerX) => ({
+    left: toPagePercent(dividerX, A4_PAGE.width),
     top: toPagePercent(contentTop, A4_PAGE.height),
     height: toPagePercent(contentHeight, A4_PAGE.height),
-  };
+  }));
   const footerStyle: CSSProperties = {
     right: toPagePercent(A4_PAGE.margin, A4_PAGE.width),
     bottom: toPagePercent(A4_PAGE.margin, A4_PAGE.height),
@@ -1596,11 +1701,18 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
 
       <div className="paper-wrap">
         <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}` }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
-          <div className="problem-grid">
+          <div className={`problem-grid ${isColumnArithmeticWorksheet ? 'problem-grid-column-arithmetic' : ''}`}>
             {worksheetTheme.worksheet.instruction ? (
               <p className="worksheet-instruction">{worksheetTheme.worksheet.instruction}</p>
             ) : null}
-            {worksheet.layout.columns > 1 ? <div className="problem-divider" data-testid="problem-divider" style={dividerStyle} /> : null}
+            {dividerStyles.map((style, index) => (
+              <div
+                className="problem-divider"
+                data-testid={index === 0 ? 'problem-divider' : `problem-divider-${index + 1}`}
+                style={style}
+                key={`divider-${index}`}
+              />
+            ))}
             {sharedLayout.cells.map((cell) => {
               const { problem, index } = cell;
               const answer = answers[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
@@ -1609,34 +1721,38 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               const position = getCellTopPosition(sharedLayout, cell);
               const isLinearEquation = problem.prompt.kind === 'linear_equation' || problem.prompt.kind === 'quadratic_equation' || problem.prompt.kind === 'simultaneous_equation';
               const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
+              const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
               const stackAnswerBelow = worksheetTheme.worksheet.answerPlacement === 'below' && !isLinearEquation;
               const cellStyle: CSSProperties = {
                 left: toPagePercent(position.x, A4_PAGE.width),
                 top: toPagePercent(position.y, A4_PAGE.height),
                 width: toPagePercent(position.width, A4_PAGE.width),
                 height: toPagePercent(position.height, A4_PAGE.height),
+                ...(isColumnArithmetic ? columnArithmeticGridVariables(problem, position) : {}),
               };
               return (
-                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
+                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
                   <span className="problem-number">{index + 1}.</span>
-                  <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
-                  <WorksheetAnswerField
-                    worksheetUi={worksheetUi}
-                    problem={problem}
-                    index={index}
-                    answer={answer}
-                    isSelected={isSelected}
-                    selectedSlot={selectedSlot}
-                    result={result}
-                    gradeResult={gradeResult}
-                    inputLocked={worksheetPhase !== 'editing'}
-                    answerPrefix={worksheetTheme.worksheet.answerPrefix}
-                    onSelect={onSelect}
-                    onRegisterMathfield={onRegisterMathfield}
-                    onMathInput={onMathInput}
-                    onCommit={onCommit}
-                    onTogglePerson={onTogglePerson}
-                  />
+                  <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} solution={Boolean(result && isColumnArithmetic)} /></span>
+                  {result && isColumnArithmetic ? null : (
+                    <WorksheetAnswerField
+                      worksheetUi={worksheetUi}
+                      problem={problem}
+                      index={index}
+                      answer={answer}
+                      isSelected={isSelected}
+                      selectedSlot={selectedSlot}
+                      result={result}
+                      gradeResult={gradeResult}
+                      inputLocked={worksheetPhase !== 'editing'}
+                      answerPrefix={worksheetTheme.worksheet.answerPrefix}
+                      onSelect={onSelect}
+                      onRegisterMathfield={onRegisterMathfield}
+                      onMathInput={onMathInput}
+                      onCommit={onCommit}
+                      onTogglePerson={onTogglePerson}
+                    />
+                  )}
                 </div>
               );
             })}

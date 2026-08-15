@@ -1,5 +1,5 @@
 import type { AnswerInputStructure, AnswerNode, ArithmeticExpression, ArithmeticOperator, ProblemDto, RationalCoefficient } from './drill-engine';
-import { problemExpressionTokens } from './problem-format';
+import { problemExpressionTokens, usesMixedFractionPresentation } from './problem-format';
 
 export function answerPrefixLatex(answerPrefix: string): string {
   return answerPrefix.replaceAll(' ', '\\,');
@@ -42,10 +42,16 @@ export function answerNodeLatex(answer: AnswerNode): string {
   }
 }
 
-function rationalLatex(value: RationalCoefficient): string {
+function rationalLatex(value: RationalCoefficient, mixed = false): string {
   const sign = value.numerator < 0 ? '-' : '';
   const magnitude = Math.abs(value.numerator);
-  return value.denominator === 1 ? `${sign}${magnitude}` : `${sign}\\frac{${magnitude}}{${value.denominator}}`;
+  if (value.denominator === 1) return `${sign}${magnitude}`;
+  if (mixed && magnitude > value.denominator) {
+    const whole = Math.floor(magnitude / value.denominator);
+    const remainder = magnitude % value.denominator;
+    return remainder === 0 ? `${sign}${whole}` : `${sign}${whole}\\frac{${remainder}}{${value.denominator}}`;
+  }
+  return `${sign}\\frac{${magnitude}}{${value.denominator}}`;
 }
 function operatorPrecedence(operator: ArithmeticOperator): number { return operator === 'add' || operator === 'subtract' ? 1 : 2; }
 function expressionPrecedence(expression: ArithmeticExpression): number { return expression.kind === 'binary' ? operatorPrecedence(expression.operator) : 3; }
@@ -55,11 +61,11 @@ function needsParentheses(expression: ArithmeticExpression, parent: ArithmeticOp
   const p = operatorPrecedence(parent);
   return child < p || (rightChild && child === p && (parent === 'subtract' || parent === 'divide'));
 }
-function arithmeticExpressionLatex(expression: ArithmeticExpression, parent?: ArithmeticOperator, rightChild = false): string {
+function arithmeticExpressionLatex(expression: ArithmeticExpression, parent?: ArithmeticOperator, rightChild = false, mixedFractions = false): string {
   let body: string;
   if (expression.kind === 'integer') body = expression.value < 0 ? `(${expression.value})` : String(expression.value);
   else if (expression.kind === 'rational') {
-    const value = rationalLatex(expression.value);
+    const value = rationalLatex(expression.value, mixedFractions);
     body = expression.value.numerator < 0 ? `(${value})` : value;
   } else if (expression.kind === 'exact_decimal') {
     const negative = expression.coefficient < 0;
@@ -68,7 +74,7 @@ function arithmeticExpressionLatex(expression: ArithmeticExpression, parent?: Ar
     body = `${negative ? '-' : ''}${digits.slice(0, split)}.${digits.slice(split)}`;
   } else {
     const operator = expression.operator === 'add' ? '+' : expression.operator === 'subtract' ? '-' : expression.operator === 'multiply' ? '\\times' : '\\div';
-    body = `${arithmeticExpressionLatex(expression.left, expression.operator)}\\,${operator}\\,${arithmeticExpressionLatex(expression.right, expression.operator, true)}`;
+    body = `${arithmeticExpressionLatex(expression.left, expression.operator, false, mixedFractions)}\\,${operator}\\,${arithmeticExpressionLatex(expression.right, expression.operator, true, mixedFractions)}`;
   }
   return parent && needsParentheses(expression, parent, rightChild) ? `\\left(${body}\\right)` : body;
 }
@@ -90,7 +96,7 @@ export function problemExpressionLatex(problem: ProblemDto, includeAnswerEquals 
     const { a, b, c, d, e, f } = problem.prompt;
     return `\\begin{cases}${integerLinearEquationLatex(a, b, c)}\\\\${integerLinearEquationLatex(d, e, f)}\\end{cases}`;
   }
-  if (problem.prompt.kind === 'arithmetic') return `${arithmeticExpressionLatex(problem.prompt.expression)}${includeAnswerEquals ? '\\,=' : ''}`;
+  if (problem.prompt.kind === 'arithmetic') return `${arithmeticExpressionLatex(problem.prompt.expression, undefined, false, usesMixedFractionPresentation(problem))}${includeAnswerEquals ? '\\,=' : ''}`;
   return problemExpressionTokens(problem, includeAnswerEquals).map((token) => {
     if (token.kind === 'text') return token.text.replaceAll('²', '^2').replaceAll(' ', '\\,');
     if (token.kind === 'minus') return '-';

@@ -16,7 +16,7 @@ Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイ�
 
 ## WASM adapter
 
-`src/domain/wasm-adapter.ts`がproductionの数学境界です。schema-v3 JSON DTOを使い、以下をRust/WASMへ委譲します。
+`src/domain/wasm-adapter.ts`がproductionの数学境界です。schema-v4 JSON DTOを使い、以下をRust/WASMへ委譲します。
 
 - worksheet generation
 - MathLive LaTeX → AnswerNode
@@ -48,9 +48,10 @@ cellはshared A4 modelをpercentage座標へ変換するため、viewportが狭�
 
 ## Shared math formatting
 
-数式のsourceはRust DTOから`mathlive-format.ts`が作るLaTeXです。Web表示と印刷/PDFは別々の数式rendererを持たず、どちらもMathLive 0.110.0へ同じLaTeXを渡します。
+通常数式のsourceはRust DTOから`mathlive-format.ts`が作るLaTeXです。Web表示と印刷/PDFは別々の数式rendererを持たず、どちらもMathLive 0.110.0へ同じLaTeXを渡します。筆算だけはfraction/root等の数式組版ではなく桁位置そのものが教材内容なので、`ProblemExpression`内の共通`ColumnArithmeticExpression`が縦式DOMを所有し、Web/PDFの両方で同じcomponentを再利用します。
 
-Webでは`ProblemExpression` / `MathLiveStatic`が`<math-span>`を使います。印刷用DOMでも**同じReact componentをそのまま再利用**します。したがってfraction、root、exponent、括弧、operator spacing、baseline等はMathLiveが一元的に所有し、PDF側にfraction lineやminus記号の座標実装はありません。将来expression ASTが複雑化しても、MathLiveが扱えるLaTeXなら印刷側の追加実装は不要です。
+Webでは通常数式を`ProblemExpression` / `MathLiveStatic`の`<math-span>`で表示し、印刷用DOMでも**同じReact componentをそのまま再利用**します。fraction、root、exponent、括弧、operator spacing、baseline等はMathLiveが一元的に所有し、PDF側にfraction lineやminus記号の座標実装はありません。筆算の縦式・横線・長除法枠・小数点位置もPDF専用実装ではなく同じ`ColumnArithmeticExpression` / CSSを共有します。 解答pageでは最終値だけを別欄へ出さず、加減算は結果まで、二桁乗算は部分積まで、除算は商・各部分積・引き算・最終余りまでを含む「完成した筆算」として同じ桁グリッドへ描画します。割り算記号は日本の教材に合わせて、左側を直線ではなく丸く立ち上がる長除法記号として表示します。
+筆算の桁位置は全theme共通のページ方眼で管理します。方眼1辺はA4幅に対する一定比率（実寸約19.5pt）で、Web previewとnative printで同じ物理比率になります。問題文より下の書き込み領域全体へ方眼を薄く表示し、表示数字は文字列を方眼cellへ分解して配置します。小数点はcellを1つ使う文字ではなく、2つの桁cellの境界に置く0幅の黒点として描画します。WebのMathLive最終答案欄でも小数点glyphを0幅化し、同じグリッド交点へ置きます。印刷問題/解答も同じ座標系を使うため、児童は問題cellに限定されずページ上の方眼へ自由に途中計算を書き込めます。長除法は除数と被除数の実桁数に応じたcompact laneを使い、除数・曲線・被除数・商を同じ方眼へ揃えます。
 
 `problem-format.ts`のsemantic tokenはaccessible plain text等には残しますが、数式のvisual renderingには使いません。
 
@@ -58,10 +59,12 @@ Webでは`ProblemExpression` / `MathLiveStatic`が`<math-span>`を使います�
 
 `src/pdf/worksheet-pdf.tsx`はPDF primitiveを描画せず、Webと同じshared layout/theme metadataから印刷専用の2page A4 React DOMを作ります。
 
-- page 1: 問題、Webと同系統のanswer box
+- page 1: 問題。筆算themeでは問題文より下を全面方眼とし、印刷用answer boxは表示せず自由記入
 - page 2: 解答。既存の両面印刷仕様により180°rotation
 - 20問theme: 2列×10行
-- 16問theme: 2列×8行
+- 通常の16問theme: 2列×8行
+- 加減算・掛け算の筆算16問theme: 4列×4行
+- 割り算の筆算12問theme: 4列×3行
 - title/instruction: Web ThemeDefinitionと同一
 - footer: date / Seed
 - 数式: `ProblemExpression` / `MathLiveStatic`をWebと共有
@@ -74,7 +77,7 @@ MathLive custom elementのrender完了と`document.fonts.ready`を待った後�
 
 ## Tests
 
-unit testは全19 registered themeについて2page print DOMを生成し、各問題式・解答が`math-span`（Webと同じMathLive static element）へ投影されることを確認します。fraction代表例は`1/3 + 1/4`がslash textへflattenされずLaTeXのままMathLiveへ渡ることも確認します。browser acceptanceではactual Chromeで`Page.printToPDF`を実行し、2page PDF、全MathLive shadow render完了、数式とanswer boxのoverlap/clippingなしを確認します。
+unit testは全37 active themeについて2page print DOMを生成します。筆算ではページ全面方眼classと各問題の方眼lane変数も検証します。通常数式は`math-span`（Webと同じMathLive static element）、筆算は同じ`ColumnArithmeticExpression`へ投影されることを確認します。4×4筆算では16 cell・行優先の問題順・縦区切りなし・筆算本体と答案位置の整合を検証します。解答pageでは加減算の最終結果、掛け算の部分積、割り算の商と途中の掛け算/引き算/余りまでを含む完成した筆算を同じpresentationから描画します。browser acceptanceはsitemapの全routeを複数Seedで生成し、各cell境界に対するclipping/overlapを確認します。さらに筆算previewからactual Chrome `Page.printToPDF`を実行し、2page PDFが生成されることを確認します。
 
 印刷UIのintegration testはPDF moduleをmockせず、主要な到達経路を状態遷移ごとに通します。現在の必須経路は、設定画面→印刷preview、preview→native印刷、worksheet editing→preview→戻る、answer input選択中→preview→戻る、graded worksheet→preview→戻るです。各経路でpreview表示前に`window.print()`が呼ばれないこと、戻った後に元のworksheet状態が維持されることも確認します。
 

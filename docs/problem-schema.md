@@ -72,6 +72,31 @@ capability projectionを満たす必要がある。`nan_error`だけはbounded�
 小学生registrationには共通のfail-closed制約を適用する。`curriculum_path`が`小学...`を含む場合、prompt literal/係数、canonical answerに負数があるcandidate、または`allow_negative`/`negative`/`plus_minus`入力capabilityを持つcandidateは共通generator境界で採用しない。これは個別themeのgenerator実装に依存しない。
 
 
+## 筆算generator
+
+筆算themeは通常の横式`arithmetic` promptとはpresentationが異なるため、Rust DTOに専用promptを持つ。
+
+```text
+ProblemPrompt::ColumnArithmetic {
+  operator: Add | Subtract | Multiply | Divide,
+  left: Integer | ExactDecimal,
+  right: Integer | ExactDecimal,
+}
+```
+
+数学的source of truthはoperand/operator/canonical answerを持つRust DTOであり、Web/PDFはこのDTOから同じ縦式componentを描画する。途中計算の各桁をAnswer ASTへ持たせない。Web gradingは最終答案だけを既存Rust graderへ送る。
+
+Presentation上は、各筆算problemが独立した方眼を持つのではなく、worksheetの問題文より下に1枚のA4-relative page gridを敷く。各problemはshared A4 cell geometryからそのpage gridへlaneの右端/開始行をsnapし、Web/PDF/解答で同じ座標を使う。小数点はgrid cellを消費せず桁境界の黒点として扱う。掛け算の未解答problemはoperand直下の主線1本だけを描き、途中計算はpage gridへ自由記入する。
+
+- 加減算・掛け算の筆算registration: `problem_count=16`, `columns=4`, `rows=4`
+- 割り算の筆算registration: `problem_count=12`, `columns=4`, `rows=3`（解答pageの完成した長除法を問題と同じ文字サイズで保持するため）
+- 整数加減乗・小数筆算: 既存`Integer` / `Decimal` answer schema
+- 整数除法: 常に`AnswerSchema::OrderedPair`、canonical answerは`Tuple([商, 余り])`
+- 余り0でもschemaを変えない
+- elementary registrationの共通nonnegative validationを通す
+
+`problem_set_id`は通常themeと同じnumeric theme ID / generator revision / Seed / difficulty contractで再生成される。ID 25〜37は新規themeであり、既存ID/revisionは変更しない。
+
 ## 一次方程式generator
 
 `ProblemPrompt::LinearEquation`は`a,b,c,d`をexactな`RationalCoefficient`として保持し、`ax+b=cx+d`を表す。Rustの`LinearEquationGenerator`を(1)/(2)で共有し、違いはregistryとmodeだけに置く。revision 6では、**各candidateについてcanonical answerをanswer domainから一様に復元抽出し、その答えに条件づけて式を生成する**。式生成に失敗した場合は答えを引き直さず、その答えのまま式だけを再生成する。
@@ -107,7 +132,9 @@ n問に対して`8n`候補を1つの共通poolとして生成する。一次方�
 
 WASM adapterはcore DTOをそのまま`ApiResponse`の`data`へserializeする薄い境界であり、同じschemaを別形式へ再定義しない。
 
-`grade_answer`はnormalizedな`expected`/`actual`、`is_correct`、statusに加え、表記上の注意を`warnings`配列で返す。識別子は`fraction_not_reduced`、`integer_form_required`、`redundant_negative`、`redundant_plus_minus`、`redundant_decimal`、`duplicate_solution`、`solution_list_required`、`fraction_form_required`で、表示文言とは分離する。Webでは「約分しましょう」「整数でこたえましょう」「分数でこたえましょう」「最後まで計算しましょう」の4表示カテゴリへまとめ、詳細設定→採点設定でカテゴリごとに○/×を選ぶ。
+二次方程式などの解集合比較では、canonical Answer AST内部の`PlusMinus`を最大4 branchまでexactに展開する。分数・根号・負号・加減乗除の内部に`±`が埋め込まれていても、浮動小数へ落とさず正規化したAnswer AST集合としてTuple入力と比較する。重複解の意味は保持し、`(2,2)`を単一解`2`へ勝手にdedupしない。
+
+`grade_answer`はnormalizedな`expected`/`actual`、`is_correct`、statusに加え、表記上の注意を`warnings`配列で返す。識別子は`fraction_not_reduced`、`integer_form_required`、`redundant_negative`、`redundant_plus_minus`、`redundant_decimal`、`duplicate_solution`、`solution_list_required`、`fraction_form_required`、`mixed_fraction_form_required`で、表示文言とは分離する。Webでは「約分しましょう」「整数でこたえましょう」「分数でこたえましょう／帯分数でこたえましょう」「最後まで計算しましょう」の採点カテゴリへまとめ、詳細設定→採点設定でカテゴリごとに○/×を選ぶ。
 Web grade DTOのstatusは`correct`、`incorrect`、`unanswered`だけを許可する。actualが`empty`なら
 `is_correct=false`かつ`unanswered`、actualがnon-emptyなら`is_correct`に応じて`correct`または`incorrect`
 でなければfail closedする。

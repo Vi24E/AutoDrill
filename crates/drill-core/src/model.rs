@@ -27,6 +27,23 @@ pub const THEME_ID_DECIMAL_ADD_SUBTRACT: u32 = 17;
 pub const THEME_ID_DECIMAL_MULTIPLY_DIVIDE: u32 = 18;
 pub const THEME_ID_SIMULTANEOUS_EQUATION_1: u32 = 19;
 pub const THEME_ID_LIAR_PUZZLE: u32 = 20;
+pub const THEME_ID_FRACTION_INTEGER_MULTIPLICATION: u32 = 21;
+pub const THEME_ID_FRACTION_INTEGER_DIVISION: u32 = 22;
+pub const THEME_ID_FRACTION_SUMMARY_IMPROPER: u32 = 23;
+pub const THEME_ID_DECIMAL_DIVISION: u32 = 24;
+pub const THEME_ID_COLUMN_ADD_2DIGIT: u32 = 25;
+pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT: u32 = 26;
+pub const THEME_ID_COLUMN_ADD_3_4DIGIT: u32 = 27;
+pub const THEME_ID_COLUMN_SUBTRACT_3_4DIGIT: u32 = 28;
+pub const THEME_ID_COLUMN_MULTIPLY_1DIGIT: u32 = 29;
+pub const THEME_ID_COLUMN_MULTIPLY_2DIGIT: u32 = 30;
+pub const THEME_ID_COLUMN_DIVIDE_1DIGIT: u32 = 31;
+pub const THEME_ID_COLUMN_DIVIDE_2DIGIT: u32 = 32;
+pub const THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT: u32 = 33;
+pub const THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: u32 = 34;
+pub const THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 35;
+pub const THEME_ID_COLUMN_DECIMAL_MULTIPLICATION: u32 = 36;
+pub const THEME_ID_COLUMN_DECIMAL_DIVISION: u32 = 37;
 pub const GENERATOR_REVISION_ONE_DIGIT_ADDITION: u32 = 5;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 8;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 8;
@@ -35,16 +52,38 @@ pub const GENERATOR_REVISION_TWO_DIGIT_ADDITION: u32 = 3;
 pub const GENERATOR_REVISION_MULTIPLICATION_TABLE: u32 = 3;
 pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_1: u32 = 3;
 pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_2: u32 = 3;
-pub const GENERATOR_REVISION_FRACTION_ADDITION: u32 = 3;
-pub const GENERATOR_REVISION_FRACTION_MULTIPLICATION: u32 = 3;
-pub const GENERATOR_REVISION_FRACTION_SUBTRACTION: u32 = 3;
-pub const GENERATOR_REVISION_FRACTION_DIVISION: u32 = 3;
+pub const GENERATOR_REVISION_FRACTION_ADDITION: u32 = 4;
+pub const GENERATOR_REVISION_FRACTION_ADDITION_LEGACY: u32 = 3;
+pub const GENERATOR_REVISION_FRACTION_MULTIPLICATION: u32 = 4;
+pub const GENERATOR_REVISION_FRACTION_MULTIPLICATION_LEGACY: u32 = 3;
+pub const GENERATOR_REVISION_FRACTION_SUBTRACTION: u32 = 4;
+pub const GENERATOR_REVISION_FRACTION_SUBTRACTION_LEGACY: u32 = 3;
+pub const GENERATOR_REVISION_FRACTION_DIVISION: u32 = 4;
+pub const GENERATOR_REVISION_FRACTION_DIVISION_LEGACY: u32 = 3;
 pub const GENERATOR_REVISION_DIVISION_1: u32 = 3;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_1: u32 = 3;
-pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 3;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 4;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_3: u32 = 3;
-pub const GENERATOR_REVISION_DECIMAL_ADD_SUBTRACT: u32 = 4;
-pub const GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE: u32 = 5;
+pub const GENERATOR_REVISION_DECIMAL_ADD_SUBTRACT: u32 = 5;
+pub const GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE: u32 = 6;
+pub const GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE_LEGACY: u32 = 5;
+pub const GENERATOR_REVISION_FRACTION_INTEGER_MULTIPLICATION: u32 = 1;
+pub const GENERATOR_REVISION_FRACTION_INTEGER_DIVISION: u32 = 1;
+pub const GENERATOR_REVISION_FRACTION_SUMMARY_IMPROPER: u32 = 1;
+pub const GENERATOR_REVISION_DECIMAL_DIVISION: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_SUBTRACT_3_4DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_MULTIPLY_1DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_MULTIPLY_2DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DIVIDE_1DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_ADD_SUBTRACT: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLY_INTEGER: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION: u32 = 1;
 pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_1: u32 = 3;
 pub const GENERATOR_REVISION_LIAR_PUZZLE: u32 = 4;
 pub const SKILL_ID: &str = "jp.grade1.addition.one_digit";
@@ -64,9 +103,30 @@ pub const SKILL_ID_QUADRATIC_EQUATION_1: &str = "jp.grade9.equation.quadratic.1"
 pub const SKILL_ID_QUADRATIC_EQUATION_2: &str = "jp.grade9.equation.quadratic.2";
 pub const SKILL_ID_QUADRATIC_EQUATION_3: &str = "jp.grade9.equation.quadratic.3";
 pub const SKILL_ID_DECIMAL_ADD_SUBTRACT: &str = "jp.grade4.decimal.add_subtract";
-pub const SKILL_ID_DECIMAL_MULTIPLY_DIVIDE: &str = "jp.grade5.decimal.multiply_divide";
+pub const SKILL_ID_DECIMAL_MULTIPLY_DIVIDE: &str = "jp.grade5.decimal.multiplication";
 pub const SKILL_ID_SIMULTANEOUS_EQUATION_1: &str = "jp.grade8.equation.simultaneous.1";
 pub const SKILL_ID_LIAR_PUZZLE: &str = "bonus.logic.liar_puzzle";
+pub const SKILL_ID_FRACTION_INTEGER_MULTIPLICATION: &str =
+    "jp.grade6.fraction.integer_multiplication";
+pub const SKILL_ID_FRACTION_INTEGER_DIVISION: &str = "jp.grade6.fraction.integer_division";
+pub const SKILL_ID_FRACTION_SUMMARY_IMPROPER: &str = "jp.grade6.fraction.summary_improper";
+pub const SKILL_ID_DECIMAL_DIVISION: &str = "jp.grade5.decimal.division";
+pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit";
+pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit";
+pub const SKILL_ID_COLUMN_ADD_3_4DIGIT: &str = "jp.grade3.column.addition.three_four_digit";
+pub const SKILL_ID_COLUMN_SUBTRACT_3_4DIGIT: &str = "jp.grade3.column.subtraction.three_four_digit";
+pub const SKILL_ID_COLUMN_MULTIPLY_1DIGIT: &str =
+    "jp.grade3.column.multiplication.one_digit_multiplier";
+pub const SKILL_ID_COLUMN_MULTIPLY_2DIGIT: &str =
+    "jp.grade3.column.multiplication.two_digit_multiplier";
+pub const SKILL_ID_COLUMN_DIVIDE_1DIGIT: &str = "jp.grade3.column.division.one_digit_divisor";
+pub const SKILL_ID_COLUMN_DIVIDE_2DIGIT: &str = "jp.grade4.column.division.two_digit_divisor";
+pub const SKILL_ID_COLUMN_DECIMAL_ADD_SUBTRACT: &str = "jp.grade4.column.decimal.add_subtract";
+pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: &str =
+    "jp.grade4.column.decimal.multiply_integer";
+pub const SKILL_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: &str = "jp.grade4.column.decimal.divide_integer";
+pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLICATION: &str = "jp.grade5.column.decimal.multiplication";
+pub const SKILL_ID_COLUMN_DECIMAL_DIVISION: &str = "jp.grade5.column.decimal.division";
 pub const CURRICULUM_PATH: [&str; 3] = ["root", "小学1年生", "一桁の足し算"];
 pub const CURRICULUM_PATH_LINEAR_EQUATION_1: [&str; 4] =
     ["root", "中学1年生", "一次方程式", "一次方程式(1)"];
@@ -82,6 +142,12 @@ pub const CURRICULUM_PATH_FRACTION_MULTIPLICATION: [&str; 3] =
     ["root", "小学6年生", "分数の掛け算"];
 pub const CURRICULUM_PATH_FRACTION_SUBTRACTION: [&str; 3] = ["root", "小学5年生", "分数の引き算"];
 pub const CURRICULUM_PATH_FRACTION_DIVISION: [&str; 3] = ["root", "小学6年生", "分数の割り算"];
+pub const CURRICULUM_PATH_FRACTION_INTEGER_MULTIPLICATION: [&str; 3] =
+    ["root", "小学6年生", "分数と整数の掛け算"];
+pub const CURRICULUM_PATH_FRACTION_INTEGER_DIVISION: [&str; 3] =
+    ["root", "小学6年生", "分数と整数の割り算"];
+pub const CURRICULUM_PATH_FRACTION_SUMMARY_IMPROPER: [&str; 3] =
+    ["root", "小学6年生", "分数総まとめ(仮分数)"];
 pub const CURRICULUM_PATH_DIVISION_1: [&str; 3] = ["root", "小学3年生", "割り算(1)"];
 pub const CURRICULUM_PATH_QUADRATIC_EQUATION_1: [&str; 4] =
     ["root", "中学3年生", "二次方程式", "二次方程式(1)"];
@@ -92,7 +158,56 @@ pub const CURRICULUM_PATH_QUADRATIC_EQUATION_3: [&str; 4] =
 pub const CURRICULUM_PATH_DECIMAL_ADD_SUBTRACT: [&str; 3] =
     ["root", "小学4年生", "小数の足し算と引き算"];
 pub const CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE: [&str; 3] =
+    ["root", "小学5年生", "小数の掛け算"];
+pub const CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE_LEGACY: [&str; 3] =
     ["root", "小学5年生", "小数の掛け算と割り算"];
+pub const CURRICULUM_PATH_DECIMAL_DIVISION: [&str; 3] = ["root", "小学5年生", "小数の割り算"];
+pub const CURRICULUM_PATH_COLUMN_ADD_2DIGIT: [&str; 4] =
+    ["root", "小学2年生", "加法，減法", "二桁の足し算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT: [&str; 4] =
+    ["root", "小学2年生", "加法，減法", "二桁の引き算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_ADD_3_4DIGIT: [&str; 4] =
+    ["root", "小学3年生", "加法，減法", "三・四桁の足し算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_SUBTRACT_3_4DIGIT: [&str; 4] =
+    ["root", "小学3年生", "加法，減法", "三・四桁の引き算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_MULTIPLY_1DIGIT: [&str; 4] =
+    ["root", "小学3年生", "乗法", "一桁をかける掛け算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_MULTIPLY_2DIGIT: [&str; 4] =
+    ["root", "小学3年生", "乗法", "二桁をかける掛け算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_DIVIDE_1DIGIT: [&str; 4] =
+    ["root", "小学3年生", "除法", "一桁で割る割り算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_DIVIDE_2DIGIT: [&str; 4] =
+    ["root", "小学4年生", "整数の除法", "二桁で割る割り算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_ADD_SUBTRACT: [&str; 4] = [
+    "root",
+    "小学4年生",
+    "小数の仕組みとその計算",
+    "小数の足し算と引き算の筆算",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLY_INTEGER: [&str; 4] = [
+    "root",
+    "小学4年生",
+    "小数の仕組みとその計算",
+    "小数と整数の掛け算の筆算",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVIDE_INTEGER: [&str; 4] = [
+    "root",
+    "小学4年生",
+    "小数の仕組みとその計算",
+    "小数と整数の割り算の筆算",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLICATION: [&str; 4] = [
+    "root",
+    "小学5年生",
+    "小数の乗法，除法",
+    "小数の掛け算の筆算",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION: [&str; 4] = [
+    "root",
+    "小学5年生",
+    "小数の乗法，除法",
+    "小数の割り算の筆算",
+];
 pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_1: [&str; 4] =
     ["root", "中学2年生", "連立方程式", "連立方程式(1)"];
 pub const CURRICULUM_PATH_LIAR_PUZZLE: [&str; 3] = ["root", "おまけ", "うそつきだれだ"];
@@ -108,6 +223,13 @@ pub const SIMULTANEOUS_EQUATION_ROWS: usize = 6;
 pub const LIAR_PUZZLE_PROBLEM_COUNT: usize = 6;
 pub const LIAR_PUZZLE_COLUMNS: usize = 1;
 pub const LIAR_PUZZLE_ROWS: usize = 6;
+pub const COLUMN_ARITHMETIC_PROBLEM_COUNT: usize = 16;
+pub const COLUMN_ARITHMETIC_COLUMNS: usize = 4;
+pub const COLUMN_ARITHMETIC_ROWS: usize = 4;
+/// Long division needs more vertical working room at the same readable font size.
+pub const COLUMN_DIVISION_PROBLEM_COUNT: usize = 12;
+pub const COLUMN_DIVISION_COLUMNS: usize = 4;
+pub const COLUMN_DIVISION_ROWS: usize = 3;
 pub const MIN_OPERAND: u8 = 1;
 pub const MAX_OPERAND: u8 = 9;
 pub const MIN_ANSWER: u8 = 1;
@@ -285,6 +407,11 @@ pub enum ProblemPrompt {
     Arithmetic {
         expression: ArithmeticExpression,
     },
+    ColumnArithmetic {
+        operator: ArithmeticOperator,
+        left: ArithmeticExpression,
+        right: ArithmeticExpression,
+    },
     LinearEquation {
         a: RationalCoefficient,
         b: RationalCoefficient,
@@ -388,6 +515,7 @@ impl Problem {
         match self.prompt {
             ProblemPrompt::Addition { left, right } => (left, right),
             ProblemPrompt::Arithmetic { .. }
+            | ProblemPrompt::ColumnArithmetic { .. }
             | ProblemPrompt::LinearEquation { .. }
             | ProblemPrompt::QuadraticEquation { .. }
             | ProblemPrompt::SimultaneousEquation { .. }
@@ -516,6 +644,7 @@ define_grade_warnings!(
     DuplicateSolution,
     SolutionListRequired,
     FractionFormRequired,
+    MixedFractionFormRequired,
     IntegerFormRequired,
 );
 

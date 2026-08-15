@@ -129,7 +129,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "9": {
       "numeric_theme_id": 9,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade5.fraction.addition",
       "curriculum_path": [
         "root",
@@ -144,7 +144,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "10": {
       "numeric_theme_id": 10,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade6.fraction.multiplication",
       "curriculum_path": [
         "root",
@@ -159,7 +159,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "11": {
       "numeric_theme_id": 11,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade5.fraction.subtraction",
       "curriculum_path": [
         "root",
@@ -174,7 +174,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "12": {
       "numeric_theme_id": 12,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade6.fraction.division",
       "curriculum_path": [
         "root",
@@ -220,7 +220,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "15": {
       "numeric_theme_id": 15,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade9.equation.quadratic.2",
       "curriculum_path": [
         "root",
@@ -252,7 +252,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "17": {
       "numeric_theme_id": 17,
-      "generator_revision": 4,
+      "generator_revision": 5,
       "skill_id": "jp.grade4.decimal.add_subtract",
       "curriculum_path": [
         "root",
@@ -267,12 +267,12 @@ export const DRILL_CORE_CONTRACT = {
     },
     "18": {
       "numeric_theme_id": 18,
-      "generator_revision": 5,
-      "skill_id": "jp.grade5.decimal.multiply_divide",
+      "generator_revision": 6,
+      "skill_id": "jp.grade5.decimal.multiplication",
       "curriculum_path": [
         "root",
         "小学5年生",
-        "小数の掛け算と割り算"
+        "小数の掛け算"
       ],
       "layout": {
         "problem_count": 20,
@@ -310,6 +310,274 @@ export const DRILL_CORE_CONTRACT = {
         "columns": 1,
         "rows": 6
       }
+    },
+    "21": {
+      "numeric_theme_id": 21,
+      "generator_revision": 1,
+      "skill_id": "jp.grade6.fraction.integer_multiplication",
+      "curriculum_path": [
+        "root",
+        "小学6年生",
+        "分数と整数の掛け算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "22": {
+      "numeric_theme_id": 22,
+      "generator_revision": 1,
+      "skill_id": "jp.grade6.fraction.integer_division",
+      "curriculum_path": [
+        "root",
+        "小学6年生",
+        "分数と整数の割り算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "23": {
+      "numeric_theme_id": 23,
+      "generator_revision": 1,
+      "skill_id": "jp.grade6.fraction.summary_improper",
+      "curriculum_path": [
+        "root",
+        "小学6年生",
+        "分数総まとめ(仮分数)"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "24": {
+      "numeric_theme_id": 24,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.decimal.division",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "小数の割り算"
+      ],
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "25": {
+      "numeric_theme_id": 25,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.column.addition.two_digit",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "加法，減法",
+        "二桁の足し算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "26": {
+      "numeric_theme_id": 26,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.column.subtraction.two_digit",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "加法，減法",
+        "二桁の引き算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "27": {
+      "numeric_theme_id": 27,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.column.addition.three_four_digit",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "加法，減法",
+        "三・四桁の足し算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "28": {
+      "numeric_theme_id": 28,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.column.subtraction.three_four_digit",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "加法，減法",
+        "三・四桁の引き算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "29": {
+      "numeric_theme_id": 29,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.column.multiplication.one_digit_multiplier",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "乗法",
+        "一桁をかける掛け算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "30": {
+      "numeric_theme_id": 30,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.column.multiplication.two_digit_multiplier",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "乗法",
+        "二桁をかける掛け算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "31": {
+      "numeric_theme_id": 31,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.column.division.one_digit_divisor",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "除法",
+        "一桁で割る割り算の筆算"
+      ],
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
+      }
+    },
+    "32": {
+      "numeric_theme_id": 32,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.division.two_digit_divisor",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "整数の除法",
+        "二桁で割る割り算の筆算"
+      ],
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
+      }
+    },
+    "33": {
+      "numeric_theme_id": 33,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.decimal.add_subtract",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "小数の仕組みとその計算",
+        "小数の足し算と引き算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "34": {
+      "numeric_theme_id": 34,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.decimal.multiply_integer",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "小数の仕組みとその計算",
+        "小数と整数の掛け算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "35": {
+      "numeric_theme_id": 35,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.decimal.divide_integer",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "小数の仕組みとその計算",
+        "小数と整数の割り算の筆算"
+      ],
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
+      }
+    },
+    "36": {
+      "numeric_theme_id": 36,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.column.decimal.multiplication",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "小数の乗法，除法",
+        "小数の掛け算の筆算"
+      ],
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "37": {
+      "numeric_theme_id": 37,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.column.decimal.division",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "小数の乗法，除法",
+        "小数の割り算の筆算"
+      ],
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
+      }
     }
   },
   "grade_warning_codes": [
@@ -320,6 +588,7 @@ export const DRILL_CORE_CONTRACT = {
     "duplicate_solution",
     "solution_list_required",
     "fraction_form_required",
+    "mixed_fraction_form_required",
     "integer_form_required"
   ]
 } as const;

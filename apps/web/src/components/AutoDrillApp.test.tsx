@@ -356,6 +356,21 @@ describe('AutoDrillApp', () => {
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
   });
 
+  it('shows the print recommendation only for themes carrying the print_recommended tag', () => {
+    const { container } = render(<AutoDrillApp engine={fixtureEngine()} />);
+    const note = 'この問題は紙に印刷して解くことをおすすめします。';
+    expect(screen.queryByRole('note', { name: note })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
+    fireEvent.click(screen.getByRole('option', { name: '二桁の足し算の筆算' }));
+    expect(screen.getByRole('note', { name: note })).toHaveClass('print-recommended-note');
+    expect(container.querySelector('.print-recommended-note rt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
+    fireEvent.click(screen.getByRole('option', { name: '一桁の足し算' }));
+    expect(screen.queryByRole('note', { name: note })).not.toBeInTheDocument();
+  });
+
   it('shows the color-coded grade tag in the selected Recommended theme and before option checkmarks', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     const themeSelect = screen.getByRole('combobox', { name: 'テーマ' });
@@ -417,8 +432,8 @@ describe('AutoDrillApp', () => {
     const groups = [
       ['足し算と引き算', ['一桁の足し算', '一桁の引き算', '二桁の足し算']],
       ['掛け算と割り算', ['九九', '割り算(1)']],
-      ['小数', ['小数の足し算と引き算', '小数の掛け算と割り算']],
-      ['分数', ['分数の足し算', '分数の引き算', '分数の掛け算', '分数の割り算']],
+      ['小数', ['小数の足し算と引き算', '小数の掛け算', '小数の割り算']],
+      ['分数', ['分数の足し算', '分数の引き算', '分数の掛け算', '分数の割り算', '分数と整数の掛け算', '分数と整数の割り算', '分数総まとめ(仮分数)']],
       ['負の数', ['負の数の計算(1)', '負の数の計算(2)']],
       ['方程式', ['一次方程式(1)', '一次方程式(2)', '連立方程式(1)', '二次方程式(1)', '二次方程式(2)', '二次方程式(3)']],
     ] as const;

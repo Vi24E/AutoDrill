@@ -63,6 +63,22 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 九九の逆算テーマだけは例外で、割り切れる問題でも常に`BaseTimes×3`で探索する。
 
+## 筆算theme
+
+筆算theme専用の「桁数×定数」effortは持たない。表示が縦式であることと数学的標準解法は分離し、既存の共通整数/小数builderをそのまま使う。
+
+- 足し算: `BasePlus` + carry時の`Increment` / `OverheadCarryPlus`
+- 引き算: `BaseMinus` + borrow時の`Decrement` / `OverheadCarryMinus`
+- 掛け算: `BaseTimes` + carry + 部分積の共通整数加算
+- 割り算: 商digit探索の`BaseTimes`/`Compare`、積との差の共通減算、桁下ろし`Identity`
+- 小数加減: decimal alignment後に共通整数加減
+- 小数乗算: 共通整数乗算 + 最終小数点位置`TimeTen`
+- 小数除算: 除数整数化の`TimeTen` + 共通長除法
+
+商と余りを答える整数除法も、計算本体は同じ`divide_or_identity_operations`を使う。OrderedPairとしての最終答案に必要な通常のread/write costだけを追加し、余りあり/なしを別difficulty heuristicにはしない。
+
+小数加減の筆算だけはAddition/Subtractionを教材coverage上のlayerとして8問ずつ確保する。carry/borrow、余りあり/なしはlayerではなく、実際に発生したprimitive operation数がscalar effortへ反映される。
+
 ## PF / GCD / LCM / 平方根
 
 ### 素因数分解
@@ -82,6 +98,20 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 一桁完全平方なら`BaseRoot`。それ以外は`OverheadFactorPerfectSquare`を加え、`2^2, 3^2, 5^2, 7^2, ...`でradicandを試し割りして平方因子を探す。外へ出した因子が複数なら共通乗算builderで掛け合わせる。一般PFへ置き換えない。
 
 `(sqrt(n))^2`そのものは探索不要で`BaseRootSquareCancel`一回。
+
+## Difficulty samplingとlayer
+
+`effort = operation_counts · operation_weights`というscalar difficultyモデルは維持する。operation vectorのcosine similarity、PCA、farthest-point等をdifficulty samplerへ導入しない。
+
+教材上同一worksheet内で複数アーキタイプのcoverageを保証する必要があるテーマだけ、generator内部metadataとしてlayerを宣言できる。quotaは各layerのminimumを確保してからweight比例のlargest-remainder方式で残数を配分し、各layer内で既存のscalar effort samplerを独立に適用する。randomもlayer quotaを守った上でlayer内random samplingする。layer情報は公開Worksheet schemaへ含めない。
+
+現行のlayered themeは次の3つ。
+
+- 小数の足し算と引き算: Addition / Subtraction（20問で10/10）
+- 分数総まとめ(仮分数): Addition / Subtraction / Multiplication / Division（16問で4/4/4/4）
+- 二次方程式(2): DifferenceOfSquares / PerfectSquare / General（16問で2/2/12、20問なら2/2/16）
+
+`うそつきだれだ`はlayered themeではない。3人/4人比率がdifficultyで変化すること自体が想定されたscalar difficulty behaviorである。
 
 ## 分数・小数
 

@@ -40,6 +40,23 @@ function representativePrompt(themeId: number): { prompt: ProblemPrompt; answer:
     case 18: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 12, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 5, scale: 2 } } }, answer: { type: 'exact_decimal', value: { coefficient: '6', scale: 2 } } };
     case 19: return { prompt: { kind: 'simultaneous_equation', a: 2, b: 1, c: 7, d: 1, e: -1, f: -1 }, answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] } };
     case 20: return { prompt: { kind: 'liar_puzzle', people_count: 4, statements: [{ kind: 'says_liar', person: 2 }, { kind: 'exact_liar_count', count: 2 }, { kind: 'both_not_liar', first: 1, second: 4 }, { kind: 'implication', antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false }] }, answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] } };
+    case 21: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'rational', value: { numerator: 5, denominator: 3 } }, right: { kind: 'integer', value: 2 } } }, answer: { type: 'mixed_fraction', value: { whole: { type: 'integer', value: '3' }, numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '3' } } } };
+    case 22: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'integer', value: 2 }, right: { kind: 'rational', value: { numerator: 3, denominator: 4 } } } }, answer: { type: 'mixed_fraction', value: { whole: { type: 'integer', value: '2' }, numerator: { type: 'integer', value: '2' }, denominator: { type: 'integer', value: '3' } } } };
+    case 23: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'rational', value: { numerator: 7, denominator: 3 } }, right: { kind: 'integer', value: 2 } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '14' }, denominator: { type: 'integer', value: '3' } } } };
+    case 24: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 36, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 12, scale: 1 } } }, answer: { type: 'integer', value: '3' } };
+    case 25: return { prompt: { kind: 'column_arithmetic', operator: 'add', left: { kind: 'integer', value: 47 }, right: { kind: 'integer', value: 38 } }, answer: { type: 'integer', value: '85' } };
+    case 26: return { prompt: { kind: 'column_arithmetic', operator: 'subtract', left: { kind: 'integer', value: 72 }, right: { kind: 'integer', value: 48 } }, answer: { type: 'integer', value: '24' } };
+    case 27: return { prompt: { kind: 'column_arithmetic', operator: 'add', left: { kind: 'integer', value: 2368 }, right: { kind: 'integer', value: 1457 } }, answer: { type: 'integer', value: '3825' } };
+    case 28: return { prompt: { kind: 'column_arithmetic', operator: 'subtract', left: { kind: 'integer', value: 5000 }, right: { kind: 'integer', value: 2846 } }, answer: { type: 'integer', value: '2154' } };
+    case 29: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'integer', value: 243 }, right: { kind: 'integer', value: 7 } }, answer: { type: 'integer', value: '1701' } };
+    case 30: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'integer', value: 243 }, right: { kind: 'integer', value: 18 } }, answer: { type: 'integer', value: '4374' } };
+    case 31: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'integer', value: 157 }, right: { kind: 'integer', value: 6 } }, answer: { type: 'tuple', value: [{ type: 'integer', value: '26' }, { type: 'integer', value: '1' }] } };
+    case 32: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'integer', value: 735 }, right: { kind: 'integer', value: 21 } }, answer: { type: 'tuple', value: [{ type: 'integer', value: '35' }, { type: 'integer', value: '0' }] } };
+    case 33: return { prompt: { kind: 'column_arithmetic', operator: 'add', left: { kind: 'exact_decimal', coefficient: 235, scale: 2 }, right: { kind: 'exact_decimal', coefficient: 17, scale: 1 } }, answer: { type: 'exact_decimal', value: { coefficient: '405', scale: 2 } } };
+    case 34: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 24, scale: 1 }, right: { kind: 'integer', value: 3 } }, answer: { type: 'exact_decimal', value: { coefficient: '72', scale: 1 } } };
+    case 35: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 48, scale: 1 }, right: { kind: 'integer', value: 2 } }, answer: { type: 'exact_decimal', value: { coefficient: '24', scale: 1 } } };
+    case 36: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 24, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 35, scale: 1 } }, answer: { type: 'exact_decimal', value: { coefficient: '84', scale: 1 } } };
+    case 37: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 72, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 6, scale: 1 } }, answer: { type: 'integer', value: '12' } };
     default: throw new Error(`Missing representative print prompt for theme ${themeId}`);
   }
 }
@@ -102,6 +119,44 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     expect(pages[0]?.footer).toEqual({ text: 'date: 2026-07-30 / seed: repeatMe', physical_corner: 'bottom-right' });
   });
 
+  it('derives a row-major 4 x 4 printable column-arithmetic model without visible vertical dividers', () => {
+    const definition = THEME_DEFINITIONS.find((theme) => theme.numeric_theme_id === 25)!;
+    const worksheet = representativeWorksheet(definition);
+    const layout = buildSharedWorksheetLayout(worksheet);
+    const { container } = render(<WorksheetPrintDocument worksheet={worksheet} />);
+    expect(layout.cells).toHaveLength(16);
+    expect(layout.cells[3]).toMatchObject({ column: 3, row: 0 });
+    expect(layout.cells[4]).toMatchObject({ column: 0, row: 1 });
+    expect(layout.cells[12]).toMatchObject({ column: 0, row: 3 });
+    expect(layout.dividerXs).toHaveLength(3);
+    expect(container.querySelectorAll('[data-print-page="problems"] .problem-divider')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-print-page="problems"] .problem-cell-column-arithmetic')).toHaveLength(16);
+    expect(container.querySelectorAll('[data-print-page="problems"] .worksheet-print-empty-answer')).toHaveLength(16);
+    expect(container.querySelectorAll('[data-print-page="answers"] .worksheet-print-empty-answer')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-print-page="answers"] [data-column-solution="true"]')).toHaveLength(16);
+  });
+
+  it('prints completed multiplication and long-division working on the answer page', () => {
+    const multiplication = representativeWorksheet(THEME_DEFINITIONS.find((theme) => theme.numeric_theme_id === 30)!);
+    const multiplicationRender = render(<WorksheetPrintDocument worksheet={multiplication} />);
+    expect(multiplicationRender.container.querySelectorAll('[data-print-page="answers"] .column-multiply-partial')).toHaveLength(32);
+    expect(multiplicationRender.container.querySelectorAll('[data-print-page="answers"] [data-column-solution="true"]')).toHaveLength(16);
+    multiplicationRender.unmount();
+
+    const division = representativeWorksheet(THEME_DEFINITIONS.find((theme) => theme.numeric_theme_id === 32)!);
+    const divisionRender = render(<WorksheetPrintDocument worksheet={division} />);
+    expect(divisionRender.container.querySelectorAll('[data-print-page="problems"] .column-division-answer-coordinate-remainder')).toHaveLength(0);
+    expect(divisionRender.container.querySelectorAll('[data-print-page="problems"] .worksheet-print-empty-answer')).toHaveLength(12);
+    expect(divisionRender.container.querySelectorAll('[data-print-page="answers"] .column-division-solution-step').length).toBeGreaterThanOrEqual(12);
+    expect(divisionRender.container.querySelectorAll('[data-print-page="answers"] .problem-answer-area-column-division')).toHaveLength(0);
+    const problemCell = divisionRender.container.querySelector<HTMLElement>('[data-print-page="problems"] .problem-cell-column-arithmetic-divide');
+    const answerCell = divisionRender.container.querySelector<HTMLElement>('[data-print-page="answers"] .problem-cell-column-arithmetic-divide');
+    expect(problemCell?.style.getPropertyValue('--column-digit-width')).toContain('var(--worksheet-grid-cell)');
+    expect(problemCell?.style.getPropertyValue('--column-division-active-width')).not.toBe('');
+    expect(answerCell?.style.getPropertyValue('--column-division-active-width')).toBe(problemCell?.style.getPropertyValue('--column-division-active-width'));
+    divisionRender.unmount();
+  });
+
   it('derives the 2 x 8 linear-equation print model from the same registry layout', () => {
     const worksheet = linearFixtureWorksheet(2);
     const layout = buildSharedWorksheetLayout(worksheet);
@@ -113,7 +168,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     expect(pages[1]?.cells[0]?.answer).toBe('-5');
   });
 
-  it('renders every registered theme through the same MathLive static elements used by Web', () => {
+  it('renders every registered theme through the same shared problem presentation used by Web', () => {
     for (const definition of THEME_DEFINITIONS) {
       const worksheet = representativeWorksheet(definition);
       const { container, unmount } = render(<WorksheetPrintDocument worksheet={worksheet} metadata={metadata} />);
@@ -125,10 +180,27 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
         expect(container.querySelectorAll('.liar-person-choice'), definition.label).toHaveLength(definition.problemCount * 4 * 2);
         expect(container.querySelectorAll('[data-print-page="answers"] .liar-person-choice-selected'), definition.label).toHaveLength(definition.problemCount * 2);
       } else {
-        expect(expressions, definition.label).toHaveLength(definition.problemCount * 2);
-        const answerFieldCount = definition.numeric_theme_id === 19 ? definition.problemCount * 2 : definition.problemCount;
-        expect(container.querySelectorAll('.worksheet-print-empty-answer'), definition.label).toHaveLength(answerFieldCount);
-        expect(container.querySelectorAll('math-span.worksheet-print-answer-value'), definition.label).toHaveLength(answerFieldCount);
+        const isColumnArithmetic = definition.tags.includes('column_arithmetic');
+        expect(expressions, definition.label).toHaveLength(isColumnArithmetic ? 0 : definition.problemCount * 2);
+        if (isColumnArithmetic) {
+          expect(container.querySelectorAll('[data-column-arithmetic]'), definition.label).toHaveLength(definition.problemCount * 2);
+          const cells = [...container.querySelectorAll<HTMLElement>('.problem-cell-column-arithmetic')];
+          expect(cells.every((cell) => cell.style.getPropertyValue('--column-digit-width').includes('var(--worksheet-grid-cell)')), definition.label).toBe(true);
+          expect(container.querySelectorAll('.problem-grid-column-arithmetic'), definition.label).toHaveLength(2);
+          expect(container.querySelectorAll('.column-arithmetic-digit-cell').length, definition.label).toBeGreaterThan(0);
+        }
+        if (isColumnArithmetic) {
+          expect(container.querySelectorAll('[data-print-page="problems"] .worksheet-print-empty-answer'), definition.label).toHaveLength(definition.problemCount);
+          expect(container.querySelectorAll('[data-print-page="answers"] [data-column-solution="true"]'), definition.label).toHaveLength(definition.problemCount);
+          expect(container.querySelectorAll('[data-print-page="answers"] .worksheet-print-answer-value'), definition.label).toHaveLength(0);
+          expect(container.querySelectorAll('[data-print-page="problems"] .column-division-answer-coordinate-remainder'), definition.label).toHaveLength(0);
+        } else {
+          const answerFieldCount = definition.numeric_theme_id === 19 || definition.answerSchemaKind === 'ordered_pair'
+            ? definition.problemCount * 2
+            : definition.problemCount;
+          expect(container.querySelectorAll('.worksheet-print-empty-answer'), definition.label).toHaveLength(answerFieldCount);
+          expect(container.querySelectorAll('math-span.worksheet-print-answer-value'), definition.label).toHaveLength(answerFieldCount);
+        }
       }
       unmount();
     }

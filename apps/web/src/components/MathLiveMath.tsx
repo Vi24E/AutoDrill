@@ -42,6 +42,8 @@ type MathLiveAnswerInputProps = {
   onInputLatex: (mathfield: MathfieldElement, latex: string) => void;
   onCommit: () => void;
   onRegister: (mathfield: MathfieldElement | null) => void;
+  /** Column-arithmetic answers use the same tabular sans digits as the printed algorithm. */
+  numericSansFont?: boolean;
 };
 
 export function MathLiveAnswerInput({
@@ -54,15 +56,21 @@ export function MathLiveAnswerInput({
   onInputLatex,
   onCommit,
   onRegister,
+  numericSansFont = false,
 }: MathLiveAnswerInputProps) {
   const mathfieldRef = useRef<MathfieldElement | null>(null);
   const initialLatexRef = useRef(initialLatex);
   const onRegisterRef = useRef(onRegister);
   const readOnlyRef = useRef(readOnly);
+  const numericSansFontRef = useRef(numericSansFont);
+  const numericGlyphObserverRef = useRef<MutationObserver | null>(null);
   onRegisterRef.current = onRegister;
   readOnlyRef.current = readOnly;
+  numericSansFontRef.current = numericSansFont;
 
   const attach = useCallback((mathfield: MathfieldElement | null) => {
+    numericGlyphObserverRef.current?.disconnect();
+    numericGlyphObserverRef.current = null;
     mathfieldRef.current = mathfield;
     onRegisterRef.current(mathfield);
     if (!mathfield) return;
@@ -81,6 +89,63 @@ export function MathLiveAnswerInput({
     mathfield.removeExtraneousParentheses = false;
     mathfield.readOnly = readOnlyRef.current;
     mathfield.setValue(initialLatexRef.current, { silenceNotifications: true });
+    if (numericSansFontRef.current) {
+      const installNumericGrid = () => {
+        const root = mathfield.shadowRoot;
+        if (!root) return;
+        if (!root.querySelector('style[data-autodrill-numeric-font]')) {
+          const style = document.createElement('style');
+          style.dataset.autodrillNumericFont = 'true';
+          style.textContent = `
+            .ML__base, .ML__latex, .ML__cmr, .ML__mathbf {
+              font-family: 'Noto Sans JP', system-ui, sans-serif !important;
+              font-variant-numeric: tabular-nums !important;
+              font-feature-settings: 'tnum' 1 !important;
+            }
+            .ML__cmr {
+              display: inline-flex !important;
+              box-sizing: border-box !important;
+              width: var(--column-digit-cell, 20px) !important;
+              min-width: var(--column-digit-cell, 20px) !important;
+              justify-content: center !important;
+              letter-spacing: 0 !important;
+              position: relative !important;
+            }
+            .ML__cmr[data-autodrill-decimal-marker="true"] {
+              width: 0 !important;
+              min-width: 0 !important;
+              overflow: visible !important;
+              color: transparent !important;
+            }
+            .ML__cmr[data-autodrill-decimal-marker="true"]::after {
+              position: absolute;
+              left: -2px;
+              bottom: 0;
+              width: 4px;
+              height: 4px;
+              border-radius: 50%;
+              background: #111;
+              content: '';
+            }
+          `;
+          root.append(style);
+        }
+        const markDecimalGlyphs = () => {
+          for (const glyph of root.querySelectorAll<HTMLElement>('.ML__cmr')) {
+            if (glyph.textContent === '.') glyph.dataset.autodrillDecimalMarker = 'true';
+            else delete glyph.dataset.autodrillDecimalMarker;
+          }
+        };
+        markDecimalGlyphs();
+        if (!numericGlyphObserverRef.current) {
+          const observer = new MutationObserver(markDecimalGlyphs);
+          observer.observe(root, { childList: true, subtree: true, characterData: true });
+          numericGlyphObserverRef.current = observer;
+        }
+      };
+      installNumericGrid();
+      queueMicrotask(installNumericGrid);
+    }
   }, []);
 
   useEffect(() => {
