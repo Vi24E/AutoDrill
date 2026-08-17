@@ -9,7 +9,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "pnpm contract:check && tsc --noEmit",
     "test": "vitest run",
-    "contract:check": "node ../../scripts/sync-web-contract.mjs"
+    "contract:check": "node ../../scripts/sync-web-contract.mjs && node ../../scripts/sync-web-wire-types.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-jp": "^5.3.0",

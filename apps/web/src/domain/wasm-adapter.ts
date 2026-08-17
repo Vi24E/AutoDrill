@@ -1,5 +1,5 @@
 import {
-  DRILL_OPERATION_KIND_COUNT,
+  drillOperationKindCountForSchema,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
   answerNodeText,
@@ -20,7 +20,7 @@ import {
 import { findThemeDefinitionByNumericId, sameInputInterface } from './theme-registry';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
-/** Generated wasm-pack exports. Every call accepts a schema-v3 JSON string. */
+/** Generated wasm-pack exports. New requests use the current generated schema. */
 export type DrillWasmRuntime = {
   generate_problem?: (request: string) => unknown | Promise<unknown>;
   generate_worksheet?: (request: string) => unknown | Promise<unknown>;
@@ -36,6 +36,8 @@ declare global {
   interface Window {
     /** Set by the generated drill-wasm package at application bootstrap. */
     __AUTODRILL_WASM__?: DrillWasmRuntime;
+    /** Current generated Rust/Web schema exposed for browser contract probes. */
+    __AUTODRILL_SCHEMA_VERSION__?: number;
   }
 }
 
@@ -111,6 +113,38 @@ function assertInteger(value: unknown, label: string): asserts value is number {
 function assertU32(value: unknown, label: string): asserts value is number {
   assertInteger(value, label);
   if (value < 0 || value > 0xffff_ffff) invalidDto(`WASM returned an out-of-range ${label}.`, value);
+}
+
+function assertWorkedSolution(value: unknown): void {
+  if (!isRecord(value) || typeof value.kind !== 'string') {
+    invalidDto('WASM returned an invalid worked solution.', value);
+  }
+  if (value.kind === 'column_multiplication') {
+    if (!Array.isArray(value.partial_products)) invalidDto('WASM returned invalid multiplication partial products.', value);
+    value.partial_products.forEach((partial) => {
+      if (!isRecord(partial)) invalidDto('WASM returned an invalid multiplication partial product.', partial);
+      assertInteger(partial.value, 'multiplication partial product');
+      assertU32(partial.place, 'multiplication partial place');
+    });
+    return;
+  }
+  if (value.kind === 'long_division') {
+    assertInteger(value.divisor, 'long-division divisor');
+    if (value.divisor <= 0) invalidDto('WASM returned a non-positive long-division divisor.', value.divisor);
+    assertInteger(value.dividend_coefficient, 'long-division dividend coefficient');
+    assertU32(value.dividend_scale, 'long-division dividend scale');
+    assertU32(value.quotient_trailing_cells, 'long-division quotient trailing cells');
+    if (!Array.isArray(value.steps)) invalidDto('WASM returned invalid long-division steps.', value);
+    value.steps.forEach((step) => {
+      if (!isRecord(step)) invalidDto('WASM returned an invalid long-division step.', step);
+      assertInteger(step.product, 'long-division product');
+      assertInteger(step.after, 'long-division next partial dividend');
+      assertU32(step.product_offset, 'long-division product offset');
+      assertU32(step.after_offset, 'long-division next-partial offset');
+    });
+    return;
+  }
+  invalidDto('WASM returned an unknown worked-solution kind.', value);
 }
 
 function assertCanonicalI64String(value: unknown, label: string): asserts value is string {
@@ -269,7 +303,7 @@ function validateAnswerNode(
 function unwrapEnvelope(value: unknown): unknown {
   const decoded = decodeWasmValue(value);
   if (!isRecord(decoded) || typeof decoded.ok !== 'boolean') {
-    invalidDto('WASM response did not contain the schema-v3 envelope.', value);
+    invalidDto('WASM response did not contain the current-schema envelope.', value);
   }
   if (decoded.schema_version !== DRILL_SCHEMA_VERSION) {
     invalidDto('WASM response used an unsupported schema version.', value);
@@ -278,16 +312,8 @@ function unwrapEnvelope(value: unknown): unknown {
   return decoded.data;
 }
 
-const INPUT_STRUCTURES: readonly AnswerInputStructure[] = [
-  'fraction',
-  'mixed_fraction',
-  'decimal',
-  'root',
-  'negative',
-  'plus_minus',
-  'tuple',
-  'arithmetic',
-];
+const INPUT_STRUCTURES: readonly AnswerInputStructure[] = DRILL_CORE_CONTRACT.editor_structures;
+const EDITOR_ACTION_TYPES: readonly string[] = DRILL_CORE_CONTRACT.editor_action_types;
 
 function assertInputInterface(value: unknown): asserts value is AnswerInputInterface {
   if (!isRecord(value) || typeof value.type !== 'string') {
@@ -543,7 +569,7 @@ function assertWorksheet(value: unknown): WorksheetDto {
   const identity = unwrapped.identity;
   const definition = findThemeDefinitionByNumericId(identity.numeric_theme_id);
   if (!definition || identity.generator_revision !== definition.generator_revision) {
-    invalidDto('WASM returned an unregistered schema-v3 theme identity.', identity);
+    invalidDto('WASM returned an unregistered current-schema theme identity.', identity);
   }
   const expectedProblemSetId = `${DRILL_SCHEMA_VERSION}-${identity.numeric_theme_id}-${identity.generator_revision}-${identity.seed}-${identity.difficulty}`;
   if (unwrapped.problem_set_id !== expectedProblemSetId) {
@@ -585,6 +611,7 @@ function assertWorksheet(value: unknown): WorksheetDto {
     assertAnswerSchema(problem.answer_schema, definition.answerSchemaKind);
     assertAnswerNode(problem.canonical_answer);
     assertAnswerSupportsInputInterface(problem.canonical_answer, problem.input_interface);
+    if (problem.worked_solution !== undefined) assertWorkedSolution(problem.worked_solution);
     if (!isRecord(problem.solution_graph) || !Array.isArray(problem.solution_graph.steps)) invalidDto('WASM returned an invalid solution graph.', problem);
     problem.solution_graph.steps.forEach((step) => {
       if (!isRecord(step) || !('id' in step) || !('operation' in step) || !('depends_on' in step)) {
@@ -598,7 +625,8 @@ function assertWorksheet(value: unknown): WorksheetDto {
       if (!Array.isArray(step.depends_on)) invalidDto('WASM returned invalid solution dependencies.', step);
       step.depends_on.forEach((dependency) => assertInteger(dependency, 'solution dependency'));
     });
-    if (!isRecord(problem.operation_vector) || !Array.isArray(problem.operation_vector.values) || problem.operation_vector.values.length !== DRILL_OPERATION_KIND_COUNT) invalidDto('WASM returned an invalid operation vector.', problem);
+    const expectedOperationKindCount = drillOperationKindCountForSchema(problem.schema_version);
+    if (expectedOperationKindCount === undefined || !isRecord(problem.operation_vector) || !Array.isArray(problem.operation_vector.values) || problem.operation_vector.values.length !== expectedOperationKindCount) invalidDto('WASM returned an invalid operation vector.', problem);
     problem.operation_vector.values.forEach((item) => assertFiniteNumber(item, 'operation-vector value'));
     assertFiniteNumber(problem.effort, 'problem effort');
     return {
@@ -694,54 +722,37 @@ function isEditableEditorLeaf(answer: AnswerNode): boolean {
   return answer.type === 'exact_decimal' && !answer.value.coefficient.startsWith('-');
 }
 
-function mapEditorAction(action: EditorAction): RecordValue {
-  switch (action.kind) {
-    case 'insert_digit': return { type: 'insert_digit', digit: action.digit };
-    case 'delete_backward': return { type: 'backspace' };
-    case 'delete_forward': return { type: 'delete' };
-    case 'move_left': return { type: 'move_left' };
-    case 'move_right': return { type: 'move_right' };
-    case 'insert_structure': return { type: 'insert_structure', structure: action.structure };
-    case 'select_slot': return { type: 'select_slot', path: [...action.path], cursor: action.cursor };
-    case 'clear': return { type: 'clear' };
-    case 'commit': return { type: 'commit' };
-  }
-}
-
 function assertEditorAction(value: unknown): asserts value is EditorAction {
-  if (!isRecord(value) || typeof value.kind !== 'string') invalidDto('The editor action was not valid.', value);
-  switch (value.kind) {
-    case 'insert_digit':
-      if (typeof value.digit !== 'number' || !Number.isSafeInteger(value.digit) || value.digit < 0 || value.digit > 9) {
-        invalidDto('The editor digit was not valid.', value);
-      }
-      return;
-    case 'delete_backward':
-    case 'delete_forward':
-    case 'move_left':
-    case 'move_right':
-    case 'clear':
-    case 'commit':
-      return;
-    case 'insert_structure':
-      if (typeof value.structure !== 'string' || !INPUT_STRUCTURES.includes(value.structure as AnswerInputStructure)) {
-        invalidDto('The editor structure was not valid.', value);
-      }
-      return;
-    case 'select_slot':
-      if (!Array.isArray(value.path) || value.path.some((index) => typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0)) {
-        invalidDto('The editor selection path was not valid.', value);
-      }
-      if (typeof value.cursor !== 'number' || !Number.isSafeInteger(value.cursor) || value.cursor < 0) {
-        invalidDto('The editor selection cursor was not valid.', value);
-      }
-      return;
-    default:
-      invalidDto(`The editor action kind was not supported: ${value.kind}.`, value);
+  if (!isRecord(value) || typeof value.type !== 'string' || !EDITOR_ACTION_TYPES.includes(value.type)) {
+    invalidDto('The editor action was not valid.', value);
+  }
+  if (value.type === 'insert_digit') {
+    if (typeof value.digit !== 'number' || !Number.isSafeInteger(value.digit) || value.digit < 0 || value.digit > 9) {
+      invalidDto('The editor digit was not valid.', value);
+    }
+    return;
+  }
+  if (value.type === 'insert_structure') {
+    if (typeof value.structure !== 'string' || !INPUT_STRUCTURES.includes(value.structure as AnswerInputStructure)) {
+      invalidDto('The editor structure was not valid.', value);
+    }
+    return;
+  }
+  if (value.type === 'select_slot') {
+    if (!Array.isArray(value.path) || value.path.some((index) => typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0)) {
+      invalidDto('The editor selection path was not valid.', value);
+    }
+    if (typeof value.cursor !== 'number' || !Number.isSafeInteger(value.cursor) || value.cursor < 0) {
+      invalidDto('The editor selection cursor was not valid.', value);
+    }
+    return;
+  }
+  if (Object.keys(value).some((key) => key !== 'type')) {
+    invalidDto('A payload-free editor action contained unexpected fields.', value);
   }
 }
 
-function assertSelectSlotTarget(state: EditorState, action: Extract<EditorAction, { kind: 'select_slot' }>): void {
+function assertSelectSlotTarget(state: EditorState, action: Extract<EditorAction, { type: 'select_slot' }>): void {
   const target = nodeAtEditorPath(state.answer, action.path);
   if (!target || !isEditableEditorLeaf(target)) invalidDto('The editor selection path was not valid.', action);
   if (action.cursor > [...answerNodeText(target)].length) {
@@ -836,9 +847,9 @@ export function createWasmDrillEngine(runtime?: DrillWasmRuntime): DrillEngine {
       try {
         assertInputInterface(inputInterface);
         assertEditorAction(action);
-        if (action.kind !== 'clear') {
+        if (action.type !== 'clear') {
           assertEditorStatePayload(state, inputInterface);
-          if (action.kind === 'select_slot') assertSelectSlotTarget(state, action);
+          if (action.type === 'select_slot') assertSelectSlotTarget(state, action);
         }
         const apply = resolveRuntime(runtime).apply_editor_action;
         if (!apply) throw new DrillEngineError('wasm_unavailable', 'drill-wasm does not expose apply_editor_action.');
@@ -851,7 +862,7 @@ export function createWasmDrillEngine(runtime?: DrillWasmRuntime): DrillEngine {
               : {}),
           },
           state,
-          action: mapEditorAction(action),
+          action,
         }), inputInterface);
       } catch (error) {
         throw mapBoundaryError(error);

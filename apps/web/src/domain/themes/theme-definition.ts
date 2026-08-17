@@ -1,7 +1,10 @@
 import type { AnswerInputInterface, AnswerInputStructure, CurriculumPathSegment, ProblemPrompt, WorksheetLayout } from '../drill-engine';
+import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 export type ThemePromptKind = ProblemPrompt['kind'];
-export type GradeSlug = `grade-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
+export type NumericThemeId = typeof DRILL_CORE_CONTRACT.themes[keyof typeof DRILL_CORE_CONTRACT.themes]['numeric_theme_id'];
+export type GradeNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type GradeSlug = `grade-${GradeNumber}`;
 export type RouteGroupSlug = GradeSlug | 'bonus';
 
 export const THEME_TAG_VALUES = [
@@ -37,7 +40,7 @@ export type ThemeDefinition = {
   generator_revision: number;
   themeKey: string;
   label: string;
-  grade: { slug: GradeSlug; label: string } | null;
+  grade: { number: GradeNumber; slug: GradeSlug; label: string } | null;
   tags: readonly ThemeTag[];
   /** Derived by defineTheme; retained as a stable read-only projection for callers. */
   gradeGenre: ThemeGenreMetadata | null;
@@ -48,13 +51,33 @@ export type ThemeDefinition = {
   route: { gradeSlug: RouteGroupSlug; themeSlug: string; pathname: `/drills/${RouteGroupSlug}/${string}` };
   search: { title: string; description: string };
   compatibility: { skillId: string; curriculumPath: readonly CurriculumPathSegment[] };
+  safety: 'non_negative_only' | 'unrestricted';
+  presentation: {
+    column_arithmetic: boolean;
+    print_recommended: boolean;
+    equation_layout: boolean;
+    fraction: 'none' | 'mixed_number_when_improper' | 'keep_improper_fraction';
+  };
+  dedup: 'canonicalize_commutative' | 'preserve_operand_order';
   promptKind: ThemePromptKind;
   answerSchemaKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'algebraic';
   inputInterface: AnswerInputInterface;
+  editorInputInterface: AnswerInputInterface;
   worksheet: { title: string; instruction: string; answerPrefix: string | null; answerPlacement?: 'inline' | 'below' };
 };
 
-export type ThemeDefinitionInput = Omit<ThemeDefinition, 'gradeGenre' | 'recommendedGenre'>;
+/**
+ * `numeric_theme_id` is the only hand-written Rust foreign key in a Web theme
+ * definition. `defineTheme` resolves and validates every other cross-language
+ * field (revision, skill id, curriculum, layout, capabilities) from generated Rust metadata.
+ */
+export type ThemeDefinitionInput = Omit<
+  ThemeDefinition,
+  'numeric_theme_id' | 'generator_revision' | 'themeKey' | 'grade' | 'tags' | 'gradeGenre' | 'recommendedGenre' | 'problemCount' | 'layout' | 'route' | 'compatibility' | 'safety' | 'presentation' | 'dedup' | 'promptKind' | 'answerSchemaKind' | 'inputInterface' | 'editorInputInterface'
+> & {
+  numeric_theme_id: NumericThemeId;
+  route: { themeSlug: string };
+};
 
 function hasAny(tags: readonly ThemeTag[], candidates: readonly ThemeTag[]): boolean {
   return candidates.some((tag) => tags.includes(tag));
@@ -85,7 +108,7 @@ export function recommendedGenreFromTags(tags: readonly ThemeTag[]): ThemeGenreM
 
 export function derivedGradeTag(grade: ThemeDefinition['grade']): DerivedGradeTag | null {
   if (!grade) return null;
-  const number = Number(grade.slug.slice('grade-'.length));
+  const number = grade.number;
   if (number <= 6) return `grade_${number}` as DerivedGradeTag;
   return `junior_high_${number - 6}` as DerivedGradeTag;
 }
@@ -100,44 +123,70 @@ export function hasThemeTag(theme: Pick<ThemeDefinition, 'tags'>, tag: ThemeTag)
 }
 
 export function defineTheme(input: ThemeDefinitionInput): ThemeDefinition {
-  const uniqueTags = [...new Set(input.tags)];
+  const core = DRILL_CORE_CONTRACT.themes[String(input.numeric_theme_id) as keyof typeof DRILL_CORE_CONTRACT.themes];
+  if (!core || core.numeric_theme_id !== input.numeric_theme_id) {
+    throw new Error(`Theme ${input.numeric_theme_id} has no Rust theme contract.`);
+  }
+  const grade = core.grade === null
+    ? null
+    : { number: core.grade as GradeNumber, slug: `grade-${core.grade}` as GradeSlug, label: core.curriculum_path[1] ?? `Grade ${core.grade}` };
+  const routeGroup = grade?.slug ?? 'bonus';
+  const uniqueTags = [...new Set(core.tags)] as ThemeTag[];
   const gradeGenre = gradeGenreFromTags(uniqueTags);
   const recommendedGenre = recommendedGenreFromTags(uniqueTags);
-  if (input.grade && !gradeGenre) throw new Error(`Theme ${input.themeKey} has no grade taxonomy genre.`);
-  if (!recommendedGenre) throw new Error(`Theme ${input.themeKey} has no recommended taxonomy genre.`);
-  return { ...input, tags: uniqueTags, gradeGenre, recommendedGenre };
+  if (grade && !gradeGenre) throw new Error(`Theme ${core.skill_id} has no grade taxonomy genre.`);
+  if (!recommendedGenre) throw new Error(`Theme ${core.skill_id} has no recommended taxonomy genre.`);
+  const curriculumPath = core.curriculum_path.map((label, index) => ({
+    id: index === 0 ? 'root' : index === core.curriculum_path.length - 1 ? core.skill_id : `${core.skill_id}:path:${index}`,
+    label,
+  }));
+  return {
+    ...input,
+    themeKey: core.skill_id,
+    route: {
+      gradeSlug: routeGroup,
+      themeSlug: input.route.themeSlug,
+      pathname: `/drills/${routeGroup}/${input.route.themeSlug}` as `/drills/${RouteGroupSlug}/${string}`,
+    },
+    generator_revision: core.generator_revision,
+    grade,
+    tags: uniqueTags,
+    gradeGenre,
+    recommendedGenre,
+    problemCount: core.layout.problem_count,
+    layout: core.layout,
+    compatibility: { skillId: core.skill_id, curriculumPath },
+    safety: core.safety,
+    presentation: core.presentation,
+    dedup: core.dedup,
+    promptKind: core.answer_contract.prompt_kind as ThemePromptKind,
+    answerSchemaKind: core.answer_contract.answer_schema_kind,
+    inputInterface: core.input_interface as AnswerInputInterface,
+    editorInputInterface: core.editor_input_interface as AnswerInputInterface,
+  };
 }
 
-export const ALL_MATH_STRUCTURES = ['fraction', 'mixed_fraction', 'decimal', 'root', 'negative', 'plus_minus', 'tuple'] as const satisfies readonly AnswerInputStructure[];
-export const SIMPLE_POSITIVE: AnswerInputInterface = { type: 'simple_numeric', allow_decimal: false, allow_negative: false };
-export const SIMPLE_SIGNED: AnswerInputInterface = { type: 'simple_numeric', allow_decimal: false, allow_negative: true };
-export const SIMPLE_DECIMAL: AnswerInputInterface = { type: 'simple_numeric', allow_decimal: true, allow_negative: false };
-export const FRACTION_INPUT: AnswerInputInterface = { type: 'structured_math', allowed_structures: ['fraction', 'mixed_fraction', 'decimal'] };
-export const SIGNED_RATIONAL_INPUT: AnswerInputInterface = { type: 'structured_math', allowed_structures: ['fraction', 'negative'] };
-export const LINEAR_INPUT_INTERFACE: AnswerInputInterface = { type: 'structured_math', allowed_structures: ALL_MATH_STRUCTURES };
-export const QUADRATIC_INPUT_INTERFACE: AnswerInputInterface = { type: 'structured_math', allowed_structures: ['fraction', 'root', 'negative', 'plus_minus', 'tuple', 'arithmetic'] };
+export const ALL_MATH_STRUCTURES = ['fraction', 'mixed_fraction', 'decimal', 'root', 'negative', 'plus_minus', 'tuple', 'arithmetic'] as const satisfies readonly AnswerInputStructure[];
 export const LINEAR_INSTRUCTION = '次の一次方程式を解きなさい。ただし、答えが整数でない場合は約分によって最も簡単な形の仮分数で答えなさい。';
 export const FRACTION_INSTRUCTION = '次の計算をしなさい。答えが仮分数になる場合は帯分数に直し、約分して最も簡単な形で答えなさい。';
 export const IMPROPER_FRACTION_INSTRUCTION = '次の計算をしなさい。答えは仮分数のまま、約分して最も簡単な形で答えなさい。';
 
-export function arithmeticTheme(base: Omit<ThemeDefinitionInput, 'promptKind' | 'answerSchemaKind' | 'worksheet'> & {
-  answerSchemaKind?: 'integer' | 'rational' | 'decimal' | 'algebraic';
+export function arithmeticTheme(base: Omit<ThemeDefinitionInput, 'worksheet'> & {
   title: string;
   instruction?: string;
   answerPlacement?: 'inline' | 'below';
 }): ThemeDefinition {
-  const { title, instruction = '', answerPlacement = 'inline', answerSchemaKind = 'integer', ...rest } = base;
-  return defineTheme({ ...rest, promptKind: 'arithmetic', answerSchemaKind, worksheet: { title, instruction, answerPrefix: null, answerPlacement } });
+  const { title, instruction = '', answerPlacement = 'inline', ...rest } = base;
+  return defineTheme({ ...rest, worksheet: { title, instruction, answerPrefix: null, answerPlacement } });
 }
 
-export function columnArithmeticTheme(base: Omit<ThemeDefinitionInput, 'promptKind' | 'worksheet'> & {
+export function columnArithmeticTheme(base: Omit<ThemeDefinitionInput, 'worksheet'> & {
   title: string;
   instruction?: string;
 }): ThemeDefinition {
   const { title, instruction = '次の計算を筆算でしなさい。', ...rest } = base;
   return defineTheme({
     ...rest,
-    promptKind: 'column_arithmetic',
     worksheet: { title, instruction, answerPrefix: null, answerPlacement: 'below' },
   });
 }

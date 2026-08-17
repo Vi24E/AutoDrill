@@ -8,7 +8,8 @@ import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { answerNodeText, type AnswerNode, type WorksheetDto } from '@/domain/drill-engine';
 import { answerNodeLatex, answerPrefixLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel, problemExpression } from '@/domain/problem-format';
-import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
+import { answerCoordinate, answerPresentationPlan } from '@/domain/answer-presentation';
+import { columnArithmeticGridVariables, columnArithmeticPageGridVariables } from '@/domain/column-arithmetic-presentation';
 import { findThemeDefinitionByNumericId, type ThemeDefinition } from '@/domain/theme-registry';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
 
@@ -72,12 +73,6 @@ function toPagePercent(value: number, total: number): string {
   return `${(value / total) * 100}%`;
 }
 
-function printAnswerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerNode {
-  return answer.type === 'tuple' && answer.value[coordinate]
-    ? answer.value[coordinate]
-    : ({ type: 'empty' } satisfies AnswerNode);
-}
-
 function PrintAnswer({
   problem,
   answerPrefix,
@@ -87,14 +82,15 @@ function PrintAnswer({
   answerPrefix: string | null;
   answers: boolean;
 }) {
-  if (problem.prompt.kind === 'liar_puzzle') {
+  const presentation = answerPresentationPlan(problem);
+  if (presentation.kind === 'liar_puzzle') {
     const selected = new Set(problem.canonical_answer.type === 'tuple'
       ? problem.canonical_answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : [])
       : []);
     return (
       <span className={`problem-answer-area problem-answer-area-liar ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`}>
         <span className="liar-person-choice-row">
-          {Array.from({ length: problem.prompt.people_count }, (_, index) => index + 1).map((person) => (
+          {Array.from({ length: presentation.peopleCount }, (_, index) => index + 1).map((person) => (
             <span key={person} className={`liar-person-choice ${answers && selected.has(person) ? 'liar-person-choice-selected' : ''}`}>{liarPersonLabel(person)}</span>
           ))}
         </span>
@@ -102,9 +98,9 @@ function PrintAnswer({
     );
   }
 
-  if (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide') {
-    const quotient = problem.answer_schema.kind === 'ordered_pair'
-      ? printAnswerCoordinate(problem.canonical_answer, 0)
+  if (presentation.kind === 'column_division') {
+    const quotient = presentation.hasRemainder
+      ? answerCoordinate(problem.canonical_answer, 0)
       : problem.canonical_answer;
     return (
       <span className={`problem-answer-area problem-answer-area-column-division ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`} aria-hidden={answers ? undefined : 'true'}>
@@ -118,19 +114,19 @@ function PrintAnswer({
     );
   }
 
-  if (problem.prompt.kind === 'simultaneous_equation') {
-    const xAnswer = printAnswerCoordinate(problem.canonical_answer, 0);
-    const yAnswer = printAnswerCoordinate(problem.canonical_answer, 1);
+  if (presentation.kind === 'simultaneous_equation') {
+    const xAnswer = answerCoordinate(problem.canonical_answer, 0);
+    const yAnswer = answerCoordinate(problem.canonical_answer, 1);
     return (
       <span className={`problem-answer-area problem-answer-area-simultaneous ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`} aria-hidden={answers ? undefined : 'true'}>
         <span className="simultaneous-answer-coordinate">
-          <MathLiveStatic className="answer-prefix-label" latex="x\\,=" ariaLabel="x =" />
+          <MathLiveStatic className="answer-prefix-label" latex="x=" ariaLabel="x =" />
           {answers
             ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(xAnswer)} ariaLabel={answerNodeText(xAnswer)} />
             : <span className="answer-box worksheet-print-empty-answer" />}
         </span>
         <span className="simultaneous-answer-coordinate">
-          <MathLiveStatic className="answer-prefix-label" latex="y\\,=" ariaLabel="y =" />
+          <MathLiveStatic className="answer-prefix-label" latex="y=" ariaLabel="y =" />
           {answers
             ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(yAnswer)} ariaLabel={answerNodeText(yAnswer)} />
             : <span className="answer-box worksheet-print-empty-answer" />}
@@ -183,10 +179,10 @@ function WorksheetPrintPage({
   answers: boolean;
 }) {
   const layout = buildSharedWorksheetLayout(worksheet);
-  const isColumnArithmeticWorksheet = worksheet.problems.length > 0
-    && worksheet.problems.every((problem) => problem.prompt.kind === 'column_arithmetic');
   const theme = themeForWorksheet(worksheet);
-  const gradeBandClass = theme.grade ? worksheetGradeBandClass(theme.grade.slug) : 'worksheet-grade-junior-high';
+  const isColumnArithmeticWorksheet = theme.presentation.column_arithmetic;
+  const isEquationWorksheet = theme.presentation.equation_layout;
+  const gradeBandClass = theme.grade ? worksheetGradeBandClass(theme.grade.number) : 'worksheet-grade-junior-high';
   const categoryLabel = theme.grade?.label ?? 'おまけ';
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
@@ -205,6 +201,7 @@ function WorksheetPrintPage({
       className={`worksheet-print-page ${gradeBandClass} ${answers ? 'worksheet-print-page-answers' : 'worksheet-print-page-problems'}`}
       data-print-page={answers ? 'answers' : 'problems'}
       aria-label={`${theme.worksheet.title}${answers ? ' 解答' : ''}`}
+      style={isColumnArithmeticWorksheet ? columnArithmeticPageGridVariables() : undefined}
     >
       <div className={`worksheet-print-page-inner ${answers ? 'worksheet-print-page-inner-rotated' : ''}`}>
         <div className="worksheet-print-heading">
@@ -221,7 +218,7 @@ function WorksheetPrintPage({
           {layout.cells.map((cell) => {
             const { problem, index } = cell;
             const position = getCellTopPosition(layout, cell);
-            const isLinearEquation = problem.prompt.kind === 'linear_equation' || problem.prompt.kind === 'quadratic_equation' || problem.prompt.kind === 'simultaneous_equation';
+            const isLinearEquation = isEquationWorksheet;
             const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
             const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
             const stackAnswerBelow = theme.worksheet.answerPlacement === 'below' && !isLinearEquation;

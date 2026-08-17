@@ -11,6 +11,7 @@ import {
   findImplementedThemeByRoute,
 } from '@/domain/curriculum';
 import { ALL_MATH_STRUCTURES, taxonomyTags } from '@/domain/theme-registry';
+import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
@@ -35,6 +36,10 @@ describe('Web curriculum registry', () => {
       });
       expect(theme.inputInterface).toEqual({
         type: 'structured_math',
+        allowed_structures: ['fraction', 'mixed_fraction', 'decimal', 'root', 'negative', 'plus_minus', 'tuple'],
+      });
+      expect(theme.editorInputInterface).toEqual({
+        type: 'structured_math',
         allowed_structures: ALL_MATH_STRUCTURES,
       });
     }
@@ -42,7 +47,7 @@ describe('Web curriculum registry', () => {
 
   it('exposes the implemented Recommended sections and defaults to addition', () => {
     expect(DEFAULT_WEB_DRILL_SETTINGS).toEqual({
-      schema_version: 4,
+      schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: ONE_DIGIT_ADDITION_THEME.numeric_theme_id,
       themeKey: ONE_DIGIT_ADDITION_THEME.themeKey,
       difficulty: 2,
@@ -83,7 +88,7 @@ describe('Web curriculum registry', () => {
   });
 
   it('never exposes negative input capability for elementary-school themes', () => {
-    const elementary = IMPLEMENTED_THEMES.filter((theme) => theme.grade && Number(theme.grade.slug.slice(6)) <= 6);
+    const elementary = IMPLEMENTED_THEMES.filter((theme) => theme.grade && theme.grade.number <= 6);
     expect(elementary.length).toBeGreaterThan(0);
     for (const theme of elementary) {
       if (theme.inputInterface.type === 'simple_numeric') {

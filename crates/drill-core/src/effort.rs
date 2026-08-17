@@ -1,13 +1,18 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::answer::AnswerNode;
+use crate::exact::gcd_u64;
 use crate::model::{
     ArithmeticExpression, ArithmeticOperator, Problem, QuadraticEquationForm, RationalCoefficient,
 };
+#[cfg(feature = "wire-types")]
+use ts_rs::TS;
 
-pub const OPERATION_KIND_COUNT: usize = 31;
+pub const OPERATION_KIND_COUNT: usize = crate::schema::OPERATION_KIND_COUNT;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 #[repr(u8)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationKind {
@@ -42,6 +47,7 @@ pub enum OperationKind {
     Reciprocal,
     BaseFractionCancel,
     BaseRootSquareCancel,
+    FractionSelfDivision,
 }
 
 impl OperationKind {
@@ -77,6 +83,7 @@ impl OperationKind {
         Self::Reciprocal,
         Self::BaseFractionCancel,
         Self::BaseRootSquareCancel,
+        Self::FractionSelfDivision,
     ];
 
     const fn index(self) -> usize {
@@ -84,12 +91,27 @@ impl OperationKind {
     }
 }
 
-/// Dense fixed-size vector. Parameterized primitives store the quantity that
-/// their base weight multiplies: Count stores n, TimeTen stores n+5,
-/// Distribution stores n, and BigNum stores exact-magnitude log10 cost.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+/// Dense operation-count vector for the current schema.
+///
+/// AutoDrill is pre-release and does not retain historic wire dimensions. A
+/// schema change replaces the previous shape; all serialized vectors therefore
+/// have exactly `OPERATION_KIND_COUNT` coordinates.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct OperationVector {
+    #[cfg_attr(feature = "wire-types", ts(type = "number[]"))]
     values: [f64; OPERATION_KIND_COUNT],
+}
+
+impl Serialize for OperationVector {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("OperationVector", 1)?;
+        state.serialize_field("values", &self.values)?;
+        state.end()
+    }
 }
 
 impl<'de> Deserialize<'de> for OperationVector {
@@ -99,20 +121,26 @@ impl<'de> Deserialize<'de> for OperationVector {
     {
         #[derive(Deserialize)]
         struct Repr {
-            values: [f64; OPERATION_KIND_COUNT],
+            values: Vec<f64>,
         }
 
         let values = Repr::deserialize(deserializer)?.values;
-        if values
+        if values.len() != OPERATION_KIND_COUNT {
+            return Err(serde::de::Error::custom(
+                "operation vector has an unsupported dimension",
+            ));
+        }
+        if !values
             .iter()
             .all(|value| value.is_finite() && *value >= 0.0)
         {
-            Ok(Self { values })
-        } else {
-            Err(serde::de::Error::custom(
+            return Err(serde::de::Error::custom(
                 "operation vector values must be finite and nonnegative",
-            ))
+            ));
         }
+        let mut dense = [0.0; OPERATION_KIND_COUNT];
+        dense.copy_from_slice(&values);
+        Ok(Self { values: dense })
     }
 }
 
@@ -309,6 +337,7 @@ impl WeightProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Operation {
     Identity,
@@ -323,6 +352,7 @@ pub enum Operation {
     BaseDivide,
     BigNum {
         #[serde(with = "crate::exact::u64_decimal_string")]
+        #[cfg_attr(feature = "wire-types", ts(type = "string"))]
         magnitude: u64,
     },
     Round,
@@ -351,6 +381,7 @@ pub enum Operation {
     Reciprocal,
     BaseFractionCancel,
     BaseRootSquareCancel,
+    FractionSelfDivision,
 }
 
 impl Operation {
@@ -392,11 +423,13 @@ impl Operation {
             Self::Reciprocal => (OperationKind::Reciprocal, 1.0),
             Self::BaseFractionCancel => (OperationKind::BaseFractionCancel, 1.0),
             Self::BaseRootSquareCancel => (OperationKind::BaseRootSquareCancel, 1.0),
+            Self::FractionSelfDivision => (OperationKind::FractionSelfDivision, 1.0),
         }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct SolutionStep {
     pub id: u32,
     pub operation: Operation,
@@ -404,6 +437,7 @@ pub struct SolutionStep {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct SolutionGraph {
     pub steps: Vec<SolutionStep>,
 }
@@ -859,15 +893,6 @@ fn rational_division_operations(
     let mut operations = vec![Operation::Reciprocal];
     operations.extend(rational_multiplication_operations(dividend, reciprocal));
     operations
-}
-
-fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
-    while right != 0 {
-        let remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    left
 }
 
 fn lcm_u64(left: u64, right: u64) -> Option<u64> {
@@ -2111,6 +2136,35 @@ mod effort_model_tests {
                 "unexpected count for {kind:?}"
             );
         }
+    }
+
+    #[test]
+    fn operation_vector_wire_dimension_matches_current_schema() {
+        let current = OperationVector::zero();
+        assert_eq!(
+            serde_json::to_value(&current).unwrap()["values"]
+                .as_array()
+                .unwrap()
+                .len(),
+            OPERATION_KIND_COUNT
+        );
+
+        let graph = SolutionGraph {
+            steps: vec![SolutionStep {
+                id: 1,
+                operation: Operation::FractionSelfDivision,
+                depends_on: vec![],
+            }],
+        };
+        let vector = calculate_graph_effort(&graph, &OperationWeights::default()).operation_vector;
+        assert_eq!(vector.get(OperationKind::FractionSelfDivision), 1.0);
+        assert_eq!(
+            serde_json::to_value(&vector).unwrap()["values"]
+                .as_array()
+                .unwrap()
+                .len(),
+            OPERATION_KIND_COUNT
+        );
     }
 
     #[test]

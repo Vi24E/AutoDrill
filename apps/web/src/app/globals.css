@@ -551,24 +551,62 @@ button:disabled { cursor: wait; opacity: .5; }
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 12px max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  padding: 30px max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   border-top: 1px solid #aeb5b8;
   background: rgba(244, 246, 247, .98);
   box-shadow: 0 -5px 22px rgba(0, 0, 0, .12);
 }
-.input-panel-inner { display: grid; grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); gap: 10px; width: min(780px, 100%); margin: 0 auto; }
-.input-panel-inner-algebraic { grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); width: min(780px, 100%); }
-.formula-keypad, .keypad-numbers, .keypad-controls { display: grid; gap: 6px; }
+.input-panel-inner { display: grid; grid-template-columns: minmax(300px, 1fr) 300px minmax(300px, 1fr); gap: 10px; width: min(980px, 100%); margin: 0 auto; }
+.input-panel-inner-algebraic { grid-template-columns: minmax(300px, 1fr) 300px minmax(300px, 1fr); width: min(980px, 100%); }
+.input-panel-inner-junior-high { grid-template-columns: minmax(300px, 1fr) 210px 50px minmax(270px, 1fr); width: min(980px, 100%); }
+.formula-keypad, .keypad-numbers, .keypad-operators, .keypad-controls { display: grid; gap: 6px; }
+.formula-keypad { grid-column: 1; }
+.keypad-numbers { grid-column: 2; }
+.keypad-operators { grid-column: 3; }
+.keypad-controls { grid-column: 3; }
+.input-panel-inner-junior-high .keypad-controls { grid-column: 4; }
+.input-panel-close { position: absolute; top: 5px; right: max(12px, env(safe-area-inset-right)); display: grid; width: 32px; height: 28px; padding: 0; place-items: center; border: 0; border-radius: 4px; background: transparent; color: #53676e; cursor: pointer; }
+.input-panel-close svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.input-panel-close:hover { color: #111; background: rgba(0, 0, 0, .05); }
 .formula-keypad { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .formula-keypad-algebraic { grid-template-columns: repeat(3, minmax(82px, 1fr)); }
-.formula-keypad-algebraic button { height: 64px; min-height: 64px; }
+.formula-keypad-algebraic .formula-structure-key { height: 138px; min-height: 138px; align-content: center; }
 .formula-keypad-algebraic .formula-key-symbol { min-height: 38px; }
+.formula-keypad-junior-high { grid-template-columns: repeat(2, minmax(82px, 1fr)); grid-template-rows: repeat(2, 66px); align-items: start; }
+.formula-keypad-junior-high .formula-structure-key { height: 66px; min-height: 66px; align-content: center; }
+.formula-keypad-junior-high .formula-key-symbol { min-height: 38px; }
 .keypad-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.keypad-numbers-algebraic { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.keypad-numbers-algebraic .keypad-digit { grid-column: span 2; }
+.keypad-numbers-algebraic .keypad-zero { grid-column: span 3; }
+.keypad-numbers-algebraic-decimal .keypad-zero { grid-column: span 2; }
+.keypad-numbers-algebraic .keypad-inline-operator,
+.keypad-numbers-algebraic .keypad-decimal { grid-column: span 1; min-width: 0; padding-inline: 0; }
+.keypad-inline-operator { font-size: 21px; line-height: 1; }
+.keypad-numbers-junior-high { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.keypad-numbers-junior-high .keypad-zero { grid-column: span 2; }
+.keypad-numbers-junior-high .keypad-decimal { grid-column: span 1; }
+.keypad-operators { grid-template-rows: repeat(3, 42px); align-content: start; }
+.keypad-operators button {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid #8d969a;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+.keypad-operators button:disabled,
+.formula-keypad-junior-high button:disabled,
+.keypad-numbers-junior-high button:disabled { opacity: .38; cursor: default; }
 .keypad-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .formula-keypad button, .keypad-numbers button, .keypad-controls button { min-height: 42px; border: 1px solid #8d969a; border-radius: 5px; background: #fff; cursor: pointer; font-weight: 650; }
 .formula-keypad button { display: grid; gap: 1px; min-height: 58px; place-items: center; padding: 4px 3px 3px; color: #243d45; background: #fafdfe; }
-.formula-keypad button:hover:not(:disabled), .keypad-numbers button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
-.formula-keypad .formula-operator-key { display: grid; min-height: 58px; place-items: center; padding: 4px 3px 3px; color: #243d45; background: #fafdfe; font-size: 23px; line-height: 1; }
+.formula-keypad button:hover:not(:disabled), .keypad-numbers button:hover:not(:disabled), .keypad-operators button:hover:not(:disabled), .keypad-controls button:hover:not(:disabled) { border-color: #333; background: #eef0f1; }
 .formula-key-symbol { display: flex; min-height: 44px; align-items: center; justify-content: center; padding-block: 3px; overflow: visible; }
 .math-template-icon { display: inline-block; margin: 0; overflow: visible; font-size: 24px; line-height: normal; vertical-align: middle; }
 .formula-key-label { color: #53676e; font-family: 'Noto Sans JP', system-ui, sans-serif; font-size: 9px; font-weight: 700; line-height: 1; }
@@ -607,11 +645,14 @@ button:disabled { cursor: wait; opacity: .5; }
   .answer-box { min-width: 27px; min-height: 29px; margin-left: 4px; padding-inline: 6px; }
   .correct-answer { margin-left: 3px; font-size: 13px; }
   .input-panel { overflow-x: auto; }
-  .input-panel-inner { grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); gap: 7px; min-width: 680px; }
-  .input-panel-inner-algebraic { grid-template-columns: minmax(270px, 1.4fr) minmax(210px, 1fr) minmax(180px, .9fr); min-width: 680px; }
+  .input-panel-inner { grid-template-columns: minmax(300px, 1fr) 300px minmax(300px, 1fr); gap: 7px; min-width: 920px; }
+  .input-panel-inner-algebraic { grid-template-columns: minmax(300px, 1fr) 300px minmax(300px, 1fr); min-width: 920px; }
+  .input-panel-inner-junior-high { grid-template-columns: minmax(300px, 1fr) 210px 50px minmax(270px, 1fr); min-width: 900px; }
   .formula-keypad { grid-template-columns: repeat(3, minmax(70px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
   .formula-keypad-algebraic { grid-template-columns: repeat(3, minmax(82px, 1fr)); }
-  .formula-keypad, .keypad-numbers, .keypad-controls { gap: 5px; }
+  .formula-keypad-junior-high { grid-template-columns: repeat(2, minmax(82px, 1fr)); grid-template-rows: repeat(2, 62px); }
+  .formula-keypad-junior-high .formula-structure-key { height: 62px; min-height: 62px; }
+  .formula-keypad, .keypad-numbers, .keypad-operators, .keypad-controls { gap: 5px; }
   .formula-keypad button { min-height: 52px; }
   .keypad-numbers button, .keypad-controls button { min-height: 39px; }
 }
@@ -763,7 +804,6 @@ button:disabled { cursor: wait; opacity: .5; }
 .paper,
 .worksheet-print-page {
   container-type: inline-size;
-  --worksheet-grid-cell: 3.27577cqw;
 }
 
 .print-recommended-note {
@@ -778,7 +818,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-grid-column-arithmetic::before {
   position: absolute;
   z-index: 0;
-  top: 10.6903%;
+  top: var(--worksheet-grid-top);
   right: 0;
   bottom: 0;
   left: 0;
@@ -804,8 +844,6 @@ button:disabled { cursor: wait; opacity: .5; }
 
 .problem-cell-column-arithmetic {
   --column-digit-cell: var(--worksheet-grid-cell);
-  --column-operator-width: var(--worksheet-grid-cell);
-  --column-digit-width: calc(5 * var(--worksheet-grid-cell));
   --column-total-width: calc(var(--column-operator-width) + var(--column-digit-width));
   --column-font-size: calc(1.08 * var(--worksheet-grid-cell));
   display: grid;
@@ -813,7 +851,7 @@ button:disabled { cursor: wait; opacity: .5; }
   grid-template-rows:
     var(--column-expression-top-offset, var(--worksheet-grid-cell))
     auto
-    calc(.35 * var(--worksheet-grid-cell))
+    0
     var(--worksheet-grid-cell)
     minmax(0, 1fr);
   align-items: start;
@@ -985,7 +1023,7 @@ button:disabled { cursor: wait; opacity: .5; }
   border-top: 1.6px solid currentColor;
 }
 .column-arithmetic-work-space { display: block; }
-.column-arithmetic-work-space-multiply { min-height: calc(1.45 * var(--worksheet-grid-cell)); }
+.column-arithmetic-work-space-multiply { min-height: calc(var(--column-working-rows, 0) * var(--worksheet-grid-cell)); }
 
 /* Completed multiplication keeps the mathematically necessary final rule.
    The unsolved problem has only the rule directly below the multiplier. */
@@ -994,7 +1032,7 @@ button:disabled { cursor: wait; opacity: .5; }
   width: var(--column-total-width);
   flex-direction: column;
   align-items: stretch;
-  margin-top: calc(.2 * var(--worksheet-grid-cell));
+  margin-top: 0;
 }
 .column-multiply-partial {
   display: flex;
@@ -1008,12 +1046,112 @@ button:disabled { cursor: wait; opacity: .5; }
   white-space: nowrap;
 }
 .column-arithmetic-solution-result {
-  margin-top: calc(.15 * var(--worksheet-grid-cell));
+  margin-top: 0;
 }
 .worksheet-print-page-answers .column-arithmetic-multiply-solution .column-arithmetic-final-rule,
 .problem-cell-column-arithmetic-multiply.problem-cell-graded .column-arithmetic-final-rule {
-  margin-top: calc(.15 * var(--worksheet-grid-cell));
+  margin-top: 0;
 }
+
+
+/* Column answers are edited as page-grid cells, not as one MathLive string.
+   Each digit owns exactly one worksheet-grid cell, so the visible field cannot
+   drift below or between the printed grid lines. */
+.problem-cell-column-arithmetic .problem-answer-area-column-digits {
+  display: contents;
+}
+.column-answer-user,
+.column-answer-correction {
+  grid-column: 2;
+  display: flex;
+  width: var(--column-total-width);
+  height: var(--worksheet-grid-cell);
+  justify-content: flex-end;
+  align-self: start;
+}
+.column-answer-user { grid-row: 4; }
+.column-answer-correction { grid-row: 5; }
+.column-digit-answer {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--column-answer-digit-count), var(--worksheet-grid-cell));
+  width: calc(var(--column-answer-digit-count) * var(--worksheet-grid-cell));
+  height: var(--worksheet-grid-cell);
+  align-items: stretch;
+  justify-content: end;
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-size: calc(.78 * var(--worksheet-grid-cell));
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: 1;
+}
+.column-digit-slot {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  width: var(--worksheet-grid-cell);
+  min-width: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  min-height: var(--worksheet-grid-cell);
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(70, 70, 70, .34);
+  border-radius: 0;
+  background: rgba(255, 255, 255, .30);
+  color: #111;
+  font: inherit;
+  line-height: 1;
+  overflow: hidden;
+}
+.column-digit-glyph { display: grid; width: 100%; height: 100%; place-items: center; line-height: 1; }
+button.column-digit-slot { cursor: text; }
+button.column-digit-slot:focus { outline: none; }
+.column-digit-slot + .column-digit-slot { border-left-width: 0; }
+.column-digit-slot-inactive + .column-digit-slot-active { border-left-width: 1px; }
+.column-digit-slot-inactive {
+  border-color: transparent;
+  background: transparent;
+  pointer-events: none;
+}
+.column-digit-slot-selected {
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px #111;
+  background: rgba(255, 255, 255, .82);
+}
+.column-digit-slot-readonly { cursor: default; }
+.column-digit-answer-correction { pointer-events: none; }
+.column-digit-answer-correction .column-digit-slot {
+  border-color: transparent;
+  background: transparent;
+}
+.column-digit-answer-correction .column-digit-glyph { color: #d20b0b; font-weight: 750; }
+.column-digit-decimal-marker {
+  position: absolute;
+  z-index: 5;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: #111;
+  pointer-events: none;
+}
+.column-grade-feedback {
+  position: absolute;
+  z-index: 5;
+  top: 4%;
+  right: 4%;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+.column-grade-mark { font-size: 20px; }
+.column-grade-feedback-correct .column-grade-mark { color: #111; }
+.column-grade-feedback-wrong { color: #d20b0b; }
 
 /* Long division is compact: divisor cells + the exact number of dividend cells.
    This prevents four-column worksheets from clipping the dividend. */
@@ -1070,13 +1208,12 @@ button:disabled { cursor: wait; opacity: .5; }
   width: var(--column-digit-width);
   min-width: var(--column-digit-width);
   height: var(--worksheet-grid-cell);
-  border-top: 1.6px solid currentColor;
 }
 .column-division-bracket-mark {
   position: absolute;
   top: -1.6px;
-  left: calc(-.30 * var(--worksheet-grid-cell));
-  width: calc(.30 * var(--worksheet-grid-cell));
+  left: calc(-.22 * var(--worksheet-grid-cell));
+  width: calc(var(--column-digit-width) + .22 * var(--worksheet-grid-cell));
   height: var(--worksheet-grid-cell);
   overflow: visible;
   pointer-events: none;
@@ -1102,7 +1239,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .column-division-work-space {
   display: block;
   width: var(--column-total-width);
-  min-height: calc(2.6 * var(--worksheet-grid-cell));
+  min-height: calc(var(--column-division-work-rows) * var(--worksheet-grid-cell));
 }
 
 .problem-cell-column-arithmetic-divide .problem-answer-area-column-division {
@@ -1126,10 +1263,25 @@ button:disabled { cursor: wait; opacity: .5; }
   height: var(--worksheet-grid-cell);
   align-self: end;
 }
-.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .answer-box,
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .column-digit-answer,
 .worksheet-print-page-problems .problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .worksheet-print-empty-answer {
   grid-column: 2;
   box-sizing: border-box;
+  width: var(--column-digit-width);
+  height: var(--worksheet-grid-cell);
+}
+.problem-cell-column-arithmetic-divide .column-division-correction-quotient {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: var(--column-operator-width) var(--column-digit-width);
+  width: var(--column-total-width);
+  height: var(--worksheet-grid-cell);
+  align-self: end;
+  pointer-events: none;
+}
+.problem-cell-column-arithmetic-divide .column-division-correction-quotient .column-digit-answer {
+  grid-column: 2;
   width: var(--column-digit-width);
   height: var(--worksheet-grid-cell);
 }
@@ -1137,8 +1289,8 @@ button:disabled { cursor: wait; opacity: .5; }
   grid-column: 2;
   grid-row: 6;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(2 * var(--worksheet-grid-cell));
-  column-gap: calc(.25 * var(--worksheet-grid-cell));
+  grid-template-columns: minmax(0, 1fr) var(--column-remainder-width);
+  column-gap: 0;
   width: var(--column-total-width);
   height: var(--worksheet-grid-cell);
   align-items: center;
@@ -1168,11 +1320,41 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 .column-division-answer-coordinate-remainder .answer-box {
   grid-column: 2;
-  width: calc(2 * var(--worksheet-grid-cell));
+  width: var(--column-remainder-width);
+  height: var(--worksheet-grid-cell);
+}
+.problem-cell-column-arithmetic-divide .column-division-correction-remainder {
+  grid-column: 2;
+  grid-row: 7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--column-remainder-width);
+  width: var(--column-total-width);
+  height: var(--worksheet-grid-cell);
+  align-self: start;
+  pointer-events: none;
+}
+.column-remainder-correction-value {
+  grid-column: 2;
+  display: flex;
+  box-sizing: border-box;
+  width: var(--column-remainder-width);
+  height: var(--worksheet-grid-cell);
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  color: #d20b0b;
+  font-size: calc(.72 * var(--worksheet-grid-cell));
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+.column-division-answer-coordinate-remainder .answer-mathfield {
+  width: 100%;
+  height: 100%;
+  font-size: calc(.72 * var(--worksheet-grid-cell));
 }
 .column-division-correct-answer { display: none; }
-.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .answer-mathfield,
-.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder .answer-mathfield {
+.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-quotient .answer-mathfield {
   width: 100%;
   height: 100%;
   font-size: var(--column-font-size);
@@ -1182,7 +1364,6 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 
 /* Completed algorithms start on the same page-grid row and use the same font. */
-.problem-cell-column-arithmetic.problem-cell-graded .expression,
 .worksheet-print-page-answers .problem-cell-column-arithmetic .expression {
   grid-column: 2;
   grid-row: 2 / 7;

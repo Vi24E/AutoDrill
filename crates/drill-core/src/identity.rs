@@ -4,7 +4,10 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
-use crate::model::SCHEMA_VERSION;
+use crate::schema::is_supported_schema_version;
+use crate::schema::SCHEMA_VERSION;
+#[cfg(feature = "wire-types")]
+use ts_rs::TS;
 
 pub const MIN_DIFFICULTY: u8 = 1;
 pub const MAX_DIFFICULTY: u8 = 4;
@@ -12,6 +15,7 @@ pub const DEFAULT_DIFFICULTY: Difficulty = Difficulty(2);
 pub const MAX_SEED_LENGTH: usize = 16;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct Difficulty(u8);
 
 impl Difficulty {
@@ -57,6 +61,7 @@ impl<'de> Deserialize<'de> for Difficulty {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct ProblemSetIdentity {
     pub schema_version: u16,
     pub numeric_theme_id: u32,
@@ -115,7 +120,7 @@ impl FromStr for ProblemSetIdentity {
         if parts.next().is_some() {
             return Err(IdentityError::MalformedProblemSetId);
         }
-        if schema_version != SCHEMA_VERSION {
+        if !is_supported_schema_version(schema_version) {
             return Err(IdentityError::UnsupportedSchemaVersion {
                 received: schema_version,
                 expected: SCHEMA_VERSION,

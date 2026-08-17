@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import UnitPage, { dynamicParams, generateMetadata, generateStaticParams } from './page';
+import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
@@ -55,7 +56,7 @@ describe('implemented unit route', () => {
 
     const page = await UnitPage({ params: params('grade-1', 'one-digit-addition') });
     expect(page.props.initialWebSettings).toEqual({
-      schema_version: 4,
+      schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: 1,
       themeKey: 'jp.grade1.addition.one_digit',
       difficulty: 2,

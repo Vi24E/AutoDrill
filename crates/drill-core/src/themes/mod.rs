@@ -1,3 +1,8 @@
+pub(crate) mod basic_arithmetic;
+pub(crate) mod column_arithmetic;
+pub(crate) mod decimals;
 pub(crate) mod division_table;
+pub(crate) mod equations;
+pub(crate) mod fractions;
 pub(crate) mod liar_puzzle;
 pub(crate) mod multiplication_table;

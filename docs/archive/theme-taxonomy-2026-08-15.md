@@ -1,3 +1,5 @@
+> **Historical document:** この文書は履歴保存用であり、現行仕様のsource of truthではありません。現在の設計は `docs/principles.md` / `docs/architecture/`、未解決事項は `docs/issues.md` を参照してください。
+
 # Theme taxonomy / tag設計
 
 更新日: 2026-08-15

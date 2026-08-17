@@ -52,3 +52,23 @@ pub(crate) mod u64_decimal_string {
         Ok(value)
     }
 }
+
+/// Euclidean GCD for exact arithmetic normalization. This is deliberately
+/// separate from effort-model GCD *search* operations, which model human work.
+pub(crate) fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
+}
+
+pub(crate) fn gcd_u128(mut left: u128, mut right: u128) -> u128 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
+}

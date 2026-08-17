@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 use crate::model::MAX_ANSWER_AST_SIZE;
+#[cfg(feature = "wire-types")]
+use ts_rs::TS;
 
 // The display-size limit and the structural-node budget are separate input
 // constraints even though they currently share the same numeric maximum.
 const MAX_VALIDATED_AST_NODES: usize = MAX_ANSWER_AST_SIZE;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 #[serde(rename_all = "snake_case")]
 pub enum AnswerBinaryOperator {
     Add,
@@ -17,13 +20,19 @@ pub enum AnswerBinaryOperator {
 /// Exact, typed answer syntax shared by editing, grading, and every generator.
 /// Mathematical values deliberately contain no binary floating-point fields.
 #[derive(Clone, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum AnswerNode {
     #[default]
     Empty,
-    Integer(#[serde(with = "crate::exact::i64_decimal_string")] i64),
+    Integer(
+        #[serde(with = "crate::exact::i64_decimal_string")]
+        #[cfg_attr(feature = "wire-types", ts(type = "string"))]
+        i64,
+    ),
     ExactDecimal {
         #[serde(with = "crate::exact::i64_decimal_string")]
+        #[cfg_attr(feature = "wire-types", ts(type = "string"))]
         coefficient: i64,
         scale: u32,
     },

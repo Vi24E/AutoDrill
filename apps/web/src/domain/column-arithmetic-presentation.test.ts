@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
+import { columnArithmeticGridVariables, columnArithmeticWorkingRows } from '@/domain/column-arithmetic-presentation';
 import type { ArithmeticExpression, ProblemDto } from '@/domain/drill-engine';
 
-function columnProblem(operator: 'add' | 'divide', left: ArithmeticExpression, right: ArithmeticExpression): ProblemDto {
+function columnProblem(operator: 'add' | 'multiply' | 'divide', left: ArithmeticExpression, right: ArithmeticExpression): ProblemDto {
   return {
     prompt: { kind: 'column_arithmetic', operator, left, right },
     canonical_answer: { type: 'integer', value: '0' },
@@ -16,7 +16,17 @@ describe('column arithmetic presentation grid', () => {
     expect(columnArithmeticGridVariables(problem)).toEqual({
       '--column-operator-width': 'calc(1 * var(--worksheet-grid-cell))',
       '--column-digit-width': 'calc(2 * var(--worksheet-grid-cell))',
+      '--column-working-rows': '0',
     });
+  });
+
+  it('derives multiplication workspace only from the shared integer-grid policy', () => {
+    const oneDigit = columnProblem('multiply', { kind: 'integer', value: 91 }, { kind: 'integer', value: 3 });
+    const twoDigit = columnProblem('multiply', { kind: 'integer', value: 91 }, { kind: 'integer', value: 23 });
+    expect(columnArithmeticWorkingRows(oneDigit)).toBe(0);
+    expect(columnArithmeticWorkingRows(twoDigit)).toBe(1);
+    expect(columnArithmeticGridVariables(oneDigit)['--column-working-rows']).toBe('0');
+    expect(columnArithmeticGridVariables(twoDigit)['--column-working-rows']).toBe('1');
   });
 
   it('sizes integer long division to the actual divisor and dividend digits', () => {
@@ -24,7 +34,10 @@ describe('column arithmetic presentation grid', () => {
     expect(columnArithmeticGridVariables(problem)).toEqual({
       '--column-operator-width': 'calc(1 * var(--worksheet-grid-cell))',
       '--column-digit-width': 'calc(3 * var(--worksheet-grid-cell))',
+      '--column-working-rows': '0',
       '--column-division-active-width': 'calc(3 * var(--worksheet-grid-cell))',
+      '--column-division-work-rows': '3',
+      '--column-remainder-width': 'calc(2 * var(--worksheet-grid-cell))',
       '--column-division-quotient-trailing-width': 'calc(0 * var(--worksheet-grid-cell))',
     });
   });

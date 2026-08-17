@@ -1,4 +1,5 @@
 import type { ProblemDto, WorksheetDto, WorksheetLayout } from './drill-engine';
+import { findThemeDefinitionByNumericId } from './theme-registry';
 
 export const A4_PAGE = {
   width: 595.28,
@@ -19,17 +20,17 @@ export type SharedWorksheetLayout = {
   page: typeof A4_PAGE;
   layout: WorksheetLayout;
   cells: readonly ProblemCell[];
-  /** All internal vertical boundaries; dividerX remains the first for legacy callers. */
+  /** All internal vertical boundaries between worksheet columns. */
   dividerXs: readonly number[];
-  dividerX: number;
 };
 
 export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorksheetLayout {
   const { columns, rows } = worksheet.layout;
   const contentWidth = A4_PAGE.width - A4_PAGE.margin * 2;
   const columnWidth = contentWidth / columns;
-  const rowMajor = worksheet.problems.length > 0
-    && worksheet.problems.every((problem) => problem.prompt.kind === 'column_arithmetic');
+  const theme = findThemeDefinitionByNumericId(worksheet.identity.numeric_theme_id);
+  if (!theme) throw new Error(`Unknown worksheet theme ${worksheet.identity.numeric_theme_id}.`);
+  const rowMajor = theme.presentation.column_arithmetic;
   const cells = worksheet.problems.map((problem, index) => ({
     index,
     problem,
@@ -47,7 +48,6 @@ export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorks
     dividerXs: Array.from({ length: Math.max(0, columns - 1) }, (_, index) => (
       A4_PAGE.margin + columnWidth * (index + 1)
     )),
-    dividerX: A4_PAGE.margin + columnWidth,
   };
 }
 

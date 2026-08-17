@@ -7,6 +7,7 @@ mod effort;
 mod error;
 mod exact;
 mod generator;
+mod generator_support;
 mod grade;
 mod identity;
 mod mathlive_input;
@@ -14,6 +15,8 @@ mod model;
 mod normalize;
 mod registry;
 mod rng;
+mod schema;
+mod theme;
 mod themes;
 
 pub use answer::{AnswerNode, AnswerRepresentation};
@@ -33,9 +36,8 @@ pub use error::{EditorError, GenerationError};
 pub use generator::{
     generate_identity_with_clock, generate_problem, generate_problem_request, generate_worksheet,
     generate_worksheet_request, generate_worksheet_request_with_clock, regenerate_problem_set,
-    registered_generator, ArithmeticThemeGenerator, GenerationConfig, LinearEquationGenerator,
-    MonotonicClock, OneDigitAdditionGenerator, ProblemGenerator, StepClock, SystemClock,
-    DEFAULT_MAX_ATTEMPTS, DEFAULT_TIMEOUT,
+    registered_generator, GenerationConfig, MonotonicClock, ProblemGenerator, StepClock,
+    SystemClock, DEFAULT_MAX_ATTEMPTS, DEFAULT_TIMEOUT,
 };
 pub use grade::{grade_answer, grade_answer_with_schema};
 pub use identity::{
@@ -47,21 +49,31 @@ pub use model::{
     AnswerInputInterface, AnswerSchema, ArithmeticExpression, ArithmeticOperator, EditorAction,
     EditorState, EditorStructure, GenerateProblemRequest, GenerateWorksheetRequest, GradeResult,
     GradeStatus, GradeWarning, LayoutMetadata, Problem, ProblemPrompt, RationalCoefficient,
-    Worksheet, CURRICULUM_PATH, CURRICULUM_PATH_LINEAR_EQUATION_1,
-    CURRICULUM_PATH_LINEAR_EQUATION_2, DEFAULT_COLUMNS, DEFAULT_PROBLEM_COUNT, DEFAULT_ROWS,
-    GENERATOR_REVISION_LINEAR_EQUATION_1, GENERATOR_REVISION_LINEAR_EQUATION_2,
-    GENERATOR_REVISION_ONE_DIGIT_ADDITION, LINEAR_EQUATION_COLUMNS, LINEAR_EQUATION_PROBLEM_COUNT,
-    LINEAR_EQUATION_ROWS, MAX_ANSWER, MAX_ANSWER_AST_SIZE, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
-    SCHEMA_VERSION, SKILL_ID, SKILL_ID_LINEAR_EQUATION_1, SKILL_ID_LINEAR_EQUATION_2,
-    THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2, THEME_ID_ONE_DIGIT_ADDITION,
+    Worksheet, MAX_ANSWER_AST_SIZE,
 };
 pub use normalize::normalize_answer;
-pub use registry::{
-    active_registration, registration, resolved_weights, ThemeRegistration, GENERATOR_REGISTRY,
-    LINEAR_EQUATION_1_REGISTRATION, LINEAR_EQUATION_2_REGISTRATION,
-    ONE_DIGIT_ADDITION_REGISTRATION,
-};
+pub use registry::{active_registration, active_registrations, registration, resolved_weights};
 pub use rng::{seed_to_u64, DeterministicRng};
+pub use schema::{
+    is_supported_schema_version, operation_kind_count_for_schema, SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
+};
+pub use theme::{
+    CurriculumSafetyPolicy, DedupPolicy, FractionPresentationPolicy, ThemePresentationPolicy,
+    ThemeRegistration, ThemeTag, WorksheetLayoutProfile,
+};
+pub use themes::basic_arithmetic::{
+    CURRICULUM_PATH, DEFAULT_COLUMNS, DEFAULT_PROBLEM_COUNT, DEFAULT_ROWS,
+    GENERATOR_REVISION_ONE_DIGIT_ADDITION, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
+    ONE_DIGIT_ADDITION_REGISTRATION, SKILL_ID, THEME_ID_ONE_DIGIT_ADDITION,
+};
+pub use themes::equations::{
+    CURRICULUM_PATH_LINEAR_EQUATION_1, CURRICULUM_PATH_LINEAR_EQUATION_2,
+    GENERATOR_REVISION_LINEAR_EQUATION_1, GENERATOR_REVISION_LINEAR_EQUATION_2,
+    LINEAR_EQUATION_1_REGISTRATION, LINEAR_EQUATION_2_REGISTRATION, LINEAR_EQUATION_COLUMNS,
+    LINEAR_EQUATION_PROBLEM_COUNT, LINEAR_EQUATION_ROWS, SKILL_ID_LINEAR_EQUATION_1,
+    SKILL_ID_LINEAR_EQUATION_2, THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2,
+};
 
 #[cfg(test)]
 mod tests {
@@ -215,7 +227,10 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(
             first.problem_set_id,
-            format!("4-1-{}-Ab3Z-2", GENERATOR_REVISION_ONE_DIGIT_ADDITION)
+            format!(
+                "{}-1-{}-Ab3Z-2",
+                SCHEMA_VERSION, GENERATOR_REVISION_ONE_DIGIT_ADDITION
+            )
         );
         assert_eq!(
             regenerate_problem_set(&first.problem_set_id).unwrap(),
@@ -225,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_schema_requests_and_ids_fail_closed() {
+    fn unsupported_schema_requests_and_ids_fail_closed() {
         let request = GenerateWorksheetRequest {
             schema_version: 2,
             seed: "Ab3Z".to_owned(),
@@ -245,13 +260,13 @@ mod tests {
                 expected: SCHEMA_VERSION,
             }
         );
-        let legacy_v3 = GenerateWorksheetRequest {
+        let unsupported_v3 = GenerateWorksheetRequest {
             schema_version: 3,
             seed: "Ab3Z".to_owned(),
             ..GenerateWorksheetRequest::default()
         };
         assert_eq!(
-            generate_worksheet_request(&legacy_v3).unwrap_err(),
+            generate_worksheet_request(&unsupported_v3).unwrap_err(),
             GenerationError::UnsupportedSchemaVersion {
                 received: 3,
                 expected: SCHEMA_VERSION,
@@ -1221,15 +1236,6 @@ mod tests {
 
     #[test]
     fn rational_linear_equations_frequently_require_final_reduction() {
-        fn gcd(mut left: u64, mut right: u64) -> u64 {
-            while right != 0 {
-                let remainder = left % right;
-                left = right;
-                right = remainder;
-            }
-            left
-        }
-
         fn requires_reduction(problem: &Problem) -> bool {
             let ProblemPrompt::LinearEquation { a, b, c, d, .. } = problem.prompt else {
                 return false;
@@ -1247,7 +1253,10 @@ mod tests {
                 return false;
             };
             raw_denominator != 0
-                && gcd(raw_numerator.unsigned_abs(), raw_denominator.unsigned_abs()) > 1
+                && crate::exact::gcd_u64(
+                    raw_numerator.unsigned_abs(),
+                    raw_denominator.unsigned_abs(),
+                ) > 1
         }
 
         let mut total = 0_usize;

@@ -2,13 +2,10 @@ import {
   DRILL_SCHEMA_VERSION,
   type DifficultyLevel,
 } from '@/domain/drill-engine';
-import {
-  LINEAR_EQUATION_1_DEFINITION,
-  LINEAR_EQUATION_2_DEFINITION,
-  ONE_DIGIT_ADDITION_DEFINITION,
-  THEME_DEFINITIONS,
-  type ThemeDefinition,
-} from '@/domain/theme-registry';
+import { THEME_DEFINITIONS, type ThemeDefinition } from '@/domain/theme-registry';
+import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
+import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
+import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
 
 export type { DifficultyLevel } from '@/domain/drill-engine';
 

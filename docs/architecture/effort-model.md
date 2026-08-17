@@ -1,5 +1,7 @@
 # Effort model
 
+上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
+
 Effortは、標準解法を人間が定数時間で実行できるprimitiveへ分解した回数vectorと、その重みの内積である。
 
 `effort = operation_counts · operation_weights`
@@ -27,6 +29,7 @@ Effortは、標準解法を人間が定数時間で実行できるprimitiveへ�
 | BaseDivide | 4 | 乗算表の逆方向lookup。例 `56÷7=8` |
 | BaseFractionCancel | 1 | `k/n × n -> k` 型の構造消去 |
 | BaseRootSquareCancel | 1 | `(sqrt(n))^2 -> n` 型の構造消去 |
+| FractionSelfDivision | 1 | `x/x -> 1` の既知同一量による除算 |
 | BaseRoot | 3 | 一桁の完全平方根lookup |
 | Compare | 1 | 大小・等値判定 |
 | Reciprocal | 1 | 逆数取得 |
@@ -35,7 +38,7 @@ Effortは、標準解法を人間が定数時間で実行できるprimitiveへ�
 
 その他の既存primitiveは`Round`, `Transposition`, `OverheadPF/GCD/LCM/Negative/Carry*`, `OverheadLinear/Distribution/EqSystem/Factor*/Quadratic`である。既定weightは`OperationWeights::default()`を正とする。
 
-OperationVectorは31次元。既存index 0〜28を維持し、29=`BaseFractionCancel`, 30=`BaseRootSquareCancel`を末尾追加する。
+OperationVectorの現行schema v5は32次元で、31=`FractionSelfDivision`である。pre-releaseでは旧schemaのwire次元を保持せず、現行32次元だけをproduction contractとする。
 
 ## 共通整数builder
 
@@ -145,4 +148,4 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 ## Versioning
 
-今回31次元化によりserialized Worksheetが全テーマで変わるため、schema v4は維持したまま全themeのgenerator revisionを1段上げる。Webのvector長はRust `WebContract.operation_kind_count`から生成同期する。
+operation basisの追加・削除はwire schema変更として扱う。pre-releaseでは`schema.rs`が現行schemaと現行vector dimensionだけを一元管理し、`OperationVector`も現行basisだけをserializeする。WebはRust `WebContract.operation_kind_count`から次元を生成同期する。effort semanticsが変わる場合は必要に応じてschema / generator revisionを破壊的に更新し、旧revisionはproduction codeへ保持しない。

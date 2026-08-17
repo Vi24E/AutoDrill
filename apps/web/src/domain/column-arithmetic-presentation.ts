@@ -7,13 +7,21 @@ import { answerNodeText, type AnswerNode, type ArithmeticExpression, type Proble
  * The same unit is expressed in cqw so Web preview and native print scale together.
  */
 export const COLUMN_ARITHMETIC_GRID_POINT = 19.5;
-export const COLUMN_ARITHMETIC_GRID_CQW = (COLUMN_ARITHMETIC_GRID_POINT / A4_PAGE.width) * 100;
+const COLUMN_DIVISION_WORK_ROWS = 3;
+const COLUMN_REMAINDER_CELLS = 2;
+
+export function columnArithmeticPageGridVariables(): Record<string, string> {
+  return {
+    '--worksheet-grid-cell': `${(COLUMN_ARITHMETIC_GRID_POINT / A4_PAGE.width) * 100}cqw`,
+    '--worksheet-grid-top': `${((A4_PAGE.margin + A4_PAGE.headerHeight) / A4_PAGE.height) * 100}%`,
+  };
+}
 
 function expressionScale(expression: ArithmeticExpression): number {
   return expression.kind === 'exact_decimal' ? expression.scale : 0;
 }
 
-function answerScale(answer: AnswerNode): number {
+export function columnAnswerScale(answer: AnswerNode): number {
   if (answer.type === 'exact_decimal') return answer.value.scale;
   if (answer.type === 'tuple' && answer.value[0]?.type === 'exact_decimal') return answer.value[0].value.scale;
   return 0;
@@ -32,12 +40,12 @@ export function columnDivisionTargetScale(problem: ProblemDto): number {
   const leftScale = expressionScale(problem.prompt.left);
   const rightScale = expressionScale(problem.prompt.right);
   const normalizedDividendScale = rightScale <= leftScale ? leftScale - rightScale : 0;
-  return Math.max(normalizedDividendScale, answerScale(problem.canonical_answer));
+  return Math.max(normalizedDividendScale, columnAnswerScale(problem.canonical_answer));
 }
 
 type CellGeometry = { x: number; y: number; width: number };
 
-function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; digitCells: number } {
+export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; digitCells: number } {
   if (problem.prompt.kind !== 'column_arithmetic') return { operatorCells: 1, digitCells: 2 };
   const leftText = arithmeticLeafText(problem.prompt.left);
   const rightText = arithmeticLeafText(problem.prompt.right);
@@ -67,27 +75,38 @@ function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number
   };
 }
 
+
+export function columnArithmeticWorkingRows(problem: ProblemDto): number {
+  if (problem.prompt.kind !== 'column_arithmetic') return 0;
+  if (problem.prompt.operator !== 'multiply') return 0;
+  // A one-digit multiplier has no partial-product row. Multi-digit multiplication
+  // reserves one grid row for handwritten partial work before the final answer.
+  return gridCellCount(arithmeticLeafText(problem.prompt.right)) > 1 ? 1 : 0;
+}
+
+export function columnArithmeticDigitCells(problem: ProblemDto): number {
+  return columnArithmeticLaneCells(problem).digitCells;
+}
+
 export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGeometry): Record<string, string> {
   if (problem.prompt.kind !== 'column_arithmetic') return {};
   const { operatorCells, digitCells } = columnArithmeticLaneCells(problem);
   const variables: Record<string, string> = {
     '--column-operator-width': `calc(${operatorCells} * var(--worksheet-grid-cell))`,
     '--column-digit-width': `calc(${digitCells} * var(--worksheet-grid-cell))`,
+    '--column-working-rows': String(columnArithmeticWorkingRows(problem)),
   };
 
   if (cell) {
     const laneWidth = (operatorCells + digitCells) * COLUMN_ARITHMETIC_GRID_POINT;
     const cellRight = cell.x + cell.width;
-    const desiredRight = cellRight - COLUMN_ARITHMETIC_GRID_POINT * 0.35;
-    const snappedRight = Math.max(
-      cell.x + laneWidth,
-      Math.min(
-        cellRight,
-        Math.round(desiredRight / COLUMN_ARITHMETIC_GRID_POINT) * COLUMN_ARITHMETIC_GRID_POINT,
-      ),
-    );
-    // Keep a small physical inset so 1px rules/SVG antialiasing never cross a cell boundary.
-    const rightOffset = Math.max(0, cellRight - snappedRight + 1.5);
+    // The page grid starts at x=0. Put the right edge of every arithmetic lane
+    // directly on a page-grid line; no visual inset/offset is allowed to create a
+    // second coordinate system. The lane must still fit wholly inside its cell.
+    const floorGridLine = Math.floor(cellRight / COLUMN_ARITHMETIC_GRID_POINT) * COLUMN_ARITHMETIC_GRID_POINT;
+    const minimumRight = cell.x + laneWidth;
+    const snappedRight = Math.max(minimumRight, floorGridLine);
+    const rightOffset = Math.max(0, cellRight - snappedRight);
     variables['--column-lane-right-offset'] = `${(rightOffset / A4_PAGE.width) * 100}cqw`;
 
     const gridOriginY = A4_PAGE.margin + A4_PAGE.headerHeight;
@@ -98,9 +117,11 @@ export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGe
   }
 
   if (problem.prompt.operator === 'divide') {
-    const quotientScale = answerScale(problem.canonical_answer);
+    const quotientScale = columnAnswerScale(problem.canonical_answer);
     const targetScale = columnDivisionTargetScale(problem);
     variables['--column-division-active-width'] = `calc(${digitCells} * var(--worksheet-grid-cell))`;
+    variables['--column-division-work-rows'] = String(COLUMN_DIVISION_WORK_ROWS);
+    variables['--column-remainder-width'] = `calc(${COLUMN_REMAINDER_CELLS} * var(--worksheet-grid-cell))`;
     variables['--column-division-quotient-trailing-width'] = `calc(${Math.max(0, targetScale - quotientScale)} * var(--worksheet-grid-cell))`;
   }
   return variables;

@@ -1,3 +1,8 @@
+[HISTORICAL / SUPERSEDED]
+この文書は履歴保存用です。現行仕様として使用しないでください。
+現在の設計: docs/principles.md, docs/architecture/
+現在のIssue: docs/issues.md
+
 自動生成ドリル plan
 
 目的

@@ -1,3 +1,0 @@
-# Legacy output location; build-wasm.sh now emits under public/wasm/pkg.
-*
-!.gitignore

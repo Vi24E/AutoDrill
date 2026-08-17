@@ -1,4 +1,5 @@
 use crate::answer::{AnswerBinaryOperator, AnswerNode};
+use crate::exact::gcd_u128;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ExactRational {
@@ -22,7 +23,7 @@ impl ExactRational {
                 denominator: 1,
             });
         }
-        let divisor = gcd(numerator.unsigned_abs(), denominator as u128) as i128;
+        let divisor = gcd_u128(numerator.unsigned_abs(), denominator as u128) as i128;
         Some(Self {
             numerator: numerator / divisor,
             denominator: denominator / divisor,
@@ -242,13 +243,4 @@ fn exact_square_root(value: u128) -> Option<u128> {
     x.checked_mul(x)
         .filter(|square| *square == value)
         .map(|_| x)
-}
-
-fn gcd(mut left: u128, mut right: u128) -> u128 {
-    while right != 0 {
-        let remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    left
 }

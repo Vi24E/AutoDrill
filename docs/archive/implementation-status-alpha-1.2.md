@@ -1,8 +1,10 @@
+> **Historical document:** この文書は履歴保存用であり、現行仕様のsource of truthではありません。現在の設計は `docs/principles.md` / `docs/architecture/`、未解決事項は `docs/issues.md` を参照してください。
+
 # AutoDrill alpha 1.2 実装状況
 
 更新日: 2026-08-15
 
-この文書は現在のコードを対象とした実装概要です。過去の移行履歴ではなく、現行architectureと受入条件を記録します。数学・学習内容の基準は[`curriculum.md`](../curriculum.md)、境界schemaは[`problem-schema.md`](problem-schema.md)、Answer ASTは[`answer-ast.md`](answer-ast.md)、effortは[`effort-model.md`](effort-model.md)、Web/PDFは[`web-pdf.md`](web-pdf.md)を参照してください。
+この文書は現在のコードを対象とした実装概要です。過去の移行履歴ではなく、現行architectureと受入条件を記録します。数学・学習内容の基準は[`curriculum.md`](../../curriculum.md)、境界schemaは[`problem-schema.md`](../architecture/problem-schema.md)、Answer ASTは[`answer-ast.md`](../architecture/answer-ast.md)、effortは[`effort-model.md`](../architecture/effort-model.md)、Web/PDFは[`web-print.md`](../architecture/web-print.md)を参照してください。
 
 ## 実装済みテーマ
 
@@ -116,7 +118,7 @@ apps/web/src/domain/themes/
 
 各ThemeDefinitionはroute、学年・ジャンル、worksheet title/instruction、input interface、answer schema kind、Rust compatibility identityを1ファイルに集約します。`theme-registry.ts`は列挙とlookupのみです。class継承ではなくimmutable typed dataを採用し、theme metadataへlifecycleや数学ロジックを持ち込みません。
 
-Theme分類のsource of truthは型付き`tags`と`grade`です。`gradeGenre` / `recommendedGenre`はthemeファイルへ手入力せず、`theme-definition.ts`でtagsから導出するread-only projectionです。学年tag（`grade_1`〜`grade_6`, `junior_high_1`〜`junior_high_3`）も`grade`から導出します。筆算themeは演算/小数tagに加えて`column_arithmetic`と`print_recommended`を持ち、UIの印刷推奨表示は後者だけを参照します。詳細は[`theme-taxonomy.md`](theme-taxonomy.md)を参照してください。
+Theme分類のsource of truthは型付き`tags`と`grade`です。`gradeGenre` / `recommendedGenre`はthemeファイルへ手入力せず、`theme-definition.ts`でtagsから導出するread-only projectionです。学年tag（`grade_1`〜`grade_6`, `junior_high_1`〜`junior_high_3`）も`grade`から導出します。筆算themeは演算/小数tagに加えて`column_arithmetic`と`print_recommended`を持ち、UIの印刷推奨表示は後者だけを参照します。詳細は[`theme-taxonomy-2026-08-15.md`](theme-taxonomy-2026-08-15.md)を参照してください。
 
 ## 問題生成
 

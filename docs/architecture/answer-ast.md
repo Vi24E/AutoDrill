@@ -1,5 +1,7 @@
 # Answer AST v3
 
+上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
+
 `AnswerNode`は入力、表示、正規化、採点で共用する正確な型付き構文木である。
 
 | node | exact payload |

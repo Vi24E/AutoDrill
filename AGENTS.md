@@ -10,6 +10,8 @@
 2. `../../ROLES.md`、`../../board/README.md`、自分のrole contract、使用engineのadapterを必要範囲で読む
 3. `../../scripts/init-project.sh --check AutoDrill`でbridgeを検証する
 4. Git rootとbranchを確認し、material taskだけ中央`../../board/`へproject名付きで記録する
+5. **`docs/principles.md` と `docs/README.md` を読む**
+6. 変更対象に対応する `docs/architecture/` 文書と `docs/issues.md` を必要範囲で読む
 
 共通の行動・権限・委譲・gate・Git・通知規則は`../../AGENTS.md`が正典である。本ファイルは
 このproduct固有の目的、command、architecture、禁止範囲だけを追加する。
@@ -22,13 +24,27 @@
 
 | パス | 役割 |
 |---|---|
-| `apps/web/` | Next.js 14のq1設定・q2回答画面、WASM adapter、PDF生成 |
+| `apps/web/` | Next.js 16の設定・回答画面、WASM adapter、印刷UI |
 | `crates/drill-core/` | Rustの決定的生成・編集・正規化・採点・努力量計算 |
 | `crates/drill-wasm/` | Rust coreをJSON/WASM DTOへ変換する薄い公開境界 |
-| `docs/web-pdf.md` | Web/WASM/PDF境界と依存ライセンスの設計メモ |
-| `docs/implementation-status.md` | 現在の実装状況・検証証拠・制約・再開手順 |
+| `docs/principles.md` | 最上位の設計思想。実装前に必読 |
+| `docs/README.md` | canonical docsへの入口 |
+| `docs/architecture/` | 現行architecture / implementation policy |
+| `docs/issues.md` | 未解決Issueのcanonical backlog |
+| `docs/roadmap.md` | support scope / 将来計画 |
 | `scripts/build-wasm.sh` | Rust/WASM targetを変更せずに行うローカル生成パイプライン |
 | `README.md` | project概要、インストール、開発、検証コマンド |
+
+## AutoDrill固有の実装原則
+
+- `docs/principles.md`を最上位の設計判断として扱う。
+- 設計思想が不明な場合、または場当たり的な例外が必要な場合は、実装前にユーザーへ質問する。
+- theme固有generatorを共通巨大fileへ追加しない。共通資源は再利用し、theme固有処理はtheme moduleへ置く。
+- 本来metadataである性質をnumeric theme ID、slug、表示文言、生成結果等から推測しない。
+- alphaはPC対象。mobile対応はbeta移行時に行う。
+- 一次テスト・debug用に作成した一時script、fixture、screenshot、browser profile等は、正式な資産として残す理由がなければ作業終了時に削除する。
+- backup目的でrepository/file copyを作らない。backup / rollback pointはGit commitで保存する。commitできない事情がある場合は、copyを作る前にユーザーへ相談する。
+- 既存の未コミット差分を勝手に破棄しない。
 
 ## コマンド
 

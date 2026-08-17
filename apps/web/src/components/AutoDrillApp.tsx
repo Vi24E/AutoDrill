@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { MathfieldElement } from 'mathlive';
 
 import {
   DEFAULT_DRILL_SETTINGS,
@@ -34,10 +33,24 @@ import {
 } from '@/domain/curriculum';
 import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
+import { ColumnArithmeticAnswerInput } from '@/components/ColumnArithmeticAnswerInput';
 import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
+import { useWorksheetAnswerController, type ColumnDigitSelection, type MathfieldSlot } from '@/components/useWorksheetAnswerController';
+import type { AutoDrillMathfield } from '@/components/MathLiveMath';
 import { answerNodeLatex, answerPrefixLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel } from '@/domain/problem-format';
-import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
+import { answerCoordinate, answerPresentationPlan } from '@/domain/answer-presentation';
+import { columnArithmeticGridVariables, columnArithmeticPageGridVariables } from '@/domain/column-arithmetic-presentation';
+import {
+  columnAnswerPart,
+  columnDigitSpec,
+  columnDigitsFromAnswer,
+  columnDigitsToAnswer,
+  nextColumnDigitIndex,
+  previousColumnDigitIndex,
+  replaceColumnAnswerPart,
+  type ColumnAnswerSlot,
+} from '@/domain/column-arithmetic-input';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
@@ -52,7 +65,6 @@ import {
   type WorksheetMetadata,
 } from '@/domain/worksheet-metadata';
 
-type AutoDrillMathfield = MathfieldElement;
 
 type WorksheetUiComponents = {
   MathLiveAnswerInput: typeof import('@/components/MathLiveMath').MathLiveAnswerInput;
@@ -97,6 +109,7 @@ const FuriganaContext = createContext(true);
 const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '計算ドリルをつくる': [["計算", "けいさん"], 'ドリルをつくる'],
   '出題範囲': [["出題", "しゅつだい"], ["範囲", "はんい"]],
+  '閉じる': [["閉", "と"], 'じる'],
   '学年から選ぶ': [["学年", "がくねん"], 'から', ["選", "えら"], 'ぶ'],
   '分数': [["分数", "ぶんすう"]],
   '帯分数': [["帯分数", "たいぶんすう"]],
@@ -278,6 +291,8 @@ const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal' 
   tuple: '複数解',
 };
 
+const JUNIOR_HIGH_STRUCTURE_KEYS = ['fraction', 'mixed_fraction', 'root', 'tuple'] as const satisfies readonly AnswerInputStructure[];
+
 type MathInputCommand =
   | { kind: 'insert_digit'; digit: number }
   | { kind: 'insert_structure'; structure: AnswerInputStructure }
@@ -317,16 +332,33 @@ function formatElapsed(startedAt: number | null, now: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-const ANSWER_CELL_RIGHT_GUTTER = 6;
+const ANSWER_CELL_GUTTER = 6;
 
-function mathfieldFrameFitsCell(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
+type PaintedBounds = Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>;
+
+function mathfieldPaintedBounds(mathfield: AutoDrillMathfield): PaintedBounds | null {
+  const content = mathfield.shadowRoot?.querySelector<HTMLElement>('[part~="content"]');
+  if (!content) return null;
+  const rects = [content, ...content.querySelectorAll<HTMLElement>('*')]
+    .map((element) => element.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.height > 0);
+  if (rects.length === 0) return null;
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
+function mathfieldPaintFitsCell(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
   const frame = mathfield.closest<HTMLElement>('.answer-box');
   if (!frame) return true;
 
-  // The frame is intrinsically sized by CSS (`max-content`) so MathLive and
-  // its border participate in the same browser layout pass. Do not write a
-  // JS width/height after MathLive has painted: that caused the visible
-  // one-frame flash when a root, tuple comma, or fraction changed geometry.
+  // The visible frame is intrinsically sized by CSS. Input validity is checked
+  // against MathLive's painted content rather than this outer frame: tall
+  // structures such as fractions may legitimately change frame geometry without
+  // any glyph escaping the worksheet cell. JSDOM has no MathLive shadow layout,
+  // so tests fall back to the frame rectangle.
   frame.style.removeProperty('width');
   frame.style.removeProperty('height');
 
@@ -334,11 +366,11 @@ function mathfieldFrameFitsCell(mathfield: AutoDrillMathfield, problemIndex: num
   const cellRect = cell?.getBoundingClientRect();
   if (!cellRect || cellRect.width <= 0 || cellRect.height <= 0) return true;
 
-  const frameRect = frame.getBoundingClientRect();
-  const escapesHorizontally = frameRect.left < cellRect.left + ANSWER_CELL_RIGHT_GUTTER
-    || frameRect.right > cellRect.right - ANSWER_CELL_RIGHT_GUTTER;
-  const escapesVertically = frameRect.top < cellRect.top + ANSWER_CELL_RIGHT_GUTTER
-    || frameRect.bottom > cellRect.bottom - ANSWER_CELL_RIGHT_GUTTER;
+  const contentRect = mathfieldPaintedBounds(mathfield) ?? frame.getBoundingClientRect();
+  const escapesHorizontally = contentRect.left < cellRect.left + ANSWER_CELL_GUTTER
+    || contentRect.right > cellRect.right - ANSWER_CELL_GUTTER;
+  const escapesVertically = contentRect.top < cellRect.top + ANSWER_CELL_GUTTER
+    || contentRect.bottom > cellRect.bottom - ANSWER_CELL_GUTTER;
   return !escapesHorizontally && !escapesVertically;
 }
 
@@ -351,12 +383,12 @@ function waitForMathfieldLayout(): Promise<void> {
   });
 }
 
-type MathfieldSlot = 'single' | 'x' | 'y' | 'quotient' | 'remainder';
+function columnDraftKey(problemId: string, slot: ColumnAnswerSlot): string {
+  return `${problemId}:${slot}`;
+}
 
-function answerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerNode {
-  return answer.type === 'tuple' && answer.value[coordinate]
-    ? answer.value[coordinate]
-    : ({ type: 'empty' } satisfies AnswerNode);
+function isColumnAnswerSlot(slot: MathfieldSlot): slot is ColumnAnswerSlot {
+  return slot === 'single' || slot === 'quotient';
 }
 
 function mathfieldMapKey(index: number, slot: MathfieldSlot): string {
@@ -384,11 +416,14 @@ type WorksheetAnswerFieldProps = {
   answer: AnswerNode;
   isSelected: boolean;
   selectedSlot: MathfieldSlot;
+  selectedColumnDigit: ColumnDigitSelection | null;
+  columnDrafts: Record<string, Array<string | null>>;
   result: GradeResult['items'][number] | undefined;
   gradeResult: GradeResult | null;
   inputLocked: boolean;
   answerPrefix: string | null;
   onSelect: (index: number, slot: MathfieldSlot) => void;
+  onSelectColumnDigit: (index: number, slot: ColumnAnswerSlot, digitIndex: number) => void;
   onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
   onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
   onCommit: (index: number, slot: MathfieldSlot) => void;
@@ -402,11 +437,14 @@ function WorksheetAnswerField({
   answer,
   isSelected,
   selectedSlot,
+  selectedColumnDigit,
+  columnDrafts,
   result,
   gradeResult,
   inputLocked,
   answerPrefix,
   onSelect,
+  onSelectColumnDigit,
   onRegisterMathfield,
   onMathInput,
   onCommit,
@@ -414,12 +452,24 @@ function WorksheetAnswerField({
 }: WorksheetAnswerFieldProps) {
   const { MathLiveAnswerInput, MathLiveStatic } = worksheetUi;
   const canonicalAnswer = answerNodeText(problem.canonical_answer);
+  const presentation = answerPresentationPlan(problem);
   const commonFrameClass = (slot: MathfieldSlot) => `answer-box ${isSelected && selectedSlot === slot ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`;
+  const selectedDigitFor = (slot: ColumnAnswerSlot) => (
+    selectedColumnDigit?.problemIndex === index && selectedColumnDigit.slot === slot
+      ? selectedColumnDigit.digitIndex
+      : null
+  );
+  const columnDraftFor = (slot: ColumnAnswerSlot) => columnDrafts[columnDraftKey(problem.problem_id, slot)];
+  const columnFeedback = result ? (
+    <span className={`column-grade-feedback ${result.correct ? 'column-grade-feedback-correct' : 'column-grade-feedback-wrong'}`}>
+      <span className="column-grade-mark" aria-label={result.correct ? '正解' : '不正解'}>{result.correct ? '○' : '×'}</span>
+    </span>
+  ) : null;
 
-  if (problem.prompt.kind === 'liar_puzzle') {
+  if (presentation.kind === 'liar_puzzle') {
     const chosen = selectedPeople(answer);
     const canonical = selectedPeople(problem.canonical_answer);
-    const peopleCount = problem.prompt.people_count;
+    const peopleCount = presentation.peopleCount;
     const renderPeople = (selection: Set<number>, interactive: boolean) => (
       <span className="liar-person-choice-row">
         {Array.from({ length: peopleCount }, (_, personIndex) => personIndex + 1).map((person) => (
@@ -448,54 +498,66 @@ function WorksheetAnswerField({
     );
   }
 
-  if (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide') {
-    const hasRemainder = problem.answer_schema.kind === 'ordered_pair';
+  if (presentation.kind === 'column_division') {
+    const { hasRemainder, quotientSlot } = presentation;
     const quotientValue = hasRemainder ? answerCoordinate(answer, 0) : answer;
     const canonicalQuotient = hasRemainder ? answerCoordinate(problem.canonical_answer, 0) : problem.canonical_answer;
-    const quotientSlot: MathfieldSlot = hasRemainder ? 'quotient' : 'single';
     const remainderValue = hasRemainder ? answerCoordinate(answer, 1) : null;
     const canonicalRemainder = hasRemainder ? answerCoordinate(problem.canonical_answer, 1) : null;
-    const coordinate = (slot: MathfieldSlot, label: string, value: AnswerNode) => (
-      <span className={`column-division-answer-coordinate column-division-answer-coordinate-${slot === 'single' ? 'quotient' : slot}`}>
-        <span className="column-division-answer-label">{label}</span>
-        <MathLiveAnswerInput
-          key={`${problem.problem_id}:${slot}:${gradeResult ? 'graded' : 'editing'}`}
-          initialLatex={answerNodeLatex(value)}
-          frameClassName={commonFrameClass(slot)}
-          ariaLabel={`${index + 1}番の${label} ${answerNodeText(value) || '未入力'}`}
-          selected={isSelected && selectedSlot === slot}
-          readOnly={inputLocked}
-          numericSansFont
-          onSelect={() => onSelect(index, slot)}
-          onInputLatex={(mathfield, latex) => onMathInput(index, slot, mathfield, latex)}
-          onCommit={() => onCommit(index, slot)}
-          onRegister={(mathfield) => onRegisterMathfield(index, slot, mathfield)}
-        />
-      </span>
-    );
+    const showCorrection = Boolean(result && !result.correct);
     return (
       <span className="problem-answer-area problem-answer-area-column-division">
-        {coordinate(quotientSlot, '商', quotientValue)}
-        {hasRemainder && remainderValue ? coordinate('remainder', 'あまり', remainderValue) : null}
-        {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
-        {result && !result.correct ? (
-          <span
-            className="correct-answer column-division-correct-answer"
-            aria-label={hasRemainder && canonicalRemainder
-              ? `正しい答え 商 ${answerNodeText(canonicalQuotient)} あまり ${answerNodeText(canonicalRemainder)}`
-              : `正しい答え ${answerNodeText(canonicalQuotient)}`}
-          >
-            {hasRemainder && canonicalRemainder ? (
-              <>
-                商 <MathLiveStatic className="canonical-answer-math" latex={answerNodeLatex(canonicalQuotient)} ariaLabel={answerNodeText(canonicalQuotient)} />
-                <span> あまり </span>
-                <MathLiveStatic className="canonical-answer-math" latex={answerNodeLatex(canonicalRemainder)} ariaLabel={answerNodeText(canonicalRemainder)} />
-              </>
-            ) : (
-              <MathLiveStatic className="canonical-answer-math" latex={answerNodeLatex(canonicalQuotient)} ariaLabel={answerNodeText(canonicalQuotient)} />
-            )}
+        <span className="column-division-answer-coordinate column-division-answer-coordinate-quotient">
+          <span className="column-division-answer-label">商</span>
+          <ColumnArithmeticAnswerInput
+            problem={problem}
+            problemNumber={index + 1}
+            slot={quotientSlot}
+            value={quotientValue}
+            draft={columnDraftFor(quotientSlot)}
+            selectedDigit={inputLocked ? null : selectedDigitFor(quotientSlot)}
+            readOnly={inputLocked}
+            onSelectDigit={(digitIndex) => onSelectColumnDigit(index, quotientSlot, digitIndex)}
+          />
+        </span>
+        {showCorrection ? (
+          <span className="column-division-correction column-division-correction-quotient" aria-label={`正しい商 ${answerNodeText(canonicalQuotient)}`}>
+            <ColumnArithmeticAnswerInput
+              problem={problem}
+              problemNumber={index + 1}
+              slot={quotientSlot}
+              value={canonicalQuotient}
+              selectedDigit={null}
+              readOnly
+              correction
+              onSelectDigit={() => undefined}
+            />
           </span>
         ) : null}
+        {hasRemainder && remainderValue ? (
+          <span className="column-division-answer-coordinate column-division-answer-coordinate-remainder">
+            <span className="column-division-answer-label">あまり</span>
+            <MathLiveAnswerInput
+              key={`${problem.problem_id}:remainder:${gradeResult ? 'graded' : 'editing'}`}
+              initialLatex={answerNodeLatex(remainderValue)}
+              frameClassName={commonFrameClass('remainder')}
+              ariaLabel={`${index + 1}番のあまり ${answerNodeText(remainderValue) || '未入力'}`}
+              selected={!inputLocked && isSelected && selectedSlot === 'remainder'}
+              readOnly={inputLocked}
+              numericSansFont
+              onSelect={() => onSelect(index, 'remainder')}
+              onInputLatex={(mathfield, latex) => onMathInput(index, 'remainder', mathfield, latex)}
+              onCommit={() => onCommit(index, 'remainder')}
+              onRegister={(mathfield) => onRegisterMathfield(index, 'remainder', mathfield)}
+            />
+          </span>
+        ) : null}
+        {showCorrection && canonicalRemainder ? (
+          <span className="column-division-correction column-division-correction-remainder" aria-label={`正しいあまり ${answerNodeText(canonicalRemainder)}`}>
+            <MathLiveStatic className="column-remainder-correction-value" latex={answerNodeLatex(canonicalRemainder)} ariaLabel={`正しいあまり ${answerNodeText(canonicalRemainder)}`} />
+          </span>
+        ) : null}
+        {columnFeedback}
         {result && result.warnings.length > 0 ? (() => {
           const messages = warningMessages(result.warnings);
           return (
@@ -508,7 +570,50 @@ function WorksheetAnswerField({
     );
   }
 
-  if (problem.prompt.kind === 'simultaneous_equation') {
+  if (presentation.kind === 'column_arithmetic') {
+    const showCorrection = Boolean(result && !result.correct);
+    return (
+      <span className="problem-answer-area problem-answer-area-column-digits">
+        <span className="column-answer-user">
+          <ColumnArithmeticAnswerInput
+            problem={problem}
+            problemNumber={index + 1}
+            slot="single"
+            value={answer}
+            draft={columnDraftFor('single')}
+            selectedDigit={inputLocked ? null : selectedDigitFor('single')}
+            readOnly={inputLocked}
+            onSelectDigit={(digitIndex) => onSelectColumnDigit(index, 'single', digitIndex)}
+          />
+        </span>
+        {showCorrection ? (
+          <span className="column-answer-correction" aria-label={`正しい答え ${canonicalAnswer}`}>
+            <ColumnArithmeticAnswerInput
+              problem={problem}
+              problemNumber={index + 1}
+              slot="single"
+              value={problem.canonical_answer}
+              selectedDigit={null}
+              readOnly
+              correction
+              onSelectDigit={() => undefined}
+            />
+          </span>
+        ) : null}
+        {columnFeedback}
+        {result && result.warnings.length > 0 ? (() => {
+          const messages = warningMessages(result.warnings);
+          return (
+            <span className="grade-warnings" aria-label={`注意 ${messages.join('、')}`}>
+              {messages.map((message) => <span key={message}><RubyMessage text={message} /></span>)}
+            </span>
+          );
+        })() : null}
+      </span>
+    );
+  }
+
+  if (presentation.kind === 'simultaneous_equation') {
     const xAnswer = answerCoordinate(answer, 0);
     const yAnswer = answerCoordinate(answer, 1);
     const canonicalX = answerCoordinate(problem.canonical_answer, 0);
@@ -516,7 +621,7 @@ function WorksheetAnswerField({
     return (
       <span className="problem-answer-area problem-answer-area-simultaneous">
         <span className="simultaneous-answer-coordinate">
-          <MathLiveStatic className="answer-prefix-label" latex="x\\,=" ariaLabel="x =" />
+          <MathLiveStatic className="answer-prefix-label" latex="x=" ariaLabel="x =" />
           <MathLiveAnswerInput
             key={`${problem.problem_id}:x:${gradeResult ? 'graded' : 'editing'}`}
             initialLatex={answerNodeLatex(xAnswer)}
@@ -531,7 +636,7 @@ function WorksheetAnswerField({
           />
         </span>
         <span className="simultaneous-answer-coordinate">
-          <MathLiveStatic className="answer-prefix-label" latex="y\\,=" ariaLabel="y =" />
+          <MathLiveStatic className="answer-prefix-label" latex="y=" ariaLabel="y =" />
           <MathLiveAnswerInput
             key={`${problem.problem_id}:y:${gradeResult ? 'graded' : 'editing'}`}
             initialLatex={answerNodeLatex(yAnswer)}
@@ -550,7 +655,7 @@ function WorksheetAnswerField({
           <span className="correct-answer" aria-label={`正しい答え ${canonicalAnswer}`}>
             <MathLiveStatic
               className="canonical-answer-math"
-              latex={`x\\,=${answerNodeLatex(canonicalX)}\\; y\\,=${answerNodeLatex(canonicalY)}`}
+              latex={`x=${answerNodeLatex(canonicalX)}\;y=${answerNodeLatex(canonicalY)}`}
               ariaLabel={`x = ${answerNodeText(canonicalX)}, y = ${answerNodeText(canonicalY)}`}
             />
           </span>
@@ -584,7 +689,6 @@ function WorksheetAnswerField({
         ariaLabel={`${index + 1}番の答え ${answerText || '未入力'}`}
         selected={isSelected && selectedSlot === 'single'}
         readOnly={inputLocked}
-        numericSansFont={problem.prompt.kind === 'column_arithmetic'}
         onSelect={() => onSelect(index, 'single')}
         onInputLatex={(mathfield, latex) => onMathInput(index, 'single', mathfield, latex)}
         onCommit={() => onCommit(index, 'single')}
@@ -674,9 +778,35 @@ export function AutoDrillApp({
   }));
   const [worksheet, setWorksheet] = useState<WorksheetDto | null>(null);
   const [worksheetMetadata, setWorksheetMetadata] = useState<WorksheetMetadata | null>(null);
-  const [answers, setAnswers] = useState<Record<string, AnswerNode>>({});
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<MathfieldSlot>('single');
+  const {
+    answers,
+    selectedIndex,
+    selectedSlot,
+    selectedColumnDigit,
+    columnDrafts,
+    answersRef,
+    selectedIndexRef,
+    selectedSlotRef,
+    selectedColumnDigitRef,
+    columnDraftsRef,
+    inputEnabledRef,
+    actionQueueRef,
+    acceptedLatexRef,
+    setAnswer,
+    setColumnDraft,
+    setSelectedIndex,
+    setSelectedSlot,
+    setSelectedColumnDigit,
+    select: selectAnswer,
+    selectColumnDigit: selectColumnAnswerDigit,
+    clearSelection,
+    registerMathfield: registerControllerMathfield,
+    getMathfield,
+    blurMathfields,
+    setMathfieldsReadOnly,
+    resetForWorksheet,
+    disableInputAndClearSelection,
+  } = useWorksheetAnswerController();
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -698,14 +828,7 @@ export function AutoDrillApp({
   // browser preference is applied only after hydration.
   const [furiganaEnabled, setFuriganaEnabled] = useState(true);
   const [gradingSettings, setGradingSettings] = useState<GradingSettings>(DEFAULT_GRADING_SETTINGS);
-  const answersRef = useRef<Record<string, AnswerNode>>({});
-  const selectedIndexRef = useRef<number | null>(null);
-  const selectedSlotRef = useRef<MathfieldSlot>('single');
-  const inputEnabledRef = useRef(false);
   const worksheetPhaseRef = useRef<WorksheetPhase>('editing');
-  const actionQueueRef = useRef(Promise.resolve());
-  const mathfieldRefs = useRef(new Map<string, AutoDrillMathfield>());
-  const acceptedLatexRef = useRef<Record<string, string>>({});
   const noticeTimerRef = useRef<number | null>(null);
   const selectedTheme = findTheme(webSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
 
@@ -771,7 +894,10 @@ export function AutoDrillApp({
     let active = true;
     void loadGeneratedWasmRuntime()
       .then((runtime) => {
-        if (active) window.__AUTODRILL_WASM__ = runtime;
+        if (active) {
+          window.__AUTODRILL_WASM__ = runtime;
+          window.__AUTODRILL_SCHEMA_VERSION__ = DRILL_SCHEMA_VERSION;
+        }
       })
       .catch(() => {
         if (active) setError('Rust/WASMの実行環境を読み込めません。WASMパッケージを生成してから再読み込みしてください。');
@@ -838,24 +964,16 @@ export function AutoDrillApp({
   }, []);
 
   const installWorksheet = useCallback((nextWorksheet: WorksheetDto, metadata: WorksheetMetadata) => {
-    const nextAnswers = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, { type: 'empty' } satisfies AnswerNode]));
-    answersRef.current = nextAnswers;
-    acceptedLatexRef.current = Object.fromEntries(nextWorksheet.problems.map((problem) => [problem.problem_id, '']));
+    resetForWorksheet(nextWorksheet);
     setWorksheet(nextWorksheet);
     setWorksheetMetadata(metadata);
-    setAnswers(nextAnswers);
     setGradeResult(null);
     transitionWorksheetPhase('editing');
-    setSelectedIndex(null);
-    selectedIndexRef.current = null;
-    setSelectedSlot('single');
-    selectedSlotRef.current = 'single';
-    inputEnabledRef.current = false;
     const timerStart = Date.now();
     setStartedAt(timerStart);
     setFinishedAt(null);
     setNow(timerStart);
-  }, [transitionWorksheetPhase]);
+  }, [resetForWorksheet, transitionWorksheetPhase]);
 
   const showEngineError = useCallback((value: unknown) => {
     if (value instanceof DrillEngineError) {
@@ -918,24 +1036,54 @@ export function AutoDrillApp({
 
   const selectProblem = useCallback((index: number, slot: MathfieldSlot = 'single') => {
     if (worksheetPhaseRef.current !== 'editing') return;
-    inputEnabledRef.current = true;
-    selectedIndexRef.current = index;
-    selectedSlotRef.current = slot;
-    setSelectedIndex(index);
-    setSelectedSlot(slot);
+    selectAnswer(index, slot);
     // The input panel is mounted by this selection. Running on the next frame
     // lets the shared viewport guard see its real top edge and keeps even a
     // bottom-aligned answer field (for example x = [...]) unobscured.
     scheduleProblemScroll(index, index);
     setError(null);
     dismissNotice();
-  }, [dismissNotice]);
+  }, [dismissNotice, selectAnswer]);
+
+  const selectColumnDigit = useCallback((index: number, slot: ColumnAnswerSlot, digitIndex: number) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
+    const problem = worksheet.problems[index];
+    if (!problem || problem.prompt.kind !== 'column_arithmetic') return;
+    const spec = columnDigitSpec(problem, slot);
+    if (digitIndex < spec.activeStart || digitIndex > spec.activeEnd) return;
+    const key = columnDraftKey(problem.problem_id, slot);
+    if (!columnDraftsRef.current[key]) {
+      const current = answersRef.current[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
+      const draft = columnDigitsFromAnswer(columnAnswerPart(current, slot), spec);
+      setColumnDraft(key, draft);
+    }
+    const selection = { problemIndex: index, slot, digitIndex };
+    selectColumnAnswerDigit(selection);
+    scheduleProblemScroll(index, index);
+    setError(null);
+    dismissNotice();
+  }, [answersRef, columnDraftsRef, dismissNotice, selectColumnAnswerDigit, setColumnDraft, worksheet]);
+
+  const closeInputPanel = useCallback(() => {
+    if (worksheetPhaseRef.current !== 'editing') return;
+    clearSelection();
+    blurMathfields();
+  }, [blurMathfields, clearSelection]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || selectedIndexRef.current === null) return;
+      event.preventDefault();
+      closeInputPanel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [closeInputPanel, selectedIndexRef]);
 
   const registerMathfield = useCallback((index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => {
     const key = mathfieldMapKey(index, slot);
-    if (mathfield) mathfieldRefs.current.set(key, mathfield);
-    else mathfieldRefs.current.delete(key);
-  }, []);
+    registerControllerMathfield(key, mathfield);
+  }, [registerControllerMathfield]);
 
   const updateMathLiveAnswer = useCallback((index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current || !worksheet.problems[index]) return Promise.resolve();
@@ -959,7 +1107,9 @@ export function AutoDrillApp({
         // Parse first: AST-size rejection is independent of layout and should
         // behave as an immediate NOP, without leaving the rejected value visible
         // while waiting for animation frames.
-        parsed = await engine.parseMathLiveAnswer(latex, problem.input_interface);
+        const editorInputInterface = findImplementedThemeByNumericId(problem.numeric_theme_id)?.editorInputInterface
+          ?? problem.input_interface;
+        parsed = await engine.parseMathLiveAnswer(latex, editorInputInterface);
       } catch (value) {
         mathfield.setValue(previousLatex, { silenceNotifications: true });
         if (value instanceof DrillEngineError && value.kind === 'answer_ast_size_limit') {
@@ -979,24 +1129,27 @@ export function AutoDrillApp({
         answer = { type: 'tuple', value: values };
       }
 
-      // MathLive and the intrinsic answer frame resolve in the same layout pass.
-      // Wait only to validate the settled geometry against the worksheet cell;
-      // JS no longer resizes the visible frame after paint.
-      await waitForMathfieldLayout();
-      if (!mathfieldFrameFitsCell(mathfield, index)) {
-        // Render-size rejection is also a true NOP. Restore the exact accepted
-        // LaTeX, not a normalized/reconstructed AnswerNode representation.
-        mathfield.setValue(previousLatex, { silenceNotifications: true });
+      // Empty is always a valid visual state. In particular, MathLive may leave
+      // a caret/placeholder paint box after deleteAll; that UI chrome must never
+      // turn a successful clear into a false "too large" rejection.
+      if (parsed.type !== 'empty') {
+        // MathLive and the intrinsic answer frame resolve in the same layout pass.
+        // Wait only to validate the settled geometry against the worksheet cell;
+        // JS no longer resizes the visible frame after paint.
         await waitForMathfieldLayout();
-        mathfieldFrameFitsCell(mathfield, index);
-        setNotice('式が大きすぎます！');
-        return;
+        if (!mathfieldPaintFitsCell(mathfield, index)) {
+          // Render-size rejection is also a true NOP. Restore the exact accepted
+          // LaTeX, not a normalized/reconstructed AnswerNode representation.
+          mathfield.setValue(previousLatex, { silenceNotifications: true });
+          await waitForMathfieldLayout();
+          mathfieldPaintFitsCell(mathfield, index);
+          setNotice('式が大きすぎます！');
+          return;
+        }
       }
 
       acceptedLatexRef.current = { ...acceptedLatexRef.current, [latexKey]: latex };
-      const nextAnswers = { ...answersRef.current, [problemId]: answer };
-      answersRef.current = nextAnswers;
-      setAnswers(nextAnswers);
+      setAnswer(problemId, answer);
       setError(null);
       dismissNotice();
     };
@@ -1004,7 +1157,24 @@ export function AutoDrillApp({
     const queued = actionQueueRef.current.then(run, run);
     actionQueueRef.current = queued.then(() => undefined, () => undefined);
     return queued;
-  }, [dismissNotice, engine, showEngineError, worksheet]);
+  }, [acceptedLatexRef, actionQueueRef, answersRef, dismissNotice, engine, inputEnabledRef, setAnswer, showEngineError, worksheet]);
+
+  const updateColumnDigitDraft = useCallback((index: number, slot: ColumnAnswerSlot, nextDraft: Array<string | null>) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
+    const problem = worksheet.problems[index];
+    if (!problem || problem.prompt.kind !== 'column_arithmetic') return;
+    const spec = columnDigitSpec(problem, slot);
+    const key = columnDraftKey(problem.problem_id, slot);
+    const normalizedDraft = Array.from({ length: spec.cellCount }, (_, digitIndex) => nextDraft[digitIndex] ?? null);
+    setColumnDraft(key, normalizedDraft);
+
+    const current = answersRef.current[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
+    const part = columnDigitsToAnswer(normalizedDraft, spec);
+    const answer = replaceColumnAnswerPart(current, slot, part);
+    setAnswer(problem.problem_id, answer);
+    setError(null);
+    dismissNotice();
+  }, [answersRef, dismissNotice, setAnswer, setColumnDraft, worksheet]);
 
   const togglePerson = useCallback((index: number, person: number) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
@@ -1014,49 +1184,133 @@ export function AutoDrillApp({
     if (current.has(person)) current.delete(person);
     else current.add(person);
     const value = [...current].sort((left, right) => left - right).map((selected) => ({ type: 'integer', value: String(selected) } as const));
-    const nextAnswers = { ...answersRef.current, [problem.problem_id]: { type: 'tuple', value } as AnswerNode };
-    answersRef.current = nextAnswers;
-    setAnswers(nextAnswers);
+    setAnswer(problem.problem_id, { type: 'tuple', value } as AnswerNode);
     setError(null);
     dismissNotice();
-  }, [dismissNotice, worksheet]);
+  }, [answersRef, dismissNotice, setAnswer, worksheet]);
 
   const commitMathfield = useCallback((index: number, slot: MathfieldSlot) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing' || !worksheet.problems[index]) return Promise.resolve();
     const problem = worksheet.problems[index];
     if (problem.prompt.kind === 'simultaneous_equation' && slot === 'x' && inputEnabledRef.current) {
-      selectedSlotRef.current = 'y';
       setSelectedSlot('y');
+      setSelectedColumnDigit(null);
       return actionQueueRef.current;
     }
-    if (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide' && slot === 'quotient' && inputEnabledRef.current) {
-      selectedSlotRef.current = 'remainder';
-      setSelectedSlot('remainder');
+    if (
+      problem.prompt.kind === 'column_arithmetic'
+      && problem.prompt.operator === 'divide'
+      && problem.answer_schema.kind === 'ordered_pair'
+      && slot === 'quotient'
+      && inputEnabledRef.current
+    ) {
+      selectProblem(index, 'remainder');
       return actionQueueRef.current;
     }
     if (index < worksheet.problems.length - 1 && inputEnabledRef.current) {
       const nextIndex = index + 1;
       const nextProblem = worksheet.problems[nextIndex];
-      const nextSlot: MathfieldSlot = nextProblem?.prompt.kind === 'simultaneous_equation'
-        ? 'x'
-        : nextProblem?.prompt.kind === 'column_arithmetic' && nextProblem.prompt.operator === 'divide'
+      if (nextProblem?.prompt.kind === 'column_arithmetic') {
+        const nextColumnSlot: ColumnAnswerSlot = nextProblem.prompt.operator === 'divide' && nextProblem.answer_schema.kind === 'ordered_pair'
           ? 'quotient'
           : 'single';
-      selectedIndexRef.current = nextIndex;
-      selectedSlotRef.current = nextSlot;
-      setSelectedIndex(nextIndex);
-      setSelectedSlot(nextSlot);
+        const spec = columnDigitSpec(nextProblem, nextColumnSlot);
+        selectColumnDigit(nextIndex, nextColumnSlot, spec.initialIndex);
+        return actionQueueRef.current;
+      }
+      const nextSlot: MathfieldSlot = nextProblem?.prompt.kind === 'simultaneous_equation' ? 'x' : 'single';
+      selectAnswer(nextIndex, nextSlot);
       scheduleProblemScroll(index, nextIndex);
     }
 
     return actionQueueRef.current;
-  }, [worksheet]);
+  }, [actionQueueRef, inputEnabledRef, selectAnswer, selectColumnDigit, selectProblem, setSelectedColumnDigit, setSelectedSlot, worksheet]);
+
 
   const applyMathCommand = useCallback((command: MathInputCommand) => {
     const index = selectedIndexRef.current;
     if (index === null || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current) return;
     const slot = selectedSlotRef.current;
-    const mathfield = mathfieldRefs.current.get(mathfieldMapKey(index, slot));
+    const columnSelection = selectedColumnDigitRef.current;
+    const columnProblem = worksheet?.problems[index];
+    if (
+      columnSelection
+      && columnSelection.problemIndex === index
+      && isColumnAnswerSlot(slot)
+      && columnSelection.slot === slot
+      && columnProblem?.prompt.kind === 'column_arithmetic'
+    ) {
+      const spec = columnDigitSpec(columnProblem, slot);
+      const key = columnDraftKey(columnProblem.problem_id, slot);
+      const currentAnswer = answersRef.current[columnProblem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
+      const currentDraft = [...(
+        columnDraftsRef.current[key]
+        ?? columnDigitsFromAnswer(columnAnswerPart(currentAnswer, slot), spec)
+      )];
+      const setDigitSelection = (digitIndex: number) => {
+        const selection = { problemIndex: index, slot, digitIndex };
+        setSelectedColumnDigit(selection);
+      };
+      const writeDraft = (draft: Array<string | null>) => updateColumnDigitDraft(index, slot, draft);
+
+      switch (command.kind) {
+        case 'insert_digit': { // 筆算の各桁は独立slot。入力方向だけ演算に応じて変える。
+          currentDraft[columnSelection.digitIndex] = String(command.digit);
+          writeDraft(currentDraft);
+          if (
+            slot === 'quotient'
+            && columnProblem.prompt.operator === 'divide'
+            && columnProblem.answer_schema.kind === 'ordered_pair'
+            && columnSelection.digitIndex === spec.activeEnd
+          ) {
+            // The quotient is written left-to-right. Once its final place is
+            // entered, continue directly into the ordinary big-endian remainder
+            // field rather than requiring an extra confirmation click.
+            selectProblem(index, 'remainder');
+          } else {
+            setDigitSelection(nextColumnDigitIndex(spec, columnSelection.digitIndex));
+          }
+          break;
+        }
+        case 'move_left':
+          setDigitSelection(Math.max(spec.activeStart, columnSelection.digitIndex - 1));
+          break;
+        case 'move_right':
+          setDigitSelection(Math.min(spec.activeEnd, columnSelection.digitIndex + 1));
+          break;
+        case 'delete_backward': { // 直前に入力した桁へ戻って消す。
+          const previous = previousColumnDigitIndex(spec, columnSelection.digitIndex);
+          const target = currentDraft[columnSelection.digitIndex] === null && previous !== columnSelection.digitIndex
+            ? previous
+            : columnSelection.digitIndex;
+          currentDraft[target] = null;
+          writeDraft(currentDraft);
+          setDigitSelection(target);
+          break;
+        }
+        case 'delete_forward':
+          currentDraft[columnSelection.digitIndex] = null;
+          writeDraft(currentDraft);
+          break;
+        case 'clear': {
+          const cleared = currentDraft.map((digit, digitIndex) => (
+            digitIndex >= spec.activeStart && digitIndex <= spec.activeEnd ? null : digit
+          ));
+          writeDraft(cleared);
+          setDigitSelection(spec.initialIndex);
+          break;
+        }
+        case 'commit':
+          void commitMathfield(index, slot);
+          break;
+        case 'insert_structure':
+        case 'insert_latex':
+          break;
+      }
+      return;
+    }
+
+    const mathfield = getMathfield(mathfieldMapKey(index, slot));
     if (!mathfield) return;
     mathfield.focus();
 
@@ -1100,7 +1354,25 @@ export function AutoDrillApp({
         void commitMathfield(index, slot);
         break;
     }
-  }, [commitMathfield, updateMathLiveAnswer]);
+  }, [answersRef, columnDraftsRef, commitMathfield, getMathfield, inputEnabledRef, selectProblem, selectedColumnDigitRef, selectedIndexRef, selectedSlotRef, setSelectedColumnDigit, updateColumnDigitDraft, updateMathLiveAnswer, worksheet]);
+
+  useEffect(() => {
+    const onColumnKeyDown = (event: KeyboardEvent) => {
+      if (!selectedColumnDigitRef.current || worksheetPhaseRef.current !== 'editing') return;
+      let command: MathInputCommand | null = null;
+      if (/^[0-9]$/.test(event.key)) command = { kind: 'insert_digit', digit: Number(event.key) };
+      else if (event.key === 'ArrowLeft') command = { kind: 'move_left' };
+      else if (event.key === 'ArrowRight') command = { kind: 'move_right' };
+      else if (event.key === 'Backspace') command = { kind: 'delete_backward' };
+      else if (event.key === 'Delete') command = { kind: 'delete_forward' };
+      else if (event.key === 'Enter') command = { kind: 'commit' };
+      if (!command) return;
+      event.preventDefault();
+      applyMathCommand(command);
+    };
+    window.addEventListener('keydown', onColumnKeyDown);
+    return () => window.removeEventListener('keydown', onColumnKeyDown);
+  }, [applyMathCommand, selectedColumnDigitRef]);
 
   const drainActionQueue = useCallback(async () => {
     while (true) {
@@ -1108,7 +1380,7 @@ export function AutoDrillApp({
       await pending;
       if (pending === actionQueueRef.current) return;
     }
-  }, []);
+  }, [actionQueueRef]);
 
   const grade = useCallback(async () => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
@@ -1116,15 +1388,8 @@ export function AutoDrillApp({
     // Lock synchronously before the first await. This closes the same-tick
     // double-click/keyboard window that React state alone cannot close.
     transitionWorksheetPhase('grading');
-    inputEnabledRef.current = false;
-    selectedIndexRef.current = null;
-    selectedSlotRef.current = 'single';
-    setSelectedIndex(null);
-    setSelectedSlot('single');
-    for (const mathfield of mathfieldRefs.current.values()) {
-      mathfield.readOnly = true;
-      mathfield.blur();
-    }
+    disableInputAndClearSelection();
+    setMathfieldsReadOnly(true);
 
     const stoppedAt = finishedAt ?? Date.now();
     setFinishedAt(stoppedAt);
@@ -1156,13 +1421,14 @@ export function AutoDrillApp({
       setFinishedAt(null);
       setNow(resumedAt);
       transitionWorksheetPhase('editing');
-      for (const mathfield of mathfieldRefs.current.values()) mathfield.readOnly = false;
+      setMathfieldsReadOnly(false);
       showEngineError(value);
     } finally {
-      selectedIndexRef.current = null;
+      setSelectedIndex(null);
+      setSelectedColumnDigit(null);
       setBusy(false);
     }
-  }, [drainActionQueue, engine, finishedAt, gradingSettings, showEngineError, startedAt, transitionWorksheetPhase, worksheet]);
+  }, [answersRef, disableInputAndClearSelection, drainActionQueue, engine, finishedAt, gradingSettings, setMathfieldsReadOnly, setSelectedColumnDigit, setSelectedIndex, showEngineError, startedAt, transitionWorksheetPhase, worksheet]);
 
   const returnToProblems = useCallback(() => {
     if (worksheetPhaseRef.current !== 'graded') return;
@@ -1173,14 +1439,10 @@ export function AutoDrillApp({
     setNow(resumedAt);
     setGradeResult(null);
     transitionWorksheetPhase('editing');
-    setSelectedIndex(null);
-    selectedIndexRef.current = null;
-    setSelectedSlot('single');
-    selectedSlotRef.current = 'single';
-    inputEnabledRef.current = false;
+    clearSelection();
     setError(null);
     dismissNotice();
-  }, [dismissNotice, finishedAt, startedAt, transitionWorksheetPhase]);
+  }, [clearSelection, dismissNotice, finishedAt, startedAt, transitionWorksheetPhase]);
 
   const retryWorksheet = useCallback(() => {
     if (worksheetPhaseRef.current !== 'graded' || !worksheet || !worksheetMetadata) return;
@@ -1214,18 +1476,14 @@ export function AutoDrillApp({
   const backToTop = useCallback(() => {
     if (worksheetPhaseRef.current === 'grading' || worksheetPhaseRef.current === 'replacing') return;
     setScreen('settings');
-    setSelectedIndex(null);
-    selectedIndexRef.current = null;
-    setSelectedSlot('single');
-    selectedSlotRef.current = 'single';
-    inputEnabledRef.current = false;
+    clearSelection();
     setStartedAt(null);
     setFinishedAt(null);
     setGradeResult(null);
     transitionWorksheetPhase('editing');
     setError(null);
     dismissNotice();
-  }, [dismissNotice, transitionWorksheetPhase]);
+  }, [clearSelection, dismissNotice, transitionWorksheetPhase]);
 
   return (
     <FuriganaContext.Provider value={furiganaEnabled}>
@@ -1259,6 +1517,8 @@ export function AutoDrillApp({
             answers={answers}
             selectedIndex={selectedIndex}
             selectedSlot={selectedSlot}
+            selectedColumnDigit={selectedColumnDigit}
+            columnDrafts={columnDrafts}
             elapsed={formatElapsed(startedAt, finishedAt ?? now)}
             gradeResult={gradeResult}
             worksheetPhase={worksheetPhase}
@@ -1266,11 +1526,13 @@ export function AutoDrillApp({
             error={error}
             notice={notice}
             onSelect={selectProblem}
+            onSelectColumnDigit={selectColumnDigit}
             onCommand={applyMathCommand}
             onRegisterMathfield={registerMathfield}
             onMathInput={(index, slot, mathfield, latex) => void updateMathLiveAnswer(index, slot, mathfield, latex)}
             onCommit={(index, slot) => void commitMathfield(index, slot)}
             onTogglePerson={togglePerson}
+            onCloseInput={closeInputPanel}
             onGrade={() => void grade()}
             onReturnToProblems={returnToProblems}
             onRetryWorksheet={retryWorksheet}
@@ -1288,7 +1550,7 @@ export function AutoDrillApp({
 
 function gradeTagForTheme(theme: CurriculumTheme): { label: string; className: string } | null {
   if (!theme.implemented || !theme.grade) return null;
-  const grade = Number(theme.grade.slug.slice('grade-'.length));
+  const grade = theme.grade.number;
   const label = grade <= 6 ? `小${grade}` : `中${grade - 6}`;
   const className = `grade-tag-grade-${grade}`;
   return { label, className };
@@ -1615,6 +1877,8 @@ type WorksheetScreenProps = {
   answers: Record<string, AnswerNode>;
   selectedIndex: number | null;
   selectedSlot: MathfieldSlot;
+  selectedColumnDigit: ColumnDigitSelection | null;
+  columnDrafts: Record<string, Array<string | null>>;
   elapsed: string;
   gradeResult: GradeResult | null;
   worksheetPhase: WorksheetPhase;
@@ -1622,11 +1886,13 @@ type WorksheetScreenProps = {
   error: string | null;
   notice: string | null;
   onSelect: (index: number, slot: MathfieldSlot) => void;
+  onSelectColumnDigit: (index: number, slot: ColumnAnswerSlot, digitIndex: number) => void;
   onCommand: (command: MathInputCommand) => void;
   onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
   onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
   onCommit: (index: number, slot: MathfieldSlot) => void;
   onTogglePerson: (index: number, person: number) => void;
+  onCloseInput: () => void;
   onGrade: () => void;
   onReturnToProblems: () => void;
   onRetryWorksheet: () => void;
@@ -1635,27 +1901,31 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, columnDrafts, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
-  const isColumnArithmeticWorksheet = worksheet.problems.length > 0
-    && worksheet.problems.every((problem) => problem.prompt.kind === 'column_arithmetic');
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
-  const gradeBandClass = worksheetTheme.grade ? worksheetGradeBandClass(worksheetTheme.grade.slug) : 'worksheet-grade-junior-high';
+  const isColumnArithmeticWorksheet = worksheetTheme.presentation.column_arithmetic;
+  const isEquationWorksheet = worksheetTheme.presentation.equation_layout;
+  const gradeBandClass = worksheetTheme.grade ? worksheetGradeBandClass(worksheetTheme.grade.number) : 'worksheet-grade-junior-high';
   const worksheetCategoryLabel = worksheetTheme.grade?.label ?? 'おまけ';
   const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
-  const selectedCapabilities = selectedProblem ? inputCapabilities(selectedProblem.input_interface) : null;
+  const columnDigitInputActive = selectedProblem?.prompt.kind === 'column_arithmetic' && selectedColumnDigit !== null;
+  const selectedCapabilities = selectedProblem ? inputCapabilities(worksheetTheme.editorInputInterface) : null;
+  const juniorHighFullKeypad = Boolean(selectedProblem && worksheetTheme.grade && worksheetTheme.grade.number >= 7);
   const arithmeticOperatorsEnabled = selectedCapabilities?.allowed_structures.includes('arithmetic') ?? false;
-  const visibleStructures = selectedCapabilities?.allowed_structures.filter(
-    (structure): structure is Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'> => (
-      structure !== 'decimal'
-      && structure !== 'arithmetic'
-      && !(selectedProblem?.prompt.kind === 'simultaneous_equation' && structure === 'tuple')
-      && !(selectedProblem?.prompt.kind === 'column_arithmetic' && selectedProblem.prompt.operator === 'divide' && structure === 'tuple')
-      && !(arithmeticOperatorsEnabled && (structure === 'negative' || structure === 'plus_minus'))
-    ),
-  ) ?? [];
-  if (selectedCapabilities?.allow_negative && !arithmeticOperatorsEnabled && !visibleStructures.includes('negative')) {
+  const visibleStructures = juniorHighFullKeypad
+    ? [...JUNIOR_HIGH_STRUCTURE_KEYS]
+    : selectedCapabilities?.allowed_structures.filter(
+        (structure): structure is Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'> => (
+          structure !== 'decimal'
+          && structure !== 'arithmetic'
+          && !(selectedProblem?.prompt.kind === 'simultaneous_equation' && structure === 'tuple')
+          && !(selectedProblem?.prompt.kind === 'column_arithmetic' && selectedProblem.prompt.operator === 'divide' && structure === 'tuple')
+          && !(arithmeticOperatorsEnabled && (structure === 'negative' || structure === 'plus_minus'))
+        ),
+      ) ?? [];
+  if (!juniorHighFullKeypad && selectedCapabilities?.allow_negative && !arithmeticOperatorsEnabled && !visibleStructures.includes('negative')) {
     visibleStructures.push('negative');
   }
   const resultById = new Map((gradeResult?.items ?? []).map((item) => [item.problem_id, item]));
@@ -1700,7 +1970,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       ) : null}
 
       <div className="paper-wrap">
-        <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}` }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
+        <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}`, ...(isColumnArithmeticWorksheet ? columnArithmeticPageGridVariables() : {}) }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
           <div className={`problem-grid ${isColumnArithmeticWorksheet ? 'problem-grid-column-arithmetic' : ''}`}>
             {worksheetTheme.worksheet.instruction ? (
               <p className="worksheet-instruction">{worksheetTheme.worksheet.instruction}</p>
@@ -1719,7 +1989,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               const isSelected = selectedIndex === index;
               const result = resultById.get(problem.problem_id);
               const position = getCellTopPosition(sharedLayout, cell);
-              const isLinearEquation = problem.prompt.kind === 'linear_equation' || problem.prompt.kind === 'quadratic_equation' || problem.prompt.kind === 'simultaneous_equation';
+              const isLinearEquation = isEquationWorksheet;
               const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
               const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
               const stackAnswerBelow = worksheetTheme.worksheet.answerPlacement === 'below' && !isLinearEquation;
@@ -1733,26 +2003,27 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               return (
                 <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
                   <span className="problem-number">{index + 1}.</span>
-                  <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} solution={Boolean(result && isColumnArithmetic)} /></span>
-                  {result && isColumnArithmetic ? null : (
-                    <WorksheetAnswerField
+                  <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
+                  <WorksheetAnswerField
                       worksheetUi={worksheetUi}
                       problem={problem}
                       index={index}
                       answer={answer}
                       isSelected={isSelected}
                       selectedSlot={selectedSlot}
+                      selectedColumnDigit={selectedColumnDigit}
+                      columnDrafts={columnDrafts}
                       result={result}
                       gradeResult={gradeResult}
                       inputLocked={worksheetPhase !== 'editing'}
                       answerPrefix={worksheetTheme.worksheet.answerPrefix}
                       onSelect={onSelect}
+                      onSelectColumnDigit={onSelectColumnDigit}
                       onRegisterMathfield={onRegisterMathfield}
                       onMathInput={onMathInput}
                       onCommit={onCommit}
                       onTogglePerson={onTogglePerson}
                     />
-                  )}
                 </div>
               );
             })}
@@ -1766,10 +2037,13 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       </div>
 
       {selectedProblem ? (
-        <div className="input-panel" aria-label="数式入力パネル">
-          <div className={`input-panel-inner ${arithmeticOperatorsEnabled ? 'input-panel-inner-algebraic' : ''}`}>
-            {(visibleStructures.length > 0 || arithmeticOperatorsEnabled) ? (
-              <div className={`formula-keypad ${arithmeticOperatorsEnabled ? 'formula-keypad-algebraic' : ''}`} aria-label={arithmeticOperatorsEnabled ? '数式キー' : '数式テンプレート'}>
+        <div className={`input-panel ${columnDigitInputActive ? 'input-panel-column-digits' : ''}`} aria-label="数式入力パネル">
+          <button type="button" className="input-panel-close" onClick={onCloseInput} aria-label="入力パネルを閉じる" title="入力パネルを閉じる">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 9l7 7 7-7" /></svg>
+          </button>
+          <div className={`input-panel-inner ${juniorHighFullKeypad ? 'input-panel-inner-junior-high' : arithmeticOperatorsEnabled ? 'input-panel-inner-algebraic' : ''}`}>
+            {visibleStructures.length > 0 ? (
+              <div className={`formula-keypad ${juniorHighFullKeypad ? 'formula-keypad-junior-high' : arithmeticOperatorsEnabled ? 'formula-keypad-algebraic' : ''}`} aria-label={juniorHighFullKeypad || arithmeticOperatorsEnabled ? '数式キー' : '数式テンプレート'}>
                 {visibleStructures.map((structure) => {
                   const label = structure === 'tuple' && selectedProblem.answer_schema.kind === 'ordered_pair'
                     ? 'x, y'
@@ -1777,6 +2051,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                   return (
                     <button
                       type="button"
+                      className="formula-structure-key"
                       key={structure}
                       onClick={() => onCommand({ kind: 'insert_structure', structure })}
                       disabled={busy}
@@ -1788,20 +2063,16 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                     </button>
                   );
                 })}
-                {arithmeticOperatorsEnabled ? (
-                  <>
-                    <button type="button" className="formula-operator-key" onClick={() => onCommand({ kind: 'insert_latex', latex: '+' })} disabled={busy} aria-label="プラスを挿入">+</button>
-                    <button type="button" className="formula-operator-key" onClick={() => onCommand({ kind: 'insert_latex', latex: '-' })} disabled={busy} aria-label="マイナスを挿入">−</button>
-                    <button type="button" className="formula-operator-key" onClick={() => onCommand({ kind: 'insert_latex', latex: '\\pm' })} disabled={busy} aria-label="プラスマイナスを挿入">±</button>
-                  </>
-                ) : null}
               </div>
             ) : null}
-            <div className="keypad-numbers" aria-label="数字キー">
+            <div
+              className={`keypad-numbers ${juniorHighFullKeypad ? 'keypad-numbers-junior-high' : arithmeticOperatorsEnabled ? 'keypad-numbers-algebraic' : ''} ${!juniorHighFullKeypad && arithmeticOperatorsEnabled && selectedCapabilities?.allow_decimal ? 'keypad-numbers-algebraic-decimal' : ''}`}
+              aria-label="数字キー"
+            >
               {[7, 8, 9, 4, 5, 6, 1, 2, 3, 0].map((digit) => (
                 <button
                   type="button"
-                  className={digit === 0 ? 'keypad-zero' : undefined}
+                  className={digit === 0 ? 'keypad-zero' : 'keypad-digit'}
                   key={digit}
                   onClick={() => onCommand({ kind: 'insert_digit', digit })}
                   disabled={busy}
@@ -1809,7 +2080,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                   {digit}
                 </button>
               ))}
-              {selectedCapabilities?.allow_decimal ? (
+              {!columnDigitInputActive && (juniorHighFullKeypad || selectedCapabilities?.allow_decimal) ? (
                 <button
                   type="button"
                   className="keypad-decimal"
@@ -1821,6 +2092,13 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                 </button>
               ) : null}
             </div>
+            {juniorHighFullKeypad ? (
+              <div className="keypad-operators" aria-label="演算子キー">
+                <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '+' })} disabled={busy} aria-label="プラスを挿入">+</button>
+                <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '-' })} disabled={busy} aria-label="マイナスを挿入">−</button>
+                <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '\\pm' })} disabled={busy} aria-label="プラスマイナスを挿入">±</button>
+              </div>
+            ) : null}
             <div className="keypad-controls" aria-label="編集キー">
               <button type="button" onClick={() => onCommand({ kind: 'move_left' })} disabled={busy} aria-label="カーソルを左へ">←</button>
               <button type="button" onClick={() => onCommand({ kind: 'move_right' })} disabled={busy} aria-label="カーソルを右へ">→</button>

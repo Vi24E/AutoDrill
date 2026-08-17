@@ -2,8 +2,8 @@
 // Source: drill-core::web_contract(). Run `pnpm contract:generate` after changing the Rust contract.
 
 export const DRILL_CORE_CONTRACT = {
-  "schema_version": 4,
-  "operation_kind_count": 31,
+  "schema_version": 5,
+  "operation_kind_count": 32,
   "themes": {
     "1": {
       "numeric_theme_id": 1,
@@ -14,6 +14,33 @@ export const DRILL_CORE_CONTRACT = {
         "小学1年生",
         "一桁の足し算"
       ],
+      "grade": 1,
+      "tags": [
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "addition",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -30,6 +57,49 @@ export const DRILL_CORE_CONTRACT = {
         "一次方程式",
         "一次方程式(1)"
       ],
+      "grade": 7,
+      "tags": [
+        "equations",
+        "linear_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "linear_equation",
+        "answer_schema_kind": "integer",
+        "input_profile": "linear_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -46,6 +116,49 @@ export const DRILL_CORE_CONTRACT = {
         "一次方程式",
         "一次方程式(2)"
       ],
+      "grade": 7,
+      "tags": [
+        "equations",
+        "linear_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "linear_equation",
+        "answer_schema_kind": "rational",
+        "input_profile": "linear_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -61,6 +174,33 @@ export const DRILL_CORE_CONTRACT = {
         "小学1年生",
         "一桁の引き算"
       ],
+      "grade": 1,
+      "tags": [
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -76,6 +216,33 @@ export const DRILL_CORE_CONTRACT = {
         "小学2年生",
         "二桁の足し算"
       ],
+      "grade": 2,
+      "tags": [
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -91,6 +258,33 @@ export const DRILL_CORE_CONTRACT = {
         "小学2年生",
         "九九"
       ],
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -106,6 +300,41 @@ export const DRILL_CORE_CONTRACT = {
         "中学1年生",
         "負の数の計算(1)"
       ],
+      "grade": 7,
+      "tags": [
+        "negative_numbers"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_signed"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": true
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -121,6 +350,43 @@ export const DRILL_CORE_CONTRACT = {
         "中学1年生",
         "負の数の計算(2)"
       ],
+      "grade": 7,
+      "tags": [
+        "negative_numbers"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "signed_rational"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "negative"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -129,13 +395,47 @@ export const DRILL_CORE_CONTRACT = {
     },
     "9": {
       "numeric_theme_id": 9,
-      "generator_revision": 4,
+      "generator_revision": 5,
       "skill_id": "jp.grade5.fraction.addition",
       "curriculum_path": [
         "root",
         "小学5年生",
         "分数の足し算"
       ],
+      "grade": 5,
+      "tags": [
+        "fractions",
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -144,13 +444,47 @@ export const DRILL_CORE_CONTRACT = {
     },
     "10": {
       "numeric_theme_id": 10,
-      "generator_revision": 4,
+      "generator_revision": 5,
       "skill_id": "jp.grade6.fraction.multiplication",
       "curriculum_path": [
         "root",
         "小学6年生",
         "分数の掛け算"
       ],
+      "grade": 6,
+      "tags": [
+        "fractions",
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -159,13 +493,47 @@ export const DRILL_CORE_CONTRACT = {
     },
     "11": {
       "numeric_theme_id": 11,
-      "generator_revision": 4,
+      "generator_revision": 5,
       "skill_id": "jp.grade5.fraction.subtraction",
       "curriculum_path": [
         "root",
         "小学5年生",
         "分数の引き算"
       ],
+      "grade": 5,
+      "tags": [
+        "fractions",
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -174,13 +542,47 @@ export const DRILL_CORE_CONTRACT = {
     },
     "12": {
       "numeric_theme_id": 12,
-      "generator_revision": 4,
+      "generator_revision": 6,
       "skill_id": "jp.grade6.fraction.division",
       "curriculum_path": [
         "root",
         "小学6年生",
         "分数の割り算"
       ],
+      "grade": 6,
+      "tags": [
+        "fractions",
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -196,6 +598,33 @@ export const DRILL_CORE_CONTRACT = {
         "小学3年生",
         "割り算(1)"
       ],
+      "grade": 3,
+      "tags": [
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -212,6 +641,48 @@ export const DRILL_CORE_CONTRACT = {
         "二次方程式",
         "二次方程式(1)"
       ],
+      "grade": 9,
+      "tags": [
+        "equations",
+        "quadratic_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "quadratic_equation",
+        "answer_schema_kind": "algebraic",
+        "input_profile": "quadratic_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -228,6 +699,48 @@ export const DRILL_CORE_CONTRACT = {
         "二次方程式",
         "二次方程式(2)"
       ],
+      "grade": 9,
+      "tags": [
+        "equations",
+        "quadratic_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "quadratic_equation",
+        "answer_schema_kind": "algebraic",
+        "input_profile": "quadratic_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -244,6 +757,48 @@ export const DRILL_CORE_CONTRACT = {
         "二次方程式",
         "二次方程式(3)"
       ],
+      "grade": 9,
+      "tags": [
+        "equations",
+        "quadratic_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "quadratic_equation",
+        "answer_schema_kind": "algebraic",
+        "input_profile": "quadratic_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -259,6 +814,35 @@ export const DRILL_CORE_CONTRACT = {
         "小学4年生",
         "小数の足し算と引き算"
       ],
+      "grade": 4,
+      "tags": [
+        "decimals",
+        "addition",
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -274,6 +858,34 @@ export const DRILL_CORE_CONTRACT = {
         "小学5年生",
         "小数の掛け算"
       ],
+      "grade": 5,
+      "tags": [
+        "decimals",
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -290,6 +902,44 @@ export const DRILL_CORE_CONTRACT = {
         "連立方程式",
         "連立方程式(1)"
       ],
+      "grade": 8,
+      "tags": [
+        "equations",
+        "simultaneous_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "simultaneous_equation",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "simultaneous_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "negative",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
       "layout": {
         "problem_count": 12,
         "columns": 2,
@@ -305,6 +955,35 @@ export const DRILL_CORE_CONTRACT = {
         "おまけ",
         "うそつきだれだ"
       ],
+      "grade": null,
+      "tags": [
+        "bonus"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "liar_puzzle",
+        "answer_schema_kind": "algebraic",
+        "input_profile": "tuple_only"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
       "layout": {
         "problem_count": 6,
         "columns": 1,
@@ -313,13 +992,47 @@ export const DRILL_CORE_CONTRACT = {
     },
     "21": {
       "numeric_theme_id": 21,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade6.fraction.integer_multiplication",
       "curriculum_path": [
         "root",
         "小学6年生",
         "分数と整数の掛け算"
       ],
+      "grade": 6,
+      "tags": [
+        "fractions",
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -328,13 +1041,47 @@ export const DRILL_CORE_CONTRACT = {
     },
     "22": {
       "numeric_theme_id": 22,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade6.fraction.integer_division",
       "curriculum_path": [
         "root",
         "小学6年生",
         "分数と整数の割り算"
       ],
+      "grade": 6,
+      "tags": [
+        "fractions",
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -343,13 +1090,50 @@ export const DRILL_CORE_CONTRACT = {
     },
     "23": {
       "numeric_theme_id": 23,
-      "generator_revision": 1,
+      "generator_revision": 3,
       "skill_id": "jp.grade6.fraction.summary_improper",
       "curriculum_path": [
         "root",
         "小学6年生",
         "分数総まとめ(仮分数)"
       ],
+      "grade": 6,
+      "tags": [
+        "fractions",
+        "addition",
+        "subtraction",
+        "multiplication",
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "keep_improper_fraction"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
       "layout": {
         "problem_count": 16,
         "columns": 2,
@@ -365,6 +1149,34 @@ export const DRILL_CORE_CONTRACT = {
         "小学5年生",
         "小数の割り算"
       ],
+      "grade": 5,
+      "tags": [
+        "decimals",
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 20,
         "columns": 2,
@@ -373,7 +1185,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "25": {
       "numeric_theme_id": 25,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.column.addition.two_digit",
       "curriculum_path": [
         "root",
@@ -381,6 +1193,35 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "二桁の足し算の筆算"
       ],
+      "grade": 2,
+      "tags": [
+        "addition",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -389,7 +1230,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "26": {
       "numeric_theme_id": 26,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.column.subtraction.two_digit",
       "curriculum_path": [
         "root",
@@ -397,6 +1238,35 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "二桁の引き算の筆算"
       ],
+      "grade": 2,
+      "tags": [
+        "subtraction",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -405,7 +1275,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "27": {
       "numeric_theme_id": 27,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade3.column.addition.three_four_digit",
       "curriculum_path": [
         "root",
@@ -413,6 +1283,35 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "三・四桁の足し算の筆算"
       ],
+      "grade": 3,
+      "tags": [
+        "addition",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -421,7 +1320,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "28": {
       "numeric_theme_id": 28,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade3.column.subtraction.three_four_digit",
       "curriculum_path": [
         "root",
@@ -429,6 +1328,35 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "三・四桁の引き算の筆算"
       ],
+      "grade": 3,
+      "tags": [
+        "subtraction",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -437,7 +1365,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "29": {
       "numeric_theme_id": 29,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade3.column.multiplication.one_digit_multiplier",
       "curriculum_path": [
         "root",
@@ -445,6 +1373,35 @@ export const DRILL_CORE_CONTRACT = {
         "乗法",
         "一桁をかける掛け算の筆算"
       ],
+      "grade": 3,
+      "tags": [
+        "multiplication",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -453,7 +1410,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "30": {
       "numeric_theme_id": 30,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade3.column.multiplication.two_digit_multiplier",
       "curriculum_path": [
         "root",
@@ -461,6 +1418,35 @@ export const DRILL_CORE_CONTRACT = {
         "乗法",
         "二桁をかける掛け算の筆算"
       ],
+      "grade": 3,
+      "tags": [
+        "multiplication",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -469,7 +1455,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "31": {
       "numeric_theme_id": 31,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade3.column.division.one_digit_divisor",
       "curriculum_path": [
         "root",
@@ -477,6 +1463,37 @@ export const DRILL_CORE_CONTRACT = {
         "除法",
         "一桁で割る割り算の筆算"
       ],
+      "grade": 3,
+      "tags": [
+        "division",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "tuple_only"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
       "layout": {
         "problem_count": 12,
         "columns": 4,
@@ -485,7 +1502,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "32": {
       "numeric_theme_id": 32,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade4.column.division.two_digit_divisor",
       "curriculum_path": [
         "root",
@@ -493,6 +1510,37 @@ export const DRILL_CORE_CONTRACT = {
         "整数の除法",
         "二桁で割る割り算の筆算"
       ],
+      "grade": 4,
+      "tags": [
+        "division",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "tuple_only"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
       "layout": {
         "problem_count": 12,
         "columns": 4,
@@ -501,7 +1549,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "33": {
       "numeric_theme_id": 33,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade4.column.decimal.add_subtract",
       "curriculum_path": [
         "root",
@@ -509,6 +1557,37 @@ export const DRILL_CORE_CONTRACT = {
         "小数の仕組みとその計算",
         "小数の足し算と引き算の筆算"
       ],
+      "grade": 4,
+      "tags": [
+        "decimals",
+        "addition",
+        "subtraction",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -517,7 +1596,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "34": {
       "numeric_theme_id": 34,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade4.column.decimal.multiply_integer",
       "curriculum_path": [
         "root",
@@ -525,6 +1604,36 @@ export const DRILL_CORE_CONTRACT = {
         "小数の仕組みとその計算",
         "小数と整数の掛け算の筆算"
       ],
+      "grade": 4,
+      "tags": [
+        "decimals",
+        "multiplication",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -533,7 +1642,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "35": {
       "numeric_theme_id": 35,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade4.column.decimal.divide_integer",
       "curriculum_path": [
         "root",
@@ -541,6 +1650,36 @@ export const DRILL_CORE_CONTRACT = {
         "小数の仕組みとその計算",
         "小数と整数の割り算の筆算"
       ],
+      "grade": 4,
+      "tags": [
+        "decimals",
+        "division",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 12,
         "columns": 4,
@@ -549,7 +1688,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "36": {
       "numeric_theme_id": 36,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade5.column.decimal.multiplication",
       "curriculum_path": [
         "root",
@@ -557,6 +1696,36 @@ export const DRILL_CORE_CONTRACT = {
         "小数の乗法，除法",
         "小数の掛け算の筆算"
       ],
+      "grade": 5,
+      "tags": [
+        "decimals",
+        "multiplication",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 16,
         "columns": 4,
@@ -565,7 +1734,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "37": {
       "numeric_theme_id": 37,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade5.column.decimal.division",
       "curriculum_path": [
         "root",
@@ -573,6 +1742,36 @@ export const DRILL_CORE_CONTRACT = {
         "小数の乗法，除法",
         "小数の割り算の筆算"
       ],
+      "grade": 5,
+      "tags": [
+        "decimals",
+        "division",
+        "column_arithmetic",
+        "print_recommended"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
       "layout": {
         "problem_count": 12,
         "columns": 4,
@@ -590,6 +1789,27 @@ export const DRILL_CORE_CONTRACT = {
     "fraction_form_required",
     "mixed_fraction_form_required",
     "integer_form_required"
+  ],
+  "editor_action_types": [
+    "insert_digit",
+    "backspace",
+    "delete",
+    "move_left",
+    "move_right",
+    "insert_structure",
+    "select_slot",
+    "clear",
+    "commit"
+  ],
+  "editor_structures": [
+    "fraction",
+    "mixed_fraction",
+    "decimal",
+    "root",
+    "negative",
+    "plus_minus",
+    "tuple",
+    "arithmetic"
   ]
 } as const;
 

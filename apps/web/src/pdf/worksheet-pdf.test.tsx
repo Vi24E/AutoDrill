@@ -12,57 +12,124 @@ import {
 import { fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
 import type { WorksheetMetadata } from '@/domain/worksheet-metadata';
 
-function representativePrompt(themeId: number): { prompt: ProblemPrompt; answer: AnswerNode } {
-  switch (themeId) {
-    case 1: return { prompt: { kind: 'addition', left: 7, right: 8 }, answer: { type: 'integer', value: '15' } };
-    case 2: return {
-      prompt: { kind: 'linear_equation', a: { numerator: 2, denominator: 1 }, b: { numerator: 3, denominator: 1 }, c: { numerator: 1, denominator: 1 }, d: { numerator: 8, denominator: 1 }, left_negative_constant_as_subtraction: false, right_negative_constant_as_subtraction: false },
-      answer: { type: 'integer', value: '5' },
-    };
-    case 3: return {
-      prompt: { kind: 'linear_equation', a: { numerator: 1, denominator: 2 }, b: { numerator: -1, denominator: 3 }, c: { numerator: 0, denominator: 1 }, d: { numerator: 1, denominator: 6 }, left_negative_constant_as_subtraction: true, right_negative_constant_as_subtraction: false },
-      answer: { type: 'integer', value: '1' },
-    };
-    case 4: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'subtract', left: { kind: 'integer', value: 15 }, right: { kind: 'integer', value: 7 } } }, answer: { type: 'integer', value: '8' } };
-    case 5: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'add', left: { kind: 'integer', value: 48 }, right: { kind: 'integer', value: 27 } } }, answer: { type: 'integer', value: '75' } };
-    case 6: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'integer', value: 7 }, right: { kind: 'integer', value: 8 } } }, answer: { type: 'integer', value: '56' } };
-    case 7: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'add', left: { kind: 'integer', value: -5 }, right: { kind: 'integer', value: 8 } } }, answer: { type: 'integer', value: '3' } };
-    case 8: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'integer', value: -4 }, right: { kind: 'integer', value: -3 } } }, answer: { type: 'integer', value: '12' } };
-    case 9: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'add', left: { kind: 'rational', value: { numerator: 1, denominator: 3 } }, right: { kind: 'rational', value: { numerator: 1, denominator: 4 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '7' }, denominator: { type: 'integer', value: '12' } } } };
-    case 10: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'rational', value: { numerator: 2, denominator: 3 } }, right: { kind: 'rational', value: { numerator: 3, denominator: 4 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '2' } } } };
-    case 11: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'subtract', left: { kind: 'rational', value: { numerator: 5, denominator: 6 } }, right: { kind: 'rational', value: { numerator: 1, denominator: 3 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '2' } } } };
-    case 12: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'rational', value: { numerator: 1, denominator: 2 } }, right: { kind: 'rational', value: { numerator: 2, denominator: 3 } } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '3' }, denominator: { type: 'integer', value: '4' } } } };
-    case 13: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'integer', value: 56 }, right: { kind: 'integer', value: 7 } } }, answer: { type: 'integer', value: '8' } };
-    case 14: return { prompt: { kind: 'quadratic_equation', form: 'square_equals_constant', a: { numerator: 2, denominator: 1 }, b: { numerator: 0, denominator: 1 }, c: { numerator: 8, denominator: 1 } }, answer: { type: 'plus_minus', value: { type: 'integer', value: '2' } } };
-    case 15: return { prompt: { kind: 'quadratic_equation', form: 'factored_scale', a: { numerator: 2, denominator: 1 }, b: { numerator: -5, denominator: 1 }, c: { numerator: 6, denominator: 1 } }, answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] } };
-    case 16: return { prompt: { kind: 'quadratic_equation', form: 'standard', a: { numerator: 1, denominator: 1 }, b: { numerator: 3, denominator: 1 }, c: { numerator: 1, denominator: 1 } }, answer: { type: 'fraction', value: { numerator: { type: 'binary', value: { operator: 'add', left: { type: 'integer', value: '-3' }, right: { type: 'plus_minus', value: { type: 'root', value: { radicand: { type: 'integer', value: '5' }, index: null } } } } }, denominator: { type: 'integer', value: '2' } } } };
-    case 17: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'add', left: { kind: 'exact_decimal', coefficient: 12, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 35, scale: 2 } } }, answer: { type: 'exact_decimal', value: { coefficient: '155', scale: 2 } } };
-    case 18: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 12, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 5, scale: 2 } } }, answer: { type: 'exact_decimal', value: { coefficient: '6', scale: 2 } } };
-    case 19: return { prompt: { kind: 'simultaneous_equation', a: 2, b: 1, c: 7, d: 1, e: -1, f: -1 }, answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] } };
-    case 20: return { prompt: { kind: 'liar_puzzle', people_count: 4, statements: [{ kind: 'says_liar', person: 2 }, { kind: 'exact_liar_count', count: 2 }, { kind: 'both_not_liar', first: 1, second: 4 }, { kind: 'implication', antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false }] }, answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] } };
-    case 21: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'rational', value: { numerator: 5, denominator: 3 } }, right: { kind: 'integer', value: 2 } } }, answer: { type: 'mixed_fraction', value: { whole: { type: 'integer', value: '3' }, numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '3' } } } };
-    case 22: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'integer', value: 2 }, right: { kind: 'rational', value: { numerator: 3, denominator: 4 } } } }, answer: { type: 'mixed_fraction', value: { whole: { type: 'integer', value: '2' }, numerator: { type: 'integer', value: '2' }, denominator: { type: 'integer', value: '3' } } } };
-    case 23: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'multiply', left: { kind: 'rational', value: { numerator: 7, denominator: 3 } }, right: { kind: 'integer', value: 2 } } }, answer: { type: 'fraction', value: { numerator: { type: 'integer', value: '14' }, denominator: { type: 'integer', value: '3' } } } };
-    case 24: return { prompt: { kind: 'arithmetic', expression: { kind: 'binary', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 36, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 12, scale: 1 } } }, answer: { type: 'integer', value: '3' } };
-    case 25: return { prompt: { kind: 'column_arithmetic', operator: 'add', left: { kind: 'integer', value: 47 }, right: { kind: 'integer', value: 38 } }, answer: { type: 'integer', value: '85' } };
-    case 26: return { prompt: { kind: 'column_arithmetic', operator: 'subtract', left: { kind: 'integer', value: 72 }, right: { kind: 'integer', value: 48 } }, answer: { type: 'integer', value: '24' } };
-    case 27: return { prompt: { kind: 'column_arithmetic', operator: 'add', left: { kind: 'integer', value: 2368 }, right: { kind: 'integer', value: 1457 } }, answer: { type: 'integer', value: '3825' } };
-    case 28: return { prompt: { kind: 'column_arithmetic', operator: 'subtract', left: { kind: 'integer', value: 5000 }, right: { kind: 'integer', value: 2846 } }, answer: { type: 'integer', value: '2154' } };
-    case 29: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'integer', value: 243 }, right: { kind: 'integer', value: 7 } }, answer: { type: 'integer', value: '1701' } };
-    case 30: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'integer', value: 243 }, right: { kind: 'integer', value: 18 } }, answer: { type: 'integer', value: '4374' } };
-    case 31: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'integer', value: 157 }, right: { kind: 'integer', value: 6 } }, answer: { type: 'tuple', value: [{ type: 'integer', value: '26' }, { type: 'integer', value: '1' }] } };
-    case 32: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'integer', value: 735 }, right: { kind: 'integer', value: 21 } }, answer: { type: 'tuple', value: [{ type: 'integer', value: '35' }, { type: 'integer', value: '0' }] } };
-    case 33: return { prompt: { kind: 'column_arithmetic', operator: 'add', left: { kind: 'exact_decimal', coefficient: 235, scale: 2 }, right: { kind: 'exact_decimal', coefficient: 17, scale: 1 } }, answer: { type: 'exact_decimal', value: { coefficient: '405', scale: 2 } } };
-    case 34: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 24, scale: 1 }, right: { kind: 'integer', value: 3 } }, answer: { type: 'exact_decimal', value: { coefficient: '72', scale: 1 } } };
-    case 35: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 48, scale: 1 }, right: { kind: 'integer', value: 2 } }, answer: { type: 'exact_decimal', value: { coefficient: '24', scale: 1 } } };
-    case 36: return { prompt: { kind: 'column_arithmetic', operator: 'multiply', left: { kind: 'exact_decimal', coefficient: 24, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 35, scale: 1 } }, answer: { type: 'exact_decimal', value: { coefficient: '84', scale: 1 } } };
-    case 37: return { prompt: { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 72, scale: 1 }, right: { kind: 'exact_decimal', coefficient: 6, scale: 1 } }, answer: { type: 'integer', value: '12' } };
-    default: throw new Error(`Missing representative print prompt for theme ${themeId}`);
+function representativeAnswer(definition: ThemeDefinition): AnswerNode {
+  if (definition.promptKind === 'liar_puzzle') {
+    return { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] };
+  }
+  switch (definition.answerSchemaKind) {
+    case 'integer': return { type: 'integer', value: '6' };
+    case 'rational': return { type: 'fraction', value: { numerator: { type: 'integer', value: '3' }, denominator: { type: 'integer', value: '4' } } };
+    case 'decimal': return { type: 'exact_decimal', value: { coefficient: '36', scale: 1 } };
+    case 'ordered_pair': return { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] };
+    case 'algebraic': return { type: 'plus_minus', value: { type: 'integer', value: '2' } };
   }
 }
 
+function representativeArithmeticExpression(definition: ThemeDefinition): Extract<ProblemPrompt, { kind: 'arithmetic' }>['expression'] {
+  const operator = definition.tags.includes('division')
+    ? 'divide'
+    : definition.tags.includes('multiplication')
+      ? 'multiply'
+      : definition.tags.includes('subtraction')
+        ? 'subtract'
+        : 'add';
+  if (definition.tags.includes('fractions')) {
+    return {
+      kind: 'binary', operator,
+      left: { kind: 'rational', value: { numerator: 1, denominator: 3 } },
+      right: { kind: 'rational', value: { numerator: 1, denominator: 4 } },
+    };
+  }
+  if (definition.tags.includes('decimals')) {
+    return {
+      kind: 'binary', operator,
+      left: { kind: 'exact_decimal', coefficient: 36, scale: 1 },
+      right: { kind: 'exact_decimal', coefficient: 12, scale: 1 },
+    };
+  }
+  const left = definition.tags.includes('negative_numbers') ? -6 : 12;
+  return { kind: 'binary', operator, left: { kind: 'integer', value: left }, right: { kind: 'integer', value: 3 } };
+}
+
+function representativeColumnPrompt(definition: ThemeDefinition): Extract<ProblemPrompt, { kind: 'column_arithmetic' }> {
+  const operator = definition.tags.includes('division')
+    ? 'divide'
+    : definition.tags.includes('multiplication')
+      ? 'multiply'
+      : definition.tags.includes('subtraction')
+        ? 'subtract'
+        : 'add';
+  const decimal = definition.tags.includes('decimals');
+  return {
+    kind: 'column_arithmetic',
+    operator,
+    left: decimal ? { kind: 'exact_decimal', coefficient: 72, scale: 1 } : { kind: 'integer', value: 72 },
+    right: decimal ? { kind: 'exact_decimal', coefficient: 6, scale: 1 } : { kind: 'integer', value: 6 },
+  };
+}
+
+function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPrompt; answer: AnswerNode } {
+  const answer = representativeAnswer(definition);
+  switch (definition.promptKind) {
+    case 'addition':
+      return { prompt: { kind: 'addition', left: 7, right: 8 }, answer };
+    case 'arithmetic':
+      return { prompt: { kind: 'arithmetic', expression: representativeArithmeticExpression(definition) }, answer };
+    case 'linear_equation':
+      return {
+        prompt: {
+          kind: 'linear_equation',
+          a: { numerator: 2, denominator: 1 }, b: { numerator: 3, denominator: 1 },
+          c: { numerator: 1, denominator: 1 }, d: { numerator: 8, denominator: 1 },
+          left_negative_constant_as_subtraction: false, right_negative_constant_as_subtraction: false,
+        },
+        answer,
+      };
+    case 'quadratic_equation':
+      return {
+        prompt: {
+          kind: 'quadratic_equation', form: 'standard',
+          a: { numerator: 1, denominator: 1 }, b: { numerator: 0, denominator: 1 }, c: { numerator: -4, denominator: 1 },
+        },
+        answer,
+      };
+    case 'simultaneous_equation':
+      return { prompt: { kind: 'simultaneous_equation', a: 2, b: 1, c: 7, d: 1, e: -1, f: -1 }, answer };
+    case 'liar_puzzle':
+      return {
+        prompt: { kind: 'liar_puzzle', people_count: 4, statements: [{ kind: 'says_liar', person: 2 }] },
+        answer,
+      };
+    case 'column_arithmetic':
+      return { prompt: representativeColumnPrompt(definition), answer };
+  }
+}
+
+function representativeWorkedSolution(
+  prompt: ProblemPrompt,
+): ProblemDto['worked_solution'] | undefined {
+  if (prompt.kind !== 'column_arithmetic') return undefined;
+  if (prompt.operator === 'multiply') {
+    return {
+      kind: 'column_multiplication',
+      partial_products: [{ value: 432, place: 0 }, { value: 72, place: 1 }],
+    };
+  }
+  if (prompt.operator === 'divide') {
+    return {
+      kind: 'long_division',
+      divisor: 6,
+      dividend_coefficient: 72,
+      dividend_scale: 0,
+      quotient_trailing_cells: 0,
+      steps: [{ product: 72, after: 0, product_offset: 0, after_offset: 0 }],
+    };
+  }
+  return undefined;
+}
+
 function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
-  const representative = representativePrompt(definition.numeric_theme_id);
+  const representative = representativePrompt(definition);
   const answerSchema = definition.answerSchemaKind === 'integer'
     ? { kind: 'integer' as const, min: '-100', max: '100' }
     : definition.answerSchemaKind === 'rational'
@@ -81,13 +148,16 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
     input_interface: definition.inputInterface,
     answer_schema: answerSchema,
     canonical_answer: representative.answer,
+    ...(representativeWorkedSolution(representative.prompt)
+      ? { worked_solution: representativeWorkedSolution(representative.prompt) }
+      : {}),
     solution_graph: { steps: [] },
     operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
     effort: 0,
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `3-${definition.numeric_theme_id}-${definition.generator_revision}-PdfTest1-3`,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-PdfTest1-3`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: 'PdfTest1', difficulty: 3 },
     skill_id: definition.compatibility.skillId,
     curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),

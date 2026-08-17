@@ -1,7 +1,4 @@
 import {
-  ADDITION_CURRICULUM_PATH,
-  ADDITION_GENERATOR_REVISION,
-  ADDITION_LAYOUT,
   DRILL_OPERATION_KIND_COUNT,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
@@ -15,10 +12,14 @@ import {
   type ProblemDto,
   type WorksheetDto,
 } from '@/domain/drill-engine';
-import { ALL_MATH_STRUCTURES, LIAR_PUZZLE_DEFINITION, LINEAR_EQUATION_1_DEFINITION, LINEAR_EQUATION_2_DEFINITION, SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/theme-registry';
+import { LIAR_PUZZLE_DEFINITION } from '@/domain/themes/liar-puzzle';
+import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
+import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
+import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
+import { SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/themes/simultaneous-equation-1';
 
 const FIXTURE_SEED = 'fixtureSeed';
-const FIXTURE_THEME_ID = 1;
+const FIXTURE_THEME_ID = ONE_DIGIT_ADDITION_DEFINITION.numeric_theme_id;
 const FIXTURE_DIFFICULTY = 3 as const;
 
 export function fixtureSettings(): DrillSettings {
@@ -51,17 +52,17 @@ export function fixtureWorksheet(): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `4-1-${ADDITION_GENERATOR_REVISION}-fixtureSeed-3`,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-1-${ONE_DIGIT_ADDITION_DEFINITION.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: FIXTURE_THEME_ID,
-      generator_revision: ADDITION_GENERATOR_REVISION,
+      generator_revision: ONE_DIGIT_ADDITION_DEFINITION.generator_revision,
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: 'jp.grade1.addition.one_digit',
-    curriculum_path: ADDITION_CURRICULUM_PATH.map((segment) => segment.label),
-    layout: ADDITION_LAYOUT,
+    skill_id: ONE_DIGIT_ADDITION_DEFINITION.compatibility.skillId,
+    curriculum_path: ONE_DIGIT_ADDITION_DEFINITION.compatibility.curriculumPath.map((segment) => segment.label),
+    layout: ONE_DIGIT_ADDITION_DEFINITION.layout,
     seed: FIXTURE_SEED,
     problems,
   };
@@ -94,10 +95,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
         left_negative_constant_as_subtraction: false,
         right_negative_constant_as_subtraction: false,
       },
-      input_interface: {
-        type: 'structured_math',
-        allowed_structures: ALL_MATH_STRUCTURES,
-      },
+      input_interface: definition.inputInterface,
       answer_schema: themeId === 2
         ? { kind: 'integer', min: '-15', max: '15' }
         : { kind: 'rational', max_abs_numerator: 20, max_denominator: 12, require_reduced_fraction_form: true },
@@ -109,7 +107,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `4-${themeId}-${definition.generator_revision}-fixtureSeed-3`,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${themeId}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: themeId,
@@ -150,7 +148,7 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `3-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: definition.numeric_theme_id,
@@ -189,7 +187,7 @@ export function liarFixtureWorksheet(): WorksheetDto {
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `4-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-2`,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-2`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: FIXTURE_SEED, difficulty: 2 },
     skill_id: definition.compatibility.skillId,
     curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
@@ -206,22 +204,22 @@ function answerDigits(answer: AnswerNode): string {
 function applyFixtureEditor(state: EditorState, action: EditorAction, _inputInterface: ProblemDto['input_interface']): EditorState {
   const digits = [...answerDigits(state.answer)];
   let cursor = Math.min(state.cursor, digits.length);
-  if (action.kind === 'insert_digit' && digits.length >= 18) {
+  if (action.type === 'insert_digit' && digits.length >= 18) {
     throw new DrillEngineError('answer_ast_size_limit', 'fixture answer AST size limit', { max_size: 18 });
   }
-  if (action.kind === 'insert_digit') {
+  if (action.type === 'insert_digit') {
     digits.splice(cursor, 0, String(action.digit));
     cursor += 1;
-  } else if (action.kind === 'delete_backward' && cursor > 0) {
+  } else if (action.type === 'backspace' && cursor > 0) {
     digits.splice(cursor - 1, 1);
     cursor -= 1;
-  } else if (action.kind === 'delete_forward') {
+  } else if (action.type === 'delete') {
     digits.splice(cursor, 1);
-  } else if (action.kind === 'move_left') {
+  } else if (action.type === 'move_left') {
     cursor = Math.max(0, cursor - 1);
-  } else if (action.kind === 'move_right') {
+  } else if (action.type === 'move_right') {
     cursor = Math.min(digits.length, cursor + 1);
-  } else if (action.kind === 'clear') {
+  } else if (action.type === 'clear') {
     digits.length = 0;
     cursor = 0;
   }
@@ -232,7 +230,7 @@ function applyFixtureEditor(state: EditorState, action: EditorAction, _inputInte
       : { type: 'empty' },
     cursor: Math.min(cursor, normalized.length),
     active_path: state.active_path,
-    committed: action.kind === 'commit',
+    committed: action.type === 'commit',
   };
 }
 

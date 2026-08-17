@@ -5,10 +5,20 @@ edition.workspace = true
 license.workspace = true
 description = "Typed, deterministic domain engine for AutoDrill"
 
+[features]
+default = []
+wire-types = ["dep:ts-rs"]
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+ts-rs = { version = "11.1.0", features = ["serde-compat"], optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
+
+[[bin]]
+name = "export_web_wire_types"
+path = "src/bin/export_web_wire_types.rs"
+required-features = ["wire-types"]

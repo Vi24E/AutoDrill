@@ -1,4 +1,5 @@
 import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ArithmeticOperator, type LiarStatement, type ProblemDto, type RationalCoefficient } from './drill-engine';
+import { findThemeDefinitionByNumericId } from './theme-registry';
 
 
 export function liarPersonLabel(person: number): string {
@@ -28,7 +29,6 @@ export type MathToken =
   | { kind: 'fraction'; numerator: number; denominator: number };
 
 /** Backward-compatible name retained for existing callers. */
-export type ProblemMathToken = MathToken;
 
 function appendText(tokens: MathToken[], text: string): void {
   if (text === '') return;
@@ -200,10 +200,9 @@ function quadraticExpressionTokens(problem: ProblemDto): readonly MathToken[] {
   return tokens;
 }
 
-const MIXED_FRACTION_THEME_IDS = new Set([9, 10, 11, 12, 21, 22]);
-
 export function usesMixedFractionPresentation(problem: ProblemDto): boolean {
-  return MIXED_FRACTION_THEME_IDS.has(problem.numeric_theme_id);
+  return findThemeDefinitionByNumericId(problem.numeric_theme_id)?.presentation.fraction
+    === 'mixed_number_when_improper';
 }
 
 export function problemExpressionTokens(problem: ProblemDto, includeAnswerEquals = true): readonly MathToken[] {

@@ -74,15 +74,30 @@ fn compact_mathlive_latex(input: &str) -> String {
 struct Parser<'a> {
     input: &'a str,
     pos: usize,
+    nesting_depth: usize,
 }
 
 impl<'a> Parser<'a> {
     const fn new(input: &'a str) -> Self {
-        Self { input, pos: 0 }
+        Self {
+            input,
+            pos: 0,
+            nesting_depth: 0,
+        }
     }
 
     fn is_eof(&self) -> bool {
         self.pos == self.input.len()
+    }
+
+    fn with_nested<T>(&mut self, parse: impl FnOnce(&mut Self) -> Result<T, ()>) -> Result<T, ()> {
+        if self.nesting_depth >= MAX_ANSWER_AST_SIZE {
+            return Err(());
+        }
+        self.nesting_depth += 1;
+        let result = parse(self);
+        self.nesting_depth -= 1;
+        result
     }
 
     fn parse_expression(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
@@ -191,10 +206,12 @@ impl<'a> Parser<'a> {
 
     fn parse_unary(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
         if self.consume_char('-') || self.consume_char('−') {
-            return Ok(AnswerNode::Negative(Box::new(self.parse_unary(stop)?)));
+            let value = self.with_nested(|parser| parser.parse_unary(stop))?;
+            return Ok(AnswerNode::Negative(Box::new(value)));
         }
         if self.consume_str("\\pm") || self.consume_char('±') {
-            return Ok(AnswerNode::PlusMinus(Box::new(self.parse_unary(stop)?)));
+            let value = self.with_nested(|parser| parser.parse_unary(stop))?;
+            return Ok(AnswerNode::PlusMinus(Box::new(value)));
         }
         if self.at_stop(stop) || self.peek_char() == Some(',') {
             return Ok(AnswerNode::Empty);
@@ -224,7 +241,7 @@ impl<'a> Parser<'a> {
             return self.parse_group();
         }
         if self.consume_char('(') {
-            let value = self.parse_expression(Some(')'))?;
+            let value = self.with_nested(|parser| parser.parse_expression(Some(')')))?;
             if !self.consume_char(')') {
                 return Err(());
             }
@@ -253,7 +270,7 @@ impl<'a> Parser<'a> {
             return Err(());
         }
         let index = if self.consume_char('[') {
-            let value = self.parse_expression(Some(']'))?;
+            let value = self.with_nested(|parser| parser.parse_expression(Some(']')))?;
             if !self.consume_char(']') {
                 return Err(());
             }
@@ -312,7 +329,7 @@ impl<'a> Parser<'a> {
         if !self.consume_char('{') {
             return Err(());
         }
-        let value = self.parse_expression(Some('}'))?;
+        let value = self.with_nested(|parser| parser.parse_expression(Some('}')))?;
         if !self.consume_char('}') {
             return Err(());
         }
@@ -671,6 +688,22 @@ mod tests {
         let oversized = "1".repeat(MAX_MATHLIVE_LATEX_BYTES + 1);
         assert!(matches!(
             parse_mathlive_answer(&oversized, &interface),
+            Err(EditorError::AnswerSizeLimit { .. })
+        ));
+
+        let unary_chain = format!("{}1", "-".repeat(MAX_ANSWER_AST_SIZE + 20));
+        assert!(matches!(
+            parse_mathlive_answer(&unary_chain, &interface),
+            Err(EditorError::AnswerSizeLimit { .. })
+        ));
+
+        let parenthesized = format!(
+            "{}1{}",
+            "(".repeat(MAX_ANSWER_AST_SIZE + 20),
+            ")".repeat(MAX_ANSWER_AST_SIZE + 20)
+        );
+        assert!(matches!(
+            parse_mathlive_answer(&parenthesized, &interface),
             Err(EditorError::AnswerSizeLimit { .. })
         ));
     }

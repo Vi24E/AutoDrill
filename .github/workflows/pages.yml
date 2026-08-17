@@ -63,6 +63,10 @@ jobs:
         run: pnpm pages:verify
 
       - name: Verify browser worksheet layout
+        env:
+          AUTODRILL_GENERATION_PROBE: 'true'
+          AUTODRILL_CPU_THROTTLE_RATE: '6'
+          AUTODRILL_CPU_THROTTLE_THEME_ID: '23'
         run: pnpm layout:verify
 
       - name: Configure Pages

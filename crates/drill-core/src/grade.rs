@@ -1,4 +1,5 @@
 use crate::answer::AnswerNode;
+use crate::exact::gcd_u64;
 use crate::model::{AnswerSchema, GradeResult, GradeStatus, GradeWarning};
 use crate::normalize::normalize_answer;
 
@@ -391,7 +392,7 @@ fn uses_simple_reduced_fraction_form(answer: &AnswerNode) -> bool {
         matches!(
             (numerator.as_ref(), denominator.as_ref()),
             (AnswerNode::Integer(left), AnswerNode::Integer(right))
-                if *right > 0 && integer_gcd(left.unsigned_abs(), right.unsigned_abs()) == 1
+                if *right > 0 && gcd_u64(left.unsigned_abs(), right.unsigned_abs()) == 1
         )
     }
     simple_fraction(answer)
@@ -455,7 +456,7 @@ fn has_reducible_fraction(answer: &AnswerNode) -> bool {
             matches!(
                 (numerator.as_ref(), denominator.as_ref()),
                 (AnswerNode::Integer(left), AnswerNode::Integer(right))
-                    if *right != 0 && integer_gcd(left.unsigned_abs(), right.unsigned_abs()) > 1
+                    if *right != 0 && gcd_u64(left.unsigned_abs(), right.unsigned_abs()) > 1
             ) || has_reducible_fraction(numerator)
                 || has_reducible_fraction(denominator)
         }
@@ -467,7 +468,7 @@ fn has_reducible_fraction(answer: &AnswerNode) -> bool {
             matches!(
                 (numerator.as_ref(), denominator.as_ref()),
                 (AnswerNode::Integer(left), AnswerNode::Integer(right))
-                    if *right != 0 && integer_gcd(left.unsigned_abs(), right.unsigned_abs()) > 1
+                    if *right != 0 && gcd_u64(left.unsigned_abs(), right.unsigned_abs()) > 1
             ) || has_reducible_fraction(whole)
                 || has_reducible_fraction(numerator)
                 || has_reducible_fraction(denominator)
@@ -682,15 +683,6 @@ fn has_redundant_decimal(answer: &AnswerNode) -> bool {
         | AnswerNode::NanError(_)
         | AnswerNode::Variable(_) => false,
     }
-}
-
-fn integer_gcd(mut left: u64, mut right: u64) -> u64 {
-    while right != 0 {
-        let remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    left
 }
 
 #[cfg(test)]
