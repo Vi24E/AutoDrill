@@ -13,6 +13,7 @@ import {
   type WorksheetDto,
 } from '@/domain/drill-engine';
 import { LIAR_PUZZLE_DEFINITION } from '@/domain/themes/liar-puzzle';
+import { MINI_SUDOKU_DEFINITION } from '@/domain/themes/mini-sudoku';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
@@ -189,6 +190,45 @@ export function liarFixtureWorksheet(): WorksheetDto {
     schema_version: DRILL_SCHEMA_VERSION,
     problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-2`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: FIXTURE_SEED, difficulty: 2 },
+    skill_id: definition.compatibility.skillId,
+    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
+export function miniSudokuFixtureWorksheet(): WorksheetDto {
+  const definition = MINI_SUDOKU_DEFINITION;
+  const solution = [1, 2, 3, 4, 3, 4, 1, 2, 2, 1, 4, 3, 4, 3, 2, 1];
+  const givens = [1, null, null, 4, null, 4, 1, null, null, 1, 4, null, 4, null, null, 1];
+  const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
+    schema_version: DRILL_SCHEMA_VERSION,
+    id: index + 1,
+    problem_id: String(index + 1),
+    numeric_theme_id: definition.numeric_theme_id,
+    prompt: { kind: 'mini_sudoku', givens },
+    input_interface: definition.inputInterface,
+    answer_schema: { kind: 'ordered_tuple', length: 16 },
+    canonical_answer: {
+      type: 'tuple',
+      value: solution.map((value) => ({ type: 'integer' as const, value: String(value) })),
+    },
+    solution_graph: { steps: [] },
+    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+    theme_specific_effort: 4.2,
+    effort: 4.2,
+  }));
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
+    identity: {
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: definition.numeric_theme_id,
+      generator_revision: definition.generator_revision,
+      seed: FIXTURE_SEED,
+      difficulty: FIXTURE_DIFFICULTY,
+    },
     skill_id: definition.compatibility.skillId,
     curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,

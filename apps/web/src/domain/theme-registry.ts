@@ -27,6 +27,7 @@ import { DECIMAL_MULTIPLICATION_DEFINITION } from './themes/decimal-multiplicati
 import { DECIMAL_DIVISION_DEFINITION } from './themes/decimal-division';
 import { SIMULTANEOUS_EQUATION_1_DEFINITION } from './themes/simultaneous-equation-1';
 import { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
+import { MINI_SUDOKU_DEFINITION } from './themes/mini-sudoku';
 import { COLUMN_ADD_2DIGIT_DEFINITION } from './themes/column-add-two-digit';
 import { COLUMN_SUBTRACT_2DIGIT_DEFINITION } from './themes/column-subtract-two-digit';
 import { COLUMN_ADD_3_4DIGIT_DEFINITION } from './themes/column-add-three-four-digit';
@@ -81,6 +82,7 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   QUADRATIC_EQUATION_2_DEFINITION,
   QUADRATIC_EQUATION_3_DEFINITION,
   LIAR_PUZZLE_DEFINITION,
+  MINI_SUDOKU_DEFINITION,
 ];
 
 export function findThemeDefinitionByNumericId(numericThemeId: number): ThemeDefinition | undefined {
@@ -95,6 +97,11 @@ export function sameInputInterface(left: AnswerInputInterface, right: AnswerInpu
   if (left.type === 'structured_math' && right.type === 'structured_math') {
     return left.allowed_structures.length === right.allowed_structures.length
       && left.allowed_structures.every((structure, index) => structure === right.allowed_structures[index]);
+  }
+  if (left.type === 'digit_grid' && right.type === 'digit_grid') {
+    return left.min_digit === right.min_digit
+      && left.max_digit === right.max_digit
+      && left.cell_count === right.cell_count;
   }
   return false;
 }

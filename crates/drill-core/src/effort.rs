@@ -463,7 +463,9 @@ pub struct EffortResult {
 
 pub fn calculate_effort(problem: &Problem, weights: &OperationWeights) -> EffortResult {
     EffortResult {
-        value: weights.weighted_sum(&problem.operation_vector),
+        value: problem
+            .theme_specific_effort
+            .unwrap_or_else(|| weights.weighted_sum(&problem.operation_vector)),
         operation_vector: problem.operation_vector.clone(),
     }
 }

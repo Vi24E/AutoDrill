@@ -4,7 +4,7 @@
 //! schema changes replace the previous schema instead of retaining compatibility
 //! code until persisted public worksheets/users make that necessary.
 
-pub const SCHEMA_VERSION: u16 = 5;
+pub const SCHEMA_VERSION: u16 = 6;
 pub const OPERATION_KIND_COUNT: usize = 32;
 pub const SUPPORTED_SCHEMA_VERSIONS: [u16; 1] = [SCHEMA_VERSION];
 

@@ -5,6 +5,7 @@ export type AnswerPresentationPlan =
   | { kind: 'column_division'; hasRemainder: boolean; quotientSlot: 'single' | 'quotient' }
   | { kind: 'column_arithmetic' }
   | { kind: 'simultaneous_equation' }
+  | { kind: 'digit_grid' }
   | { kind: 'standard' };
 
 export function answerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerNode {
@@ -20,6 +21,7 @@ export function answerCoordinate(answer: AnswerNode, coordinate: 0 | 1): AnswerN
  * pair, or ordinary scalar.
  */
 export function answerPresentationPlan(problem: ProblemDto): AnswerPresentationPlan {
+  if (problem.input_interface.type === 'digit_grid') return { kind: 'digit_grid' };
   if (problem.prompt.kind === 'liar_puzzle') {
     return { kind: 'liar_puzzle', peopleCount: problem.prompt.people_count };
   }

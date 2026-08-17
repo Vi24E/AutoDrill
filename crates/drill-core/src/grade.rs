@@ -15,9 +15,17 @@ pub fn grade_answer_with_schema(
     let representation_differs = expected != actual;
     let normalized_expected = normalize_answer(expected);
     let normalized_actual = normalize_answer(actual);
-    let ordered_pair = matches!(answer_schema, Some(AnswerSchema::OrderedPair));
-    let mathematically_equal = if ordered_pair {
-        normalized_expected == normalized_actual
+    let ordered_length = match answer_schema {
+        Some(AnswerSchema::OrderedPair) => Some(2_usize),
+        Some(AnswerSchema::OrderedTuple { length }) => Some(usize::from(*length)),
+        _ => None,
+    };
+    let ordered_shape_valid = ordered_length.is_none_or(|length| {
+        matches!(&normalized_expected, AnswerNode::Tuple(values) if values.len() == length)
+            && matches!(&normalized_actual, AnswerNode::Tuple(values) if values.len() == length)
+    });
+    let mathematically_equal = if ordered_length.is_some() {
+        ordered_shape_valid && normalized_expected == normalized_actual
     } else {
         solutions_mathematically_equal(&normalized_expected, &normalized_actual)
     };
@@ -34,10 +42,10 @@ pub fn grade_answer_with_schema(
     } else {
         Vec::new()
     };
-    if !ordered_pair && has_duplicate_solution(actual) {
+    if ordered_length.is_none() && has_duplicate_solution(actual) {
         push_warning(&mut warnings, GradeWarning::DuplicateSolution);
     }
-    if !ordered_pair
+    if ordered_length.is_none()
         && matches!(normalized_expected, AnswerNode::Tuple(_))
         && has_embedded_plus_minus(actual)
     {
@@ -711,6 +719,27 @@ mod tests {
         assert!(!equal_result
             .warnings
             .contains(&GradeWarning::DuplicateSolution));
+    }
+
+    #[test]
+    fn ordered_tuple_schema_preserves_full_order_and_length() {
+        let expected = AnswerNode::Tuple(vec![
+            AnswerNode::Integer(1),
+            AnswerNode::Integer(2),
+            AnswerNode::Integer(3),
+            AnswerNode::Integer(4),
+        ]);
+        let schema = AnswerSchema::OrderedTuple { length: 4 };
+        assert!(grade_answer_with_schema(&expected, &expected, Some(&schema)).is_correct);
+        let swapped = AnswerNode::Tuple(vec![
+            AnswerNode::Integer(2),
+            AnswerNode::Integer(1),
+            AnswerNode::Integer(3),
+            AnswerNode::Integer(4),
+        ]);
+        assert!(!grade_answer_with_schema(&expected, &swapped, Some(&schema)).is_correct);
+        let short = AnswerNode::Tuple(vec![AnswerNode::Integer(1), AnswerNode::Integer(2)]);
+        assert!(!grade_answer_with_schema(&expected, &short, Some(&schema)).is_correct);
     }
 
     #[test]

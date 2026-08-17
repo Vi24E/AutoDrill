@@ -3,13 +3,15 @@ import { useEffect, useState, type CSSProperties } from 'react';
 
 import { MathLiveStatic } from '@/components/MathLiveMath';
 import { ProblemExpression } from '@/components/ProblemExpression';
+import { MiniSudokuGrid } from '@/components/MiniSudokuGrid';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { answerNodeText, type AnswerNode, type WorksheetDto } from '@/domain/drill-engine';
 import { answerNodeLatex, answerPrefixLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel, problemExpression } from '@/domain/problem-format';
 import { answerCoordinate, answerPresentationPlan } from '@/domain/answer-presentation';
-import { columnArithmeticGridVariables, columnArithmeticPageGridVariables } from '@/domain/column-arithmetic-presentation';
+import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
+import { worksheetPageGridVariables } from '@/domain/worksheet-grid-presentation';
 import { findThemeDefinitionByNumericId, type ThemeDefinition } from '@/domain/theme-registry';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
 
@@ -83,6 +85,7 @@ function PrintAnswer({
   answers: boolean;
 }) {
   const presentation = answerPresentationPlan(problem);
+  if (presentation.kind === 'digit_grid') return null;
   if (presentation.kind === 'liar_puzzle') {
     const selected = new Set(problem.canonical_answer.type === 'tuple'
       ? problem.canonical_answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : [])
@@ -180,13 +183,14 @@ function WorksheetPrintPage({
 }) {
   const layout = buildSharedWorksheetLayout(worksheet);
   const theme = themeForWorksheet(worksheet);
+  const usesWorksheetGrid = theme.presentation.worksheet_grid;
   const isColumnArithmeticWorksheet = theme.presentation.column_arithmetic;
   const isEquationWorksheet = theme.presentation.equation_layout;
   const gradeBandClass = theme.grade ? worksheetGradeBandClass(theme.grade.number) : 'worksheet-grade-junior-high';
   const categoryLabel = theme.grade?.label ?? 'おまけ';
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
-  const dividerStyles: readonly CSSProperties[] = (isColumnArithmeticWorksheet ? [] : layout.dividerXs).map((dividerX) => ({
+  const dividerStyles: readonly CSSProperties[] = (usesWorksheetGrid ? [] : layout.dividerXs).map((dividerX) => ({
     left: toPagePercent(dividerX, A4_PAGE.width),
     top: toPagePercent(contentTop, A4_PAGE.height),
     height: toPagePercent(contentHeight, A4_PAGE.height),
@@ -201,14 +205,14 @@ function WorksheetPrintPage({
       className={`worksheet-print-page ${gradeBandClass} ${answers ? 'worksheet-print-page-answers' : 'worksheet-print-page-problems'}`}
       data-print-page={answers ? 'answers' : 'problems'}
       aria-label={`${theme.worksheet.title}${answers ? ' 解答' : ''}`}
-      style={isColumnArithmeticWorksheet ? columnArithmeticPageGridVariables() : undefined}
+      style={usesWorksheetGrid ? worksheetPageGridVariables() : undefined}
     >
       <div className={`worksheet-print-page-inner ${answers ? 'worksheet-print-page-inner-rotated' : ''}`}>
         <div className="worksheet-print-heading">
           <span>{categoryLabel}</span>
           <strong>{theme.worksheet.title}{answers ? ' 解答' : ''}</strong>
         </div>
-        <div className={`problem-grid ${isColumnArithmeticWorksheet ? 'problem-grid-column-arithmetic' : ''}`}>
+        <div className={`problem-grid ${usesWorksheetGrid ? 'problem-grid-worksheet-grid' : ''}`}>
           {theme.worksheet.instruction ? (
             <p className="worksheet-instruction">{theme.worksheet.instruction}</p>
           ) : null}
@@ -221,6 +225,7 @@ function WorksheetPrintPage({
             const isLinearEquation = isEquationWorksheet;
             const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
             const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
+            const isMiniSudoku = problem.prompt.kind === 'mini_sudoku';
             const stackAnswerBelow = theme.worksheet.answerPlacement === 'below' && !isLinearEquation;
             const cellStyle: CSSProperties = {
               left: toPagePercent(position.x, A4_PAGE.width),
@@ -231,19 +236,29 @@ function WorksheetPrintPage({
             };
             return (
               <div
-                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''}`}
+                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${isMiniSudoku ? 'problem-cell-mini-sudoku' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''}`}
                 data-print-problem-index={index}
                 style={cellStyle}
                 key={problem.problem_id}
               >
                 <span className="problem-number">{index + 1}.</span>
-                <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} solution={answers && isColumnArithmetic} /></span>
-                {answers && isColumnArithmetic ? null : (
-                  <PrintAnswer
+                {isMiniSudoku ? (
+                  <MiniSudokuGrid
                     problem={problem}
-                    answerPrefix={theme.worksheet.answerPrefix}
-                    answers={answers}
+                    answer={answers ? problem.canonical_answer : undefined}
+                    readOnly
                   />
+                ) : (
+                  <>
+                    <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} solution={answers && isColumnArithmetic} /></span>
+                    {answers && isColumnArithmetic ? null : (
+                      <PrintAnswer
+                        problem={problem}
+                        answerPrefix={theme.worksheet.answerPrefix}
+                        answers={answers}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             );

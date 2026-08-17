@@ -867,6 +867,7 @@ fn simultaneous_equation_problem(
         worked_solution: None,
         solution_graph,
         operation_vector: effort.operation_vector,
+        theme_specific_effort: None,
         effort: effort.value,
     })
 }
@@ -1002,6 +1003,7 @@ fn quadratic_equation_problem(
         worked_solution: None,
         solution_graph,
         operation_vector: effort.operation_vector,
+        theme_specific_effort: None,
         effort: effort.value,
     })
 }
@@ -1049,6 +1051,7 @@ fn linear_equation_problem(
         worked_solution: None,
         solution_graph,
         operation_vector: result.operation_vector,
+        theme_specific_effort: None,
         effort: result.value,
     }
 }

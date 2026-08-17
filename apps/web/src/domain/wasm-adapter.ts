@@ -325,6 +325,15 @@ function assertInputInterface(value: unknown): asserts value is AnswerInputInter
     }
     return;
   }
+  if (value.type === 'digit_grid') {
+    assertInteger(value.min_digit, 'digit-grid minimum digit');
+    assertInteger(value.max_digit, 'digit-grid maximum digit');
+    assertInteger(value.cell_count, 'digit-grid cell count');
+    if (value.min_digit < 0 || value.max_digit < value.min_digit || value.max_digit > 9 || value.cell_count <= 0) {
+      invalidDto('WASM returned an invalid digit-grid input interface.', value);
+    }
+    return;
+  }
   if (value.type === 'structured_math') {
     if (!Array.isArray(value.allowed_structures)) {
       invalidDto('WASM returned an invalid structured-math input interface.', value);
@@ -342,6 +351,7 @@ function assertInputInterface(value: unknown): asserts value is AnswerInputInter
 }
 
 function inputAllowsStructure(inputInterface: AnswerInputInterface, structure: AnswerInputStructure): boolean {
+  if (inputInterface.type === 'digit_grid') return false;
   if (inputInterface.type === 'simple_numeric') {
     return structure === 'decimal'
       ? inputInterface.allow_decimal
@@ -359,6 +369,21 @@ function inputAllowsStructure(inputInterface: AnswerInputInterface, structure: A
  * forbidden typed node.
  */
 function assertAnswerSupportsInputInterface(answer: AnswerNode, inputInterface: AnswerInputInterface): void {
+  if (inputInterface.type === 'digit_grid') {
+    if (answer.type === 'empty') return;
+    if (answer.type !== 'tuple' || answer.value.length !== inputInterface.cell_count) {
+      invalidDto('WASM returned a digit-grid answer with the wrong shape.', answer);
+    }
+    for (const cell of answer.value) {
+      if (cell.type === 'empty') continue;
+      if (cell.type !== 'integer') invalidDto('WASM returned a non-integer digit-grid cell.', cell);
+      const digit = Number(cell.value);
+      if (!Number.isSafeInteger(digit) || digit < inputInterface.min_digit || digit > inputInterface.max_digit) {
+        invalidDto('WASM returned an out-of-range digit-grid cell.', cell);
+      }
+    }
+    return;
+  }
   switch (answer.type) {
     case 'empty':
     case 'nan_error':
@@ -446,7 +471,7 @@ function assertArithmeticExpression(value: unknown): void {
   invalidDto('WASM returned an unsupported arithmetic expression variant.', value);
 }
 
-function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'column_arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle'): void {
+function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'column_arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle' | 'mini_sudoku'): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported prompt variant; expected ${expectedKind}.`, value);
   }
@@ -504,6 +529,17 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
     }
     return;
   }
+  if (expectedKind === 'mini_sudoku') {
+    if (!Array.isArray(value.givens) || value.givens.length !== 16) {
+      invalidDto('WASM returned an invalid mini-sudoku grid.', value);
+    }
+    for (const cell of value.givens) {
+      if (cell === null) continue;
+      assertInteger(cell, 'mini-sudoku given');
+      if (cell < 1 || cell > 4) invalidDto('WASM returned an out-of-range mini-sudoku given.', cell);
+    }
+    return;
+  }
   if (expectedKind === 'quadratic_equation') {
     if (!['square_equals_constant', 'square_plus_constant_zero', 'factored_scale', 'standard'].includes(String(value.form))) {
       invalidDto('WASM returned an invalid quadratic-equation form.', value);
@@ -523,7 +559,7 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
   }
 }
 
-function assertAnswerSchema(value: unknown, expectedKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'algebraic'): void {
+function assertAnswerSchema(value: unknown, expectedKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'ordered_tuple' | 'algebraic'): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported answer schema; expected ${expectedKind}.`, value);
   }
@@ -533,6 +569,11 @@ function assertAnswerSchema(value: unknown, expectedKind: 'integer' | 'rational'
     return;
   }
   if (expectedKind === 'algebraic' || expectedKind === 'ordered_pair') return;
+  if (expectedKind === 'ordered_tuple') {
+    assertInteger(value.length, 'ordered-tuple length');
+    if (value.length <= 0) invalidDto('WASM returned an invalid ordered-tuple answer schema.', value);
+    return;
+  }
   if (expectedKind === 'decimal') {
     assertU32(value.max_scale, 'answer-schema maximum decimal scale');
     if (value.max_scale === 0) invalidDto('WASM returned an invalid decimal answer schema.', value);
@@ -628,6 +669,15 @@ function assertWorksheet(value: unknown): WorksheetDto {
     const expectedOperationKindCount = drillOperationKindCountForSchema(problem.schema_version);
     if (expectedOperationKindCount === undefined || !isRecord(problem.operation_vector) || !Array.isArray(problem.operation_vector.values) || problem.operation_vector.values.length !== expectedOperationKindCount) invalidDto('WASM returned an invalid operation vector.', problem);
     problem.operation_vector.values.forEach((item) => assertFiniteNumber(item, 'operation-vector value'));
+    if (problem.theme_specific_effort !== undefined && problem.theme_specific_effort !== null) {
+      assertFiniteNumber(problem.theme_specific_effort, 'theme-specific problem effort');
+      if (problem.theme_specific_effort < 0) invalidDto('WASM returned a negative theme-specific effort.', problem.theme_specific_effort);
+      if (problem.solution_graph.steps.length !== 0
+          || problem.operation_vector.values.some((value) => value !== 0)
+          || problem.effort !== problem.theme_specific_effort) {
+        invalidDto('WASM returned a theme-specific effort mixed with the ordinary operation-vector model.', problem);
+      }
+    }
     assertFiniteNumber(problem.effort, 'problem effort');
     return {
       ...problem,

@@ -357,6 +357,30 @@ pub(crate) fn ensure_capability(
     answer: &AnswerNode,
     input_interface: &AnswerInputInterface,
 ) -> Result<(), EditorError> {
+    if let AnswerInputInterface::DigitGrid {
+        min_digit,
+        max_digit,
+        cell_count,
+    } = input_interface
+    {
+        return match answer {
+            AnswerNode::Empty => Ok(()),
+            AnswerNode::Tuple(values) if values.len() == usize::from(*cell_count) => {
+                if values.iter().all(|value| match value {
+                    AnswerNode::Empty => true,
+                    AnswerNode::Integer(value) => {
+                        i64::from(*min_digit) <= *value && *value <= i64::from(*max_digit)
+                    }
+                    _ => false,
+                }) {
+                    Ok(())
+                } else {
+                    Err(EditorError::InputInterfaceViolation)
+                }
+            }
+            _ => Err(EditorError::InputInterfaceViolation),
+        };
+    }
     match answer {
         AnswerNode::Empty | AnswerNode::NanError(_) => Ok(()),
         AnswerNode::Integer(value) => {

@@ -1196,3 +1196,517 @@ Warning semanticsそのものではなく、ユーザーへの提示方法を再
 | L-005 | **PASS** | test-local GCDに加え`grade.rs`の純粋Euclidean GCD重複も発見・削除し、`exact::gcd_u64/u128`へ集約。pedagogical `gcd_search_operations`は意味が異なるため分離維持。 |
 
 修正後の主要検証: `cargo test --workspace`、workspace Clippy `-D warnings`、`drill-core --features wire-types` Clippy、generated Web contract / wire drift check、TypeScript typecheck、ESLint `--max-warnings=0`、Vitest 168 tests、fresh release WASM、production Next build、Pages export 38 routes、browser layout verifier、`git diff --check`。最終commit前に同一check群を再実行する。
+
+---
+
+### M-021 page-wide worksheet grid capabilityが`column_arithmetic`へ結合している
+
+**状態:** Closed (2026-08-17 implementation verification)
+**発見契機:** 新単元「すうじはひとりぼっち」実装
+
+筆算で使っているA4全体の方眼、row-major配置、divider suppressionが`presentation.column_arithmetic`からしか取得できず、非筆算のgrid puzzleから再利用するには「数独を筆算扱いする」かWeb側でtheme固有special caseを入れる必要がある。
+
+**方針:** page-wide worksheet gridを独立したpresentation capabilityへ分離し、column arithmeticはそのcapabilityを利用する1利用者とする。
+
+
+**解決確認 (2026-08-17)**
+
+Rust presentation metadataへ独立`worksheet_grid` capabilityを追加し、筆算は`worksheet_grid=true, column_arithmetic=true`、数独は`worksheet_grid=true, column_arithmetic=false`とした。row-major配置・page方眼・divider suppressionは`worksheet_grid`だけを見る。共通A4 grid geometryは`worksheet-grid-presentation.ts`へ分離し、fresh Chrome全80 samplesでcrossing 0を確認した。
+
+---
+
+### M-022 固定セルdigit-grid入力のtyped capabilityがない
+
+**状態:** Closed (2026-08-17 implementation verification)
+**発見契機:** 新単元「すうじはひとりぼっち」実装
+
+現行`AnswerInputInterface`はscalar numeric / structured mathのみで、4x4 gridの各cellへ1〜4を入力する能力を正しく表現できない。`tuple_only`等へ偽装するとWebが入力意味論を再解釈する必要がある。
+
+**方針:** Rust contractへfixed digit-grid input capabilityを追加し、cell countとdigit rangeをgenerated Web contractへ投影する。
+
+
+**解決確認 (2026-08-17)**
+
+`AnswerInputInterface::DigitGrid { min_digit, max_digit, cell_count }`をRust canonical contractへ追加し、generated TSからWeb keypad/cell数を取得する。数独は1〜4・16cellをcontractで宣言し、WASM/Web validatorもshape/rangeをfail-closed検証する。input/controller/component testと実Chrome入力probeがpassした。
+
+---
+
+### M-023 2要素以外の順序付きtuple answer schemaがない
+
+**状態:** Closed (2026-08-17 implementation verification)
+**発見契機:** 新単元「すうじはひとりぼっち」実装
+
+16cellの完成盤面は順序付きtupleとして採点したいが、`OrderedPair`は2要素専用の意味名であり、`Algebraic`ではtupleを解集合として順序正規化する。
+
+**方針:** fixed-length ordered tuple schemaを追加し、長さと順序をRust gradingでfail-closedに検証する。
+
+
+**解決確認 (2026-08-17)**
+
+`AnswerSchema::OrderedTuple { length }`を追加し、Rust gradingで長さと順序を厳密比較する。solution-set semanticsを持つ`Algebraic` tupleとは分離した。16cell数独answerとWeb/WASM validation、ordered tuple regressionがpassした。
+
+---
+
+### M-024 九九の特殊effortを`BigNum` primitiveへ偽装している
+
+**状態:** Closed (2026-08-17 implementation verification)
+**発見契機:** 新単元「すうじはひとりぼっち」の特殊effort設計見直し
+
+九九は仕様上`log(answer)`というtheme固有effort例外だが、現実装は`Operation::BigNum`の通常primitiveを借用して同じ数値を得ている。数値が一致してもprimitiveの意味が異なり、`principles.md`の「場当たり的な実装をしない」「真にtheme固有の例外だけをtheme側へ置く」に反する。
+
+**方針:** 通常のoperation-vector effortとは別に、theme固有effortを明示的なoptional経路として表現する。九九と「すうじはひとりぼっち」はこの経路を利用し、既存primitiveの意味を流用しない。通常themeは従来どおりoperation vectorをsource of truthとする。
+
+
+**解決確認 (2026-08-17)**
+
+`Problem.theme_specific_effort: Option<f64>`を通常operation-vector modelとは独立した明示的経路として追加した。九九は`Some(log10(answer))`へ移行し`BigNum`偽装を削除、数独は`Some(nontrivial + 0.3*trivial)`を使用する。特殊effort problemはgraph/vectorを空にし、generic Rust regressionとWeb wire validatorが通常modelとの混在を拒否する。
+
+**再監査注記 (2026-08-17 / Rust architecture audit)**
+
+元の`BigNum` primitive偽装そのものは解消されているため、本Issueの元症状はClosedのままとする。ただし、代替として導入された`theme_specific_effort: Option<f64>`は最終architectureとしては不適切と判定した。`solution_graph` / `operation_vector` / `theme_specific_effort` / `effort`を独立fieldとして同居させ、「Someなら他2つは空/zero」というruntime invariantへ逃がしているためである。このより広い設計問題は **H-010** で追跡する。
+
+---
+
+### M-025 Pages verifierがtheme数を固定値で保持している
+
+**状態:** Closed (2026-08-17 implementation verification)
+**発見契機:** 新単元「すうじはひとりぼっち」のfresh Pages export検証
+
+`scripts/verify-pages-export.mjs`がsitemap URL数を`38`と直書きしており、正常にthemeを1つ追加しただけでverificationが失敗する。theme追加のたびにverifierの無関係なmagic number更新が必要で、M-015/M-017で避けるべき中央boilerplateの一種である。
+
+**方針:** 固定件数を削除し、fresh export内のdrill `index.html`集合とsitemap URL集合を相互照合する。root routeも明示的に要求し、sitemap欠落・余計なrouteの双方を検出する。
+
+
+**解決確認 (2026-08-17)**
+
+固定`38`件を削除し、fresh export内の`drills/**/index.html`集合とsitemap URL集合を相互照合するよう変更した。新theme追加後のalpha Pages exportは39 routesでpassした。
+
+---
+
+### M-026 route/sitemap testsが全theme routeを手書き列挙している
+
+**状態:** Closed (2026-08-17 implementation verification)
+**発見契機:** 新単元「すうじはひとりぼっち」のroute追加
+
+`sitemap.test.ts`と`page.test.tsx`が全implemented themeのrouteをexpected fixtureとして手書き列挙しており、新theme追加のたびにproduction registryとは無関係な長大listへ追記が必要だった。M-017の「新theme追加でstale fixture更新を要求しない」という意図に反する。
+
+**方針:** expected route/static paramsは`IMPLEMENTED_THEMES`のtyped route metadataから導出する。個別themeのSEO/foreign-key等、意味のあるspot checkは残す。export completenessはPages verifierがfresh artifactとsitemapを相互照合する。
+
+**解決確認 (2026-08-17)**
+
+`sitemap.test.ts`とstatic params testの全route手書きfixtureを削除し、expectedを`IMPLEMENTED_THEMES`のtyped route metadataから導出した。個別theme metadataのspot checkは維持する。
+
+
+---
+
+## 2026-08-17 Rust architecture audit
+
+以下は、既存IssueのClosed表記を前提にせず、`crates/`以下の現行Rust実装を型設計・ownership・module/API・WASM境界から再監査して追加したIssueである。テスト/Clippyの成否はIssue判定の根拠とはせず、実装上のinvariantと将来の変更容易性を根拠とする。
+
+### H-009 `Problem`と周辺domain typeがwire DTOを兼ね、invalid stateを型で排除できない
+
+**severity:** High
+**状態:** Open
+**該当:** `crates/drill-core/src/model.rs` (`Problem`, `ProblemPrompt`, `RationalCoefficient`, `AnswerInputInterface`, `AnswerSchema`, `Worksheet`, `EditorState`, `GradeResult`), `crates/drill-core/src/identity.rs` (`ProblemSetIdentity`), `crates/drill-wasm/src/lib.rs` (`CalculateEffortRequest`等)
+
+**具体的なコード上の証拠**
+
+- `model.rs`自身が`Versioned domain values shared by the native engine and the WASM adapter`と宣言し、core domain typeへ`Deserialize` / `Serialize` / `ts-rs`都合を直接載せている。
+- `RationalCoefficient`は`new()`では0分母を拒否し約分・符号正規化する一方、`numerator` / `denominator`が`pub`でderive `Deserialize`されているため、`RationalCoefficient { denominator: 0, .. }`や未約分値をconstructorを通さず生成・deserializeできる。constructorのinvariantが型によって保護されていない。
+- `Problem`は`prompt`, `input_interface`, `answer_schema`, `canonical_answer`, `worked_solution`, effort関連fieldをすべてpublicに持つ。例えばMini Sudoku promptに5cellだけ入れ、Integer schemaとscalar answerを組み合わせた`Problem`も型上合法である。
+- `ProblemPrompt::MiniSudoku { givens: Vec<Option<u8>> }`は16cell・digit 1..=4を型で表さない。`LiarPuzzle` / `LiarStatement`も`people_count` / person indexを生の`u8`で保持し、0や範囲外personがrepresentableである。`liar_puzzle::statement_truth()`は`person - 1`を行うため、不正domain valueはdebug buildでpanicし得る。
+- `AnswerNode`はediting draft用の`Empty` / `NanError`まで含む同じenumが`Problem.canonical_answer`の型でもあり、「canonical answerが未入力/parse error」というdomain上不正な状態を表現できる。
+- `ProblemSetIdentity::new()` / `FromStr`はseed/schemaを検証する一方、struct fieldがpublicでderive `Deserialize`されるため検証を迂回できる。対照的に`Difficulty`はprivate field + custom `Deserialize`で1..=4を保証している。
+- WASM `calculate_effort`はJSONを直接`Problem`へdeserializeし、`problem.schema_version`しか検証せずcoreへ渡す。Rust domain invariantをWeb validator側が補う構造になっている。
+- `GradeResult`は`status`と派生値`is_correct`を両方保存し、矛盾した値を型上作れる。`Worksheet`も`problem_set_id`文字列とdecoded `identity`を同時保存する。
+
+**なぜRustとして不適切か**
+
+これはtyped domain modelではなく、Serdeで運びやすいpublic data bagをdomain objectとしても使っている。Rustでconstructorを用意してもpublic fields/derived Deserializeがinvariantを迂回できるなら、`Invalid states should be unrepresentable`を実現していない。wire都合とdomain意味論が同一typeへ混在している。
+
+**なぜ保守性上問題か**
+
+新prompt/input/schemaを追加するたびに「この組合せは合法か」を複数validator/testのruntime conventionで同期する必要がある。1箇所のvalidation漏れで、分母0、board長不正、canonical answer shape不整合、worked solution不整合などがcore内部まで到達する。Web側のruntime validationがRust domain modelの穴を埋める状態は、`drill-core`を数学的source of truthとする原則にも反する。
+
+**よりRustらしい修正方向**
+
+- invariantを持つcore typeはprivate field + validated constructor / `TryFrom` / custom `Deserialize`とし、wire DTOが必要ならWASM boundaryへ分離する。
+- `RationalCoefficient`、grade、theme identity、fixed grid等にはvalidityを保持するnewtype/fixed-size typeを使う。Mini Sudokuなら少なくとも`[Option<Digit>; 16]`相当のdomain typeを検討する。
+- edit中の`AnswerNode`と、generatorが保持するvalidated/canonical answerを同じ無制約typeとして扱わない。必要なら`CanonicalAnswer` wrapperを設ける。
+- `Problem`はpublic field literalではなく、prompt/answer contract/effort evidenceの整合性を保証したaggregateとして構築する。wire serialization用のderived fieldはDTO projectionで作る。
+- `GradeResult::is_correct`や`Worksheet.problem_set_id`のような純粋派生値は、core SoTとして重複保存しないか、DTO生成時だけ導出する。
+
+**Close条件**
+
+- coreのinvariant-bearing typeをsafe Rust API経由で不正状態に構築できない。
+- WASM JSONが直接unvalidated core aggregateへdeserializeされない。
+- `RationalCoefficient`等のconstructor invariantをpublic field/Serdeが迂回しない。
+- prompt/input/schema/canonical answer/worked solutionの不正組合せが型または単一validated conversion boundaryで拒否される。
+- draft-only answer状態とcanonical generated answerの境界が明示される。
+
+---
+
+### H-010 特殊effortを`Option<f64>`で逃がし、graph/vector/scalar/scoreを複数SoTとして保持している
+
+**severity:** High
+**状態:** Open
+**該当:** `crates/drill-core/src/model.rs::Problem`, `crates/drill-core/src/effort.rs::{SolutionGraph, calculate_effort, calculate_graph_effort}`, `crates/drill-core/src/themes/basic_arithmetic.rs`, `crates/drill-core/src/themes/mini_sudoku.rs`, `docs/architecture/effort-model.md`, M-024
+
+**具体的なコード上の証拠**
+
+`Problem`は同時に次を保持する。
+
+- `solution_graph: SolutionGraph`
+- `operation_vector: OperationVector`
+- `theme_specific_effort: Option<f64>`
+- `effort: f64`
+
+現行規約は「通常modelなら`theme_specific_effort=None`」「特殊modelなら`Some`かつgraphはempty/vectorはzero」である。しかしこれは型ではなくtest/Web validatorによるruntime conventionである。
+
+`calculate_effort()`は`theme_specific_effort.unwrap_or_else(|| weights.weighted_sum(&problem.operation_vector))`だけを読み、`solution_graph`とstored `problem.effort`を無視する。従って、同じ`Problem`内のgraph/vector/special/stored effortが相互に矛盾していても関数は通常どおり値を返す。WASM `calculate_effort`もこの不整合を拒否しない。
+
+さらに`SolutionGraph::operation_vector()`は`depends_on`を一切参照せず全nodeを1回数えるだけであり、通常builderの大半は`operations_graph()`でoperation列を単なる直列chainへ包んでいる。graph topologyを持つ型なのにeffort意味論はtopologyを使用しない。
+
+九九・Mini Sudokuは空graph/zero vectorを格納し、別fieldのscalarへescapeする。元のM-024であった`BigNum`意味偽装は消えたが、問題を「特殊値をOptionで横に足す」設計へ移しただけである。
+
+**なぜRustとして不適切か**
+
+これは本質的に
+
+`OperationModel | ThemeSpecificModel`
+
+というsum typeである。Rustならenumでvariantとして表現すべきものを、4 independent fields + Option + empty/zero sentinelへ展開している。normal/special両方を同時に入れる、不一致vectorを入れる、stored scoreだけ変える、といったinvalid stateがすべてrepresentableである。
+
+**なぜ保守性上問題か**
+
+新しい特殊effortを追加するたびに、generator・tests・wire validator・docsが「どのfieldを空にするか」を共有しなければならない。将来graph semanticsやweightsを変更してもstored vector/effortが自動追従しないためsilent driftが起きる。`solution_graph`という重い抽象化も、そのedgeが意味を持つのか単なるoperation listなのか不明瞭になる。
+
+**よりRustらしい修正方向**
+
+例えばcoreでは次のような1つのauthorityへ寄せる。
+
+- `EffortModel::Operation(OperationPlan)`
+- `EffortModel::ThemeSpecific(ThemeSpecificEffort)`
+
+通常modelではoperation evidenceからvectorとscoreを導出し、特殊modelはfinite/nonnegativeを保証するvalue typeまたはtheme-owned policyで表す。wireへvector/scoreを出したい場合はDTO projection時のderived dataとする。
+
+`SolutionGraph`については、本当に依存関係が教材意味論に必要ならunique ID/dangling/cycle等をvalidated typeとして扱い、そのtopologyがconsumerで意味を持つようにする。単にprimitive列で十分なら、graphという名前・edge fieldを残さずoperation sequenceとして単純化する。
+
+**Close条件**
+
+- normal/special effort modelが型のvariantとして排他的に表現される。
+- graph/vector/special/scalarを相互独立SoTとして保存しない。
+- `calculate_effort`が唯一のeffort evidenceから導出でき、不整合`Problem`を構築できない。
+- 特殊theme追加時にempty graph/zero vector sentinel規約を手動同期しない。
+- `SolutionGraph.depends_on`を残すならgraph invariantと用途が明確で、残さないなら不要なgraph abstractionを削る。
+
+---
+
+### H-011 `ProblemGenerator` traitがoptional/default methodの組合せでcapability protocolを表現している
+
+**severity:** High
+**状態:** Open
+**該当:** `crates/drill-core/src/generator.rs::ProblemGenerator`, `generate_with_generator`, layered/finite/answer-conditioned sampling;各theme generator impl
+
+**具体的なコード上の証拠**
+
+`ProblemGenerator`には、必須の`registration` / `draw_candidate`に加えて、次の独立したoptional/default methodが並ぶ。
+
+- `answer_domain() -> Option<...>`
+- `finite_distinct_candidate_count() -> Option<usize>`
+- `draw_finite_candidate(...) -> Option<Problem>`（default `None`）
+- `sampling_layers() -> Option<...>`
+- `sampling_layer(...) -> Option<usize>`（default `None`）
+- `bootstrap_layer_multiplier()`
+- `deduplicate_bootstrap_pool() -> bool`
+- `constructive_layer_sampling() -> bool`
+- `draw_candidate_for_layer(...) -> Option<Problem>`（default `None`）
+- `draw_candidate_for_answer(...)`（defaultは指定answerを無視して通常`draw_candidate`を呼ぶ）
+
+このため、例えば以下がすべてcompileする。
+
+- finite countだけ`Some`にし、finite drawはdefault `None`。
+- `sampling_layers=Some`だが`sampling_layer=None`。
+- `constructive_layer_sampling=true`だがlayersまたはlayer draw未実装。
+- `answer_domain=Some`だが`draw_candidate_for_answer`をoverrideせず、要求answerを無視。
+
+framework側はその矛盾を型で防げず、`expect("constructive layer sampling requires declared layers")`、`expect("layered selection requires layers")`、分類失敗によるpool不足、answer mismatchのretry等で処理している。
+
+**なぜRustとして不適切か**
+
+traitが「共通behavior」を抽象化する代わりに、複数の独立capability flag/Option/default methodを持つextension-pointの墓場になっている。型が実装者へ要求すべき契約を、runtime conventionへ逃がしている。dynamic dispatch自体は問題ではなく、trait contractの形が問題である。
+
+**なぜ保守性上問題か**
+
+新sampling strategy追加時にdefault methodがさらに増えやすく、実装者は「どのmethodの組を同時overrideすべきか」を暗黙知として覚える必要がある。AI agentがthemeを追加する運用では特に、compileするがAttemptLimitでしか壊れない実装を生みやすい。
+
+**よりRustらしい修正方向**
+
+`ProblemGenerator`本体はregistrationとcandidate construction等の最小共通契約へ縮め、sampling方式は整合したstrategy typeで表す。例えば`SamplingStrategy`を`Random` / `Finite` / `AnswerConditioned` / `Layered`等のenumにし、各variantが必要なcallback/dataを一括で持つ。あるいは能力ごとに小さなtrait/typeを分け、存在するcapabilityは必要methodを必須化する。
+
+「将来拡張できるからtrait」ではなく、現在存在するstrategyの意味論がcompile-timeにcompleteになることを優先する。
+
+**Close条件**
+
+- finite/layered/answer-conditioned/constructiveの不完全なmethod組合せがcompile-timeに表現できない、または1つのvalidated strategy valueで拒否される。
+- capability矛盾を理由にする`expect`や「defaultが指定answerを無視する」挙動がない。
+- 新sampling mode追加時に無関係themeへoptional methodを増やさない。
+
+---
+
+### H-012 `ThemeRegistrationSpec`がnamed fieldsになっただけで、theme contractのinvalid combinationを許している
+
+**severity:** High
+**状態:** Open
+**該当:** `crates/drill-core/src/theme.rs::{ThemeRegistrationSpec, ThemeRegistration, ThemeAnswerContract, ThemeInputProfile, WorksheetLayoutProfile}`, `crates/drill-core/src/registry.rs`,各`themes/*.rs` registration
+
+**具体的なコード上の証拠**
+
+M-016で11個の位置引数は`ThemeRegistrationSpec { ... }`へ改善されたが、現在もSpecは次の値を独立に自由組合せできる。
+
+- `grade: Option<u8>`。コメント上は1..=9だが型は0/255も許す。
+- `ThemeAnswerContract { prompt_kind, answer_schema_kind, input_profile }`。例えばMiniSudoku prompt + Integer schema + LinearEquation input profileも合法。
+- `ThemeInputProfile::DigitGrid { min_digit, max_digit, cell_count }`。`min > max`や0cellも合法。
+- `WorksheetLayoutProfile { problem_count, columns, rows: usize }`。0列、`columns * rows < problem_count`等も合法。
+- `numeric_theme_id`と`generator_revision`はいずれも生`u32`で、registry APIも同じprimitiveを2つ受ける。
+
+重複theme IDはregistration時に型/const構築で拒否されず、`active_registrations()`が`BTreeMap::insert`後に`assert!(previous.is_none())`して初めてpanicする。weight overrideの不正値も`resolved_weights()`内の`expect`で処理する。
+
+またMini Sudokuではregistrationの`DigitGrid {1,4,16}`、generatorが返すproblemのinput interface、`OrderedTuple { length:16 }`、promptのgivens Vec長が別々に手入力される。型上はこれらが一致する保証がない。
+
+**なぜRustとして不適切か**
+
+named struct literalは位置引数事故を減らすだけで、domain invariantを表現しない。registrationは「themeを追加するときのcompile-time schema」に近い重要な値なのに、実態はpublic primitive fieldsを集めたdata bagである。
+
+**なぜ保守性上問題か**
+
+新theme/schema/input modeを追加するたびに、prompt/schema/input/layout/grade/IDの整合性をreviewとtestへ依存する。間違ったmetadataでもcompileし、場合によってはregistryを列挙した時点でpanicする。theme数が増えるほど同期面積が増える。
+
+**よりRustらしい修正方向**
+
+- `ThemeId`, `GeneratorRevision`, `SchoolGrade`等、混同と範囲に意味がある値はnewtype/enum化する。
+- layoutはzero/mismatchを作れないconstructor/value typeにする。既知layout profileをenum化する選択も可だが、無意味な固定enum乱造は避ける。
+- answer contractは「prompt kind/schema/input三つ組」を自由直積にせず、実際に存在するcontractを表すenum/typed descriptor、またはgeneratorのassociated contractへ寄せる。
+- fixed gridではcell count/digit domainを1つのtyped specからprompt/input/schemaへ投影する。
+- duplicate registry identityは起動後の`assert!`ではなく、構築時に一意性を保証/検証する明示的registry builder等へ寄せる。
+
+**Close条件**
+
+- grade/layout/digit-grid等の不正値をsafe constructorで作れない。
+- prompt kind / answer schema kind / input profileの無意味な組合せを単なるpublic struct literalで作れない。
+- fixed-grid等の同じdomain parameterをregistrationとproblem生成で別々に手入力しない。
+- duplicate theme identityや不正weightが通常のregistry利用時panicとして初めて発見されない。
+
+---
+
+### M-027 `うそつきだれだ`の論理式長を`Operation::Identity` node数へ偽装している
+
+**severity:** Medium
+**状態:** Open
+**該当:** `crates/drill-core/src/themes/liar_puzzle.rs::{statement_effort, solution_graph}`
+
+**具体的なコード上の証拠**
+
+`statement_effort()`は各論理文のformula lengthを1/2/people_countで定義している。一方`solution_graph()`は、その総長`formula_length`個の`SolutionStep`を生成し、全nodeの`operation`を`Operation::Identity`、`depends_on`を空にしている。`calculate_graph_effort`のIdentity weightが1であることを利用し、結果だけをformula lengthへ一致させている。
+
+これは「論理式の長さ」という意味を「算術solution graph上のIdentity primitiveの反復」に偽装している。
+
+**なぜRustとして不適切か**
+
+型名は付いているが、variantの意味論を守っていない。`Operation::Identity`の本来の意味を変更すれば、無関係な論理パズルeffortが連動して変わる。型でsemantic distinctionを作った意味を自ら壊している。
+
+**なぜ保守性上問題か**
+
+primitive weight調整が別domainへ漏れ、後からコードを読んでもなぜIdentityが数十個並ぶのか説明できない。M-024で禁止した「数値が一致するprimitiveを借りる」設計と同型である。
+
+**よりRustらしい修正方向**
+
+H-010のeffort model整理後、論理式長が真にtheme固有modelならtheme-specific variantとして明示する。もし複数logic themeで再利用する人間操作primitiveが定義できるなら、`LogicalLiteralEvaluation`等の実際の意味を持つprimitiveを共通modelへ追加する。単に数値を合わせるため既存primitiveを借りない。
+
+**Close条件**
+
+- liar puzzle effortが`Identity`等の無関係primitiveのweightに依存しない。
+- graph/operationを使うならnodeのoperationが実際の解法primitiveを表す。
+
+---
+
+### M-028 MathLive移行後も旧`EditorState` / `apply_editor_action` state machineをcompatibility目的で保持している
+
+**severity:** Medium
+**状態:** Open
+**該当:** `crates/drill-core/src/editor.rs`, `model.rs::{EditorState, EditorAction}`, `lib.rs`, `crates/drill-wasm/src/lib.rs::apply_editor_action`, `export_web_wire_types.rs`, `contract.rs`, `docs/architecture/answer-ast.md`
+
+**具体的なコード上の証拠**
+
+`docs/architecture/answer-ast.md`は明示的に、productionのMathLive pathではselection/caretをMathLiveが所有し、旧`EditorState.active_path` / `cursor`は`apply_editor_action`互換境界だけに残す、と記載している。
+
+production Webを検索すると`applyEditorAction`はadapter/interface定義以外に実利用callerがなく、現在の回答同期は`parse_mathlive_answer`を使用している。それにもかかわらず、Rustには約680行の旧editor state machine、wire `EditorState`/`EditorAction`、WASM endpoint、generated TS root、action discriminant contract、対応testが残る。
+
+なお`mathlive_input.rs`は`editor::ensure_capability`を現行validationとして再利用しているため、`editor.rs`を機械的に全削除するのではなく、この現行helperは適切なmoduleへ残す必要がある。
+
+**なぜRustとして不適切か**
+
+コード単体の型付けより、pre-release projectで「互換性のためだけの過去state machine」をproduction APIに維持している点が問題である。`principles.md`の「legacy compatibilityを抱えない」「Gitを歴史保存層として使う」に反する。
+
+**なぜ保守性上問題か**
+
+AnswerNode/editor capabilityを変更するたびに、実際には使わない旧state machineとWASM contractまで同期する必要がある。さらに`EditorState { answer, cursor, active_path, committed }`自体が不正組合せを多数作れるため、不要なvalidation surfaceを残している。
+
+**よりRustらしい修正方向**
+
+MathLive production pathで必要なcapability validationだけを小さな現行moduleへ分離し、未使用の`EditorState` / `EditorAction` state machine、WASM endpoint、wire export、compatibility testsを削除する。将来必要ならGit履歴から再設計する。
+
+**Close条件**
+
+- productionで未使用の旧editor state/action APIがRust/WASM/wire contractから消える。
+- MathLive parserが必要とするinput capability validationだけが現行責務として残る。
+- canonical docsが「compatibility boundaryを残す」前提を持たない。
+
+---
+
+### M-029 theme capabilityが`ThemeTag`と`ThemePresentationPolicy`へ二重登録されている
+
+**severity:** Medium
+**状態:** Open
+**該当:** `crates/drill-core/src/theme.rs::{ThemeTag, ThemePresentationPolicy}`, `crates/drill-core/src/themes/column_arithmetic.rs`, generated Web contract consumers
+
+**具体的なコード上の証拠**
+
+`ThemeTag`に`ColumnArithmetic`と`PrintRecommended`があり、同時に`ThemePresentationPolicy`にも`column_arithmetic: bool` / `print_recommended: bool`がある。全column themeはtagsへ両方を手入力しつつ、`Presentation::COLUMN_ARITHMETIC`で同じ2事実を再度trueにしている。
+
+実際のWeb側も、印刷推奨badgeには`hasThemeTag(..., 'print_recommended')`を使う一方、worksheet layoutには`presentation.column_arithmetic` / `worksheet_grid`を使っているため、2つの値が食い違えばUIの一部だけが変わる。
+
+**なぜRustとして不適切か**
+
+typed metadataにしたにもかかわらず、同じsemantic factを別型の2 fieldへ重複保存している。bool/tagいずれかを変更してもcompilerは矛盾を検出できない。
+
+**なぜ保守性上問題か**
+
+新themeで片方だけ付け忘れるsilent bugを誘発し、source of truthを一つにする原則に反する。
+
+**よりRustらしい修正方向**
+
+taxonomyとbehavioral capabilityを明確に分ける。`print_recommended` / `column_arithmetic`がbehaviorならpresentation policyをcanonicalにし、UI badgeもそこから導出する。検索/filter用tagが必要ならcanonical policyから生成し、人手で二重登録しない。
+
+**Close条件**
+
+- 同じcapabilityの真偽をtagとpresentation fieldへ別々に手入力しない。
+- Web/Rustの全consumerが1つのcanonical metadataから導出する。
+
+---
+
+### M-030 `problem_key()`がdedup keyとして`ProblemPrompt`全体を所有cloneし、sort比較中にも再構築している
+
+**severity:** Medium
+**状態:** Open
+**該当:** `crates/drill-core/src/generator.rs::{canonicalize_commutative_expression, problem_key, select_candidates_from_pool, generate_with_generator}`
+
+**具体的なコード上の証拠**
+
+`problem_key()`の返り値は専用keyではなくowned `ProblemPrompt`である。Arithmeticでは式木をclone/canonicalizeし、ColumnArithmeticは左右式をclone、LiarPuzzleはstatements `Vec`をclone、MiniSudokuはgivens `Vec`をcloneする。LinearEquationだけはpresentation用boolをfalseへ書き換えた新Promptを作り、「promptそのもの」と「dedup identity」が異なることを関数内で吸収している。
+
+候補poolのsort comparatorは比較のたびに`problem_key(left).cmp(&problem_key(right))`を呼ぶため、heap-owning promptでは比較ごとにclone/allocationが発生する。同じkeyはHashSet dedupでも繰り返し構築される。
+
+**なぜRustとして不適切か**
+
+これはmicro optimizationではなく、ownership/API設計の問題である。semantic identityを表す型がないためwire/display promptをowned keyとして流用し、borrowで済む比較までallocationしている。またpresentation-only flagをkey生成時に手で消す必要があること自体、promptとsemantic identityの混同を示す。
+
+**なぜ保守性上問題か**
+
+新Prompt variant追加時に「何をdedup上同一とみなすか」を巨大matchへ追記し、clone方法まで考える必要がある。display field追加がdedup semanticsへ漏れる可能性もある。
+
+**よりRustらしい修正方向**
+
+dedup identityを専用のborrowable/compact keyまたはtheme-owned semantic keyとして定義し、必要ならcandidate作成時に一度だけprecomputeする。sort comparator内でAST/Vecを再cloneしない。presentation-only fieldをsemantic keyへ最初から含めない。
+
+**Close条件**
+
+- sort比較ごとにheap-owning`ProblemPrompt`をclone/rebuildしない。
+- dedup identityとwire/display promptの意味が型/API上分離される。
+- 新Prompt variant追加時のdedup semanticsが明示的かつ局所的である。
+
+---
+
+### M-031 theme固有regression testが共通`generator.rs`へ集中し、theme追加の変更局所性を壊している
+
+**severity:** Medium
+**状態:** Open
+**該当:** `crates/drill-core/src/generator.rs`の`#[cfg(test)] mod tests`（`new_arithmetic_themes_generate_with_requested_domains`, `broad_seed_effort_invariants_hold_for_every_registered_theme`, column arithmetic/layered theme tests等）
+
+**具体的なコード上の証拠**
+
+production generatorはH-002対応でfamily moduleへ分離されたが、`generator.rs`は現在も約2,800行あり、後半の大部分が中央testである。
+
+- `new_arithmetic_themes_generate_with_requested_domains`は複数familyのtheme IDを手書き配列へ並べ、IDごとの巨大`match`でoperand/domain仕様を検証する。
+- `broad_seed_effort_invariants_hold_for_every_registered_theme`には`repaired_themes`という過去修正対象IDの手書き`HashSet`が残る。
+- column arithmetic testは13個のtheme IDを手書き列挙し、別testでも同じ13 ID配列を再度持ち、IDごとの詳細curriculum条件を中央matchで検証する。
+- layered theme testも対象generatorを中央配列へ手入力している。
+
+**なぜRustとして不適切か**
+
+testだから多少の冗長性は許容できるが、module ownershipを反転させるほどの中央fixture/matchは問題である。productionではtheme-owned semanticsにしたのに、testでは共通generatorが各themeのprivate domain知識を再列挙している。
+
+**なぜ保守性上問題か**
+
+新theme追加時にfamily moduleだけで完結せず、中央`generator.rs`のID list/matchを更新する誘惑・必要性が残る。stale listはtest coverageのsilent omissionにもなる。
+
+**よりRustらしい修正方向**
+
+- 全registrationに共通するdeterminism、schema、effort finite、dedup等だけを`generator.rs`のgeneric testsへ残す。
+- operand range、curriculum shape、theme固有archetype等は各theme/family moduleの`#[cfg(test)]`へ移す。
+- capability共通testが必要なら「ID手書きリスト」ではなくregistration/generatorが公開するcapabilityを基準に走査する。
+- `repaired_themes`のような歴史保存fixtureは現行contractへ置換する。
+
+**Close条件**
+
+- 新themeのdomain/curriculum testは原則theme/family module内で完結する。
+- central generator testsにtheme IDごとの巨大match/歴史的修正対象listがない。
+- universal invariant testは全registryを自動走査する。
+
+---
+
+### L-006 現worktreeのRust sourceが`cargo fmt --all -- --check`を通らない
+
+**severity:** Low
+**状態:** Open
+**該当:** 現在の未コミットRust差分（`generator.rs`, `generator_support.rs`, `model.rs`, `theme.rs`, `themes/basic_arithmetic.rs`, `themes/mini_sudoku.rs`, `themes/mod.rs`, `themes/multiplication_table.rs`等）
+
+**具体的なコード上の証拠**
+
+2026-08-17監査時に`cargo fmt --all -- --check`がexit 1となり、複数Rust fileにrustfmt差分を報告した。一方`cargo check` / test / Clippyはpassしている。監査ではproduction codeを変更しない指示のため、rustfmt自体は実行していない。
+
+**なぜRustとして不適切か / 保守性上問題か**
+
+formatting自体は意味論問題ではないが、Rust repositoryのcanonical formattingから外れた差分はreview noiseを増やし、CIでfmtを必須化した場合にmergeを止める。
+
+**よりRustらしい修正方向**
+
+現在の価値ある未コミット差分を破壊しない状態で、実装担当が意図した変更を確定した後に`cargo fmt --all`を適用し、差分をreviewする。
+
+**Close条件**
+
+- `cargo fmt --all -- --check`がcleanにpassする。
+
+---
+
+### L-007 `SamplingLayerSpec.key`が宣言されるだけで一度も読まれていない
+
+**severity:** Low
+**状態:** Open
+**該当:** `crates/drill-core/src/theme.rs::SamplingLayerSpec`, layered theme declarations
+
+**具体的なコード上の証拠**
+
+`SamplingLayerSpec`は`key: &'static str`, `weight`, `minimum`を持つが、`crates/drill-core/src`を横断検索しても`.key`のconsumerが存在しない。layered samplerは配列indexだけでlayerを識別している。各themeは意味のある文字列keyを記述しているがproduction semanticsには影響しない。
+
+**なぜRustとして不適切か / 保守性上問題か**
+
+未使用metadataは「将来使うかもしれない」schema residueであり、AI実装者にkeyの一意性・安定性・wire意味が必要だと誤認させる。`principles.md`の一時/試験実装の残骸を残さない方針にも反する。
+
+**よりRustらしい修正方向**
+
+現在不要ならfieldを削除する。diagnostics/telemetry等でstable layer identityが本当に必要なら、そのconsumerと型上の意味を同時に導入する。
+
+**Close条件**
+
+- `key`を削除するか、現行product requirementに基づく明確なconsumerが存在する。

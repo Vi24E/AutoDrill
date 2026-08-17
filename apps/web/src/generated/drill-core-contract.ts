@@ -2,7 +2,7 @@
 // Source: drill-core::web_contract(). Run `pnpm contract:generate` after changing the Rust contract.
 
 export const DRILL_CORE_CONTRACT = {
-  "schema_version": 5,
+  "schema_version": 6,
   "operation_kind_count": 32,
   "themes": {
     "1": {
@@ -20,6 +20,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -64,6 +65,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
@@ -123,6 +125,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
@@ -180,6 +183,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -222,6 +226,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -264,6 +269,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -306,6 +312,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -356,6 +363,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -409,6 +417,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -458,6 +467,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -507,6 +517,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -556,6 +567,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -604,6 +616,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -648,6 +661,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
@@ -706,6 +720,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
@@ -764,6 +779,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
@@ -822,6 +838,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -865,6 +882,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -909,6 +927,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
@@ -961,6 +980,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "unrestricted",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -1006,6 +1026,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -1055,6 +1076,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -1107,6 +1129,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -1156,6 +1179,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": false,
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
@@ -1201,6 +1225,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1246,6 +1271,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1291,6 +1317,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1336,6 +1363,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1381,6 +1409,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1426,6 +1455,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1471,6 +1501,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1518,6 +1549,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1567,6 +1599,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1613,6 +1646,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1659,6 +1693,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1705,6 +1740,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1751,6 +1787,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "safety": "non_negative_only",
       "presentation": {
+        "worksheet_grid": true,
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
@@ -1776,6 +1813,57 @@ export const DRILL_CORE_CONTRACT = {
         "problem_count": 12,
         "columns": 4,
         "rows": 3
+      }
+    },
+    "38": {
+      "numeric_theme_id": 38,
+      "generator_revision": 1,
+      "skill_id": "bonus.logic.mini_sudoku",
+      "curriculum_path": [
+        "root",
+        "おまけ",
+        "すうじはひとりぼっち"
+      ],
+      "grade": null,
+      "tags": [
+        "bonus"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none"
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "mini_sudoku",
+        "answer_schema_kind": "ordered_tuple",
+        "input_profile": {
+          "digit_grid": {
+            "min_digit": 1,
+            "max_digit": 4,
+            "cell_count": 16
+          }
+        }
+      },
+      "input_interface": {
+        "type": "digit_grid",
+        "min_digit": 1,
+        "max_digit": 4,
+        "cell_count": 16
+      },
+      "editor_input_interface": {
+        "type": "digit_grid",
+        "min_digit": 1,
+        "max_digit": 4,
+        "cell_count": 16
+      },
+      "layout": {
+        "problem_count": 4,
+        "columns": 2,
+        "rows": 2
       }
     }
   },

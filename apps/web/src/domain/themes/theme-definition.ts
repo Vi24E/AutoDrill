@@ -53,6 +53,7 @@ export type ThemeDefinition = {
   compatibility: { skillId: string; curriculumPath: readonly CurriculumPathSegment[] };
   safety: 'non_negative_only' | 'unrestricted';
   presentation: {
+    worksheet_grid: boolean;
     column_arithmetic: boolean;
     print_recommended: boolean;
     equation_layout: boolean;
@@ -60,7 +61,7 @@ export type ThemeDefinition = {
   };
   dedup: 'canonicalize_commutative' | 'preserve_operand_order';
   promptKind: ThemePromptKind;
-  answerSchemaKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'algebraic';
+  answerSchemaKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'ordered_tuple' | 'algebraic';
   inputInterface: AnswerInputInterface;
   editorInputInterface: AnswerInputInterface;
   worksheet: { title: string; instruction: string; answerPrefix: string | null; answerPlacement?: 'inline' | 'below' };

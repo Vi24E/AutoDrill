@@ -175,9 +175,17 @@ export function findCurriculumSelection(themeKey: string): CurriculumSelection {
     }
   }
 
+  // Bonus themes intentionally live outside the grade tree. Keep the exact
+  // selected theme while borrowing only the grade-mode navigation context;
+  // Recommended mode resolves its genre directly from RECOMMENDED_GENRES.
+  const bonusTheme = IMPLEMENTED_THEMES.find((theme) => theme.themeKey === themeKey && theme.grade === null);
   const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === ONE_DIGIT_ADDITION_THEME.grade!.slug)!;
-  const genre = grade.genres.find((candidate) => candidate.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre!.genreKey)!;
-  return { grade, genre, theme: ONE_DIGIT_ADDITION_THEME };
+  const fallbackGenre = grade.genres.find((candidate) => candidate.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre!.genreKey)!;
+  if (bonusTheme) {
+    const bonusGenre = RECOMMENDED_GENRES.find((candidate) => candidate.themes.some((theme) => theme.themeKey === themeKey)) ?? fallbackGenre;
+    return { grade, genre: bonusGenre, theme: bonusTheme };
+  }
+  return { grade, genre: fallbackGenre, theme: ONE_DIGIT_ADDITION_THEME };
 }
 
 export function findTheme(themeKey: string): CurriculumTheme | undefined {

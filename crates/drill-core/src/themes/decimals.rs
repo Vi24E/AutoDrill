@@ -293,6 +293,7 @@ fn draw_problem_v1(
         worked_solution: None,
         solution_graph,
         operation_vector: effort.operation_vector,
+        theme_specific_effort: None,
         effort: effort.value,
     })
 }

@@ -1019,6 +1019,7 @@ fn draw_problem(
         worked_solution,
         solution_graph,
         operation_vector: effort.operation_vector,
+        theme_specific_effort: None,
         effort: effort.value,
     })
 }

@@ -21,6 +21,7 @@ function representativeAnswer(definition: ThemeDefinition): AnswerNode {
     case 'rational': return { type: 'fraction', value: { numerator: { type: 'integer', value: '3' }, denominator: { type: 'integer', value: '4' } } };
     case 'decimal': return { type: 'exact_decimal', value: { coefficient: '36', scale: 1 } };
     case 'ordered_pair': return { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] };
+    case 'ordered_tuple': return { type: 'tuple', value: [1, 2, 3, 4, 3, 4, 1, 2, 2, 1, 4, 3, 4, 3, 2, 1].map((value) => ({ type: 'integer' as const, value: String(value) })) };
     case 'algebraic': return { type: 'plus_minus', value: { type: 'integer', value: '2' } };
   }
 }
@@ -102,6 +103,8 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
       };
     case 'column_arithmetic':
       return { prompt: representativeColumnPrompt(definition), answer };
+    case 'mini_sudoku':
+      return { prompt: { kind: 'mini_sudoku', givens: [1, null, null, 4, null, 4, 1, null, null, 1, 4, null, 4, null, null, 1] }, answer };
   }
 }
 
@@ -138,7 +141,9 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
         ? { kind: 'decimal' as const, max_scale: 6 }
         : definition.answerSchemaKind === 'ordered_pair'
           ? { kind: 'ordered_pair' as const }
-          : { kind: 'algebraic' as const };
+          : definition.answerSchemaKind === 'ordered_tuple'
+            ? { kind: 'ordered_tuple' as const, length: 16 }
+            : { kind: 'algebraic' as const };
   const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
     schema_version: DRILL_SCHEMA_VERSION,
     id: index + 1,
@@ -244,11 +249,17 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
       const { container, unmount } = render(<WorksheetPrintDocument worksheet={worksheet} metadata={metadata} />);
       expect(container.querySelectorAll('[data-print-page]'), definition.label).toHaveLength(2);
       const expressions = container.querySelectorAll('math-span.problem-math-expression');
-      if (definition.numeric_theme_id === 20) {
+      if (definition.promptKind === 'liar_puzzle') {
         expect(expressions, definition.label).toHaveLength(0);
         expect(container.querySelectorAll('.liar-statements'), definition.label).toHaveLength(definition.problemCount * 2);
         expect(container.querySelectorAll('.liar-person-choice'), definition.label).toHaveLength(definition.problemCount * 4 * 2);
         expect(container.querySelectorAll('[data-print-page="answers"] .liar-person-choice-selected'), definition.label).toHaveLength(definition.problemCount * 2);
+      } else if (definition.promptKind === 'mini_sudoku') {
+        expect(expressions, definition.label).toHaveLength(0);
+        expect(container.querySelectorAll('.mini-sudoku-grid'), definition.label).toHaveLength(definition.problemCount * 2);
+        expect(container.querySelectorAll('[data-print-page=\"problems\"] button.digit-grid-cell'), definition.label).toHaveLength(0);
+        expect(container.querySelectorAll('[data-print-page=\"answers\"] .digit-grid-cell-value'), definition.label).toHaveLength(definition.problemCount * 16);
+        expect(container.querySelectorAll('.problem-grid-worksheet-grid'), definition.label).toHaveLength(2);
       } else {
         const isColumnArithmetic = definition.tags.includes('column_arithmetic');
         expect(expressions, definition.label).toHaveLength(isColumnArithmetic ? 0 : definition.problemCount * 2);
@@ -256,7 +267,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
           expect(container.querySelectorAll('[data-column-arithmetic]'), definition.label).toHaveLength(definition.problemCount * 2);
           const cells = [...container.querySelectorAll<HTMLElement>('.problem-cell-column-arithmetic')];
           expect(cells.every((cell) => cell.style.getPropertyValue('--column-digit-width').includes('var(--worksheet-grid-cell)')), definition.label).toBe(true);
-          expect(container.querySelectorAll('.problem-grid-column-arithmetic'), definition.label).toHaveLength(2);
+          expect(container.querySelectorAll('.problem-grid-worksheet-grid'), definition.label).toHaveLength(2);
           expect(container.querySelectorAll('.column-arithmetic-digit-cell').length, definition.label).toBeGreaterThan(0);
         }
         if (isColumnArithmetic) {

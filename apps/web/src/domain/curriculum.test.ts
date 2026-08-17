@@ -15,7 +15,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 25, 26, 27, 28, 6, 13, 29, 30, 31, 32, 17, 33, 34, 35, 9, 18, 24, 36, 37, 11, 10, 12, 21, 22, 23, 7, 8, 2, 3, 19, 14, 15, 16, 20]);
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 25, 26, 27, 28, 6, 13, 29, 30, 31, 32, 17, 33, 34, 35, 9, 18, 24, 36, 37, 11, 10, 12, 21, 22, 23, 7, 8, 2, 3, 19, 14, 15, 16, 20, 38]);
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -70,6 +70,7 @@ describe('Web curriculum registry', () => {
     expect(columnThemes).toHaveLength(13);
     for (const theme of columnThemes) {
       expect(theme.tags).toContain('print_recommended');
+      expect(theme.presentation.worksheet_grid).toBe(true);
       const isDivision = theme.tags.includes('division');
       expect(theme.problemCount).toBe(isDivision ? 12 : 16);
       expect(theme.layout).toEqual(isDivision
@@ -85,6 +86,15 @@ describe('Web curriculum registry', () => {
     expect(grade2.gradeGenre).toEqual({ genreKey: 'addition-and-subtraction', label: '足し算と引き算' });
     const decimal = columnThemes.find((theme) => theme.numeric_theme_id === 33)!;
     expect(decimal.recommendedGenre).toEqual({ genreKey: 'decimals', label: '小数' });
+
+    const miniSudoku = IMPLEMENTED_THEMES.find((theme) => theme.numeric_theme_id === 38)!;
+    expect(miniSudoku.presentation).toMatchObject({
+      worksheet_grid: true,
+      column_arithmetic: false,
+      print_recommended: false,
+    });
+    expect(miniSudoku.layout).toEqual({ problem_count: 4, columns: 2, rows: 2 });
+    expect(miniSudoku.inputInterface).toEqual({ type: 'digit_grid', min_digit: 1, max_digit: 4, cell_count: 16 });
   });
 
   it('never exposes negative input capability for elementary-school themes', () => {
@@ -93,9 +103,11 @@ describe('Web curriculum registry', () => {
     for (const theme of elementary) {
       if (theme.inputInterface.type === 'simple_numeric') {
         expect(theme.inputInterface.allow_negative).toBe(false);
-      } else {
+      } else if (theme.inputInterface.type === 'structured_math') {
         expect(theme.inputInterface.allowed_structures).not.toContain('negative');
         expect(theme.inputInterface.allowed_structures).not.toContain('plus_minus');
+      } else {
+        expect(theme.inputInterface.min_digit).toBeGreaterThanOrEqual(0);
       }
     }
   });

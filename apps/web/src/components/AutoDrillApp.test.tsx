@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AutoDrillApp } from '@/components/AutoDrillApp';
 import { deleteEmptyMathLiveStructureBackward, type AutoDrillMathfield } from '@/components/MathLiveMath';
-import { createWebDrillSettings, LINEAR_EQUATION_1_THEME, ONE_DIGIT_ADDITION_THEME } from '@/domain/curriculum';
+import { createWebDrillSettings, findImplementedThemeByNumericId, LINEAR_EQUATION_1_THEME, ONE_DIGIT_ADDITION_THEME } from '@/domain/curriculum';
 import { DECIMAL_ADD_SUBTRACT_DEFINITION } from '@/domain/themes/decimal-add-subtract';
+import { MINI_SUDOKU_DEFINITION } from '@/domain/themes/mini-sudoku';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from '@/domain/themes/signed-arithmetic-1';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
-import { fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
+import { fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
 
 
@@ -483,6 +484,25 @@ describe('AutoDrillApp', () => {
   });
 
 
+  it('edits the fixed 4x4 digit grid through the shared numeric keypad', async () => {
+    const worksheet = miniSudokuFixtureWorksheet();
+    render(
+      <AutoDrillApp
+        engine={fixtureEngine(worksheet)}
+        initialWebSettings={createWebDrillSettings(findImplementedThemeByNumericId(MINI_SUDOKU_DEFINITION.numeric_theme_id)!, 3, 'fixtureSeed')}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    const firstProblem = await screen.findByTestId('problem-cell-0');
+    const firstEditable = within(firstProblem).getByRole('button', { name: '2番目のマス 未入力' });
+    fireEvent.click(firstEditable);
+    const inputPanel = screen.getByLabelText('数式入力パネル');
+    expect(within(inputPanel).queryByRole('button', { name: '5' })).toBeNull();
+    fireEvent.click(within(inputPanel).getByRole('button', { name: '2' }));
+    expect(firstProblem.querySelector('[data-digit-grid-cell="1"] .digit-grid-cell-value')?.textContent).toBe('2');
+    expect(firstProblem.querySelectorAll('[data-digit-grid-cell]')).toHaveLength(16);
+  });
+
   it('renders simultaneous equations with separate x and y answer boxes and 12 problems', async () => {
     const worksheet = simultaneousFixtureWorksheet();
     render(<AutoDrillApp engine={fixtureEngine(worksheet)} />);
@@ -513,6 +533,16 @@ describe('AutoDrillApp', () => {
     render(<AutoDrillApp engine={fixtureEngine(worksheet)} />);
     fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
     fireEvent.click(screen.getByRole('option', { name: 'おまけ' }));
+    expect(screen.getByLabelText('問題数6問')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
+    fireEvent.click(screen.getByRole('option', { name: 'すうじはひとりぼっち' }));
+    expect(screen.getByLabelText('問題数4問')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-value', expect.stringContaining('mini_sudoku'));
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
+    fireEvent.click(screen.getByRole('option', { name: 'うそつきだれだ' }));
+    expect(screen.getByLabelText('問題数6問')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
 
     await screen.findByRole('heading', { name: 'うそつきだれだ' });

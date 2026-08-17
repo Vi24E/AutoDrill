@@ -76,7 +76,8 @@ export type AnswerInputInterface =
   | Extract<RustAnswerInputInterface, { type: 'simple_numeric' }>
   | (Omit<Extract<RustAnswerInputInterface, { type: 'structured_math' }>, 'allowed_structures'> & {
       allowed_structures: readonly AnswerInputStructure[];
-    });
+    })
+  | Extract<RustAnswerInputInterface, { type: 'digit_grid' }>;
 
 export type InputCapabilities = {
   allow_decimal: boolean;
@@ -91,6 +92,9 @@ export function inputCapabilities(inputInterface: AnswerInputInterface): InputCa
       allow_negative: inputInterface.allow_negative,
       allowed_structures: [],
     };
+  }
+  if (inputInterface.type === 'digit_grid') {
+    return { allow_decimal: false, allow_negative: false, allowed_structures: [] };
   }
   return {
     allow_decimal: inputInterface.allowed_structures.includes('decimal'),

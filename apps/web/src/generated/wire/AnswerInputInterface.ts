@@ -6,4 +6,4 @@ import type { EditorStructure } from "./EditorStructure";
  * public wire schema. It describes which editor affordances may be exposed
  * for one problem; it does not change AnswerSchema or mathematical semantics.
  */
-export type AnswerInputInterface = { "type": "simple_numeric", allow_decimal: boolean, allow_negative: boolean, } | { "type": "structured_math", allowed_structures: Array<EditorStructure>, };
+export type AnswerInputInterface = { "type": "simple_numeric", allow_decimal: boolean, allow_negative: boolean, } | { "type": "structured_math", allowed_structures: Array<EditorStructure>, } | { "type": "digit_grid", min_digit: number, max_digit: number, cell_count: number, };

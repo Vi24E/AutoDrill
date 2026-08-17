@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { DRILL_SCHEMA_VERSION, answerNodeText, emptyEditorState } from '@/domain/drill-engine';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
-import { fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
+import { fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet } from '@/test/fixtures';
 
 const envelope = (data: unknown) => ({ schema_version: DRILL_SCHEMA_VERSION, ok: true, data, error: null });
 const simpleInputInterface = { type: 'simple_numeric', allow_decimal: false, allow_negative: false } as const;
@@ -116,6 +116,46 @@ describe('versioned WASM adapter', () => {
     expect(prompt.statements.map((statement) => statement.kind)).toEqual([
       'says_liar', 'exact_liar_count', 'both_not_liar', 'implication',
     ]);
+  });
+
+  it('accepts fixed digit-grid DTOs and rejects malformed grid contracts', async () => {
+    const worksheet = miniSudokuFixtureWorksheet();
+    const engine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(worksheet)) });
+    const result = await engine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: 38,
+      seed: 'fixtureSeed',
+      difficulty: 3,
+    });
+    expect(result.problems).toHaveLength(4);
+    expect(result.problems.every((problem) => problem.input_interface.type === 'digit_grid')).toBe(true);
+    expect(result.problems.every((problem) => problem.answer_schema.kind === 'ordered_tuple')).toBe(true);
+
+    const malformed = miniSudokuFixtureWorksheet();
+    malformed.problems = [{
+      ...malformed.problems[0]!,
+      prompt: { kind: 'mini_sudoku', givens: [1, null] },
+    }, ...malformed.problems.slice(1)];
+    const malformedEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(malformed)) });
+    await expect(malformedEngine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: 38,
+      seed: 'fixtureSeed',
+      difficulty: 3,
+    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+
+    const mixedEffort = miniSudokuFixtureWorksheet();
+    mixedEffort.problems = [{
+      ...mixedEffort.problems[0]!,
+      effort: 7,
+    }, ...mixedEffort.problems.slice(1)];
+    const mixedEffortEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(mixedEffort)) });
+    await expect(mixedEffortEngine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: 38,
+      seed: 'fixtureSeed',
+      difficulty: 3,
+    })).rejects.toMatchObject({ kind: 'invalid_dto' });
   });
 
   it('rejects a prompt kind that disagrees with the registered linear theme', async () => {

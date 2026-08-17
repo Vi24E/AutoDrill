@@ -1,21 +1,10 @@
 import { arithmeticLeafText } from '@/domain/problem-format';
 import { A4_PAGE } from '@/domain/layout';
-import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
+import { WORKSHEET_GRID_POINT } from '@/domain/worksheet-grid-presentation';
 
-/**
- * Printed A4 is ~793.7 CSS px wide, so 19.5pt corresponds to ~26px.
- * The same unit is expressed in cqw so Web preview and native print scale together.
- */
-export const COLUMN_ARITHMETIC_GRID_POINT = 19.5;
 const COLUMN_DIVISION_WORK_ROWS = 3;
 const COLUMN_REMAINDER_CELLS = 2;
-
-export function columnArithmeticPageGridVariables(): Record<string, string> {
-  return {
-    '--worksheet-grid-cell': `${(COLUMN_ARITHMETIC_GRID_POINT / A4_PAGE.width) * 100}cqw`,
-    '--worksheet-grid-top': `${((A4_PAGE.margin + A4_PAGE.headerHeight) / A4_PAGE.height) * 100}%`,
-  };
-}
+import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
 
 function expressionScale(expression: ArithmeticExpression): number {
   return expression.kind === 'exact_decimal' ? expression.scale : 0;
@@ -98,20 +87,20 @@ export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGe
   };
 
   if (cell) {
-    const laneWidth = (operatorCells + digitCells) * COLUMN_ARITHMETIC_GRID_POINT;
+    const laneWidth = (operatorCells + digitCells) * WORKSHEET_GRID_POINT;
     const cellRight = cell.x + cell.width;
     // The page grid starts at x=0. Put the right edge of every arithmetic lane
     // directly on a page-grid line; no visual inset/offset is allowed to create a
     // second coordinate system. The lane must still fit wholly inside its cell.
-    const floorGridLine = Math.floor(cellRight / COLUMN_ARITHMETIC_GRID_POINT) * COLUMN_ARITHMETIC_GRID_POINT;
+    const floorGridLine = Math.floor(cellRight / WORKSHEET_GRID_POINT) * WORKSHEET_GRID_POINT;
     const minimumRight = cell.x + laneWidth;
     const snappedRight = Math.max(minimumRight, floorGridLine);
     const rightOffset = Math.max(0, cellRight - snappedRight);
     variables['--column-lane-right-offset'] = `${(rightOffset / A4_PAGE.width) * 100}cqw`;
 
     const gridOriginY = A4_PAGE.margin + A4_PAGE.headerHeight;
-    const desiredTop = cell.y + COLUMN_ARITHMETIC_GRID_POINT;
-    const snappedTop = gridOriginY + Math.ceil((desiredTop - gridOriginY) / COLUMN_ARITHMETIC_GRID_POINT) * COLUMN_ARITHMETIC_GRID_POINT;
+    const desiredTop = cell.y + WORKSHEET_GRID_POINT;
+    const snappedTop = gridOriginY + Math.ceil((desiredTop - gridOriginY) / WORKSHEET_GRID_POINT) * WORKSHEET_GRID_POINT;
     const topOffset = Math.max(0, snappedTop - cell.y);
     variables['--column-expression-top-offset'] = `${(topOffset / A4_PAGE.width) * 100}cqw`;
   }

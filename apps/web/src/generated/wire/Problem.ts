@@ -7,4 +7,4 @@ import type { ProblemPrompt } from "./ProblemPrompt";
 import type { SolutionGraph } from "./SolutionGraph";
 import type { WorkedSolution } from "./WorkedSolution";
 
-export type Problem = { schema_version: number, id: number, numeric_theme_id: number, prompt: ProblemPrompt, input_interface: AnswerInputInterface, answer_schema: AnswerSchema, canonical_answer: AnswerNode, worked_solution?: WorkedSolution | null, solution_graph: SolutionGraph, operation_vector: OperationVector, effort: number, };
+export type Problem = { schema_version: number, id: number, numeric_theme_id: number, prompt: ProblemPrompt, input_interface: AnswerInputInterface, answer_schema: AnswerSchema, canonical_answer: AnswerNode, worked_solution?: WorkedSolution | null, solution_graph: SolutionGraph, operation_vector: OperationVector, theme_specific_effort?: number | null, effort: number, };

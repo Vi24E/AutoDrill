@@ -45,6 +45,7 @@ pub enum DedupPolicy {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub struct ThemePresentationPolicy {
+    pub worksheet_grid: bool,
     pub column_arithmetic: bool,
     pub print_recommended: bool,
     pub equation_layout: bool,
@@ -53,6 +54,7 @@ pub struct ThemePresentationPolicy {
 
 impl ThemePresentationPolicy {
     pub const STANDARD: Self = Self {
+        worksheet_grid: false,
         column_arithmetic: false,
         print_recommended: false,
         equation_layout: false,
@@ -64,7 +66,13 @@ impl ThemePresentationPolicy {
         ..Self::STANDARD
     };
 
+    pub const WORKSHEET_GRID: Self = Self {
+        worksheet_grid: true,
+        ..Self::STANDARD
+    };
+
     pub const COLUMN_ARITHMETIC: Self = Self {
+        worksheet_grid: true,
         column_arithmetic: true,
         print_recommended: true,
         ..Self::STANDARD
@@ -86,6 +94,7 @@ pub enum ThemePromptKind {
     QuadraticEquation,
     SimultaneousEquation,
     LiarPuzzle,
+    MiniSudoku,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -96,6 +105,7 @@ pub enum ThemeAnswerSchemaKind {
     Decimal,
     OrderedPair,
     Algebraic,
+    OrderedTuple,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -112,6 +122,7 @@ pub enum ThemeInputProfile {
     SimultaneousEquation,
     JuniorHighFull,
     TupleOnly,
+    DigitGrid { min_digit: u8, max_digit: u8, cell_count: u8 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -148,6 +159,12 @@ pub const LIAR_6_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile {
     columns: 1,
     rows: 6,
 };
+pub const PUZZLE_4_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile {
+    problem_count: 4,
+    columns: 2,
+    rows: 2,
+};
+
 pub const COLUMN_16_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile {
     problem_count: 16,
     columns: 4,

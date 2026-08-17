@@ -73,6 +73,11 @@ pub(crate) fn input_interface(profile: ThemeInputProfile) -> AnswerInputInterfac
         ThemeInputProfile::TupleOnly => AnswerInputInterface::StructuredMath {
             allowed_structures: vec![EditorStructure::Tuple],
         },
+        ThemeInputProfile::DigitGrid { min_digit, max_digit, cell_count } => AnswerInputInterface::DigitGrid {
+            min_digit,
+            max_digit,
+            cell_count,
+        },
     }
 }
 

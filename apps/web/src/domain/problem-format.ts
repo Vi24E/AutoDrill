@@ -227,6 +227,9 @@ export function problemExpressionTokens(problem: ProblemDto, includeAnswerEquals
   if (problem.prompt.kind === 'liar_puzzle') {
     return [{ kind: 'text', text: problem.prompt.statements.map((statement, index) => `${liarPersonLabel(index + 1)}さん「${liarStatementText(statement)}」`).join(' / ') }];
   }
+  if (problem.prompt.kind === 'mini_sudoku') {
+    return [{ kind: 'text', text: '4×4 数独' }];
+  }
   const tokens: MathToken[] = [];
   appendLinearSide(tokens, problem.prompt.a, problem.prompt.b, problem.prompt.left_negative_constant_as_subtraction);
   appendText(tokens, ' = ');

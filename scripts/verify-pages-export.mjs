@@ -23,12 +23,36 @@ if (!root.includes(`${basePath}/_next/`)) fail('Next assets do not use the proje
 if (root.includes('href="/_next/') || root.includes('src="/_next/')) fail('root-relative Next asset escaped the project base path');
 
 const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-if (locations.length !== 38) fail(`expected 38 sitemap URLs, found ${locations.length}`);
 for (const url of locations) {
   if (!url.startsWith(`${origin}${basePath}/`)) fail(`sitemap URL escaped project site: ${url}`);
   const pathname = new URL(url).pathname.slice(`${basePath}/`.length);
   const htmlPath = pathname === '' ? 'index.html' : path.join(pathname, 'index.html');
   if (!fs.existsSync(path.join(outDir, htmlPath))) fail(`sitemap route has no exported HTML: ${htmlPath}`);
+}
+
+function exportedDrillUrls() {
+  const drillsDir = path.join(outDir, 'drills');
+  const urls = [];
+  const stack = [drillsDir];
+  while (stack.length) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) { stack.push(absolute); continue; }
+      if (entry.name !== 'index.html') continue;
+      const relativeDir = path.relative(outDir, path.dirname(absolute)).split(path.sep).join('/');
+      urls.push(`${origin}${basePath}/${relativeDir}`);
+    }
+  }
+  return urls;
+}
+
+const expectedLocations = [`${origin}${basePath}/`, ...exportedDrillUrls()].sort();
+const actualLocations = [...locations].sort();
+if (JSON.stringify(actualLocations) !== JSON.stringify(expectedLocations)) {
+  const missing = expectedLocations.filter((url) => !actualLocations.includes(url));
+  const extra = actualLocations.filter((url) => !expectedLocations.includes(url));
+  fail(`sitemap/export route mismatch; missing=${missing.join(',') || 'none'} extra=${extra.join(',') || 'none'}`);
 }
 
 const staticDir = path.join(outDir, '_next/static');

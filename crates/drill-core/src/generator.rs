@@ -18,6 +18,7 @@ use crate::theme::{CurriculumSafetyPolicy, DedupPolicy, SamplingLayerSpec, Theme
 use crate::themes::{
     basic_arithmetic as basic_theme, column_arithmetic as column_theme, decimals as decimal_theme,
     equations as equation_theme, fractions as fraction_theme, liar_puzzle as liar_puzzle_theme,
+    mini_sudoku as mini_sudoku_theme,
 };
 
 // Deterministic max_attempts is the primary work budget. Wall-clock time is only
@@ -170,6 +171,7 @@ pub(crate) fn registered_generator_entries() -> impl Iterator<Item = GeneratorEn
         .chain(column_theme::GENERATORS.iter().copied())
         .chain(equation_theme::GENERATORS.iter().copied())
         .chain(liar_puzzle_theme::GENERATORS.iter().copied())
+        .chain(mini_sudoku_theme::GENERATORS.iter().copied())
 }
 
 pub fn registered_generator(
@@ -874,7 +876,7 @@ fn prompt_has_no_negative_values(prompt: &ProblemPrompt) -> bool {
         ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f } => {
             [a, b, c, d, e, f].iter().all(|value| **value >= 0)
         }
-        ProblemPrompt::LiarPuzzle { .. } => true,
+        ProblemPrompt::LiarPuzzle { .. } | ProblemPrompt::MiniSudoku { .. } => true,
     }
 }
 
@@ -928,6 +930,7 @@ fn input_interface_has_no_negative_capability(input: &AnswerInputInterface) -> b
             !allowed_structures.contains(&EditorStructure::Negative)
                 && !allowed_structures.contains(&EditorStructure::PlusMinus)
         }
+        AnswerInputInterface::DigitGrid { .. } => true,
     }
 }
 
@@ -1015,6 +1018,7 @@ fn problem_key(registration: &ThemeRegistration, problem: &Problem) -> ProblemPr
             people_count: *people_count,
             statements: statements.clone(),
         },
+        ProblemPrompt::MiniSudoku { givens } => ProblemPrompt::MiniSudoku { givens: givens.clone() },
     }
 }
 
@@ -1242,11 +1246,11 @@ mod tests {
                             panic!("integer multiplication operands");
                         };
                         assert!((1..=9).contains(a) && (1..=9).contains(b));
-                        assert_eq!(problem.solution_graph.steps.len(), 1);
-                        assert!(matches!(
-                            problem.solution_graph.steps[0].operation,
-                            crate::effort::Operation::BigNum { .. }
-                        ));
+                        let answer = a * b;
+                        assert!(problem.solution_graph.steps.is_empty());
+                        assert_eq!(problem.operation_vector, crate::effort::OperationVector::zero());
+                        assert_eq!(problem.theme_specific_effort, Some((answer as f64).log10()));
+                        assert_eq!(problem.effort, (answer as f64).log10());
                     }
                     THEME_ID_SIGNED_ARITHMETIC_1 => {
                         assert!((2..=4).contains(&expression_leaf_count(expression)));
@@ -1414,6 +1418,16 @@ mod tests {
                             problem.operation_vector,
                             "stored operation vector must equal the graph projection"
                         );
+                        if let Some(special) = problem.theme_specific_effort {
+                            assert!(special.is_finite() && special >= 0.0);
+                            assert_eq!(problem.effort, special);
+                            assert!(problem.solution_graph.steps.is_empty());
+                            assert_eq!(problem.operation_vector, crate::effort::OperationVector::zero());
+                        } else {
+                            let expected = crate::registry::resolved_weights(registration)
+                                .weighted_sum(&problem.operation_vector);
+                            assert!((problem.effort - expected).abs() < 1e-12);
+                        }
                         distinct_vectors.insert(
                             problem
                                 .operation_vector
@@ -1703,16 +1717,22 @@ mod tests {
     }
 
     #[test]
-    fn multiplication_table_exceptions_stay_in_theme_modules() {
-        let multiplication = multiplication_table::solution_graph(56).operation_vector();
-        assert_eq!(
-            multiplication.get(crate::effort::OperationKind::BaseTimes),
-            0.0
-        );
-        assert_eq!(
-            multiplication.get(crate::effort::OperationKind::BigNum),
-            56_f64.log10()
-        );
+    fn theme_specific_effort_stays_out_of_unrelated_operation_primitives() {
+        assert_eq!(multiplication_table::effort(56), 56_f64.log10());
+
+        let multiplication = generate_worksheet_request(&GenerateWorksheetRequest {
+            schema_version: SCHEMA_VERSION,
+            numeric_theme_id: basic_theme::THEME_ID_MULTIPLICATION_TABLE,
+            seed: "Kuku56".to_owned(),
+            difficulty: crate::identity::DEFAULT_DIFFICULTY,
+            timeout_ms: None,
+            max_attempts: None,
+        }).unwrap();
+        assert!(multiplication.problems.iter().all(|problem| {
+            problem.theme_specific_effort == Some(problem.effort)
+                && problem.solution_graph.steps.is_empty()
+                && problem.operation_vector == crate::effort::OperationVector::zero()
+        }));
 
         let division = division_table::solution_graph(56).operation_vector();
         assert_eq!(division.get(crate::effort::OperationKind::BaseTimes), 3.0);

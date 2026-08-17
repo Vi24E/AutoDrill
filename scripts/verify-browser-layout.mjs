@@ -252,7 +252,7 @@ function worksheetProbe(seed) {
       const column = Number(cell.dataset.layoutColumn);
       // Check every cell boundary rather than a single center divider so 4-column
       // printable themes get the same clipping guarantees as legacy 2-column themes.
-      const rects = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .liar-statements, .problem-answer-area')]
+      const rects = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .liar-statements, .mini-sudoku-grid, .problem-answer-area')]
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
       if (rects.length === 0) continue;
@@ -308,7 +308,8 @@ function worksheetProbe(seed) {
       }
     }
     const gradeClass = [...paper.classList].find((name) => name.startsWith('worksheet-grade-')) ?? null;
-    const fontSize = getComputedStyle(paper.querySelector('.expression')).fontSize;
+    const expression = paper.querySelector('.expression');
+    const fontSize = expression ? getComputedStyle(expression).fontSize : null;
     return { crossings, columnGridMismatches, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
   })()`;
 }
@@ -422,6 +423,55 @@ function simultaneousInputProbe() {
   })()`;
 }
 
+
+function miniSudokuInputProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const grids = await waitFor(() => {
+      const values = [...document.querySelectorAll('.worksheet-screen .mini-sudoku-grid')];
+      return values.length === 4 ? values : null;
+    }, 'four mini sudoku grids');
+    const counts = grids.map((grid) => ({
+      cells: grid.querySelectorAll('[data-digit-grid-cell]').length,
+      editable: grid.querySelectorAll('button[data-digit-grid-cell]').length,
+      givens: grid.querySelectorAll('.digit-grid-cell-given').length,
+    }));
+    const first = grids[0];
+    const firstButton = first.querySelector('button[data-digit-grid-cell]');
+    const selectedIndex = Number(firstButton?.getAttribute('data-digit-grid-cell'));
+    firstButton?.click();
+    const panel = await waitFor(() => document.querySelector('.input-panel'), 'mini sudoku input panel');
+    const numberKeys = [...panel.querySelectorAll('.keypad-numbers button')].map((button) => button.textContent?.trim()).filter(Boolean);
+    const digit = numberKeys[0];
+    [...panel.querySelectorAll('.keypad-numbers button')].find((button) => button.textContent?.trim() === digit)?.click();
+    await sleep(80);
+    const written = first.querySelector('[data-digit-grid-cell="' + selectedIndex + '"] .digit-grid-cell-value')?.textContent?.trim() ?? '';
+    const cellRects = [...first.querySelectorAll('[data-digit-grid-cell]')].map((cell) => cell.getBoundingClientRect());
+    const maxSquareDelta = Math.max(...cellRects.map((rect) => Math.abs(rect.width - rect.height)));
+    const gridRect = first.getBoundingClientRect();
+    const cellSize = cellRects[0]?.width ?? 0;
+    const blockRight = first.querySelector('.digit-grid-cell-block-right');
+    const blockBottom = first.querySelector('.digit-grid-cell-block-bottom');
+    const blockRightWidth = blockRight ? parseFloat(getComputedStyle(blockRight).borderRightWidth) : 0;
+    const blockBottomWidth = blockBottom ? parseFloat(getComputedStyle(blockBottom).borderBottomWidth) : 0;
+    return {
+      gridCount: grids.length,
+      counts,
+      numberKeys,
+      selectedIndex,
+      written,
+      maxSquareDelta,
+      gridWidthDelta: Math.abs(gridRect.width - 4 * cellSize),
+      blockRightWidth,
+      blockBottomWidth,
+      panelDigitGrid: panel.classList.contains('input-panel-digit-grid'),
+    };
+  })()`;
+}
 
 function columnAdditionInputProbe() {
   return `(async () => {
@@ -930,7 +980,7 @@ function printPreviewProbe(seed) {
     const cells = [...problemPage.querySelectorAll('.problem-cell')];
     const crossingDetails = cells.flatMap((cell) => {
       const cellRect = cell.getBoundingClientRect();
-      const entries = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .problem-answer-area')]
+      const entries = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .mini-sudoku-grid, .problem-answer-area')]
         .map((element) => ({ element, rect: element.getBoundingClientRect() }))
         .filter(({ rect }) => rect.width > 0 && rect.height > 0);
       if (entries.length === 0) return [];
@@ -969,6 +1019,11 @@ function printPreviewProbe(seed) {
     const divisionMinusSigns = answerPage?.querySelectorAll('.column-division-solution-minus').length ?? 0;
     const multiplicationPartials = answerPage?.querySelectorAll('.column-multiply-partial').length ?? 0;
     const answerPageEmptyAnswers = answerPage?.querySelectorAll('.worksheet-print-empty-answer').length ?? 0;
+    const miniSudokuProblemGrids = problemPage.querySelectorAll('.mini-sudoku-grid').length;
+    const miniSudokuAnswerGrids = answerPage?.querySelectorAll('.mini-sudoku-grid').length ?? 0;
+    const miniSudokuProblemCells = problemPage.querySelectorAll('.mini-sudoku-grid [data-digit-grid-cell]').length;
+    const miniSudokuAnswerCells = answerPage?.querySelectorAll('.mini-sudoku-grid [data-digit-grid-cell]').length ?? 0;
+    const miniSudokuPrintButtons = preview.querySelectorAll('.mini-sudoku-grid button').length;
     const answerCrossingDetails = [...(answerPage?.querySelectorAll('.problem-cell-column-arithmetic') ?? [])].flatMap((cell) => {
       const cellRect = cell.getBoundingClientRect();
       const solution = cell.querySelector('[data-column-solution=\"true\"]');
@@ -992,7 +1047,7 @@ function printPreviewProbe(seed) {
     const divisionAnswerFontSizes = [...new Set([...(answerPage?.querySelectorAll('.column-division-solution') ?? [])].map((solution) => getComputedStyle(solution).fontSize))];
     printButton.click();
     const result = await waitFor(() => window.__AUTODRILL_PRINT_PROBE__, 'native print callback', 320);
-    return { ...result, initialDisabled, stacked: stacked.length, equalsCount, crossings, crossingDetails, answerCrossings, answerCrossingDetails, dividerCount, columnCells, columnExpressions, emptyAnswers, completedSolutions, visibleCompletedSolutions, divisionSolutionSteps, divisionMinusSigns, divisionProblemFontSizes, divisionAnswerFontSizes, multiplicationPartials, answerPageEmptyAnswers };
+    return { ...result, initialDisabled, stacked: stacked.length, equalsCount, crossings, crossingDetails, answerCrossings, answerCrossingDetails, dividerCount, columnCells, columnExpressions, emptyAnswers, completedSolutions, visibleCompletedSolutions, divisionSolutionSteps, divisionMinusSigns, divisionProblemFontSizes, divisionAnswerFontSizes, multiplicationPartials, answerPageEmptyAnswers, miniSudokuProblemGrids, miniSudokuAnswerGrids, miniSudokuProblemCells, miniSudokuAnswerCells, miniSudokuPrintButtons };
   })()`;
 }
 
@@ -1169,6 +1224,24 @@ try {
             failures.push({ route, seed, reason: `simultaneous coordinate input was rejected as too large: ${JSON.stringify(input)}` });
           }
         }
+        if (route.endsWith('/mini-sudoku') && seed === SEEDS[0]) {
+          const input = await cdp.evaluate(miniSudokuInputProbe());
+          if (
+            input.gridCount !== 4
+            || input.counts.some((count) => count.cells !== 16 || count.editable < 5 || count.editable > 10 || count.givens + count.editable !== 16)
+            || JSON.stringify(input.numberKeys) !== JSON.stringify(['1', '2', '3', '4'])
+            || !Number.isInteger(input.selectedIndex)
+            || input.written !== input.numberKeys[0]
+            || input.maxSquareDelta > 1
+            || input.gridWidthDelta > 1
+            || input.blockRightWidth < 1.5
+            || input.blockBottomWidth < 1.5
+            || !input.panelDigitGrid
+          ) {
+            failures.push({ route, seed, reason: `mini sudoku grid/input mismatch: ${JSON.stringify(input)}` });
+          }
+          console.log(`[input] mini-sudoku: ${JSON.stringify(input)}`);
+        }
         if (route.endsWith('/column-addition-two-digit') && seed === SEEDS[0]) {
           const input = await cdp.evaluate(columnAdditionInputProbe());
           if (
@@ -1298,6 +1371,28 @@ try {
     }
   }
   if (!SKIP_PRINT_PROBES) {
+    await navigate(cdp, `${origin}${BASE_PATH}/drills/bonus/mini-sudoku/`);
+    const miniSudokuPrint = await cdp.evaluate(printPreviewProbe('A1b2'));
+    if (miniSudokuPrint.generationFailed) throw new Error(`Mini sudoku print probe could not generate worksheet: ${JSON.stringify(miniSudokuPrint)}`);
+    if (
+      miniSudokuPrint.miniSudokuProblemGrids !== 4
+      || miniSudokuPrint.miniSudokuAnswerGrids !== 4
+      || miniSudokuPrint.miniSudokuProblemCells !== 64
+      || miniSudokuPrint.miniSudokuAnswerCells !== 64
+      || miniSudokuPrint.miniSudokuPrintButtons !== 0
+      || miniSudokuPrint.dividerCount !== 0
+      || miniSudokuPrint.crossings !== 0
+    ) {
+      failures.push({ route: 'mini-sudoku', seed: 'A1b2', reason: `mini sudoku print structure mismatch: ${JSON.stringify(miniSudokuPrint)}` });
+    }
+    const miniSudokuPrinted = await cdp.send('Page.printToPDF', { printBackground: true, preferCSSPageSize: true });
+    const miniSudokuPdf = Buffer.from(miniSudokuPrinted.data, 'base64');
+    const miniSudokuPageCount = (miniSudokuPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) ?? []).length;
+    if (miniSudokuPdf.length < 10_000 || miniSudokuPdf.subarray(0, 4).toString('ascii') !== '%PDF' || miniSudokuPageCount !== 2) {
+      failures.push({ route: 'mini-sudoku', seed: 'A1b2', reason: `actual mini sudoku Chrome PDF invalid: bytes=${miniSudokuPdf.length}, pages=${miniSudokuPageCount}` });
+    }
+    console.log(`[print] mini-sudoku seed=A1b2: grids=${miniSudokuPrint.miniSudokuProblemGrids}+${miniSudokuPrint.miniSudokuAnswerGrids}, cells=${miniSudokuPrint.miniSudokuProblemCells}+${miniSudokuPrint.miniSudokuAnswerCells}, crossings=${miniSudokuPrint.crossings}, actual PDF bytes=${miniSudokuPdf.length}, pages=${miniSudokuPageCount}`);
+
     await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-7/signed-arithmetic-1/`);
     const printResult = await cdp.evaluate(printPreviewProbe('A1b2'));
     if (printResult.generationFailed) throw new Error(`Signed print probe could not generate worksheet: ${JSON.stringify(printResult)}`);

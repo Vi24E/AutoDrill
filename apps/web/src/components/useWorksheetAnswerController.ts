@@ -2,16 +2,20 @@ import { useCallback, useRef, useState } from 'react';
 
 import type { AutoDrillMathfield } from '@/components/MathLiveMath';
 import type { ColumnAnswerSlot } from '@/domain/column-arithmetic-input';
+import { initialDigitGridAnswer } from '@/domain/digit-grid-input';
 import type { AnswerNode, WorksheetDto } from '@/domain/drill-engine';
 
 export type MathfieldSlot = 'single' | 'x' | 'y' | 'quotient' | 'remainder';
 export type ColumnDigitSelection = { problemIndex: number; slot: ColumnAnswerSlot; digitIndex: number };
+export type DigitGridSelection = { problemIndex: number; cellIndex: number };
 
 function emptyAnswers(worksheet: WorksheetDto): Record<string, AnswerNode> {
   return Object.fromEntries(
     worksheet.problems.map((problem) => [
       problem.problem_id,
-      { type: 'empty' } satisfies AnswerNode,
+      problem.input_interface.type === 'digit_grid'
+        ? initialDigitGridAnswer(problem)
+        : ({ type: 'empty' } satisfies AnswerNode),
     ]),
   );
 }
@@ -27,12 +31,14 @@ export function useWorksheetAnswerController() {
   const [selectedIndex, setSelectedIndexState] = useState<number | null>(null);
   const [selectedSlot, setSelectedSlotState] = useState<MathfieldSlot>('single');
   const [selectedColumnDigit, setSelectedColumnDigitState] = useState<ColumnDigitSelection | null>(null);
+  const [selectedDigitGridCell, setSelectedDigitGridCellState] = useState<DigitGridSelection | null>(null);
   const [columnDrafts, setColumnDraftsState] = useState<Record<string, Array<string | null>>>({});
 
   const answersRef = useRef<Record<string, AnswerNode>>({});
   const selectedIndexRef = useRef<number | null>(null);
   const selectedSlotRef = useRef<MathfieldSlot>('single');
   const selectedColumnDigitRef = useRef<ColumnDigitSelection | null>(null);
+  const selectedDigitGridCellRef = useRef<DigitGridSelection | null>(null);
   const columnDraftsRef = useRef<Record<string, Array<string | null>>>({});
   const inputEnabledRef = useRef(false);
   const actionQueueRef = useRef(Promise.resolve());
@@ -77,6 +83,12 @@ export function useWorksheetAnswerController() {
   const setSelectedColumnDigit = useCallback((selection: ColumnDigitSelection | null) => {
     selectedColumnDigitRef.current = selection;
     setSelectedColumnDigitState(selection);
+    setSelectedDigitGridCellState(null);
+  }, []);
+
+  const setSelectedDigitGridCell = useCallback((selection: DigitGridSelection | null) => {
+    selectedDigitGridCellRef.current = selection;
+    setSelectedDigitGridCellState(selection);
   }, []);
 
   const select = useCallback((index: number, slot: MathfieldSlot = 'single') => {
@@ -84,9 +96,11 @@ export function useWorksheetAnswerController() {
     selectedIndexRef.current = index;
     selectedSlotRef.current = slot;
     selectedColumnDigitRef.current = null;
+    selectedDigitGridCellRef.current = null;
     setSelectedIndexState(index);
     setSelectedSlotState(slot);
     setSelectedColumnDigitState(null);
+    setSelectedDigitGridCellState(null);
   }, []);
 
   const selectColumnDigit = useCallback((selection: ColumnDigitSelection) => {
@@ -94,28 +108,45 @@ export function useWorksheetAnswerController() {
     selectedIndexRef.current = selection.problemIndex;
     selectedSlotRef.current = selection.slot;
     selectedColumnDigitRef.current = selection;
+    selectedDigitGridCellRef.current = null;
     setSelectedIndexState(selection.problemIndex);
     setSelectedSlotState(selection.slot);
     setSelectedColumnDigitState(selection);
+  }, []);
+
+  const selectDigitGridCell = useCallback((selection: DigitGridSelection) => {
+    inputEnabledRef.current = true;
+    selectedIndexRef.current = selection.problemIndex;
+    selectedSlotRef.current = 'single';
+    selectedColumnDigitRef.current = null;
+    selectedDigitGridCellRef.current = selection;
+    setSelectedIndexState(selection.problemIndex);
+    setSelectedSlotState('single');
+    setSelectedColumnDigitState(null);
+    setSelectedDigitGridCellState(selection);
   }, []);
 
   const clearSelection = useCallback(() => {
     selectedIndexRef.current = null;
     selectedSlotRef.current = 'single';
     selectedColumnDigitRef.current = null;
+    selectedDigitGridCellRef.current = null;
     inputEnabledRef.current = false;
     setSelectedIndexState(null);
     setSelectedSlotState('single');
     setSelectedColumnDigitState(null);
+    setSelectedDigitGridCellState(null);
   }, []);
 
   const selectWithoutEnabling = useCallback((index: number | null, slot: MathfieldSlot = 'single') => {
     selectedIndexRef.current = index;
     selectedSlotRef.current = slot;
     selectedColumnDigitRef.current = null;
+    selectedDigitGridCellRef.current = null;
     setSelectedIndexState(index);
     setSelectedSlotState(slot);
     setSelectedColumnDigitState(null);
+    setSelectedDigitGridCellState(null);
   }, []);
 
   const registerMathfield = useCallback((key: string, mathfield: AutoDrillMathfield | null) => {
@@ -154,11 +185,13 @@ export function useWorksheetAnswerController() {
     selectedIndex,
     selectedSlot,
     selectedColumnDigit,
+    selectedDigitGridCell,
     columnDrafts,
     answersRef,
     selectedIndexRef,
     selectedSlotRef,
     selectedColumnDigitRef,
+    selectedDigitGridCellRef,
     columnDraftsRef,
     inputEnabledRef,
     actionQueueRef,
@@ -170,8 +203,10 @@ export function useWorksheetAnswerController() {
     setSelectedIndex,
     setSelectedSlot,
     setSelectedColumnDigit,
+    setSelectedDigitGridCell,
     select,
     selectColumnDigit,
+    selectDigitGridCell,
     clearSelection,
     selectWithoutEnabling,
     registerMathfield,

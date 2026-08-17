@@ -1,7 +1,7 @@
 use crate::answer::AnswerNode;
 use crate::effort::{
     arithmetic_expression_graph, calculate_graph_effort, one_digit_addition_graph,
-    one_digit_subtraction_graph, two_digit_addition_graph, OperationWeights,
+    one_digit_subtraction_graph, two_digit_addition_graph, OperationWeights, SolutionGraph,
 };
 use crate::generator::{GeneratorEntry, ProblemGenerator};
 use crate::generator_support::{
@@ -282,7 +282,7 @@ fn draw_problem(
         return Some(one_digit_addition_problem(id, left, right, weights));
     }
 
-    let (expression, answer, solution_graph, answer_schema, input_profile) = match mode {
+    let (expression, answer, solution_graph, answer_schema, input_profile, theme_specific_effort) = match mode {
         Mode::OneDigitAddition => unreachable!(),
         Mode::OneDigitSubtraction => {
             let b = 1_i64 + rng.next_bounded(9) as i64;
@@ -299,6 +299,7 @@ fn draw_problem(
                 one_digit_subtraction_graph(a as u8, b as u8),
                 AnswerSchema::Integer { min: 1, max: 9 },
                 Input::SimplePositive,
+                None,
             )
         }
         Mode::TwoDigitAddition => {
@@ -316,6 +317,7 @@ fn draw_problem(
                 two_digit_addition_graph(a as u8, b as u8),
                 AnswerSchema::Integer { min: 20, max: 198 },
                 Input::SimplePositive,
+                None,
             )
         }
         Mode::MultiplicationTable => {
@@ -330,9 +332,10 @@ fn draw_problem(
             (
                 expression,
                 AnswerNode::Integer(c),
-                multiplication_table::solution_graph(c as u8),
+                SolutionGraph::default(),
                 AnswerSchema::Integer { min: 1, max: 81 },
                 Input::SimplePositive,
+                Some(multiplication_table::effort(c as u8)),
             )
         }
         Mode::DivisionTable => {
@@ -350,6 +353,7 @@ fn draw_problem(
                 division_table::solution_graph(dividend as u8),
                 AnswerSchema::Integer { min: 1, max: 9 },
                 Input::SimplePositive,
+                None,
             )
         }
         Mode::SignedArithmetic1 => {
@@ -379,6 +383,7 @@ fn draw_problem(
                 graph,
                 AnswerSchema::Integer { min: -60, max: 60 },
                 Input::SimpleSigned,
+                None,
             )
         }
         Mode::SignedArithmetic2 => {
@@ -404,10 +409,12 @@ fn draw_problem(
                     require_reduced_fraction_form: true,
                 },
                 Input::SignedRational,
+                None,
             )
         }
     };
-    let effort = calculate_graph_effort(&solution_graph, weights);
+    let graph_effort = calculate_graph_effort(&solution_graph, weights);
+    let effort_value = theme_specific_effort.unwrap_or(graph_effort.value);
     Some(Problem {
         schema_version: SCHEMA_VERSION,
         id,
@@ -418,8 +425,9 @@ fn draw_problem(
         canonical_answer: answer,
         worked_solution: None,
         solution_graph,
-        operation_vector: effort.operation_vector,
-        effort: effort.value,
+        operation_vector: graph_effort.operation_vector,
+        theme_specific_effort,
+        effort: effort_value,
     })
 }
 
@@ -448,6 +456,7 @@ pub(crate) fn one_digit_addition_problem(
         worked_solution: None,
         solution_graph,
         operation_vector: effort.operation_vector,
+        theme_specific_effort: None,
         effort: effort.value,
     }
 }

@@ -224,6 +224,9 @@ pub enum ProblemPrompt {
         people_count: u8,
         statements: Vec<LiarStatement>,
     },
+    MiniSudoku {
+        givens: Vec<Option<u8>>,
+    },
 }
 
 /// The answer-entry UI is a capability-bearing data value, independent of the
@@ -240,6 +243,11 @@ pub enum AnswerInputInterface {
     StructuredMath {
         allowed_structures: Vec<EditorStructure>,
     },
+    DigitGrid {
+        min_digit: u8,
+        max_digit: u8,
+        cell_count: u8,
+    },
 }
 
 impl AnswerInputInterface {
@@ -254,6 +262,7 @@ impl AnswerInputInterface {
                 _ => false,
             },
             Self::StructuredMath { allowed_structures } => allowed_structures.contains(&structure),
+            Self::DigitGrid { .. } => false,
         }
     }
 }
@@ -279,6 +288,7 @@ pub enum AnswerSchema {
         max_scale: u32,
     },
     OrderedPair,
+    OrderedTuple { length: u8 },
     Algebraic,
 }
 
@@ -333,6 +343,8 @@ pub struct Problem {
     pub worked_solution: Option<WorkedSolution>,
     pub solution_graph: SolutionGraph,
     pub operation_vector: OperationVector,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_specific_effort: Option<f64>,
     pub effort: f64,
 }
 
@@ -349,7 +361,8 @@ impl Problem {
             | ProblemPrompt::LinearEquation { .. }
             | ProblemPrompt::QuadraticEquation { .. }
             | ProblemPrompt::SimultaneousEquation { .. }
-            | ProblemPrompt::LiarPuzzle { .. } => {
+            | ProblemPrompt::LiarPuzzle { .. }
+            | ProblemPrompt::MiniSudoku { .. } => {
                 panic!("ordered_pair is addition-only")
             }
         }

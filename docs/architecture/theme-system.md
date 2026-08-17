@@ -140,15 +140,16 @@ worksheet.problems.every(problem => problem.prompt.kind === 'column_arithmetic')
 
 から逆算しない。
 
-column arithmetic capabilityから以下を一貫して決める。
+`worksheet_grid`をpage-wide方眼・row-major配置・divider suppressionの独立presentation capabilityとし、`column_arithmetic`はその利用者の一つとする。grid puzzleが方眼を再利用するために筆算themeへ偽装してはいけない。
 
-- row-major worksheet order
-- page grid behavior
-- divider suppression
-- print recommendation
-- relevant CSS/layout mode
+column arithmetic capabilityは筆算固有のanswer placement / work geometry / print recommendationだけを表し、page grid自体のsource of truthにはしない。
 
 個々のProblemを実際にrenderする際は`ProblemPrompt::ColumnArithmetic`を型として処理する。
+
+
+## Fixed digit-grid input
+
+固定cellへ有限digitを入れるthemeはRust `AnswerInputInterface::DigitGrid { min_digit, max_digit, cell_count }`をcanonical capabilityとして使う。Webはこのcontractからkeypad範囲・cell数を取得し、tuple-only MathLive等へ偽装しない。数独固有の2×2 block規則は`ProblemPrompt::MiniSudoku`のdomain semanticsであり、generic input capabilityへ混ぜない。
 
 ## Fraction presentation
 

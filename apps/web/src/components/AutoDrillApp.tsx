@@ -34,13 +34,16 @@ import {
 import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
 import { ColumnArithmeticAnswerInput } from '@/components/ColumnArithmeticAnswerInput';
+import { MiniSudokuGrid } from '@/components/MiniSudokuGrid';
 import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
-import { useWorksheetAnswerController, type ColumnDigitSelection, type MathfieldSlot } from '@/components/useWorksheetAnswerController';
+import { useWorksheetAnswerController, type ColumnDigitSelection, type DigitGridSelection, type MathfieldSlot } from '@/components/useWorksheetAnswerController';
 import type { AutoDrillMathfield } from '@/components/MathLiveMath';
 import { answerNodeLatex, answerPrefixLatex, mathTemplateInsertLatex } from '@/domain/mathlive-format';
+import { initialDigitGridAnswer, replaceDigitGridCell } from '@/domain/digit-grid-input';
 import { liarPersonLabel } from '@/domain/problem-format';
 import { answerCoordinate, answerPresentationPlan } from '@/domain/answer-presentation';
-import { columnArithmeticGridVariables, columnArithmeticPageGridVariables } from '@/domain/column-arithmetic-presentation';
+import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
+import { worksheetPageGridVariables } from '@/domain/worksheet-grid-presentation';
 import {
   columnAnswerPart,
   columnDigitSpec,
@@ -453,6 +456,7 @@ function WorksheetAnswerField({
   const { MathLiveAnswerInput, MathLiveStatic } = worksheetUi;
   const canonicalAnswer = answerNodeText(problem.canonical_answer);
   const presentation = answerPresentationPlan(problem);
+  if (presentation.kind === 'digit_grid') return null;
   const commonFrameClass = (slot: MathfieldSlot) => `answer-box ${isSelected && selectedSlot === slot ? 'answer-box-selected' : ''} ${result ? (result.correct ? 'answer-box-correct' : 'answer-box-wrong') : ''}`;
   const selectedDigitFor = (slot: ColumnAnswerSlot) => (
     selectedColumnDigit?.problemIndex === index && selectedColumnDigit.slot === slot
@@ -783,11 +787,13 @@ export function AutoDrillApp({
     selectedIndex,
     selectedSlot,
     selectedColumnDigit,
+    selectedDigitGridCell,
     columnDrafts,
     answersRef,
     selectedIndexRef,
     selectedSlotRef,
     selectedColumnDigitRef,
+    selectedDigitGridCellRef,
     columnDraftsRef,
     inputEnabledRef,
     actionQueueRef,
@@ -797,8 +803,10 @@ export function AutoDrillApp({
     setSelectedIndex,
     setSelectedSlot,
     setSelectedColumnDigit,
+    setSelectedDigitGridCell,
     select: selectAnswer,
     selectColumnDigit: selectColumnAnswerDigit,
+    selectDigitGridCell: selectMiniSudokuGridCell,
     clearSelection,
     registerMathfield: registerControllerMathfield,
     getMathfield,
@@ -1064,6 +1072,17 @@ export function AutoDrillApp({
     dismissNotice();
   }, [answersRef, columnDraftsRef, dismissNotice, selectColumnAnswerDigit, setColumnDraft, worksheet]);
 
+  const selectDigitGridCell = useCallback((index: number, cellIndex: number) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
+    const problem = worksheet.problems[index];
+    if (!problem || problem.prompt.kind !== 'mini_sudoku' || problem.input_interface.type !== 'digit_grid') return;
+    if (cellIndex < 0 || cellIndex >= problem.input_interface.cell_count || problem.prompt.givens[cellIndex] != null) return;
+    selectMiniSudokuGridCell({ problemIndex: index, cellIndex });
+    scheduleProblemScroll(index, index);
+    setError(null);
+    dismissNotice();
+  }, [dismissNotice, selectMiniSudokuGridCell, worksheet]);
+
   const closeInputPanel = useCallback(() => {
     if (worksheetPhaseRef.current !== 'editing') return;
     clearSelection();
@@ -1232,7 +1251,74 @@ export function AutoDrillApp({
     if (index === null || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current) return;
     const slot = selectedSlotRef.current;
     const columnSelection = selectedColumnDigitRef.current;
+    const digitGridSelection = selectedDigitGridCellRef.current;
     const columnProblem = worksheet?.problems[index];
+    const digitGridProblem = worksheet?.problems[index];
+    if (
+      digitGridSelection
+      && digitGridSelection.problemIndex === index
+      && digitGridProblem?.prompt.kind === 'mini_sudoku'
+      && digitGridProblem.input_interface.type === 'digit_grid'
+    ) {
+      const input = digitGridProblem.input_interface;
+      const editableCells = digitGridProblem.prompt.givens
+        .map((given, cellIndex) => given == null ? cellIndex : -1)
+        .filter((cellIndex) => cellIndex >= 0);
+      const currentPosition = editableCells.indexOf(digitGridSelection.cellIndex);
+      const selectPosition = (position: number) => {
+        if (editableCells.length === 0) return;
+        const bounded = Math.max(0, Math.min(editableCells.length - 1, position));
+        setSelectedDigitGridCell({ problemIndex: index, cellIndex: editableCells[bounded] });
+      };
+      const currentAnswer = answersRef.current[digitGridProblem.problem_id] ?? initialDigitGridAnswer(digitGridProblem);
+      const writeCell = (digit: number | null) => {
+        setAnswer(
+          digitGridProblem.problem_id,
+          replaceDigitGridCell(currentAnswer, input, digitGridSelection.cellIndex, digit),
+        );
+        setError(null);
+        dismissNotice();
+      };
+
+      switch (command.kind) {
+        case 'insert_digit':
+          if (command.digit >= input.min_digit && command.digit <= input.max_digit) {
+            writeCell(command.digit);
+            if (currentPosition >= 0) selectPosition(currentPosition + 1);
+          }
+          break;
+        case 'move_left':
+          if (currentPosition >= 0) selectPosition(currentPosition - 1);
+          break;
+        case 'move_right':
+          if (currentPosition >= 0) selectPosition(currentPosition + 1);
+          break;
+        case 'delete_backward':
+        case 'delete_forward':
+          writeCell(null);
+          break;
+        case 'clear':
+          setAnswer(digitGridProblem.problem_id, initialDigitGridAnswer(digitGridProblem));
+          if (editableCells.length > 0) selectPosition(0);
+          break;
+        case 'commit': {
+          const nextProblemIndex = index + 1;
+          const nextProblem = worksheet?.problems[nextProblemIndex];
+          if (nextProblem?.prompt.kind === 'mini_sudoku' && nextProblem.input_interface.type === 'digit_grid') {
+            const firstEditable = nextProblem.prompt.givens.findIndex((given) => given == null);
+            if (firstEditable >= 0) selectMiniSudokuGridCell({ problemIndex: nextProblemIndex, cellIndex: firstEditable });
+          } else {
+            clearSelection();
+          }
+          break;
+        }
+        case 'insert_structure':
+        case 'insert_latex':
+          break;
+      }
+      return;
+    }
+
     if (
       columnSelection
       && columnSelection.problemIndex === index
@@ -1354,11 +1440,11 @@ export function AutoDrillApp({
         void commitMathfield(index, slot);
         break;
     }
-  }, [answersRef, columnDraftsRef, commitMathfield, getMathfield, inputEnabledRef, selectProblem, selectedColumnDigitRef, selectedIndexRef, selectedSlotRef, setSelectedColumnDigit, updateColumnDigitDraft, updateMathLiveAnswer, worksheet]);
+  }, [answersRef, clearSelection, columnDraftsRef, commitMathfield, dismissNotice, getMathfield, inputEnabledRef, selectMiniSudokuGridCell, selectProblem, selectedColumnDigitRef, selectedDigitGridCellRef, selectedIndexRef, selectedSlotRef, setAnswer, setSelectedColumnDigit, setSelectedDigitGridCell, updateColumnDigitDraft, updateMathLiveAnswer, worksheet]);
 
   useEffect(() => {
     const onColumnKeyDown = (event: KeyboardEvent) => {
-      if (!selectedColumnDigitRef.current || worksheetPhaseRef.current !== 'editing') return;
+      if ((!selectedColumnDigitRef.current && !selectedDigitGridCellRef.current) || worksheetPhaseRef.current !== 'editing') return;
       let command: MathInputCommand | null = null;
       if (/^[0-9]$/.test(event.key)) command = { kind: 'insert_digit', digit: Number(event.key) };
       else if (event.key === 'ArrowLeft') command = { kind: 'move_left' };
@@ -1372,7 +1458,7 @@ export function AutoDrillApp({
     };
     window.addEventListener('keydown', onColumnKeyDown);
     return () => window.removeEventListener('keydown', onColumnKeyDown);
-  }, [applyMathCommand, selectedColumnDigitRef]);
+  }, [applyMathCommand, selectedColumnDigitRef, selectedDigitGridCellRef]);
 
   const drainActionQueue = useCallback(async () => {
     while (true) {
@@ -1518,6 +1604,7 @@ export function AutoDrillApp({
             selectedIndex={selectedIndex}
             selectedSlot={selectedSlot}
             selectedColumnDigit={selectedColumnDigit}
+            selectedDigitGridCell={selectedDigitGridCell}
             columnDrafts={columnDrafts}
             elapsed={formatElapsed(startedAt, finishedAt ?? now)}
             gradeResult={gradeResult}
@@ -1527,6 +1614,7 @@ export function AutoDrillApp({
             notice={notice}
             onSelect={selectProblem}
             onSelectColumnDigit={selectColumnDigit}
+            onSelectDigitGridCell={selectDigitGridCell}
             onCommand={applyMathCommand}
             onRegisterMathfield={registerMathfield}
             onMathInput={(index, slot, mathfield, latex) => void updateMathLiveAnswer(index, slot, mathfield, latex)}
@@ -1878,6 +1966,7 @@ type WorksheetScreenProps = {
   selectedIndex: number | null;
   selectedSlot: MathfieldSlot;
   selectedColumnDigit: ColumnDigitSelection | null;
+  selectedDigitGridCell: DigitGridSelection | null;
   columnDrafts: Record<string, Array<string | null>>;
   elapsed: string;
   gradeResult: GradeResult | null;
@@ -1887,6 +1976,7 @@ type WorksheetScreenProps = {
   notice: string | null;
   onSelect: (index: number, slot: MathfieldSlot) => void;
   onSelectColumnDigit: (index: number, slot: ColumnAnswerSlot, digitIndex: number) => void;
+  onSelectDigitGridCell: (index: number, cellIndex: number) => void;
   onCommand: (command: MathInputCommand) => void;
   onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
   onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
@@ -1901,16 +1991,18 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, columnDrafts, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, selectedDigitGridCell, columnDrafts, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onSelectDigitGridCell, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
+  const usesWorksheetGrid = worksheetTheme.presentation.worksheet_grid;
   const isColumnArithmeticWorksheet = worksheetTheme.presentation.column_arithmetic;
   const isEquationWorksheet = worksheetTheme.presentation.equation_layout;
   const gradeBandClass = worksheetTheme.grade ? worksheetGradeBandClass(worksheetTheme.grade.number) : 'worksheet-grade-junior-high';
   const worksheetCategoryLabel = worksheetTheme.grade?.label ?? 'おまけ';
   const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
   const columnDigitInputActive = selectedProblem?.prompt.kind === 'column_arithmetic' && selectedColumnDigit !== null;
+  const digitGridInputActive = selectedProblem?.input_interface.type === 'digit_grid' && selectedDigitGridCell !== null;
   const selectedCapabilities = selectedProblem ? inputCapabilities(worksheetTheme.editorInputInterface) : null;
   const juniorHighFullKeypad = Boolean(selectedProblem && worksheetTheme.grade && worksheetTheme.grade.number >= 7);
   const arithmeticOperatorsEnabled = selectedCapabilities?.allowed_structures.includes('arithmetic') ?? false;
@@ -1928,11 +2020,15 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
   if (!juniorHighFullKeypad && selectedCapabilities?.allow_negative && !arithmeticOperatorsEnabled && !visibleStructures.includes('negative')) {
     visibleStructures.push('negative');
   }
+  const digitGridInput = selectedProblem?.input_interface.type === 'digit_grid' ? selectedProblem.input_interface : null;
+  const numberKeys = digitGridInput
+    ? Array.from({ length: digitGridInput.max_digit - digitGridInput.min_digit + 1 }, (_, index) => digitGridInput.min_digit + index)
+    : [7, 8, 9, 4, 5, 6, 1, 2, 3, 0];
   const resultById = new Map((gradeResult?.items ?? []).map((item) => [item.problem_id, item]));
   const toPagePercent = (value: number, total: number) => `${(value / total) * 100}%`;
   const contentTop = A4_PAGE.margin + A4_PAGE.headerHeight;
   const contentHeight = A4_PAGE.height - A4_PAGE.margin * 2 - A4_PAGE.headerHeight - A4_PAGE.footerHeight;
-  const dividerStyles: readonly CSSProperties[] = (isColumnArithmeticWorksheet ? [] : sharedLayout.dividerXs).map((dividerX) => ({
+  const dividerStyles: readonly CSSProperties[] = (usesWorksheetGrid ? [] : sharedLayout.dividerXs).map((dividerX) => ({
     left: toPagePercent(dividerX, A4_PAGE.width),
     top: toPagePercent(contentTop, A4_PAGE.height),
     height: toPagePercent(contentHeight, A4_PAGE.height),
@@ -1970,8 +2066,8 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       ) : null}
 
       <div className="paper-wrap">
-        <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}`, ...(isColumnArithmeticWorksheet ? columnArithmeticPageGridVariables() : {}) }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
-          <div className={`problem-grid ${isColumnArithmeticWorksheet ? 'problem-grid-column-arithmetic' : ''}`}>
+        <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}`, ...(usesWorksheetGrid ? worksheetPageGridVariables() : {}) }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
+          <div className={`problem-grid ${usesWorksheetGrid ? 'problem-grid-worksheet-grid' : ''}`}>
             {worksheetTheme.worksheet.instruction ? (
               <p className="worksheet-instruction">{worksheetTheme.worksheet.instruction}</p>
             ) : null}
@@ -1992,6 +2088,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               const isLinearEquation = isEquationWorksheet;
               const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
               const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
+              const isMiniSudoku = problem.prompt.kind === 'mini_sudoku';
               const stackAnswerBelow = worksheetTheme.worksheet.answerPlacement === 'below' && !isLinearEquation;
               const cellStyle: CSSProperties = {
                 left: toPagePercent(position.x, A4_PAGE.width),
@@ -2001,29 +2098,45 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                 ...(isColumnArithmetic ? columnArithmeticGridVariables(problem, position) : {}),
               };
               return (
-                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
+                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${isMiniSudoku ? 'problem-cell-mini-sudoku' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
                   <span className="problem-number">{index + 1}.</span>
-                  <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
-                  <WorksheetAnswerField
-                      worksheetUi={worksheetUi}
-                      problem={problem}
-                      index={index}
-                      answer={answer}
-                      isSelected={isSelected}
-                      selectedSlot={selectedSlot}
-                      selectedColumnDigit={selectedColumnDigit}
-                      columnDrafts={columnDrafts}
-                      result={result}
-                      gradeResult={gradeResult}
-                      inputLocked={worksheetPhase !== 'editing'}
-                      answerPrefix={worksheetTheme.worksheet.answerPrefix}
-                      onSelect={onSelect}
-                      onSelectColumnDigit={onSelectColumnDigit}
-                      onRegisterMathfield={onRegisterMathfield}
-                      onMathInput={onMathInput}
-                      onCommit={onCommit}
-                      onTogglePerson={onTogglePerson}
-                    />
+                  {isMiniSudoku ? (
+                    <>
+                      <MiniSudokuGrid
+                        problem={problem}
+                        answer={answer}
+                        selectedCell={selectedDigitGridCell?.problemIndex === index ? selectedDigitGridCell.cellIndex : null}
+                        readOnly={worksheetPhase !== 'editing'}
+                        correctionAnswer={result && !result.correct ? problem.canonical_answer : null}
+                        onSelectCell={(cellIndex) => onSelectDigitGridCell(index, cellIndex)}
+                      />
+                      {result ? <span className="result-mark mini-sudoku-result-mark" aria-label={result.correct ? '正解' : '不正解'}>{result.correct ? '○' : '×'}</span> : null}
+                    </>
+                  ) : (
+                    <>
+                      <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
+                      <WorksheetAnswerField
+                        worksheetUi={worksheetUi}
+                        problem={problem}
+                        index={index}
+                        answer={answer}
+                        isSelected={isSelected}
+                        selectedSlot={selectedSlot}
+                        selectedColumnDigit={selectedColumnDigit}
+                        columnDrafts={columnDrafts}
+                        result={result}
+                        gradeResult={gradeResult}
+                        inputLocked={worksheetPhase !== 'editing'}
+                        answerPrefix={worksheetTheme.worksheet.answerPrefix}
+                        onSelect={onSelect}
+                        onSelectColumnDigit={onSelectColumnDigit}
+                        onRegisterMathfield={onRegisterMathfield}
+                        onMathInput={onMathInput}
+                        onCommit={onCommit}
+                        onTogglePerson={onTogglePerson}
+                      />
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -2037,7 +2150,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       </div>
 
       {selectedProblem ? (
-        <div className={`input-panel ${columnDigitInputActive ? 'input-panel-column-digits' : ''}`} aria-label="数式入力パネル">
+        <div className={`input-panel ${columnDigitInputActive ? 'input-panel-column-digits' : ''} ${digitGridInputActive ? 'input-panel-digit-grid' : ''}`} aria-label="数式入力パネル">
           <button type="button" className="input-panel-close" onClick={onCloseInput} aria-label="入力パネルを閉じる" title="入力パネルを閉じる">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 9l7 7 7-7" /></svg>
           </button>
@@ -2069,7 +2182,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               className={`keypad-numbers ${juniorHighFullKeypad ? 'keypad-numbers-junior-high' : arithmeticOperatorsEnabled ? 'keypad-numbers-algebraic' : ''} ${!juniorHighFullKeypad && arithmeticOperatorsEnabled && selectedCapabilities?.allow_decimal ? 'keypad-numbers-algebraic-decimal' : ''}`}
               aria-label="数字キー"
             >
-              {[7, 8, 9, 4, 5, 6, 1, 2, 3, 0].map((digit) => (
+              {numberKeys.map((digit) => (
                 <button
                   type="button"
                   className={digit === 0 ? 'keypad-zero' : 'keypad-digit'}

@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn worksheet_boundary_matches_current_schema_and_identity() {
         let output = generate_worksheet(
-            r#"{"schema_version":5,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
+            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
         );
         let value = parse(&output);
         assert_eq!(value["schema_version"], SCHEMA_VERSION);
@@ -496,7 +496,7 @@ mod tests {
         assert_eq!(missing_schema["error"]["code"], "invalid_request");
 
         let missing_editor_path = parse(&apply_editor_action(
-            r#"{"schema_version":5,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"empty"},"cursor":0,"committed":false},"action":{"type":"insert_digit","digit":4}}"#,
+            r#"{"schema_version":6,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"empty"},"cursor":0,"committed":false},"action":{"type":"insert_digit","digit":4}}"#,
         ));
         assert_eq!(missing_editor_path["error"]["code"], "invalid_request");
     }
@@ -504,12 +504,12 @@ mod tests {
     #[test]
     fn timeout_and_attempt_errors_remain_distinct() {
         let timeout = parse(&generate_worksheet(
-            r#"{"schema_version":5,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3,"timeout_ms":0}"#,
+            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3,"timeout_ms":0}"#,
         ));
         assert_eq!(timeout["error"]["code"], "generation_timeout");
 
         let attempts = parse(&generate_worksheet(
-            r#"{"schema_version":5,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3,"timeout_ms":1000,"max_attempts":0}"#,
+            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3,"timeout_ms":1000,"max_attempts":0}"#,
         ));
         assert_eq!(attempts["error"]["code"], "generation_attempt_limit");
     }
@@ -517,7 +517,7 @@ mod tests {
     #[test]
     fn ast_editor_grade_and_effort_use_matching_json_dtos() {
         let edited = parse(&apply_editor_action(
-            r#"{"schema_version":5,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"empty"},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_digit","digit":4}}"#,
+            r#"{"schema_version":6,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"empty"},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_digit","digit":4}}"#,
         ));
         assert_eq!(
             edited["data"]["answer"],
@@ -526,7 +526,7 @@ mod tests {
         assert_eq!(edited["data"]["active_path"], json!([]));
 
         let structured = parse(&apply_editor_action(
-            r#"{"schema_version":5,"input_interface":{"type":"structured_math","allowed_structures":["fraction"]},"state":{"answer":{"type":"empty"},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_structure","structure":"fraction"}}"#,
+            r#"{"schema_version":6,"input_interface":{"type":"structured_math","allowed_structures":["fraction"]},"state":{"answer":{"type":"empty"},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_structure","structure":"fraction"}}"#,
         ));
         assert_eq!(
             structured["data"]["answer"],
@@ -535,13 +535,13 @@ mod tests {
         assert_eq!(structured["data"]["active_path"], json!([0]));
 
         let oversized_decimal = parse(&apply_editor_action(
-            r#"{"schema_version":5,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"exact_decimal","value":{"coefficient":"0","scale":4294967295}},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_digit","digit":1}}"#,
+            r#"{"schema_version":6,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"exact_decimal","value":{"coefficient":"0","scale":4294967295}},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_digit","digit":1}}"#,
         ));
         assert_eq!(oversized_decimal["ok"], false);
         assert_eq!(oversized_decimal["error"]["code"], "answer_ast_size_limit");
 
         let normalized = parse(&normalize_answer(
-            r#"{"schema_version":5,"answer":{"type":"exact_decimal","value":{"coefficient":"300","scale":3}}}"#,
+            r#"{"schema_version":6,"answer":{"type":"exact_decimal","value":{"coefficient":"300","scale":3}}}"#,
         ));
         assert_eq!(
             normalized["data"],
@@ -549,19 +549,19 @@ mod tests {
         );
 
         let graded = parse(&grade_answer(
-            r#"{"schema_version":5,"expected":{"type":"integer","value":"4"},"actual":{"type":"integer","value":"4"}}"#,
+            r#"{"schema_version":6,"expected":{"type":"integer","value":"4"},"actual":{"type":"integer","value":"4"}}"#,
         ));
         assert_eq!(graded["data"]["is_correct"], true);
         assert_eq!(graded["data"]["warnings"], json!([]));
 
         let equivalent_fraction = parse(&grade_answer(
-            r#"{"schema_version":5,"expected":{"type":"fraction","value":{"numerator":{"type":"integer","value":"1"},"denominator":{"type":"integer","value":"2"}}},"actual":{"type":"exact_decimal","value":{"coefficient":"5","scale":1}}}"#,
+            r#"{"schema_version":6,"expected":{"type":"fraction","value":{"numerator":{"type":"integer","value":"1"},"denominator":{"type":"integer","value":"2"}}},"actual":{"type":"exact_decimal","value":{"coefficient":"5","scale":1}}}"#,
         ));
         assert_eq!(equivalent_fraction["data"]["is_correct"], true);
         assert_eq!(equivalent_fraction["data"]["warnings"], json!([]));
 
         let reducible_fraction = parse(&grade_answer(
-            r#"{"schema_version":5,"expected":{"type":"fraction","value":{"numerator":{"type":"integer","value":"1"},"denominator":{"type":"integer","value":"2"}}},"actual":{"type":"fraction","value":{"numerator":{"type":"integer","value":"2"},"denominator":{"type":"integer","value":"4"}}}}"#,
+            r#"{"schema_version":6,"expected":{"type":"fraction","value":{"numerator":{"type":"integer","value":"1"},"denominator":{"type":"integer","value":"2"}}},"actual":{"type":"fraction","value":{"numerator":{"type":"integer","value":"2"},"denominator":{"type":"integer","value":"4"}}}}"#,
         ));
         assert_eq!(reducible_fraction["data"]["is_correct"], true);
         assert_eq!(
@@ -570,7 +570,7 @@ mod tests {
         );
 
         let generated = parse(&generate_problem(
-            r#"{"schema_version":5,"numeric_theme_id":1,"seed":"Ab3Z"}"#,
+            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z"}"#,
         ));
         let effort_request = json!({
             "schema_version": SCHEMA_VERSION,
@@ -629,7 +629,7 @@ mod tests {
         );
 
         let graded = parse(&grade_answer(
-            r#"{"schema_version":5,"expected":{"type":"integer","value":"4"},"actual":{"type":"nan_error","value":"3.1.4.5"}}"#,
+            r#"{"schema_version":6,"expected":{"type":"integer","value":"4"},"actual":{"type":"nan_error","value":"3.1.4.5"}}"#,
         ));
         assert_eq!(graded["data"]["is_correct"], false);
         assert_eq!(graded["data"]["warnings"], json!([]));
@@ -1010,7 +1010,7 @@ mod tests {
     fn answer_i64_payloads_cross_json_as_exact_decimal_strings() {
         let exact = "999999999999999999";
         let graded = parse(&grade_answer(&format!(
-            r#"{{"schema_version":5,"expected":{{"type":"integer","value":"{exact}"}},"actual":{{"type":"integer","value":"{exact}"}}}}"#
+            r#"{{"schema_version":6,"expected":{{"type":"integer","value":"{exact}"}},"actual":{{"type":"integer","value":"{exact}"}}}}"#
         )));
         assert_eq!(graded["data"]["is_correct"], true);
         assert_eq!(graded["data"]["actual"]["value"], exact);

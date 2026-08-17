@@ -799,8 +799,7 @@ button:disabled { cursor: wait; opacity: .5; }
   .worksheet-print-page { box-shadow: none; }
 }
 
-/* Column-arithmetic themes are designed first as printable practice sheets.
-   A single A4-relative square grid is shared by Web, print problems, and answers. */
+/* Grid-based worksheets share one A4-relative square grid across Web and print. */
 .paper,
 .worksheet-print-page {
   container-type: inline-size;
@@ -815,7 +814,7 @@ button:disabled { cursor: wait; opacity: .5; }
   line-height: 1.45;
 }
 
-.problem-grid-column-arithmetic::before {
+.problem-grid-worksheet-grid::before {
   position: absolute;
   z-index: 0;
   top: var(--worksheet-grid-top);
@@ -832,12 +831,12 @@ button:disabled { cursor: wait; opacity: .5; }
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-.problem-grid-column-arithmetic > .worksheet-instruction,
-.problem-grid-column-arithmetic > .problem-cell,
-.problem-grid-column-arithmetic > .worksheet-footer {
+.problem-grid-worksheet-grid > .worksheet-instruction,
+.problem-grid-worksheet-grid > .problem-cell,
+.problem-grid-worksheet-grid > .worksheet-footer {
   z-index: 1;
 }
-.problem-grid-column-arithmetic > .worksheet-footer {
+.problem-grid-worksheet-grid > .worksheet-footer {
   padding: 2px 3px;
   background: rgba(255, 255, 255, .9);
 }
@@ -1489,4 +1488,75 @@ button.column-digit-slot:focus { outline: none; }
   font-size: var(--column-font-size);
   line-height: 1;
   text-align: right;
+}
+
+
+/* Fixed digit-grid puzzles share the worksheet page grid but own no column-arithmetic geometry. */
+.problem-cell-mini-sudoku {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: start;
+  justify-items: center;
+  padding: calc(1.1 * var(--worksheet-grid-cell)) calc(.5 * var(--worksheet-grid-cell)) 0;
+  overflow: hidden;
+}
+.problem-cell-mini-sudoku > .problem-number {
+  justify-self: start;
+}
+.problem-cell-mini-sudoku > .mini-sudoku-grid {
+  grid-column: 1 / -1;
+  margin-top: calc(.45 * var(--worksheet-grid-cell));
+}
+.mini-sudoku-grid {
+  --digit-grid-cell-size: calc(var(--digit-grid-cell-span) * var(--worksheet-grid-cell));
+  display: grid;
+  grid-template-columns: repeat(var(--digit-grid-side), var(--digit-grid-cell-size));
+  grid-auto-rows: var(--digit-grid-cell-size);
+  width: max-content;
+  border: 0;
+  box-shadow: inset 0 0 0 2px #222;
+  background: rgba(255, 255, 255, .78);
+}
+.digit-grid-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--digit-grid-cell-size);
+  height: var(--digit-grid-cell-size);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #555;
+  border-bottom: 1px solid #555;
+  border-radius: 0;
+  background: transparent;
+  color: #111;
+  font: inherit;
+  font-size: calc(.92 * var(--worksheet-grid-cell));
+  line-height: 1;
+}
+.digit-grid-cell:nth-child(4n) { border-right: 0; }
+.digit-grid-cell:nth-last-child(-n + 4) { border-bottom: 0; }
+.digit-grid-cell-block-right { border-right: 2px solid #222; }
+.digit-grid-cell-block-bottom { border-bottom: 2px solid #222; }
+button.digit-grid-cell-answer { cursor: pointer; }
+button.digit-grid-cell-answer:hover:not(.digit-grid-cell-selected) { background: rgba(255, 255, 255, .62); }
+.digit-grid-cell-given {
+  font-weight: 700;
+  background: rgba(255, 255, 255, .72);
+}
+.digit-grid-cell-selected {
+  outline: 2px solid #111;
+  outline-offset: -3px;
+  background: rgba(255, 255, 255, .9);
+}
+.digit-grid-cell-wrong .digit-grid-cell-value { opacity: .42; }
+.digit-grid-cell-correction {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  color: #d20b0b;
+  font-size: .48em;
+  font-weight: 700;
 }

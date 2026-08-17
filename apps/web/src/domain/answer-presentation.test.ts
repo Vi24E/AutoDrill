@@ -35,6 +35,10 @@ describe('answerPresentationPlan', () => {
     expect(answerPresentationPlan(problem({
       prompt: { kind: 'simultaneous_equation', a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 },
     }))).toEqual({ kind: 'simultaneous_equation' });
+    expect(answerPresentationPlan(problem({
+      input_interface: { type: 'digit_grid', min_digit: 1, max_digit: 4, cell_count: 16 },
+      prompt: { kind: 'mini_sudoku', givens: Array.from({ length: 16 }, () => null) },
+    }))).toEqual({ kind: 'digit_grid' });
   });
 
   it('extracts tuple coordinates without duplicating renderer-specific fallback logic', () => {

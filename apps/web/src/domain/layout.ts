@@ -30,13 +30,12 @@ export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorks
   const columnWidth = contentWidth / columns;
   const theme = findThemeDefinitionByNumericId(worksheet.identity.numeric_theme_id);
   if (!theme) throw new Error(`Unknown worksheet theme ${worksheet.identity.numeric_theme_id}.`);
-  const rowMajor = theme.presentation.column_arithmetic;
+  const rowMajor = theme.presentation.worksheet_grid;
   const cells = worksheet.problems.map((problem, index) => ({
     index,
     problem,
     // Ordinary worksheets keep the historical vertical reading order.
-    // Printable column arithmetic follows the conventional worksheet order:
-    // 1–4 across the first row, then 5–8, 9–12, and 13–16.
+    // Grid-based worksheets use conventional row-major reading order.
     column: rowMajor ? index % columns : Math.floor(index / rows),
     row: rowMajor ? Math.floor(index / columns) : index % rows,
   }));

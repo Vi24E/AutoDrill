@@ -38,7 +38,7 @@ Effortは、標準解法を人間が定数時間で実行できるprimitiveへ�
 
 その他の既存primitiveは`Round`, `Transposition`, `OverheadPF/GCD/LCM/Negative/Carry*`, `OverheadLinear/Distribution/EqSystem/Factor*/Quadratic`である。既定weightは`OperationWeights::default()`を正とする。
 
-OperationVectorの現行schema v5は32次元で、31=`FractionSelfDivision`である。pre-releaseでは旧schemaのwire次元を保持せず、現行32次元だけをproduction contractとする。
+OperationVectorの現行schema v6は32次元で、31=`FractionSelfDivision`である。pre-releaseでは旧schemaのwire次元を保持せず、現行32次元だけをproduction contractとする。
 
 ## 共通整数builder
 
@@ -140,11 +140,19 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 ## 明示的なテーマ例外
 
-- 九九: `log10(answer)`による既存特殊difficulty。
-- 九九の逆算: `BaseTimes×3 + BigNum(dividend)`。一般の`BaseDivide` shortcutを使わない。
-- うそつきだれだ: SAT式が参照するliteral数。
+通常themeは`OperationVector · OperationWeights`をeffortのsource of truthとする。一方、標準解法primitiveへ意味を保ったまま分解できない真正のtheme固有式は、`Problem.theme_specific_effort: Option<f64>`を使う。
 
-これらの実装は`effort.rs`ではなく`crates/drill-core/src/themes/<theme>.rs`側に置く。
+- `None`: 通常経路。`solution_graph -> operation_vector -> weighted_sum`でeffortを決める。
+- `Some(value)`: theme固有経路。`effort = value`とし、通常operation graph/vectorは空にする。既存primitiveの数値上の重みを流用して特殊式を偽装しない。
+
+現行のtheme固有経路:
+
+- 九九: `log10(answer)`。旧実装の`BigNum`借用は廃止した。
+- すうじはひとりぼっち: `(非自明な空マス数) + 0.3 × (自明な空マス数)`。自明な空マスは、行・列・2×2 blockのいずれかに既知値が3つある空マス。
+
+九九の逆算は`BaseTimes×3 + BigNum(dividend)`、うそつきだれだはSAT式が参照するliteral数として通常operation graphで意味を表せるため、`theme_specific_effort`を使わない。
+
+特殊式の計算自体は`effort.rs`へtheme名の分岐を入れず、`crates/drill-core/src/themes/<theme>.rs`側が所有する。generic generator / wire validatorは「特殊effortと通常operation modelを混在させない」という不変条件だけを検証する。
 
 ## Versioning
 

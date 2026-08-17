@@ -1,13 +1,13 @@
-# Problem schema v5
+# Problem schema v6
 
 上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
 
-現行Rust domainとWASM JSON境界は新規生成について`schema_version = 5`を使用する。生成requestは次の値だけを持つ。
-すべてのrequestは`schema_version: 5`を明示し、それ以外のschema、version欠落、互換DTOはfail closedで拒否する。pre-releaseでは旧schemaのproblem-set ID再生成をsupportしない。
+現行Rust domainとWASM JSON境界は新規生成について`schema_version = 6`を使用する。生成requestは次の値だけを持つ。
+すべてのrequestは`schema_version: 6`を明示し、それ以外のschema、version欠落、互換DTOはfail closedで拒否する。pre-releaseでは旧schemaのproblem-set ID再生成をsupportしない。
 
 ```json
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "numeric_theme_id": 1,
   "seed": "Ab3Z",
   "difficulty": 2,
@@ -68,7 +68,7 @@ ID形式は次の可逆なASCII表現である。
 
 現行例は`5-1-5-Ab3Z-2`。Seedは1〜16文字で、`1-9`、`a-z`、`A-Z`から`I`、`l`、`O`を除いた集合だけを許可する。`-`を許可しないため分割は曖昧にならない。現行revisionの`ProblemSetIdentity`は同じ現行generatorで決定的に再生成できる。
 
-Worksheetは`problem_set_id`に加えてdecode済み`identity`、registry由来のskill/curriculum/layout、registry所定個数のProblemを持つ。Problemはversion、通し番号、numeric theme ID、型付きprompt、`answer_schema`、それとは直交するtyped `input_interface`、正解AnswerNode、必要なthemeではtyped `worked_solution`、標準解法graph、現行operation vector、解決済み重みによるeffortを持つ。schema v5のoperation vectorは32次元で、pre-releaseでは旧wire次元へのprojectionを持たない。
+Worksheetは`problem_set_id`に加えてdecode済み`identity`、registry由来のskill/curriculum/layout、registry所定個数のProblemを持つ。Problemはversion、通し番号、numeric theme ID、型付きprompt、`answer_schema`、それとは直交するtyped `input_interface`、正解AnswerNode、必要なthemeではtyped `worked_solution`、標準解法graph、現行operation vector、optionalな`theme_specific_effort`、最終`effort`を持つ。schema v6のoperation vectorは32次元で、pre-releaseでは旧wire次元へのprojectionを持たない。`theme_specific_effort`が`Some`のときは通常operation graph/vectorを空にし、既存primitiveへ特殊式を偽装しない。
 
 operation vectorの現行固定長はRust `WebContract.operation_kind_count`からWebへ同期する。basis追加はwire schema変更として扱うが、pre-releaseでは旧schema shapeをproduction codeへ保持しない。出力が変わる場合は必要に応じてgenerator revisionも更新する。数学値は整数またはAnswerNodeの正確な十進表現で保持し、binary floatは使用しない。JSON/WASM境界のAnswerNode integer/coefficientとanswer-schema bounds（`i64`）、BigNum magnitude（`u64`）はcanonical decimal stringとし、JavaScriptの安全整数範囲を超える18桁値も可逆にする。`effort`とoperation vector quantityだけは評価結果なので`f64`を許可する。
 
@@ -80,7 +80,7 @@ operation vectorの現行固定長はRust `WebContract.operation_kind_count`か�
 
 構造化テーマは`{"type":"structured_math","allowed_structures":["fraction","root"]}`のように
 許可する構造を返す。Webの`apply_editor_action` requestは、このProblemから選択したinterfaceを
-`state`と`action`と同じ現行schema v5 envelope内で送る。Webはinterfaceを`answer_schema`から推測しない。
+`state`と`action`と同じ現行schema v6 envelope内で送る。Webはinterfaceを`answer_schema`から推測しない。
 Typed leaf/composite answer、editor state、editor candidate、gradeのexpected/actualは、このinterfaceの
 capability projectionを満たす必要がある。`nan_error`だけはboundedなraw-text recovery sentinelとして
 保持できるが、digits-only `simple_numeric`から小数・負数・構造のtyped nodeを回復経路で生成することはできない。
@@ -148,7 +148,7 @@ canonical answerは2要素`tuple`を内部表現として使うが、`answer_sch
 
 ## Difficulty sampling
 
-難易度は4段階とし、wire値は `1=かんたん`, `2=ふつう`, `3=むずかしい`, `4=ランダム` とする。現行schema v5で意味を固定し、それ以外のschemaはfail closedで拒否する。
+難易度は4段階とし、wire値は `1=かんたん`, `2=ふつう`, `3=むずかしい`, `4=ランダム` とする。現行schema v6で意味を固定し、それ以外のschemaはfail closedで拒否する。
 
 原則としてn問に対して`8n`候補をbootstrap poolとして生成する。一次方程式はn=16なので**128候補**である。有限index domainを持つthemeは母集団全体をProblem化せず、Seedに対して一様なunique indexを必要数だけ抽出できる。さらに分数のようにoperand spaceから候補を直接構成できるthemeは、finite candidate vector自体をmaterializeせずrejection samplingする。`分数総まとめ(仮分数)`は4演算layerを1/4ずつ直接生成するため、4layer合計で`8n`候補を使う。
 
