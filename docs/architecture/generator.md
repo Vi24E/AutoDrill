@@ -86,7 +86,7 @@ Themeまたは密接なtheme familyのmoduleが所有するもの:
 
 difficulty samplerはscalar effortだけで教材構成を破壊しない。
 
-複数archetypeを含むthemeでは必要に応じてlayered samplingを使用する。
+複数archetypeを含むthemeでは必要に応じてlayered samplingを使用する。`SamplingStrategy`はvalidated constructorからのみ構成し、answer domain/layer setを空にしたり、layer minimumの合計がworksheet problem countを超えたり、constructive bootstrap multiplierを0にした状態をsampling loopへ持ち込まない。classifierのraw indexは共通frameworkがbounded `LayerIndex`へ変換し、範囲外は`SamplingError`としてfail closedする。さらにanswer-conditioned callbackがrequested answerと異なるProblemを返した場合、constructive-layered callbackがrequested layerと異なるProblemを返した場合は、そのcandidateをretryして`AttemptLimit`へ化かさず即座にsampling-contract errorとする。single-problem generationとworksheet generationは同じ検証を通す。
 
 基本形:
 
@@ -105,7 +105,7 @@ Theme固有のquota値はtheme側が所有し、sampler自体へtheme ID特例�
 - commutative canonicalizationするか
 - visually same / mathematically sameのどちらを除外するか
 
-これをnumeric theme IDで中央から推測しない。theme policyとして宣言する。
+これをnumeric theme IDで中央から推測しない。theme policyとして宣言する。semantic identityは専用`ProblemKey`としてCandidate生成時に一度だけ構築する。heap-owning AST/statement keyをdedup用HashSetへ入れるたびにdeep cloneせず、Candidateと一時setは`Rc<ProblemKey>`で同じkey allocationを共有する。sort comparatorもこのprecomputed keyだけを参照する。
 
 ## 7. Correctness by construction
 

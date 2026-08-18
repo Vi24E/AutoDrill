@@ -466,16 +466,12 @@ let activePreviewCleanup: (() => void) | null = null;
  * Open an in-app print preview first. The preview and the eventual native
  * print/PDF workflow use the exact same MathLive DOM/CSS; no parallel PDF
  * math renderer is introduced.
- *
- * `targetWindow` is retained only for call-site compatibility with alpha 1.1.
  */
 export async function openWorksheetPdf(
   worksheet: WorksheetDto,
-  targetWindow?: Window | null,
   metadata?: WorksheetMetadata,
 ): Promise<void> {
   if (typeof window === 'undefined') return;
-  targetWindow?.close();
   activePreviewCleanup?.();
 
   const host = document.createElement('div');

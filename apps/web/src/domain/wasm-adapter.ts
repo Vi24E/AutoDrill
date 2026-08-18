@@ -8,8 +8,6 @@ import {
   type AnswerInputStructure,
   type DrillEngine,
   type DrillSettings,
-  type EditorAction,
-  type EditorState,
   type GradeRequest,
   type GradeResult,
   type GradeWarningCode,
@@ -25,11 +23,9 @@ export type DrillWasmRuntime = {
   generate_problem?: (request: string) => unknown | Promise<unknown>;
   generate_worksheet?: (request: string) => unknown | Promise<unknown>;
   regenerate_problem_set?: (request: string) => unknown | Promise<unknown>;
-  apply_editor_action?: (request: string) => unknown | Promise<unknown>;
   parse_mathlive_answer?: (request: string) => unknown | Promise<unknown>;
   normalize_answer?: (request: string) => unknown | Promise<unknown>;
   grade_answer?: (request: string) => unknown | Promise<unknown>;
-  calculate_effort?: (request: string) => unknown | Promise<unknown>;
 };
 
 declare global {
@@ -80,6 +76,40 @@ function mapBoundaryError(error: unknown): DrillEngineError {
       error,
     );
   }
+  if (kind === 'invalid_sampling_strategy') {
+    return new DrillEngineError(
+      'invalid_sampling_strategy',
+      'The registered generator violated its sampling strategy contract.',
+      error,
+    );
+  }
+  if (kind === 'invalid_registry') {
+    return new DrillEngineError('invalid_registry', 'The Rust theme registry is invalid.', error);
+  }
+  if (kind === 'invalid_generated_problem') {
+    return new DrillEngineError(
+      'invalid_generated_problem',
+      'A generator produced a problem that violated the Rust domain contract.',
+      error,
+    );
+  }
+  if (kind === 'invalid_generated_worksheet') {
+    return new DrillEngineError(
+      'invalid_generated_worksheet',
+      'Worksheet assembly violated the Rust domain contract.',
+      error,
+    );
+  }
+  if (kind === 'invalid_answer_schema') {
+    return new DrillEngineError('invalid_answer_schema', 'The answer schema is structurally invalid.', error);
+  }
+  if (kind === 'expected_answer_outside_schema') {
+    return new DrillEngineError(
+      'expected_answer_outside_schema',
+      'The expected answer does not satisfy its Rust answer schema.',
+      error,
+    );
+  }
   if (error instanceof Error) return new DrillEngineError('invalid_dto', error.message, error);
   return new DrillEngineError('invalid_dto', 'The drill-wasm response was not valid.', error);
 }
@@ -107,7 +137,7 @@ function assertFiniteNumber(value: unknown, label: string): asserts value is num
 
 function assertInteger(value: unknown, label: string): asserts value is number {
   assertFiniteNumber(value, label);
-  if (!Number.isInteger(value)) invalidDto(`WASM returned a non-integer ${label}.`, value);
+  if (!Number.isSafeInteger(value)) invalidDto(`WASM returned a non-safe integer ${label}.`, value);
 }
 
 function assertU32(value: unknown, label: string): asserts value is number {
@@ -173,7 +203,7 @@ function assertCanonicalU64String(value: unknown, label: string): asserts value 
   }
 }
 
-const MAX_ANSWER_AST_SIZE = 18;
+const MAX_ANSWER_AST_SIZE = DRILL_CORE_CONTRACT.max_answer_ast_size;
 
 type AnswerValidationState = {
   visitedNodes: number;
@@ -313,7 +343,6 @@ function unwrapEnvelope(value: unknown): unknown {
 }
 
 const INPUT_STRUCTURES: readonly AnswerInputStructure[] = DRILL_CORE_CONTRACT.editor_structures;
-const EDITOR_ACTION_TYPES: readonly string[] = DRILL_CORE_CONTRACT.editor_action_types;
 
 function assertInputInterface(value: unknown): asserts value is AnswerInputInterface {
   if (!isRecord(value) || typeof value.type !== 'string') {
@@ -443,7 +472,6 @@ function assertRationalCoefficient(value: unknown, label: string): void {
   if (!isRecord(value)) invalidDto(`WASM returned an invalid ${label}.`, value);
   assertInteger(value.numerator, `${label} numerator`);
   assertInteger(value.denominator, `${label} denominator`);
-  if (value.denominator <= 0) invalidDto(`WASM returned a nonpositive ${label} denominator.`, value);
 }
 
 function assertArithmeticExpression(value: unknown): void {
@@ -459,7 +487,6 @@ function assertArithmeticExpression(value: unknown): void {
   if (value.kind === 'exact_decimal') {
     assertInteger(value.coefficient, 'arithmetic decimal coefficient');
     assertU32(value.scale, 'arithmetic decimal scale');
-    if (value.scale === 0 || value.scale > 6) invalidDto('WASM returned an invalid arithmetic decimal scale.', value);
     return;
   }
   if (value.kind === 'binary') {
@@ -471,7 +498,11 @@ function assertArithmeticExpression(value: unknown): void {
   invalidDto('WASM returned an unsupported arithmetic expression variant.', value);
 }
 
-function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 'column_arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle' | 'mini_sudoku'): void {
+function assertPrompt(
+  value: unknown,
+  expectedKind: 'addition' | 'arithmetic' | 'column_arithmetic' | 'linear_equation' | 'quadratic_equation' | 'simultaneous_equation' | 'liar_puzzle' | 'mini_sudoku',
+  expectedInputInterface: AnswerInputInterface,
+): void {
   if (!isRecord(value) || value.kind !== expectedKind) {
     invalidDto(`WASM returned an unsupported prompt variant; expected ${expectedKind}.`, value);
   }
@@ -502,27 +533,18 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
   }
   if (expectedKind === 'liar_puzzle') {
     assertInteger(value.people_count, 'liar-puzzle people count');
-    if (value.people_count < 3 || value.people_count > 5 || !Array.isArray(value.statements) || value.statements.length !== value.people_count) {
+    if (!Array.isArray(value.statements) || value.statements.length !== value.people_count) {
       invalidDto('WASM returned an invalid liar-puzzle shape.', value);
     }
     for (const statement of value.statements) {
       if (!isRecord(statement)) invalidDto('WASM returned an invalid liar-puzzle statement.', statement);
       if (statement.kind === 'says_liar' || statement.kind === 'says_not_liar') {
         assertInteger(statement.person, 'liar-puzzle person');
-        if (statement.person < 1 || statement.person > value.people_count) invalidDto('WASM returned an out-of-range liar-puzzle person.', statement);
       } else if (statement.kind === 'exactly_one_liar' || statement.kind === 'both_liar' || statement.kind === 'both_not_liar') {
         assertInteger(statement.first, 'liar-puzzle first person');
         assertInteger(statement.second, 'liar-puzzle second person');
-        if (statement.first < 1 || statement.second < 1 || statement.first > value.people_count || statement.second > value.people_count || statement.first >= statement.second) {
-          invalidDto('WASM returned invalid liar-puzzle pair targets.', statement);
-        }
       } else if (statement.kind === 'exact_liar_count') {
         assertInteger(statement.count, 'liar-puzzle liar count');
-        if (statement.count < 1 || statement.count >= value.people_count) invalidDto('WASM returned an invalid liar-puzzle liar count.', statement);
-      } else if (statement.kind === 'implication') {
-        assertInteger(statement.antecedent_person, 'liar-puzzle implication antecedent');
-        assertInteger(statement.consequent_person, 'liar-puzzle implication consequent');
-        if (statement.antecedent_person < 1 || statement.antecedent_person > value.people_count || statement.consequent_person < 1 || statement.consequent_person > value.people_count || statement.antecedent_person === statement.consequent_person || typeof statement.antecedent_is_liar !== 'boolean' || typeof statement.consequent_is_liar !== 'boolean') invalidDto('WASM returned an invalid liar-puzzle implication.', statement);
       } else {
         invalidDto('WASM returned an unsupported liar-puzzle statement.', statement);
       }
@@ -530,13 +552,18 @@ function assertPrompt(value: unknown, expectedKind: 'addition' | 'arithmetic' | 
     return;
   }
   if (expectedKind === 'mini_sudoku') {
-    if (!Array.isArray(value.givens) || value.givens.length !== 16) {
+    if (expectedInputInterface.type !== 'digit_grid') {
+      invalidDto('Registered mini-sudoku input contract is not a digit grid.', expectedInputInterface);
+    }
+    if (!Array.isArray(value.givens) || value.givens.length !== expectedInputInterface.cell_count) {
       invalidDto('WASM returned an invalid mini-sudoku grid.', value);
     }
     for (const cell of value.givens) {
       if (cell === null) continue;
       assertInteger(cell, 'mini-sudoku given');
-      if (cell < 1 || cell > 4) invalidDto('WASM returned an out-of-range mini-sudoku given.', cell);
+      if (cell < expectedInputInterface.min_digit || cell > expectedInputInterface.max_digit) {
+        invalidDto('WASM returned an out-of-range mini-sudoku given.', cell);
+      }
     }
     return;
   }
@@ -644,7 +671,7 @@ function assertWorksheet(value: unknown): WorksheetDto {
     if (problem.numeric_theme_id !== identity.numeric_theme_id) {
       invalidDto('WASM returned a problem for a different numeric theme.', problem);
     }
-    assertPrompt(problem.prompt, definition.promptKind);
+    assertPrompt(problem.prompt, definition.promptKind, definition.inputInterface);
     assertInputInterface(problem.input_interface);
     if (!sameInputInterface(problem.input_interface, definition.inputInterface)) {
       invalidDto('WASM returned input capabilities inconsistent with the theme registry.', problem.input_interface);
@@ -653,18 +680,16 @@ function assertWorksheet(value: unknown): WorksheetDto {
     assertAnswerNode(problem.canonical_answer);
     assertAnswerSupportsInputInterface(problem.canonical_answer, problem.input_interface);
     if (problem.worked_solution !== undefined) assertWorkedSolution(problem.worked_solution);
-    if (!isRecord(problem.solution_graph) || !Array.isArray(problem.solution_graph.steps)) invalidDto('WASM returned an invalid solution graph.', problem);
-    problem.solution_graph.steps.forEach((step) => {
-      if (!isRecord(step) || !('id' in step) || !('operation' in step) || !('depends_on' in step)) {
-        invalidDto('WASM returned an invalid solution step.', step);
+    if (!isRecord(problem.operation_plan) || !Array.isArray(problem.operation_plan.operations)) {
+      invalidDto('WASM returned an invalid operation plan.', problem);
+    }
+    problem.operation_plan.operations.forEach((operation) => {
+      if (!isRecord(operation) || typeof operation.kind !== 'string') {
+        invalidDto('WASM returned an unknown effort operation.', operation);
       }
-      assertInteger(step.id, 'solution-step id');
-      if (!isRecord(step.operation) || typeof step.operation.kind !== 'string') invalidDto('WASM returned an unknown solution operation.', step);
-      if (step.operation.kind === 'big_num') {
-        assertCanonicalU64String(step.operation.magnitude, 'BigNum magnitude');
+      if (operation.kind === 'big_num') {
+        assertCanonicalU64String(operation.magnitude, 'BigNum magnitude');
       }
-      if (!Array.isArray(step.depends_on)) invalidDto('WASM returned invalid solution dependencies.', step);
-      step.depends_on.forEach((dependency) => assertInteger(dependency, 'solution dependency'));
     });
     const expectedOperationKindCount = drillOperationKindCountForSchema(problem.schema_version);
     if (expectedOperationKindCount === undefined || !isRecord(problem.operation_vector) || !Array.isArray(problem.operation_vector.values) || problem.operation_vector.values.length !== expectedOperationKindCount) invalidDto('WASM returned an invalid operation vector.', problem);
@@ -672,7 +697,7 @@ function assertWorksheet(value: unknown): WorksheetDto {
     if (problem.theme_specific_effort !== undefined && problem.theme_specific_effort !== null) {
       assertFiniteNumber(problem.theme_specific_effort, 'theme-specific problem effort');
       if (problem.theme_specific_effort < 0) invalidDto('WASM returned a negative theme-specific effort.', problem.theme_specific_effort);
-      if (problem.solution_graph.steps.length !== 0
+      if (problem.operation_plan.operations.length !== 0
           || problem.operation_vector.values.some((value) => value !== 0)
           || problem.effort !== problem.theme_specific_effort) {
         invalidDto('WASM returned a theme-specific effort mixed with the ordinary operation-vector model.', problem);
@@ -690,124 +715,6 @@ function assertWorksheet(value: unknown): WorksheetDto {
     problems,
     seed: identity.seed,
   } as unknown as WorksheetDto;
-}
-
-function assertEditorStatePayload(value: unknown, inputInterface: AnswerInputInterface): asserts value is EditorState {
-  if (!isRecord(value)) invalidDto('WASM returned an empty editor state.', value);
-  assertAnswerNode(value.answer);
-  assertAnswerSupportsInputInterface(value.answer, inputInterface);
-  if (!Array.isArray(value.active_path)) invalidDto('WASM returned an invalid editor path.', value);
-  value.active_path.forEach((index) => {
-    if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0) {
-      invalidDto('WASM returned an invalid editor path index.', index);
-    }
-  });
-  if (typeof value.cursor !== 'number' || !Number.isSafeInteger(value.cursor) || value.cursor < 0) {
-    invalidDto('WASM returned an invalid editor cursor.', value.cursor);
-  }
-  const activeNode = nodeAtEditorPath(value.answer, value.active_path);
-  if (!activeNode || !isEditableEditorLeaf(activeNode)) {
-    invalidDto('WASM returned an editor path that does not select an editable slot.', value);
-  }
-  if (value.cursor > [...answerNodeText(activeNode)].length) {
-    invalidDto('WASM returned an editor cursor outside the selected slot.', value);
-  }
-  if (typeof value.committed !== 'boolean') invalidDto('WASM returned an invalid editor committed flag.', value);
-}
-
-function assertEditorState(value: unknown, inputInterface: AnswerInputInterface): EditorState {
-  const unwrapped = unwrapEnvelope(value);
-  assertEditorStatePayload(unwrapped, inputInterface);
-  return unwrapped;
-}
-
-function nodeAtEditorPath(answer: AnswerNode, path: readonly number[]): AnswerNode | null {
-  let node = answer;
-  for (const index of path) {
-    switch (node.type) {
-      case 'fraction':
-        if (index === 0) node = node.value.numerator;
-        else if (index === 1) node = node.value.denominator;
-        else return null;
-        break;
-      case 'mixed_fraction':
-        if (index === 0) node = node.value.whole;
-        else if (index === 1) node = node.value.numerator;
-        else if (index === 2) node = node.value.denominator;
-        else return null;
-        break;
-      case 'root':
-        if (index === 0) node = node.value.radicand;
-        else if (index === 1 && node.value.index) node = node.value.index;
-        else return null;
-        break;
-      case 'negative':
-      case 'plus_minus':
-        if (index !== 0) return null;
-        node = node.value;
-        break;
-      case 'binary':
-        if (index === 0) node = node.value.left;
-        else if (index === 1) node = node.value.right;
-        else return null;
-        break;
-      case 'tuple':
-        if (!node.value[index]) return null;
-        node = node.value[index];
-        break;
-      case 'empty':
-      case 'integer':
-      case 'exact_decimal':
-      case 'nan_error':
-      case 'variable': return null;
-    }
-  }
-  return node;
-}
-
-function isEditableEditorLeaf(answer: AnswerNode): boolean {
-  if (answer.type === 'empty') return true;
-  if (answer.type === 'integer') return !answer.value.startsWith('-');
-  if (answer.type === 'nan_error') return true;
-  return answer.type === 'exact_decimal' && !answer.value.coefficient.startsWith('-');
-}
-
-function assertEditorAction(value: unknown): asserts value is EditorAction {
-  if (!isRecord(value) || typeof value.type !== 'string' || !EDITOR_ACTION_TYPES.includes(value.type)) {
-    invalidDto('The editor action was not valid.', value);
-  }
-  if (value.type === 'insert_digit') {
-    if (typeof value.digit !== 'number' || !Number.isSafeInteger(value.digit) || value.digit < 0 || value.digit > 9) {
-      invalidDto('The editor digit was not valid.', value);
-    }
-    return;
-  }
-  if (value.type === 'insert_structure') {
-    if (typeof value.structure !== 'string' || !INPUT_STRUCTURES.includes(value.structure as AnswerInputStructure)) {
-      invalidDto('The editor structure was not valid.', value);
-    }
-    return;
-  }
-  if (value.type === 'select_slot') {
-    if (!Array.isArray(value.path) || value.path.some((index) => typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0)) {
-      invalidDto('The editor selection path was not valid.', value);
-    }
-    if (typeof value.cursor !== 'number' || !Number.isSafeInteger(value.cursor) || value.cursor < 0) {
-      invalidDto('The editor selection cursor was not valid.', value);
-    }
-    return;
-  }
-  if (Object.keys(value).some((key) => key !== 'type')) {
-    invalidDto('A payload-free editor action contained unexpected fields.', value);
-  }
-}
-
-function assertSelectSlotTarget(state: EditorState, action: Extract<EditorAction, { type: 'select_slot' }>): void {
-  const target = nodeAtEditorPath(state.answer, action.path);
-  if (!target || !isEditableEditorLeaf(target)) invalidDto('The editor selection path was not valid.', action);
-  if (action.cursor > [...answerNodeText(target)].length) {
-    invalidDto('The editor selection cursor was outside the selected slot.', action);
-  }
 }
 
 function answerTextOrNull(value: AnswerNode): string | null {
@@ -888,32 +795,6 @@ export function createWasmDrillEngine(runtime?: DrillWasmRuntime): DrillEngine {
         const generate = resolveRuntime(runtime).generate_worksheet;
         if (!generate) throw new DrillEngineError('wasm_unavailable', 'drill-wasm does not expose generate_worksheet.');
         return assertWorksheet(await invokeBoundary(generate, settings));
-      } catch (error) {
-        throw mapBoundaryError(error);
-      }
-    },
-
-    async applyEditorAction(state, action, inputInterface) {
-      try {
-        assertInputInterface(inputInterface);
-        assertEditorAction(action);
-        if (action.type !== 'clear') {
-          assertEditorStatePayload(state, inputInterface);
-          if (action.type === 'select_slot') assertSelectSlotTarget(state, action);
-        }
-        const apply = resolveRuntime(runtime).apply_editor_action;
-        if (!apply) throw new DrillEngineError('wasm_unavailable', 'drill-wasm does not expose apply_editor_action.');
-        return assertEditorState(await invokeBoundary(apply, {
-          schema_version: DRILL_SCHEMA_VERSION,
-          input_interface: {
-            ...inputInterface,
-            ...(inputInterface.type === 'structured_math'
-              ? { allowed_structures: [...inputInterface.allowed_structures] }
-              : {}),
-          },
-          state,
-          action,
-        }), inputInterface);
       } catch (error) {
         throw mapBoundaryError(error);
       }

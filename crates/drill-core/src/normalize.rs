@@ -1,100 +1,37 @@
 use crate::answer::{AnswerBinaryOperator, AnswerNode};
-use crate::exact::gcd_u128;
+use crate::exact::ExactRational;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ExactRational {
-    numerator: i128,
-    denominator: i128,
-}
-
-impl ExactRational {
-    fn new(numerator: i128, denominator: i128) -> Option<Self> {
-        if denominator == 0 {
-            return None;
-        }
-        let (numerator, denominator) = if denominator < 0 {
-            (numerator.checked_neg()?, denominator.checked_neg()?)
-        } else {
-            (numerator, denominator)
-        };
-        if numerator == 0 {
-            return Some(Self {
-                numerator: 0,
-                denominator: 1,
-            });
-        }
-        let divisor = gcd_u128(numerator.unsigned_abs(), denominator as u128) as i128;
-        Some(Self {
-            numerator: numerator / divisor,
-            denominator: denominator / divisor,
+fn exact_rational_into_answer(value: ExactRational) -> Option<AnswerNode> {
+    let numerator = i64::try_from(value.numerator()).ok()?;
+    let denominator = i64::try_from(value.denominator()).ok()?;
+    if denominator == 1 {
+        Some(AnswerNode::Integer(numerator))
+    } else {
+        Some(AnswerNode::Fraction {
+            numerator: Box::new(AnswerNode::Integer(numerator)),
+            denominator: Box::new(AnswerNode::Integer(denominator)),
         })
-    }
-
-    fn add(self, other: Self) -> Option<Self> {
-        let left = self.numerator.checked_mul(other.denominator)?;
-        let right = other.numerator.checked_mul(self.denominator)?;
-        Self::new(
-            left.checked_add(right)?,
-            self.denominator.checked_mul(other.denominator)?,
-        )
-    }
-
-    fn subtract(self, other: Self) -> Option<Self> {
-        self.add(other.negate()?)
-    }
-
-    fn multiply(self, other: Self) -> Option<Self> {
-        Self::new(
-            self.numerator.checked_mul(other.numerator)?,
-            self.denominator.checked_mul(other.denominator)?,
-        )
-    }
-
-    fn divide(self, other: Self) -> Option<Self> {
-        if other.numerator == 0 {
-            return None;
-        }
-        Self::new(
-            self.numerator.checked_mul(other.denominator)?,
-            self.denominator.checked_mul(other.numerator)?,
-        )
-    }
-
-    fn negate(self) -> Option<Self> {
-        Self::new(self.numerator.checked_neg()?, self.denominator)
-    }
-
-    fn square_root(self) -> Option<Self> {
-        if self.numerator < 0 {
-            return None;
-        }
-        let numerator = exact_square_root(self.numerator as u128)?;
-        let denominator = exact_square_root(self.denominator as u128)?;
-        Self::new(
-            i128::try_from(numerator).ok()?,
-            i128::try_from(denominator).ok()?,
-        )
-    }
-
-    fn into_answer(self) -> Option<AnswerNode> {
-        let numerator = i64::try_from(self.numerator).ok()?;
-        let denominator = i64::try_from(self.denominator).ok()?;
-        if denominator == 1 {
-            Some(AnswerNode::Integer(numerator))
-        } else {
-            Some(AnswerNode::Fraction {
-                numerator: Box::new(AnswerNode::Integer(numerator)),
-                denominator: Box::new(AnswerNode::Integer(denominator)),
-            })
-        }
     }
 }
 
 /// Return a canonical tree while preserving the caller's display tree outside
 /// this function. Exact numeric nodes normalize to a reduced rational value;
 /// normalization never passes mathematical values through binary float.
+///
+/// Raw `AnswerNode` is a public recursive wire/domain syntax type, so native
+/// callers can construct trees deeper than the interactive contract. Reject
+/// those before entering recursive semantic normalization.
 pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
-    if let Some(normalized) = exact_rational(answer).and_then(ExactRational::into_answer) {
+    if !answer.is_within_structural_node_limit() {
+        return AnswerNode::NanError("answer_ast_size_limit".to_owned());
+    }
+    normalize_answer_bounded(answer)
+}
+
+fn normalize_answer_bounded(answer: &AnswerNode) -> AnswerNode {
+    if let Some(normalized) =
+        crate::exact_value::rational_from_answer(answer).and_then(exact_rational_into_answer)
+    {
         return normalized;
     }
 
@@ -127,41 +64,49 @@ pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
             numerator,
             denominator,
         } => AnswerNode::Fraction {
-            numerator: Box::new(normalize_answer(numerator)),
-            denominator: Box::new(normalize_answer(denominator)),
+            numerator: Box::new(normalize_answer_bounded(numerator)),
+            denominator: Box::new(normalize_answer_bounded(denominator)),
         },
         AnswerNode::MixedFraction {
             whole,
             numerator,
             denominator,
         } => AnswerNode::MixedFraction {
-            whole: Box::new(normalize_answer(whole)),
-            numerator: Box::new(normalize_answer(numerator)),
-            denominator: Box::new(normalize_answer(denominator)),
+            whole: Box::new(normalize_answer_bounded(whole)),
+            numerator: Box::new(normalize_answer_bounded(numerator)),
+            denominator: Box::new(normalize_answer_bounded(denominator)),
         },
         AnswerNode::Root { radicand, index } => AnswerNode::Root {
-            radicand: Box::new(normalize_answer(radicand)),
-            index: index.as_deref().map(normalize_answer).map(Box::new),
+            radicand: Box::new(normalize_answer_bounded(radicand)),
+            index: index.as_deref().map(normalize_answer_bounded).map(Box::new),
         },
-        AnswerNode::Negative(value) => match normalize_answer(value) {
-            AnswerNode::Integer(value) => value.checked_neg().map_or_else(
-                || AnswerNode::Negative(Box::new(AnswerNode::Integer(value))),
-                AnswerNode::Integer,
-            ),
-            AnswerNode::Negative(inner) => *inner,
-            value => AnswerNode::Negative(Box::new(value)),
-        },
-        AnswerNode::PlusMinus(value) => match normalize_answer(value) {
-            AnswerNode::PlusMinus(inner) => AnswerNode::PlusMinus(inner),
-            value => AnswerNode::PlusMinus(Box::new(value)),
-        },
+        AnswerNode::Negative(value) => {
+            let normalized = normalize_answer_bounded(value);
+            match &normalized {
+                AnswerNode::Integer(value) => value.checked_neg().map_or_else(
+                    || AnswerNode::Negative(Box::new(AnswerNode::Integer(*value))),
+                    AnswerNode::Integer,
+                ),
+                AnswerNode::Negative(inner) => inner.as_ref().clone(),
+                _ => AnswerNode::Negative(Box::new(normalized)),
+            }
+        }
+        AnswerNode::PlusMinus(value) => {
+            let normalized = normalize_answer_bounded(value);
+            match &normalized {
+                AnswerNode::PlusMinus(inner) => {
+                    AnswerNode::PlusMinus(Box::new(inner.as_ref().clone()))
+                }
+                _ => AnswerNode::PlusMinus(Box::new(normalized)),
+            }
+        }
         AnswerNode::Binary {
             operator,
             left,
             right,
         } => {
-            let left = normalize_answer(left);
-            let right = normalize_answer(right);
+            let left = normalize_answer_bounded(left);
+            let right = normalize_answer_bounded(right);
             match (operator, &left, &right) {
                 (AnswerBinaryOperator::Add, AnswerNode::Integer(0), _) => right,
                 (AnswerBinaryOperator::Add, _, AnswerNode::Integer(0)) => left,
@@ -180,67 +125,8 @@ pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
             }
         }
         AnswerNode::Tuple(values) => {
-            AnswerNode::Tuple(values.iter().map(normalize_answer).collect())
+            AnswerNode::Tuple(values.iter().map(normalize_answer_bounded).collect())
         }
         AnswerNode::Variable(name) => AnswerNode::Variable(name.clone()),
     }
-}
-
-fn exact_rational(answer: &AnswerNode) -> Option<ExactRational> {
-    match answer {
-        AnswerNode::Integer(value) => ExactRational::new(i128::from(*value), 1),
-        AnswerNode::ExactDecimal { coefficient, scale } => {
-            let denominator = 10_i128.checked_pow(*scale)?;
-            ExactRational::new(i128::from(*coefficient), denominator)
-        }
-        AnswerNode::Fraction {
-            numerator,
-            denominator,
-        } => exact_rational(numerator)?.divide(exact_rational(denominator)?),
-        AnswerNode::MixedFraction {
-            whole,
-            numerator,
-            denominator,
-        } => exact_rational(whole)?
-            .add(exact_rational(numerator)?.divide(exact_rational(denominator)?)?),
-        AnswerNode::Negative(value) => exact_rational(value)?.negate(),
-        AnswerNode::Binary {
-            operator,
-            left,
-            right,
-        } => {
-            let left = exact_rational(left)?;
-            let right = exact_rational(right)?;
-            match operator {
-                AnswerBinaryOperator::Add => left.add(right),
-                AnswerBinaryOperator::Subtract => left.subtract(right),
-                AnswerBinaryOperator::Multiply => left.multiply(right),
-            }
-        }
-        AnswerNode::Root {
-            radicand,
-            index: None,
-        } => exact_rational(radicand)?.square_root(),
-        AnswerNode::Empty
-        | AnswerNode::NanError(_)
-        | AnswerNode::Root { .. }
-        | AnswerNode::PlusMinus(_)
-        | AnswerNode::Tuple(_)
-        | AnswerNode::Variable(_) => None,
-    }
-}
-
-fn exact_square_root(value: u128) -> Option<u128> {
-    if value < 2 {
-        return Some(value);
-    }
-    let mut x = value;
-    let mut next = value / 2 + 1;
-    while next < x {
-        x = next;
-        next = (x + value / x) / 2;
-    }
-    x.checked_mul(x)
-        .filter(|square| *square == value)
-        .map(|_| x)
 }

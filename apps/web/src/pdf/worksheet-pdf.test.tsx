@@ -156,8 +156,9 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
     ...(representativeWorkedSolution(representative.prompt)
       ? { worked_solution: representativeWorkedSolution(representative.prompt) }
       : {}),
-    solution_graph: { steps: [] },
+    operation_plan: { operations: [] },
     operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+    theme_specific_effort: null,
     effort: 0,
   }));
   return {
@@ -261,7 +262,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
         expect(container.querySelectorAll('[data-print-page=\"answers\"] .digit-grid-cell-value'), definition.label).toHaveLength(definition.problemCount * 16);
         expect(container.querySelectorAll('.problem-grid-worksheet-grid'), definition.label).toHaveLength(2);
       } else {
-        const isColumnArithmetic = definition.tags.includes('column_arithmetic');
+        const isColumnArithmetic = definition.presentation.column_arithmetic;
         expect(expressions, definition.label).toHaveLength(isColumnArithmetic ? 0 : definition.problemCount * 2);
         if (isColumnArithmetic) {
           expect(container.querySelectorAll('[data-column-arithmetic]'), definition.label).toHaveLength(definition.problemCount * 2);
@@ -308,7 +309,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
 
   it('opens an in-app preview and invokes native printing only after explicit confirmation', async () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
-    await openWorksheetPdf(fixtureWorksheet(), undefined, metadata);
+    await openWorksheetPdf(fixtureWorksheet(), metadata);
 
     expect(print).not.toHaveBeenCalled();
     expect(await screen.findByRole('dialog', { name: '印刷プレビュー' })).toBeInTheDocument();

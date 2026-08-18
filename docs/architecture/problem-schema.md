@@ -1,13 +1,13 @@
-# Problem schema v6
+# Problem schema v7
 
 上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
 
-現行Rust domainとWASM JSON境界は新規生成について`schema_version = 6`を使用する。生成requestは次の値だけを持つ。
-すべてのrequestは`schema_version: 6`を明示し、それ以外のschema、version欠落、互換DTOはfail closedで拒否する。pre-releaseでは旧schemaのproblem-set ID再生成をsupportしない。
+現行Rust domainとWASM JSON境界は新規生成について`schema_version = 7`を使用する。生成requestは次の値だけを持つ。
+すべてのrequestは`schema_version: 7`を明示し、それ以外のschema、version欠落、互換DTOはfail closedで拒否する。pre-releaseでは旧schemaのproblem-set ID再生成をsupportしない。
 
 ```json
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "numeric_theme_id": 1,
   "seed": "Ab3Z",
   "difficulty": 2,
@@ -57,6 +57,7 @@
 | 小数と整数の割り算の筆算 | 35 | 2 | 12問・4列3行 |
 | 小数の掛け算の筆算 | 36 | 2 | 16問・4列4行 |
 | 小数の割り算の筆算 | 37 | 2 | 12問・4列3行 |
+| すうじはひとりぼっち（Mini Sudoku） | 38 | 1 | 4問・2列2行 |
 
 ## Problem-set identity
 
@@ -66,9 +67,19 @@ ID形式は次の可逆なASCII表現である。
 {schema_version}-{numeric_theme_id}-{generator_revision}-{seed}-{difficulty}
 ```
 
-現行例は`5-1-5-Ab3Z-2`。Seedは1〜16文字で、`1-9`、`a-z`、`A-Z`から`I`、`l`、`O`を除いた集合だけを許可する。`-`を許可しないため分割は曖昧にならない。現行revisionの`ProblemSetIdentity`は同じ現行generatorで決定的に再生成できる。
+現行例は`7-1-5-Ab3Z-2`。Seedは1〜16文字で、`1-9`、`a-z`、`A-Z`から`I`、`l`、`O`を除いた集合だけを許可する。`-`を許可しないため分割は曖昧にならない。現行revisionの`ProblemSetIdentity`は同じ現行generatorで決定的に再生成できる。identityのfieldはcoreではprivateで、constructor / `FromStr` / custom `Deserialize`のすべてがschema・seed・nonzero theme/revisionを検証する。
 
-Worksheetは`problem_set_id`に加えてdecode済み`identity`、registry由来のskill/curriculum/layout、registry所定個数のProblemを持つ。Problemはversion、通し番号、numeric theme ID、型付きprompt、`answer_schema`、それとは直交するtyped `input_interface`、正解AnswerNode、必要なthemeではtyped `worked_solution`、標準解法graph、現行operation vector、optionalな`theme_specific_effort`、最終`effort`を持つ。schema v6のoperation vectorは32次元で、pre-releaseでは旧wire次元へのprojectionを持たない。`theme_specific_effort`が`Some`のときは通常operation graph/vectorを空にし、既存primitiveへ特殊式を偽装しない。
+Worksheetはcoreではdecoded `identity`、registry由来のskill/curriculum/layout、registry所定個数のProblemだけを保持するvalidated aggregateである。`problem_set_id`はidentityから純粋に導出し、wire DTO生成時だけ文字列として出力する。`Worksheet::generated`はidentityとregistrationのschema/theme/revision、problem数、各Problemのschema/themeを一度に検証する。coreの`Problem`はversion、通し番号、numeric theme ID、型付きprompt、validated answer schema、validated canonical answer、そこからregistration contractで導出した`input_interface`、promptとcanonical answerからcore自身が導出したopaque `worked_solution`、そして排他的な`EffortModel`を持つ。generatorはworked-solution fieldを直接組み立てて`Problem`へ注入できない。Column multiplication / long divisionのpartial/step dataはcore domainのprivate valueであり、Webへ必要なshapeだけを`wire.rs`のDTOへ投影する。
+
+`Problem::generated`は単にprompt/schemaのkindだけを比較しない。`AnswerSchema`の構造条件（整数範囲の`min <= max`、有理数の正の最大分母、非空tuple length等）を検証し、canonical answerがその具体的schemaのrange/shapeを満たした後、`semantics.rs`のgenerator-independent domain semanticsで**そのpromptの実際の正解であること**まで検証してからprivate `ValidatedAnswerSchema` / `CanonicalAnswer`としてaggregateへ格納する。Addition / Arithmetic / ColumnArithmeticはexact arithmetic、Linear / Simultaneous / Quadraticは方程式のexact solution semantics、Liar Puzzleはstatement truthによる唯一解、Mini Sudokuはgivensを保存する唯一の合法盤面をauthorityとする。Mini Sudokuでは同一`DigitGridSpec`からtuple lengthとdigit domainも検証する。Liar Puzzleのcanonical answerはperson indexの昇順tupleで、各indexがpromptの`people_count`内かつ空/all-liarでないことまでcontract boundaryで検証する。筆算のworked solutionはprompt operand/operatorとcanonical answerから一意に再構成できる場合だけaggregateへ格納されるため、arbitrary divisor/product/offset等の内部値をsafe generator APIから注入できない。native Rust / WASM grading境界から受け取るschemaも同じstructural/canonical-answer validationを通し、不正schemaは`GradeError`として拒否する。`parse_mathlive_answer`も`AnswerInputInterface`の構造条件を最初に検証する。
+
+JavaScriptへ`number`として投影するProblemPrompt / worked-solution内の整数は、`Problem::generated`のaggregate invariantとして`Number.MAX_SAFE_INTEGER`相当の範囲内であることも検証する。AnswerNode / AnswerSchema / BigNum等、64-bit exactnessをwire上で保持すべき値はcanonical decimal stringを使う。これによりRust `i64`を無条件にJavaScript `number`へ落とす経路は作らない。
+
+Generator callbackは`Result<Option<Problem>, GenerationError>`で、`None`は数学的candidate rejection、`Err`はgenerator/aggregate contract failureとして意味を分離する。`ProblemInvariantError` / `WorksheetInvariantError`はそれぞれ`invalid_generated_problem` / `invalid_generated_worksheet`へ変換し、`AttemptLimit`へ偽装しない。WASM/Web境界も`invalid_sampling_strategy` / `invalid_registry`を含むconfiguration error codeを独立したkindのまま保持する。
+
+通常解法は`EffortModel::Operations(OperationPlan)`、真正のtheme固有式は`EffortModel::ThemeSpecific`であり、plan/vector/scalarを独立SoTとして同居させない。`OperationPlan`は現在productが実際に消費するprimitive operation列だけを保持し、未使用のdependency DAGは持たない。Web wire上の`operation_plan` / `operation_vector` / `theme_specific_effort` / `effort`はこの1つのmodelから導出する。schema v7のoperation vectorは32次元で、pre-releaseでは旧wire次元へのprojectionを持たない。
+
+固定domainも生のwire primitiveをcore invariantに使わない。Mini Sudokuのgivensは16cell固定かつcanonical `MINI_SUDOKU_GRID_SPEC`のdigit domainを保証する`MiniSudokuGrid`、liar puzzleのperson/countは`PersonIndex` / `PeopleCount` / `LiarCount`で表す。Mini Sudoku solverのcandidate digit iterationも同じ`MINI_SUDOKU_GRID_SPEC.min_digit()..=max_digit()`から導出し、1..=4を別SoTとして手入力しない。`ProblemSetIdentity`は`new` / `FromStr` / custom `Deserialize`のすべてが同一validation pathを通り、schema・seed・nonzero theme/revisionのinvariantを共有する。`GradeResult`は`status`だけをcorrectnessのSoTとして保持し、`is_correct`はmethod/wire projectionで導出する。
 
 operation vectorの現行固定長はRust `WebContract.operation_kind_count`からWebへ同期する。basis追加はwire schema変更として扱うが、pre-releaseでは旧schema shapeをproduction codeへ保持しない。出力が変わる場合は必要に応じてgenerator revisionも更新する。数学値は整数またはAnswerNodeの正確な十進表現で保持し、binary floatは使用しない。JSON/WASM境界のAnswerNode integer/coefficientとanswer-schema bounds（`i64`）、BigNum magnitude（`u64`）はcanonical decimal stringとし、JavaScriptの安全整数範囲を超える18桁値も可逆にする。`effort`とoperation vector quantityだけは評価結果なので`f64`を許可する。
 
@@ -79,9 +90,8 @@ operation vectorの現行固定長はRust `WebContract.operation_kind_count`か�
 ```
 
 構造化テーマは`{"type":"structured_math","allowed_structures":["fraction","root"]}`のように
-許可する構造を返す。Webの`apply_editor_action` requestは、このProblemから選択したinterfaceを
-`state`と`action`と同じ現行schema v6 envelope内で送る。Webはinterfaceを`answer_schema`から推測しない。
-Typed leaf/composite answer、editor state、editor candidate、gradeのexpected/actualは、このinterfaceの
+許可する構造を返す。WebはこのProblemから選択したinterfaceを`parse_mathlive_answer`とgrading境界へ渡し、
+`answer_schema`から入力capabilityを推測しない。MathLive parse結果とgradeのexpected/actualは、このinterfaceの
 capability projectionを満たす必要がある。`nan_error`だけはboundedなraw-text recovery sentinelとして
 保持できるが、digits-only `simple_numeric`から小数・負数・構造のtyped nodeを回復経路で生成することはできない。
 
@@ -92,7 +102,7 @@ capability projectionを満たす必要がある。`nan_error`だけはbounded�
 
 - 一桁引き算: `a-b=c`、`1<=a<=18`、`1<=b,c<=9`。
 - 二桁加算: `a+b=c`、`10<=a,b<=99`。
-- 九九: `1<=a,b<=9`。effortは例外的に正解`c`の`BigNum(c)=log10(c)`だけを使う。
+- 九九: `1<=a,b<=9`。effortは通常operation planではなく `EffortModel::ThemeSpecific(log10(c))` としてtheme側が所有する。`BigNum` primitiveを特殊式の代用には使わない。
 - 負の数(1): 2〜4整数項、演算子は加減のみ。少なくとも1つ負整数を含む。
 - 負の数(2): 2〜4整数leafの四則演算AST。0除算を拒否し、最終値が整数になる候補だけを採用する。
 - 通常分数operand domainは、既約後に非整数となる正の分数で `numerator + denominator <= 15` を満たすもの（実装上は分母2〜14）を重複排除した集合である。加算/乗算は可換な鏡像をdomain index上で重複させない。引き算は正の結果だけを採用する。
@@ -148,12 +158,12 @@ canonical answerは2要素`tuple`を内部表現として使うが、`answer_sch
 
 ## Difficulty sampling
 
-難易度は4段階とし、wire値は `1=かんたん`, `2=ふつう`, `3=むずかしい`, `4=ランダム` とする。現行schema v6で意味を固定し、それ以外のschemaはfail closedで拒否する。
+難易度は4段階とし、wire値は `1=かんたん`, `2=ふつう`, `3=むずかしい`, `4=ランダム` とする。現行schema v7で意味を固定し、それ以外のschemaはfail closedで拒否する。
 
 原則としてn問に対して`8n`候補をbootstrap poolとして生成する。一次方程式はn=16なので**128候補**である。有限index domainを持つthemeは母集団全体をProblem化せず、Seedに対して一様なunique indexを必要数だけ抽出できる。さらに分数のようにoperand spaceから候補を直接構成できるthemeは、finite candidate vector自体をmaterializeせずrejection samplingする。`分数総まとめ(仮分数)`は4演算layerを1/4ずつ直接生成するため、4layer合計で`8n`候補を使う。
 
 1. candidate slotごとにcanonical answerをanswer domainから独立一様に選び、必要ならその答えを固定したまま式だけを再生成する。
-2. 完成candidateについてSolutionGraphからeffortを計算する。
+2. 完成candidateについて`OperationPlan`からoperation vectorを導出し、weightsとの内積でeffortを計算する。theme固有scalarは`EffortModel::ThemeSpecific`として別variantに保持する。
 3. `かんたん` / `ふつう` / `むずかしい` はpoolをeffort順に並べ、独立に5個引いた一様indexのorder statisticから、それぞれ旧difficulty 1 / 3 / 5相当の最小・中央値・最大を使う。`n+4`問を得た後、effort最小2問・最大2問を外れ値として除く。
 4. `ランダム` はeffort sortもorder statisticもtrimも行わない。candidate poolを式の完全一致で集合化して偶発的な重複multiplicityを除き、その**distinct candidate集合から一様に、非復元抽出**でn問を選ぶ。したがってdifficulty由来のeasy/hard biasを一切入れない。
 5. 最終n問は、`かんたん` / `ふつう`ではeffort非減少順に並べてworksheet内にも緩やかなdifficulty rampを持たせる。`むずかしい` / `ランダム`では同じRNG streamでFisher–Yates shuffleする。

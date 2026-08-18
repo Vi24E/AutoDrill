@@ -3,11 +3,58 @@ use crate::exact::gcd_u64;
 use crate::model::{AnswerSchema, GradeResult, GradeStatus, GradeWarning};
 use crate::normalize::normalize_answer;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum GradeError {
+    #[error("answer schema is structurally invalid")]
+    InvalidAnswerSchema,
+    #[error("expected canonical answer does not satisfy the answer schema")]
+    ExpectedAnswerOutsideSchema,
+    #[error("answer AST exceeds the current size limit")]
+    AnswerAstSizeLimit,
+}
+
+impl GradeError {
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::InvalidAnswerSchema => "invalid_answer_schema",
+            Self::ExpectedAnswerOutsideSchema => "expected_answer_outside_schema",
+            Self::AnswerAstSizeLimit => "answer_ast_size_limit",
+        }
+    }
+}
+
 pub fn grade_answer(expected: &AnswerNode, actual: &AnswerNode) -> GradeResult {
-    grade_answer_with_schema(expected, actual, None)
+    if !expected.is_within_structural_node_limit() || !actual.is_within_structural_node_limit() {
+        return GradeResult::new(
+            GradeStatus::Incorrect,
+            AnswerNode::NanError("answer_ast_size_limit".to_owned()),
+            AnswerNode::NanError("answer_ast_size_limit".to_owned()),
+            Vec::new(),
+        );
+    }
+    grade_answer_impl(expected, actual, None)
 }
 
 pub fn grade_answer_with_schema(
+    expected: &AnswerNode,
+    actual: &AnswerNode,
+    answer_schema: Option<&AnswerSchema>,
+) -> Result<GradeResult, GradeError> {
+    if !expected.is_within_structural_node_limit() || !actual.is_within_structural_node_limit() {
+        return Err(GradeError::AnswerAstSizeLimit);
+    }
+    if let Some(schema) = answer_schema {
+        if !schema.is_structurally_valid() {
+            return Err(GradeError::InvalidAnswerSchema);
+        }
+        if !schema.accepts_canonical_answer(expected) {
+            return Err(GradeError::ExpectedAnswerOutsideSchema);
+        }
+    }
+    Ok(grade_answer_impl(expected, actual, answer_schema))
+}
+
+fn grade_answer_impl(
     expected: &AnswerNode,
     actual: &AnswerNode,
     answer_schema: Option<&AnswerSchema>,
@@ -90,14 +137,7 @@ pub fn grade_answer_with_schema(
         }
     }
 
-    let is_correct = matches!(status, GradeStatus::Correct);
-    GradeResult {
-        status,
-        is_correct,
-        expected: normalized_expected,
-        actual: normalized_actual,
-        warnings,
-    }
+    GradeResult::new(status, normalized_expected, normalized_actual, warnings)
 }
 
 const MAX_SOLUTION_BRANCHES: usize = 4;
@@ -125,7 +165,7 @@ fn solutions_mathematically_equal(left: &AnswerNode, right: &AnswerNode) -> bool
     }
 }
 
-fn solution_set(answer: &AnswerNode) -> Option<Vec<AnswerNode>> {
+pub(crate) fn solution_set(answer: &AnswerNode) -> Option<Vec<AnswerNode>> {
     let mut values = Vec::new();
     match answer {
         AnswerNode::Tuple(items) => {
@@ -282,22 +322,22 @@ fn canonicalize_algebraic_signs(answer: &AnswerNode) -> AnswerNode {
         } => {
             let left = canonicalize_algebraic_signs(left);
             let right = canonicalize_algebraic_signs(right);
-            match (operator, right) {
+            match (operator, &right) {
                 (crate::answer::AnswerBinaryOperator::Add, AnswerNode::Negative(value)) => {
                     AnswerNode::Binary {
                         operator: crate::answer::AnswerBinaryOperator::Subtract,
                         left: Box::new(left),
-                        right: value,
+                        right: Box::new(value.as_ref().clone()),
                     }
                 }
                 (crate::answer::AnswerBinaryOperator::Subtract, AnswerNode::Negative(value)) => {
                     AnswerNode::Binary {
                         operator: crate::answer::AnswerBinaryOperator::Add,
                         left: Box::new(left),
-                        right: value,
+                        right: Box::new(value.as_ref().clone()),
                     }
                 }
-                (operator, right) => AnswerNode::Binary {
+                (operator, _) => AnswerNode::Binary {
                     operator: *operator,
                     left: Box::new(left),
                     right: Box::new(right),
@@ -530,7 +570,8 @@ fn has_redundant_negative(answer: &AnswerNode) -> bool {
 }
 
 fn starts_negative(answer: &AnswerNode) -> bool {
-    match normalize_answer(answer) {
+    let normalized = normalize_answer(answer);
+    match &normalized {
         AnswerNode::Negative(_) | AnswerNode::Integer(i64::MIN..=-1) => true,
         AnswerNode::ExactDecimal {
             coefficient: i64::MIN..=-1,
@@ -697,16 +738,46 @@ fn has_redundant_decimal(answer: &AnswerNode) -> bool {
 mod tests {
     use super::*;
 
+    fn grade_answer_with_schema(
+        expected: &AnswerNode,
+        actual: &AnswerNode,
+        answer_schema: Option<&AnswerSchema>,
+    ) -> GradeResult {
+        super::grade_answer_with_schema(expected, actual, answer_schema)
+            .expect("test answer schema must be valid")
+    }
+
+    #[test]
+    fn grading_rejects_invalid_schema_contracts_before_comparison() {
+        let expected = AnswerNode::Integer(2);
+        assert_eq!(
+            super::grade_answer_with_schema(
+                &expected,
+                &expected,
+                Some(&AnswerSchema::Integer { min: 3, max: 1 }),
+            ),
+            Err(GradeError::InvalidAnswerSchema)
+        );
+        assert_eq!(
+            super::grade_answer_with_schema(
+                &expected,
+                &expected,
+                Some(&AnswerSchema::Integer { min: 3, max: 10 }),
+            ),
+            Err(GradeError::ExpectedAnswerOutsideSchema)
+        );
+    }
+
     #[test]
     fn ordered_pair_schema_preserves_coordinate_order_and_allows_equal_coordinates() {
         let expected = AnswerNode::Tuple(vec![AnswerNode::Integer(2), AnswerNode::Integer(-3)]);
         let correct =
             grade_answer_with_schema(&expected, &expected, Some(&AnswerSchema::OrderedPair));
-        assert_eq!(correct.status, GradeStatus::Correct);
+        assert_eq!(correct.status(), GradeStatus::Correct);
 
         let swapped = AnswerNode::Tuple(vec![AnswerNode::Integer(-3), AnswerNode::Integer(2)]);
         let wrong = grade_answer_with_schema(&expected, &swapped, Some(&AnswerSchema::OrderedPair));
-        assert_eq!(wrong.status, GradeStatus::Incorrect);
+        assert_eq!(wrong.status(), GradeStatus::Incorrect);
 
         let equal_coordinates =
             AnswerNode::Tuple(vec![AnswerNode::Integer(2), AnswerNode::Integer(2)]);
@@ -715,9 +786,9 @@ mod tests {
             &equal_coordinates,
             Some(&AnswerSchema::OrderedPair),
         );
-        assert_eq!(equal_result.status, GradeStatus::Correct);
+        assert_eq!(equal_result.status(), GradeStatus::Correct);
         assert!(!equal_result
-            .warnings
+            .warnings()
             .contains(&GradeWarning::DuplicateSolution));
     }
 
@@ -730,16 +801,16 @@ mod tests {
             AnswerNode::Integer(4),
         ]);
         let schema = AnswerSchema::OrderedTuple { length: 4 };
-        assert!(grade_answer_with_schema(&expected, &expected, Some(&schema)).is_correct);
+        assert!(grade_answer_with_schema(&expected, &expected, Some(&schema)).is_correct());
         let swapped = AnswerNode::Tuple(vec![
             AnswerNode::Integer(2),
             AnswerNode::Integer(1),
             AnswerNode::Integer(3),
             AnswerNode::Integer(4),
         ]);
-        assert!(!grade_answer_with_schema(&expected, &swapped, Some(&schema)).is_correct);
+        assert!(!grade_answer_with_schema(&expected, &swapped, Some(&schema)).is_correct());
         let short = AnswerNode::Tuple(vec![AnswerNode::Integer(1), AnswerNode::Integer(2)]);
-        assert!(!grade_answer_with_schema(&expected, &short, Some(&schema)).is_correct);
+        assert!(!grade_answer_with_schema(&expected, &short, Some(&schema)).is_correct());
     }
 
     #[test]
@@ -759,8 +830,8 @@ mod tests {
             },
             AnswerNode::Integer(2),
         ]);
-        assert!(grade_answer(&expected, &actual).is_correct);
-        assert!(grade_answer(&expected, &expected).is_correct);
+        assert!(grade_answer(&expected, &actual).is_correct());
+        assert!(grade_answer(&expected, &expected).is_correct());
     }
 
     #[test]
@@ -793,7 +864,7 @@ mod tests {
             }),
             denominator: Box::new(AnswerNode::Integer(2)),
         };
-        assert!(grade_answer(&expected, &AnswerNode::Tuple(vec![minus, plus])).is_correct);
+        assert!(grade_answer(&expected, &AnswerNode::Tuple(vec![minus, plus])).is_correct());
     }
 
     #[test]
@@ -813,12 +884,12 @@ mod tests {
             require_reduced_fraction_form: true,
         };
         let result = grade_answer_with_schema(&expected, &actual, Some(&schema));
-        assert!(result.is_correct);
+        assert!(result.is_correct());
         assert!(result
-            .warnings
+            .warnings()
             .contains(&GradeWarning::MixedFractionFormRequired));
         assert!(!result
-            .warnings
+            .warnings()
             .contains(&GradeWarning::FractionFormRequired));
     }
 }

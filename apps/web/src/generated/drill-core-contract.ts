@@ -2,8 +2,9 @@
 // Source: drill-core::web_contract(). Run `pnpm contract:generate` after changing the Rust contract.
 
 export const DRILL_CORE_CONTRACT = {
-  "schema_version": 6,
+  "schema_version": 7,
   "operation_kind_count": 32,
+  "max_answer_ast_size": 18,
   "themes": {
     "1": {
       "numeric_theme_id": 1,
@@ -1219,9 +1220,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 2,
       "tags": [
-        "addition",
-        "column_arithmetic",
-        "print_recommended"
+        "addition"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1265,9 +1264,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 2,
       "tags": [
-        "subtraction",
-        "column_arithmetic",
-        "print_recommended"
+        "subtraction"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1311,9 +1308,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 3,
       "tags": [
-        "addition",
-        "column_arithmetic",
-        "print_recommended"
+        "addition"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1357,9 +1352,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 3,
       "tags": [
-        "subtraction",
-        "column_arithmetic",
-        "print_recommended"
+        "subtraction"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1403,9 +1396,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 3,
       "tags": [
-        "multiplication",
-        "column_arithmetic",
-        "print_recommended"
+        "multiplication"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1449,9 +1440,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 3,
       "tags": [
-        "multiplication",
-        "column_arithmetic",
-        "print_recommended"
+        "multiplication"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1495,9 +1484,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 3,
       "tags": [
-        "division",
-        "column_arithmetic",
-        "print_recommended"
+        "division"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1543,9 +1530,7 @@ export const DRILL_CORE_CONTRACT = {
       ],
       "grade": 4,
       "tags": [
-        "division",
-        "column_arithmetic",
-        "print_recommended"
+        "division"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1593,9 +1578,7 @@ export const DRILL_CORE_CONTRACT = {
       "tags": [
         "decimals",
         "addition",
-        "subtraction",
-        "column_arithmetic",
-        "print_recommended"
+        "subtraction"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1640,9 +1623,7 @@ export const DRILL_CORE_CONTRACT = {
       "grade": 4,
       "tags": [
         "decimals",
-        "multiplication",
-        "column_arithmetic",
-        "print_recommended"
+        "multiplication"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1687,9 +1668,7 @@ export const DRILL_CORE_CONTRACT = {
       "grade": 4,
       "tags": [
         "decimals",
-        "division",
-        "column_arithmetic",
-        "print_recommended"
+        "division"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1734,9 +1713,7 @@ export const DRILL_CORE_CONTRACT = {
       "grade": 5,
       "tags": [
         "decimals",
-        "multiplication",
-        "column_arithmetic",
-        "print_recommended"
+        "multiplication"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1781,9 +1758,7 @@ export const DRILL_CORE_CONTRACT = {
       "grade": 5,
       "tags": [
         "decimals",
-        "division",
-        "column_arithmetic",
-        "print_recommended"
+        "division"
       ],
       "safety": "non_negative_only",
       "presentation": {
@@ -1877,17 +1852,6 @@ export const DRILL_CORE_CONTRACT = {
     "fraction_form_required",
     "mixed_fraction_form_required",
     "integer_form_required"
-  ],
-  "editor_action_types": [
-    "insert_digit",
-    "backspace",
-    "delete",
-    "move_left",
-    "move_right",
-    "insert_structure",
-    "select_slot",
-    "clear",
-    "commit"
   ],
   "editor_structures": [
     "fraction",

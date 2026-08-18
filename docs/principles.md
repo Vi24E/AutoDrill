@@ -68,7 +68,7 @@ Rust coreが所有するものの例:
 - canonical answer
 - normalization / grading
 - typed answer semantics
-- effort operation graph / operation counts
+- effort operation plan / operation counts
 - mathematical validation
 - generator revision / reproducibility
 

@@ -66,10 +66,10 @@ describe('Web curriculum registry', () => {
   });
 
   it('derives grade and UI classification from typed taxonomy tags', () => {
-    const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.tags.includes('column_arithmetic'));
+    const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.presentation.column_arithmetic);
     expect(columnThemes).toHaveLength(13);
     for (const theme of columnThemes) {
-      expect(theme.tags).toContain('print_recommended');
+      expect(theme.presentation.print_recommended).toBe(true);
       expect(theme.presentation.worksheet_grid).toBe(true);
       const isDivision = theme.tags.includes('division');
       expect(theme.problemCount).toBe(isDivision ? 12 : 16);

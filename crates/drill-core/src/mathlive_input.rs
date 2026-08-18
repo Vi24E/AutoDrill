@@ -1,6 +1,6 @@
 use crate::answer::{AnswerBinaryOperator, AnswerNode};
-use crate::editor::ensure_capability;
 use crate::error::EditorError;
+use crate::input::ensure_capability;
 use crate::model::{AnswerInputInterface, MAX_ANSWER_AST_SIZE};
 
 const MAX_MATHLIVE_LATEX_BYTES: usize = 4096;
@@ -12,6 +12,9 @@ pub fn parse_mathlive_answer(
     latex: &str,
     input_interface: &AnswerInputInterface,
 ) -> Result<AnswerNode, EditorError> {
+    if !input_interface.is_structurally_valid() {
+        return Err(EditorError::InputInterfaceViolation);
+    }
     if latex_exceeds_parse_budget(latex) {
         return Err(EditorError::AnswerSizeLimit {
             max_size: MAX_ANSWER_AST_SIZE,
@@ -176,14 +179,14 @@ impl<'a> Parser<'a> {
                 let AnswerNode::Fraction {
                     numerator,
                     denominator,
-                } = fraction
+                } = &fraction
                 else {
                     unreachable!();
                 };
                 left = AnswerNode::MixedFraction {
                     whole: Box::new(left),
-                    numerator,
-                    denominator,
+                    numerator: Box::new(numerator.as_ref().clone()),
+                    denominator: Box::new(denominator.as_ref().clone()),
                 };
                 continue;
             }
@@ -423,6 +426,19 @@ mod tests {
     }
 
     #[test]
+    fn rejects_structurally_invalid_input_interface_before_parsing() {
+        let invalid = AnswerInputInterface::DigitGrid {
+            min_digit: 4,
+            max_digit: 1,
+            cell_count: 0,
+        };
+        assert_eq!(
+            parse_mathlive_answer("1", &invalid),
+            Err(EditorError::InputInterfaceViolation)
+        );
+    }
+
+    #[test]
     fn parses_representative_mathlive_values() {
         let interface = structured();
         let cases = [
@@ -607,7 +623,7 @@ mod tests {
             }),
             denominator: Box::new(AnswerNode::Integer(4)),
         };
-        assert!(crate::grade::grade_answer(&expected, &actual).is_correct);
+        assert!(crate::grade::grade_answer(&expected, &actual).is_correct());
     }
 
     #[test]
@@ -619,33 +635,37 @@ mod tests {
         let parse = |latex: &str| parse_mathlive_answer(latex, &interface).unwrap();
 
         let result = grade_answer(&AnswerNode::Integer(2), &parse("--2"));
-        assert!(result.is_correct);
-        assert!(result.warnings.contains(&GradeWarning::RedundantNegative));
+        assert!(result.is_correct());
+        assert!(result.warnings().contains(&GradeWarning::RedundantNegative));
 
         let plus_minus_two = AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(2)));
         let result = grade_answer(&plus_minus_two, &parse(r"\pm\pm2"));
-        assert!(result.is_correct);
-        assert!(result.warnings.contains(&GradeWarning::RedundantPlusMinus));
+        assert!(result.is_correct());
+        assert!(result
+            .warnings()
+            .contains(&GradeWarning::RedundantPlusMinus));
 
-        assert!(grade_answer(&plus_minus_two, &parse("2,-2")).is_correct);
-        assert!(grade_answer(&plus_minus_two, &parse(r"\pm2")).is_correct);
+        assert!(grade_answer(&plus_minus_two, &parse("2,-2")).is_correct());
+        assert!(grade_answer(&plus_minus_two, &parse(r"\pm2")).is_correct());
 
         let offset_roots = AnswerNode::Tuple(vec![AnswerNode::Integer(-2), AnswerNode::Integer(6)]);
         let result = grade_answer(&offset_roots, &parse(r"2\pm4"));
-        assert!(result.is_correct);
+        assert!(result.is_correct());
         assert!(result
-            .warnings
+            .warnings()
             .contains(&GradeWarning::SolutionListRequired));
-        assert!(grade_answer(&offset_roots, &parse("-2,6")).is_correct);
+        assert!(grade_answer(&offset_roots, &parse("-2,6")).is_correct());
 
         let result = grade_answer(&AnswerNode::Integer(2), &parse("2,2"));
-        assert!(!result.is_correct);
-        assert!(result.warnings.contains(&GradeWarning::DuplicateSolution));
-        assert!(grade_answer(&AnswerNode::Integer(2), &parse("2")).is_correct);
+        assert!(!result.is_correct());
+        assert!(result.warnings().contains(&GradeWarning::DuplicateSolution));
+        assert!(grade_answer(&AnswerNode::Integer(2), &parse("2")).is_correct());
 
         let result = grade_answer(&AnswerNode::Integer(4), &parse(r"\sqrt{16}"));
-        assert!(result.is_correct);
-        assert!(result.warnings.contains(&GradeWarning::IntegerFormRequired));
+        assert!(result.is_correct());
+        assert!(result
+            .warnings()
+            .contains(&GradeWarning::IntegerFormRequired));
     }
 
     #[test]

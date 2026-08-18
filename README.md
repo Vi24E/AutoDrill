@@ -8,7 +8,7 @@
 
 **AutoDrill alpha 1.2**
 
-alpha 1.2系の現行実装では、通常計算、分数、小数、正負の数、方程式、筆算、「うそつきだれだ」を含む **37個のactive theme** を登録しています。個々の学年配置と教材内容は[`curriculum.md`](curriculum.md)を参照してください。
+alpha 1.2系の現行実装では、通常計算、分数、小数、正負の数、方程式、筆算、「うそつきだれだ」を含む **38個のactive theme** を登録しています。個々の学年配置と教材内容は[`curriculum.md`](curriculum.md)を参照してください。
 
 小学1年生〜中学3年生の全学年に実装済み単元があり、学年選択、`おすすめ`、4段階難易度、Seed再現、単元別URLを備えています。
 
@@ -49,7 +49,7 @@ git diff --check
 
 ## Rust / WASM boundary
 
-問題生成・正規化・採点・effort計算・MathLive入力の`AnswerNode`化はRustがsource of truthです。Webはgenerated Rust Web contractのcurrent schema（現行v5）JSON DTO経由でWASMを呼び出し、数学的correctnessを再実装しません。
+問題生成・正規化・採点・effort計算・MathLive入力の`AnswerNode`化はRustがsource of truthです。Webはgenerated Rust Web contractのcurrent schema（現行v7）JSON DTO経由でWASMを呼び出し、数学的correctnessを再実装しません。
 
 各Problemは`answer_schema`とは独立したtyped `input_interface`を返し、themeごとに許可する数値・構造入力を明示します。Webはこのcapabilityから入力UIを構成し、不正・巨大な入力はRust境界でfail closedに扱います。
 

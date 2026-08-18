@@ -11,6 +11,7 @@ import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domai
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
 import { fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
+import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 
 function pressKey(key: string) {
@@ -549,7 +550,7 @@ describe('AutoDrillApp', () => {
     expect(document.querySelectorAll('[data-problem-index]')).toHaveLength(6);
     const first = screen.getByTestId('problem-cell-0');
     expect(first).toHaveTextContent('このなかの2人がうそつきだ。');
-    expect(first).toHaveTextContent('Aさんがうそつきなら、Cさんはうそつきではない。');
+    expect(first).toHaveTextContent('Cさんはうそつきではない。');
     const a = within(first).getByRole('button', { name: 'Aさん' });
     const c = within(first).getByRole('button', { name: 'Cさん' });
     expect(a).toHaveAttribute('aria-pressed', 'false');
@@ -618,7 +619,6 @@ describe('AutoDrillApp', () => {
 
   it('disables q1 actions and announces PDF preparation while it is pending', async () => {
     const { engine, resolveGeneration } = deferredGenerationEngine();
-    vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window);
     render(<AutoDrillApp engine={engine} />);
 
     fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
@@ -1073,7 +1073,7 @@ describe('AutoDrillApp', () => {
     expect(screen.queryByLabelText('式が大きすぎます！')).not.toBeInTheDocument();
   });
 
-  it('keeps an 18-digit answer inside its box and shows a stable size-limit notice on the next digit', async () => {
+  it('keeps an answer at the Rust AST limit inside its box and shows a stable size-limit notice on the next digit', async () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
@@ -1086,14 +1086,15 @@ describe('AutoDrillApp', () => {
     const twoDigits = await screen.findByRole('textbox', { name: '1番の答え 11' }) as HTMLElement & { value: string };
     expect(twoDigits.value).toBe('11');
 
-    for (let index = 2; index < 19; index += 1) pressKey('1');
-    const eighteenDigits = '1'.repeat(18);
-    const answer = await screen.findByRole('textbox', { name: `1番の答え ${eighteenDigits}` }) as HTMLElement & { value: string };
-    expect(answer.value).toBe(eighteenDigits);
+    const answerLimit = DRILL_CORE_CONTRACT.max_answer_ast_size;
+    for (let index = 2; index <= answerLimit; index += 1) pressKey('1');
+    const limitDigits = '1'.repeat(answerLimit);
+    const answer = await screen.findByRole('textbox', { name: `1番の答え ${limitDigits}` }) as HTMLElement & { value: string };
+    expect(answer.value).toBe(limitDigits);
     expect(await screen.findByLabelText('式が大きすぎます！')).toBeInTheDocument();
 
     pressKey('Backspace');
-    await screen.findByRole('textbox', { name: `1番の答え ${'1'.repeat(17)}` });
+    await screen.findByRole('textbox', { name: `1番の答え ${'1'.repeat(answerLimit - 1)}` });
     await waitFor(() => expect(screen.queryByLabelText('式が大きすぎます！')).not.toBeInTheDocument());
   });
 
@@ -1103,7 +1104,6 @@ describe('AutoDrillApp', () => {
     let seedIndex = 0;
     const pdfModule = await import('@/pdf/worksheet-pdf');
     const openSpy = vi.mocked(pdfModule.openWorksheetPdf);
-    vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window);
     render(
       <AutoDrillApp
         engine={engine}
@@ -1122,7 +1122,7 @@ describe('AutoDrillApp', () => {
 
     expect(seeds).toEqual(generatedSeeds);
     expect(new Set(seeds).size).toBe(2);
-    expect(openSpy.mock.calls[0]?.[2]).toEqual({ generated_date: '2026-07-30', seed: 'C3d4' });
+    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', seed: 'C3d4' });
   });
 
   it('reuses an explicit q1 seed exactly and repeats the worksheet', async () => {
@@ -1514,14 +1514,13 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '印刷' }));
     await waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
     expect(openSpy.mock.calls[0]?.[0].seed).toBe('fixtureSeed');
-    expect(openSpy.mock.calls[0]?.[2]).toEqual({ generated_date: '2026-07-30', seed: 'fixtureSeed' });
+    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', seed: 'fixtureSeed' });
     expect(seeds).toEqual(['fixtureSeed']);
   });
 
   it('uses the same PDF pipeline for q1 print after generation', async () => {
     const pdfModule = await import('@/pdf/worksheet-pdf');
     const openSpy = vi.mocked(pdfModule.openWorksheetPdf);
-    vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window);
     render(<AutoDrillApp engine={fixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
     await waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
@@ -1532,7 +1531,6 @@ describe('AutoDrillApp', () => {
   it('does not retain a timer for q1 print and clears q2 timer on TOP', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1000);
-    vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window);
     try {
       render(<AutoDrillApp engine={fixtureEngine()} />);
       fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));

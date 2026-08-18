@@ -1,17 +1,20 @@
 use std::sync::OnceLock;
 
 use crate::answer::AnswerNode;
-use crate::effort::{OperationWeights, OperationVector, SolutionGraph};
-use crate::generator::{GeneratorEntry, ProblemGenerator};
-use crate::generator_support::input_interface;
-use crate::model::{AnswerSchema, Problem, ProblemPrompt};
+use crate::effort::{EffortModel, OperationWeights};
+use crate::error::GenerationError;
+use crate::generator::{
+    BootstrapDedup, GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy,
+};
+use crate::model::{
+    AnswerSchema, MiniSudokuGrid, Problem, ProblemPrompt, MINI_SUDOKU_CELL_COUNT,
+    MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
+};
 use crate::rng::DeterministicRng;
-use crate::schema::SCHEMA_VERSION;
 use crate::theme::{
     CurriculumSafetyPolicy as Safety, DedupPolicy as Dedup, ThemeAnswerContract as AnswerContract,
-    ThemeAnswerSchemaKind as Schema, ThemeInputProfile as Input,
-    ThemePresentationPolicy as Presentation, ThemePromptKind as Prompt, ThemeRegistration,
-    ThemeRegistrationSpec, ThemeTag, PUZZLE_4_LAYOUT,
+    ThemePresentationPolicy as Presentation, ThemeRegistration, ThemeRegistrationSpec, ThemeTag,
+    PUZZLE_4_LAYOUT,
 };
 
 pub const THEME_ID_MINI_SUDOKU: u32 = 38;
@@ -19,29 +22,26 @@ pub const GENERATOR_REVISION_MINI_SUDOKU: u32 = 1;
 pub const SKILL_ID_MINI_SUDOKU: &str = "bonus.logic.mini_sudoku";
 pub const CURRICULUM_PATH_MINI_SUDOKU: [&str; 3] = ["root", "おまけ", "すうじはひとりぼっち"];
 const TAGS: &[ThemeTag] = &[ThemeTag::Bonus];
-const SIDE: usize = 4;
-const CELL_COUNT: usize = SIDE * SIDE;
+const SIDE: usize = MINI_SUDOKU_SIDE;
+const CELL_COUNT: usize = MINI_SUDOKU_CELL_COUNT;
 const MIN_BLANKS: usize = 5;
 const MAX_BLANKS: usize = 10;
 const UNIQUE_PUZZLE_ATTEMPTS_PER_BLANK_COUNT: usize = 64;
 
-pub const MINI_SUDOKU_REGISTRATION: ThemeRegistration = ThemeRegistration::new(ThemeRegistrationSpec {
-    numeric_theme_id: THEME_ID_MINI_SUDOKU,
-    generator_revision: GENERATOR_REVISION_MINI_SUDOKU,
-    skill_id: SKILL_ID_MINI_SUDOKU,
-    curriculum_path: &CURRICULUM_PATH_MINI_SUDOKU,
-    grade: None,
-    tags: TAGS,
-    safety: Safety::NonNegativeOnly,
-    presentation: Presentation::WORKSHEET_GRID,
-    dedup: Dedup::PreserveOperandOrder,
-    answer_contract: AnswerContract {
-        prompt_kind: Prompt::MiniSudoku,
-        answer_schema_kind: Schema::OrderedTuple,
-        input_profile: Input::DigitGrid { min_digit: 1, max_digit: 4, cell_count: 16 },
-    },
-    layout: PUZZLE_4_LAYOUT,
-});
+pub const MINI_SUDOKU_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_MINI_SUDOKU),
+        generator_revision: crate::theme::GeneratorRevision::new(GENERATOR_REVISION_MINI_SUDOKU),
+        skill_id: SKILL_ID_MINI_SUDOKU,
+        curriculum_path: &CURRICULUM_PATH_MINI_SUDOKU,
+        grade: None,
+        tags: TAGS,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::WORKSHEET_GRID,
+        dedup: Dedup::PreserveOperandOrder,
+        answer_contract: AnswerContract::DigitGrid(MINI_SUDOKU_GRID_SPEC),
+        layout: PUZZLE_4_LAYOUT,
+    });
 
 pub struct MiniSudokuGenerator;
 pub static GENERATOR: MiniSudokuGenerator = MiniSudokuGenerator;
@@ -51,12 +51,18 @@ impl ProblemGenerator for MiniSudokuGenerator {
         &MINI_SUDOKU_REGISTRATION
     }
 
+    fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
+        Ok(SamplingStrategy::random(self, BootstrapDedup::Deduplicate))
+    }
+}
+
+impl RandomCandidateSource for MiniSudokuGenerator {
     fn draw_candidate(
         &self,
         rng: &mut DeterministicRng,
         ordinal: u32,
         _weights: &OperationWeights,
-    ) -> Option<Problem> {
+    ) -> Result<Option<Problem>, GenerationError> {
         // Draw the bootstrap blank count exactly once. Uniqueness retries keep
         // that count fixed so rejection probability cannot bias the requested
         // uniform [5, 10] blank-count source population.
@@ -79,35 +85,41 @@ impl ProblemGenerator for MiniSudokuGenerator {
                 break;
             }
         }
-        let (solved, puzzle) = selected?;
+        let Some((solved, puzzle)) = selected else {
+            return Ok(None);
+        };
 
         let trivial = trivial_blank_count(&puzzle);
         let nontrivial = blank_count - trivial;
         let theme_specific_effort = nontrivial as f64 + 0.3 * trivial as f64;
-        let solution_graph = SolutionGraph::default();
-
-        Some(Problem {
-            schema_version: SCHEMA_VERSION,
-            id: ordinal,
-            numeric_theme_id: THEME_ID_MINI_SUDOKU,
-            prompt: ProblemPrompt::MiniSudoku {
-                givens: puzzle.iter().map(|&value| (value != 0).then_some(value)).collect(),
+        let givens = MiniSudokuGrid::new(std::array::from_fn(|index| {
+            (puzzle[index] != 0).then_some(puzzle[index])
+        }))
+        .ok_or(GenerationError::InvalidGeneratedProblem {
+            reason: "mini-sudoku generator produced a digit outside its grid spec",
+        })?;
+        let effort_model = EffortModel::theme_specific(theme_specific_effort).ok_or(
+            GenerationError::InvalidGeneratedProblem {
+                reason: "mini-sudoku generator produced a non-finite effort",
             },
-            input_interface: input_interface(Input::DigitGrid { min_digit: 1, max_digit: 4, cell_count: 16 }),
-            answer_schema: AnswerSchema::OrderedTuple { length: CELL_COUNT as u8 },
-            canonical_answer: AnswerNode::Tuple(
-                solved.iter().map(|&value| AnswerNode::Integer(i64::from(value))).collect(),
+        )?;
+        Problem::generated(
+            &MINI_SUDOKU_REGISTRATION,
+            ordinal,
+            ProblemPrompt::MiniSudoku { givens },
+            AnswerSchema::OrderedTuple {
+                length: MINI_SUDOKU_GRID_SPEC.cell_count(),
+            },
+            AnswerNode::Tuple(
+                solved
+                    .iter()
+                    .map(|&value| AnswerNode::Integer(i64::from(value)))
+                    .collect(),
             ),
-            worked_solution: None,
-            solution_graph,
-            operation_vector: OperationVector::zero(),
-            theme_specific_effort: Some(theme_specific_effort),
-            effort: theme_specific_effort,
-        })
-    }
-
-    fn deduplicate_bootstrap_pool(&self) -> bool {
-        true
+            effort_model,
+        )
+        .map(Some)
+        .map_err(GenerationError::from)
     }
 }
 
@@ -117,56 +129,11 @@ fn draw_blank_count(rng: &mut DeterministicRng) -> usize {
 
 fn solved_boards() -> &'static [[u8; CELL_COUNT]] {
     static BOARDS: OnceLock<Vec<[u8; CELL_COUNT]>> = OnceLock::new();
-    BOARDS.get_or_init(|| {
-        let mut boards = Vec::new();
-        enumerate_solutions([0; CELL_COUNT], 0, &mut boards, usize::MAX);
-        boards
-    })
+    BOARDS.get_or_init(|| crate::semantics::mini_sudoku_solutions([0; CELL_COUNT], usize::MAX))
 }
 
 fn count_solutions(board: &[u8; CELL_COUNT], limit: usize) -> usize {
-    let mut solutions = Vec::new();
-    enumerate_solutions(*board, 0, &mut solutions, limit);
-    solutions.len()
-}
-
-fn enumerate_solutions(
-    mut board: [u8; CELL_COUNT],
-    start: usize,
-    solutions: &mut Vec<[u8; CELL_COUNT]>,
-    limit: usize,
-) {
-    if solutions.len() >= limit {
-        return;
-    }
-    let Some(index) = (start..CELL_COUNT).find(|&index| board[index] == 0) else {
-        solutions.push(board);
-        return;
-    };
-    for digit in 1..=4 {
-        if can_place(&board, index, digit) {
-            board[index] = digit;
-            enumerate_solutions(board, index + 1, solutions, limit);
-            board[index] = 0;
-            if solutions.len() >= limit {
-                return;
-            }
-        }
-    }
-}
-
-fn can_place(board: &[u8; CELL_COUNT], index: usize, digit: u8) -> bool {
-    let row = index / SIDE;
-    let column = index % SIDE;
-    if (0..SIDE).any(|offset| board[row * SIDE + offset] == digit) {
-        return false;
-    }
-    if (0..SIDE).any(|offset| board[offset * SIDE + column] == digit) {
-        return false;
-    }
-    let block_row = (row / 2) * 2;
-    let block_column = (column / 2) * 2;
-    !(0..2).any(|dr| (0..2).any(|dc| board[(block_row + dr) * SIDE + block_column + dc] == digit))
+    crate::semantics::mini_sudoku_solutions(*board, limit).len()
 }
 
 fn trivial_blank_count(board: &[u8; CELL_COUNT]) -> usize {
@@ -177,8 +144,12 @@ fn trivial_blank_count(board: &[u8; CELL_COUNT]) -> usize {
             }
             let row = index / SIDE;
             let column = index % SIDE;
-            let row_filled = (0..SIDE).filter(|&offset| board[row * SIDE + offset] != 0).count();
-            let column_filled = (0..SIDE).filter(|&offset| board[offset * SIDE + column] != 0).count();
+            let row_filled = (0..SIDE)
+                .filter(|&offset| board[row * SIDE + offset] != 0)
+                .count();
+            let column_filled = (0..SIDE)
+                .filter(|&offset| board[offset * SIDE + column] != 0)
+                .count();
             let block_row = (row / 2) * 2;
             let block_column = (column / 2) * 2;
             let block_filled = (0..2)
@@ -195,7 +166,6 @@ pub(crate) static GENERATORS: [GeneratorEntry; 1] = [GeneratorEntry::current(&GE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::registry::resolved_weights;
 
     #[test]
     fn four_by_four_sudoku_has_288_completed_boards() {
@@ -207,37 +177,36 @@ mod tests {
 
     #[test]
     fn generated_candidates_are_unique_and_follow_the_requested_effort() {
-        let weights = resolved_weights(&MINI_SUDOKU_REGISTRATION);
+        let weights = OperationWeights::default();
         let mut rng = DeterministicRng::from_seed("Lonely42");
         for ordinal in 1..=200 {
             let mut expected_rng = rng.clone();
             let expected_blank_count = draw_blank_count(&mut expected_rng);
             let problem = GENERATOR
                 .draw_candidate(&mut rng, ordinal, &weights)
+                .expect("candidate construction must preserve the problem contract")
                 .expect("every uniformly drawn blank count must find a unique puzzle within the local retry budget");
-            let ProblemPrompt::MiniSudoku { givens } = &problem.prompt else {
+            let ProblemPrompt::MiniSudoku { givens } = problem.prompt() else {
                 panic!("expected mini sudoku prompt");
             };
             let board: [u8; CELL_COUNT] = std::array::from_fn(|index| givens[index].unwrap_or(0));
             let blanks = board.iter().filter(|&&value| value == 0).count();
             assert!((MIN_BLANKS..=MAX_BLANKS).contains(&blanks));
-            assert_eq!(blanks, expected_blank_count, "uniqueness retries must not redraw the uniformly sampled blank count");
+            assert_eq!(
+                blanks, expected_blank_count,
+                "uniqueness retries must not redraw the uniformly sampled blank count"
+            );
             assert_eq!(count_solutions(&board, 2), 1);
             let trivial = trivial_blank_count(&board);
             let expected = (blanks - trivial) as f64 + 0.3 * trivial as f64;
-            assert!((problem.effort - expected).abs() < 1e-12);
-            assert_eq!(problem.canonical_answer.size(), 17);
+            assert!((problem.effort() - expected).abs() < 1e-12);
+            assert_eq!(problem.canonical_answer().size(), 17);
         }
     }
 
     #[test]
     fn trivial_blank_means_a_row_column_or_block_has_three_givens() {
-        let board = [
-            1, 2, 3, 0,
-            3, 4, 1, 2,
-            2, 1, 4, 3,
-            4, 3, 2, 1,
-        ];
+        let board = [1, 2, 3, 0, 3, 4, 1, 2, 2, 1, 4, 3, 4, 3, 2, 1];
         assert_eq!(trivial_blank_count(&board), 1);
     }
 }

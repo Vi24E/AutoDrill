@@ -242,7 +242,7 @@ Base: (重み)
 - BaseRootSquareCancel: `(sqrt(n))^2 -> n`の構造消去(1)
 - BigNum(n): 答えの大きさに伴う読み書き・保持のcost(log_10(n))。nは被演算子ではなく正解ASTの正確な整数成分から得る
 - Round: 四捨五入(1)
-- TimeTen(n): 10^n倍する、または10^nで割る(1+0.2n)
+- TimeTen(n): 10^n倍する、または10^nで割る。operation vectorでは`TimeTen × 1 + Count × n`へ分解し、既定weightで1+0.2nとする
 - OverheadPF: 素因数分解の追加overhead(2)
 - OverheadGCD: GCD探索の追加overhead(4)
 - OverheadLCM: LCM探索の追加overhead(4)
@@ -292,7 +292,7 @@ Base: (重み)
 ### 方程式
 
 - 一次方程式: `ax+b=cx+d -> Ax=B -> x=B/A`を標準戦略とする。移項を`Transposition`で数え、`A=a-c`、`B=d-b`、`B/A`は整数・有理数の共通builderへ分解する。異分母整理や約分も上記LCM/GCDモデルを使う。
-- 連立方程式: 加減法を標準解法とする。x消去とy消去の**完全なSolutionGraphを両方構築し、重み適用後のeffortが小さい方**を採用する。係数調整、消去、残った一次方程式、代入をすべて共通多桁演算へ分解する。`OverheadNegative`は負数を含む個々の演算ごとに数える。
+- 連立方程式: 加減法を標準解法とする。x消去とy消去の**完全なOperationPlanを両方構築し、重み適用後のeffortが小さい方**を採用する。係数調整、消去、残った一次方程式、代入をすべて共通多桁演算へ分解する。`OverheadNegative`は負数を含む個々の演算ごとに数える。
 
 ### 二次方程式
 

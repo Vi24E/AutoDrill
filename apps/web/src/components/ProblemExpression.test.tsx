@@ -15,8 +15,9 @@ function columnProblem(prompt: ProblemDto['prompt'], canonical_answer: ProblemDt
     answer_schema: { kind: 'decimal', max_scale: 3 },
     canonical_answer,
     ...(worked_solution ? { worked_solution } : {}),
-    solution_graph: { steps: [] },
+    operation_plan: { operations: [] },
     operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+    theme_specific_effort: null,
     effort: 0,
   };
 }

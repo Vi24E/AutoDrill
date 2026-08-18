@@ -58,7 +58,6 @@ import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
-import { hasThemeTag } from '@/domain/theme-registry';
 import { generateAutomaticSeed } from '@/domain/seed';
 import { AUTODRILL_VERSION_LABEL } from '@/domain/version';
 import {
@@ -102,9 +101,9 @@ type WorksheetPhase = 'editing' | 'grading' | 'graded' | 'replacing';
 type SettingsBusyAction = 'generate' | 'print' | null;
 const FURIGANA_STORAGE_KEY = 'autodrill:furigana-enabled';
 
-async function openWorksheetPdfLazy(worksheet: WorksheetDto, targetWindow?: Window | null, metadata?: WorksheetMetadata): Promise<void> {
+async function openWorksheetPdfLazy(worksheet: WorksheetDto, metadata?: WorksheetMetadata): Promise<void> {
   const { openWorksheetPdf } = await import('@/pdf/worksheet-pdf');
-  return openWorksheetPdf(worksheet, targetWindow, metadata);
+  return openWorksheetPdf(worksheet, metadata);
 }
 
 const FuriganaContext = createContext(true);
@@ -1023,7 +1022,7 @@ export function AutoDrillApp({
       // exact seed used by this UI invocation when a fixture/runtime returns a
       // stale or normalized seed string.
       const nextWorksheet = { ...generatedWorksheet, seed };
-      if (printAfterGeneration) await openWorksheetPdfLazy(nextWorksheet, undefined, metadata);
+      if (printAfterGeneration) await openWorksheetPdfLazy(nextWorksheet, metadata);
       if (printAfterGeneration) {
         setWorksheet(nextWorksheet);
         setWorksheetMetadata(metadata);
@@ -1626,7 +1625,7 @@ export function AutoDrillApp({
             onRetryWorksheet={retryWorksheet}
             onDifferentWorksheet={() => void generateDifferentWorksheet()}
             onPrint={() => {
-              void openWorksheetPdfLazy(worksheet, undefined, worksheetMetadata ?? undefined).catch(showEngineError);
+              void openWorksheetPdfLazy(worksheet, worksheetMetadata ?? undefined).catch(showEngineError);
             }}
             onBack={backToTop}
           />
@@ -1827,7 +1826,7 @@ function SettingsScreen({
             </div>
           </div>
 
-          {selection.theme.implemented && hasThemeTag(selection.theme, 'print_recommended') ? (
+          {selection.theme.implemented && selection.theme.presentation.print_recommended ? (
             <p className="print-recommended-note" role="note" aria-label="この問題は紙に印刷して解くことをおすすめします。">
               <RubyMessage text="この問題は紙に印刷して解くことをおすすめします。" />
             </p>

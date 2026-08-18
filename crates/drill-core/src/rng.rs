@@ -3,18 +3,18 @@
 
 /// SplitMix64 is fast, reproducible, and has a well-defined integer algorithm.
 #[derive(Clone, Debug)]
-pub struct DeterministicRng {
+pub(crate) struct DeterministicRng {
     state: u64,
 }
 
 impl DeterministicRng {
-    pub fn from_seed(seed: &str) -> Self {
+    pub(crate) fn from_seed(seed: &str) -> Self {
         Self {
             state: seed_to_u64(seed),
         }
     }
 
-    pub fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.state;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -24,7 +24,7 @@ impl DeterministicRng {
 
     /// Draw an integer uniformly in `[0, upper)`, rejecting the partial range
     /// that would otherwise introduce modulo bias.
-    pub fn next_bounded(&mut self, upper: u64) -> u64 {
+    pub(crate) fn next_bounded(&mut self, upper: u64) -> u64 {
         assert!(upper > 0, "upper bound must be positive");
         let zone = u64::MAX - (u64::MAX % upper);
         loop {
@@ -35,7 +35,7 @@ impl DeterministicRng {
         }
     }
 
-    pub fn next_ordered_pair(&mut self) -> (u8, u8) {
+    pub(crate) fn next_ordered_pair(&mut self) -> (u8, u8) {
         let pair = self.next_bounded(81);
         ((pair / 9 + 1) as u8, (pair % 9 + 1) as u8)
     }
@@ -44,7 +44,7 @@ impl DeterministicRng {
 /// Decimal and hexadecimal seeds remain intuitive, while arbitrary strings are
 /// still accepted using a stable FNV-1a hash.  The original string is retained
 /// in the worksheet DTO so JS never has to round a numeric seed.
-pub fn seed_to_u64(seed: &str) -> u64 {
+pub(crate) fn seed_to_u64(seed: &str) -> u64 {
     let trimmed = seed.trim();
     if let Some(hex) = trimmed
         .strip_prefix("0x")

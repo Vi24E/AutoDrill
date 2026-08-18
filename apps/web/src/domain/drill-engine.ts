@@ -6,8 +6,6 @@ import type {
   ArithmeticExpression as RustArithmeticExpression,
   ArithmeticOperator as RustArithmeticOperator,
   ColumnMultiplicationPartial as RustColumnMultiplicationPartial,
-  EditorAction as RustEditorAction,
-  EditorState as RustEditorState,
   EditorStructure as RustEditorStructure,
   GenerateWorksheetRequest as RustGenerateWorksheetRequest,
   LiarStatement as RustLiarStatement,
@@ -17,8 +15,7 @@ import type {
   ProblemPrompt as RustProblemPrompt,
   ProblemSetIdentity as RustProblemSetIdentity,
   RationalCoefficient as RustRationalCoefficient,
-  SolutionGraph as RustSolutionGraph,
-  SolutionStep as RustSolutionStep,
+  OperationPlan as RustOperationPlan,
   WorkedSolution as RustWorkedSolution,
   Worksheet as RustWorksheet,
 } from '@/generated/wire';
@@ -65,12 +62,6 @@ export type AnswerNode = RustAnswerNode;
 
 export type IntegerAnswerNode = Extract<AnswerNode, { type: 'integer' }>;
 
-/** Rust EditorState with readonly Web collection views. */
-export type EditorState = Omit<RustEditorState, 'answer' | 'active_path'> & {
-  answer: AnswerNode;
-  active_path: readonly number[];
-};
-
 export type AnswerInputStructure = RustEditorStructure;
 export type AnswerInputInterface =
   | Extract<RustAnswerInputInterface, { type: 'simple_numeric' }>
@@ -103,16 +94,6 @@ export function inputCapabilities(inputInterface: AnswerInputInterface): InputCa
   };
 }
 
-export function isEditorActionAllowed(inputInterface: AnswerInputInterface, action: EditorAction): boolean {
-  if (action.type !== 'insert_structure') return true;
-  const capabilities = inputCapabilities(inputInterface);
-  return capabilities.allowed_structures.includes(action.structure)
-    || (action.structure === 'decimal' && capabilities.allow_decimal)
-    || (action.structure === 'negative' && capabilities.allow_negative);
-}
-
-export type EditorAction = RustEditorAction;
-
 export type RationalCoefficient = RustRationalCoefficient;
 export type ArithmeticOperator = RustArithmeticOperator;
 export type ArithmeticExpression = RustArithmeticExpression;
@@ -120,8 +101,7 @@ export type LiarStatement = RustLiarStatement;
 export type ProblemPrompt = RustProblemPrompt;
 export type AnswerSchema = RustAnswerSchema;
 export type OperationVector = RustOperationVector;
-export type SolutionStep = RustSolutionStep;
-export type SolutionGraph = RustSolutionGraph;
+export type OperationPlan = RustOperationPlan;
 export type ColumnMultiplicationPartial = RustColumnMultiplicationPartial;
 export type LongDivisionStep = RustLongDivisionStep;
 export type WorkedSolution = RustWorkedSolution;
@@ -174,6 +154,12 @@ export type DrillEngineErrorKind =
   | 'generation_timeout'
   | 'generation_attempt_limit'
   | 'answer_ast_size_limit'
+  | 'invalid_sampling_strategy'
+  | 'invalid_registry'
+  | 'invalid_generated_problem'
+  | 'invalid_generated_worksheet'
+  | 'invalid_answer_schema'
+  | 'expected_answer_outside_schema'
   | 'wasm_unavailable'
   | 'invalid_dto';
 
@@ -191,7 +177,6 @@ export class DrillEngineError extends Error {
 
 export interface DrillEngine {
   generateWorksheet(settings: DrillSettings): Promise<WorksheetDto>;
-  applyEditorAction(state: EditorState, action: EditorAction, inputInterface: AnswerInputInterface): Promise<EditorState>;
   parseMathLiveAnswer(latex: string, inputInterface: AnswerInputInterface): Promise<AnswerNode>;
   gradeAnswer(request: GradeRequest): Promise<GradeResult>;
 }
@@ -204,15 +189,6 @@ export const DEFAULT_DRILL_SETTINGS: DrillSettings = {
   // q1 resolves a blank value to a fresh automatic seed per click.
   seed: '',
 };
-
-export function emptyEditorState(): EditorState {
-  return {
-    answer: { type: 'empty' },
-    cursor: 0,
-    active_path: [],
-    committed: false,
-  };
-}
 
 function exactDecimalText(coefficient: string, scale: number): string {
   const negative = coefficient.startsWith('-');
@@ -246,11 +222,6 @@ export function answerNodeText(answer: AnswerNode): string {
     case 'tuple': return answer.value.map(answerNodeText).join(', ');
     case 'variable': return answer.value;
   }
-}
-
-export function editorValue(state: EditorState): string | null {
-  const text = answerNodeText(state.answer);
-  return text.length > 0 ? text : null;
 }
 
 export function integerAnswerValue(answer: AnswerNode): string | null {

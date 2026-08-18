@@ -1,85 +1,6 @@
 use crate::answer::AnswerNode;
-use crate::model::{
-    AnswerInputInterface, ArithmeticExpression, ArithmeticOperator, EditorStructure,
-    RationalCoefficient,
-};
+use crate::model::{ArithmeticExpression, ArithmeticOperator, RationalCoefficient};
 use crate::rng::DeterministicRng;
-use crate::theme::ThemeInputProfile;
-
-pub(crate) fn input_interface(profile: ThemeInputProfile) -> AnswerInputInterface {
-    let junior_high_full = || AnswerInputInterface::StructuredMath {
-        allowed_structures: vec![
-            EditorStructure::Fraction,
-            EditorStructure::MixedFraction,
-            EditorStructure::Decimal,
-            EditorStructure::Root,
-            EditorStructure::Negative,
-            EditorStructure::PlusMinus,
-            EditorStructure::Tuple,
-            EditorStructure::Arithmetic,
-        ],
-    };
-    match profile {
-        ThemeInputProfile::SimplePositive => AnswerInputInterface::SimpleNumeric {
-            allow_decimal: false,
-            allow_negative: false,
-        },
-        ThemeInputProfile::SimpleSigned => AnswerInputInterface::SimpleNumeric {
-            allow_decimal: false,
-            allow_negative: true,
-        },
-        ThemeInputProfile::SimpleDecimal => AnswerInputInterface::SimpleNumeric {
-            allow_decimal: true,
-            allow_negative: false,
-        },
-        ThemeInputProfile::Fraction => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![
-                EditorStructure::Fraction,
-                EditorStructure::MixedFraction,
-                EditorStructure::Decimal,
-            ],
-        },
-        ThemeInputProfile::ImproperFraction => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![EditorStructure::Fraction, EditorStructure::Decimal],
-        },
-        ThemeInputProfile::SignedRational => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![EditorStructure::Fraction, EditorStructure::Negative],
-        },
-        ThemeInputProfile::LinearEquation => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![
-                EditorStructure::Fraction,
-                EditorStructure::MixedFraction,
-                EditorStructure::Decimal,
-                EditorStructure::Root,
-                EditorStructure::Negative,
-                EditorStructure::PlusMinus,
-                EditorStructure::Tuple,
-            ],
-        },
-        ThemeInputProfile::QuadraticEquation => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![
-                EditorStructure::Fraction,
-                EditorStructure::Root,
-                EditorStructure::Negative,
-                EditorStructure::PlusMinus,
-                EditorStructure::Tuple,
-                EditorStructure::Arithmetic,
-            ],
-        },
-        ThemeInputProfile::SimultaneousEquation => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![EditorStructure::Negative, EditorStructure::Tuple],
-        },
-        ThemeInputProfile::JuniorHighFull => junior_high_full(),
-        ThemeInputProfile::TupleOnly => AnswerInputInterface::StructuredMath {
-            allowed_structures: vec![EditorStructure::Tuple],
-        },
-        ThemeInputProfile::DigitGrid { min_digit, max_digit, cell_count } => AnswerInputInterface::DigitGrid {
-            min_digit,
-            max_digit,
-            cell_count,
-        },
-    }
-}
 
 pub(crate) fn integer_expression(value: i64) -> ArithmeticExpression {
     ArithmeticExpression::Integer { value }
@@ -106,29 +27,29 @@ pub(crate) fn binary_expression(
 }
 
 pub(crate) fn rational_answer(value: RationalCoefficient) -> AnswerNode {
-    if value.denominator == 1 {
-        AnswerNode::Integer(value.numerator)
+    if value.denominator() == 1 {
+        AnswerNode::Integer(value.numerator())
     } else {
         AnswerNode::Fraction {
-            numerator: Box::new(AnswerNode::Integer(value.numerator)),
-            denominator: Box::new(AnswerNode::Integer(value.denominator)),
+            numerator: Box::new(AnswerNode::Integer(value.numerator())),
+            denominator: Box::new(AnswerNode::Integer(value.denominator())),
         }
     }
 }
 
 pub(crate) fn mixed_number_answer(value: RationalCoefficient) -> AnswerNode {
-    if value.denominator == 1 || value.numerator < value.denominator {
+    if value.denominator() == 1 || value.numerator() < value.denominator() {
         return rational_answer(value);
     }
-    let whole = value.numerator / value.denominator;
-    let numerator = value.numerator % value.denominator;
+    let whole = value.numerator() / value.denominator();
+    let numerator = value.numerator() % value.denominator();
     if numerator == 0 {
         AnswerNode::Integer(whole)
     } else {
         AnswerNode::MixedFraction {
             whole: Box::new(AnswerNode::Integer(whole)),
             numerator: Box::new(AnswerNode::Integer(numerator)),
-            denominator: Box::new(AnswerNode::Integer(value.denominator)),
+            denominator: Box::new(AnswerNode::Integer(value.denominator())),
         }
     }
 }
@@ -139,8 +60,8 @@ pub(crate) fn exact_decimal_rational(coefficient: i64, scale: u32) -> Option<Rat
 }
 
 pub(crate) fn rational_less_than(left: RationalCoefficient, right: RationalCoefficient) -> bool {
-    i128::from(left.numerator) * i128::from(right.denominator)
-        < i128::from(right.numerator) * i128::from(left.denominator)
+    i128::from(left.numerator()) * i128::from(right.denominator())
+        < i128::from(right.numerator()) * i128::from(left.denominator())
 }
 
 pub(crate) fn rational_to_exact_decimal_answer(
@@ -148,9 +69,9 @@ pub(crate) fn rational_to_exact_decimal_answer(
     max_scale: u32,
 ) -> Option<AnswerNode> {
     if value.is_integer() {
-        return Some(AnswerNode::Integer(value.numerator));
+        return Some(AnswerNode::Integer(value.numerator()));
     }
-    let mut denominator = value.denominator;
+    let mut denominator = value.denominator();
     while denominator % 2 == 0 {
         denominator /= 2;
     }
@@ -162,8 +83,8 @@ pub(crate) fn rational_to_exact_decimal_answer(
     }
     for scale in 1..=max_scale {
         let power = 10_i64.checked_pow(scale)?;
-        if power % value.denominator == 0 {
-            let coefficient = value.numerator.checked_mul(power / value.denominator)?;
+        if power % value.denominator() == 0 {
+            let coefficient = value.numerator().checked_mul(power / value.denominator())?;
             return Some(AnswerNode::ExactDecimal { coefficient, scale });
         }
     }
@@ -186,19 +107,24 @@ pub(crate) fn rational_to_arithmetic_expression(
 pub(crate) fn draw_decimal_coefficient(
     rng: &mut DeterministicRng,
     max_significant_digits: u32,
-) -> i64 {
-    debug_assert!(max_significant_digits >= 1);
+) -> Option<i64> {
+    if max_significant_digits == 0 {
+        return None;
+    }
     let significant_digits = 1 + rng.next_bounded(u64::from(max_significant_digits)) as u32;
     let lower = if significant_digits == 1 {
         1_i64
     } else {
-        10_i64.pow(significant_digits - 1)
+        10_i64.checked_pow(significant_digits - 1)?
     };
-    let upper = 10_i64.pow(significant_digits) - 1;
+    let upper = 10_i64.checked_pow(significant_digits)?.checked_sub(1)?;
+    let width = upper.checked_sub(lower)?.checked_add(1)?;
+    let width = u64::try_from(width).ok()?;
     loop {
-        let candidate = lower + rng.next_bounded((upper - lower + 1) as u64) as i64;
+        let offset = i64::try_from(rng.next_bounded(width)).ok()?;
+        let candidate = lower.checked_add(offset)?;
         if candidate % 10 != 0 {
-            break candidate;
+            break Some(candidate);
         }
     }
 }
@@ -207,11 +133,13 @@ pub(crate) fn draw_decimal_operand(
     rng: &mut DeterministicRng,
     max_significant_digits: u32,
     max_scale: u32,
-) -> (i64, u32) {
-    debug_assert!(max_scale >= 1);
-    let coefficient = draw_decimal_coefficient(rng, max_significant_digits);
+) -> Option<(i64, u32)> {
+    if max_scale == 0 {
+        return None;
+    }
+    let coefficient = draw_decimal_coefficient(rng, max_significant_digits)?;
     let scale = 1 + rng.next_bounded(u64::from(max_scale)) as u32;
-    (coefficient, scale)
+    Some((coefficient, scale))
 }
 
 pub(crate) fn arithmetic_leaf_significant_digits(
@@ -241,52 +169,40 @@ pub(crate) fn arithmetic_leaf_column_grid_cells(
     }
 }
 
-pub(crate) fn draw_signed_integer(rng: &mut DeterministicRng, max_abs: i64) -> i64 {
-    let magnitude = 1 + rng.next_bounded(max_abs as u64) as i64;
-    if rng.next_bounded(2) == 0 {
+pub(crate) fn draw_signed_integer(rng: &mut DeterministicRng, max_abs: i64) -> Option<i64> {
+    let upper = u64::try_from(max_abs).ok().filter(|value| *value > 0)?;
+    let magnitude = i64::try_from(1 + rng.next_bounded(upper)).ok()?;
+    Some(if rng.next_bounded(2) == 0 {
         magnitude
     } else {
         -magnitude
-    }
+    })
 }
 
-pub(crate) fn ensure_negative_term(rng: &mut DeterministicRng, values: &mut [i64]) {
+pub(crate) fn ensure_negative_term(rng: &mut DeterministicRng, values: &mut [i64]) -> Option<()> {
+    if values.is_empty() {
+        return None;
+    }
     if values.iter().all(|value| *value > 0) {
         let index = rng.next_bounded(values.len() as u64) as usize;
         values[index] = -values[index];
     }
+    Some(())
 }
 
 pub(crate) fn evaluate_expression(
     expression: &ArithmeticExpression,
 ) -> Option<RationalCoefficient> {
-    match expression {
-        ArithmeticExpression::Integer { value } => RationalCoefficient::new(*value, 1),
-        ArithmeticExpression::Rational { value } => Some(*value),
-        ArithmeticExpression::ExactDecimal { coefficient, scale } => {
-            exact_decimal_rational(*coefficient, *scale)
-        }
-        ArithmeticExpression::Binary {
-            operator,
-            left,
-            right,
-        } => {
-            let left = evaluate_expression(left)?;
-            let right = evaluate_expression(right)?;
-            match operator {
-                ArithmeticOperator::Add => left.checked_add(right),
-                ArithmeticOperator::Subtract => left.subtract(right),
-                ArithmeticOperator::Multiply => left.multiply(right),
-                ArithmeticOperator::Divide => left.divide(right),
-            }
-        }
-    }
+    crate::semantics::evaluate_expression(expression)
 }
 
 pub(crate) fn draw_bounded_rational_arithmetic_ast(
     rng: &mut DeterministicRng,
     values: &[i64],
 ) -> Option<ArithmeticExpression> {
+    if values.is_empty() {
+        return None;
+    }
     if values.len() == 1 {
         return Some(integer_expression(values[0]));
     }
@@ -301,5 +217,25 @@ pub(crate) fn draw_bounded_rational_arithmetic_ast(
     };
     let expression = binary_expression(operator, left, right);
     let value = evaluate_expression(&expression)?;
-    (value.numerator.unsigned_abs() <= 729 && value.denominator <= 81).then_some(expression)
+    (value.numerator().unsigned_abs() <= 729 && value.denominator() <= 81).then_some(expression)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generation_helpers_reject_empty_or_zero_bounds_without_reaching_rng_panics() {
+        let mut rng = DeterministicRng::from_seed("helper-bounds");
+        assert!(draw_decimal_coefficient(&mut rng, 0).is_none());
+        assert!(draw_decimal_coefficient(&mut rng, u32::MAX).is_none());
+        assert!(draw_decimal_operand(&mut rng, 0, 2).is_none());
+        assert!(draw_decimal_operand(&mut rng, 2, 0).is_none());
+        assert!(draw_signed_integer(&mut rng, 0).is_none());
+        assert!(draw_signed_integer(&mut rng, -1).is_none());
+
+        let mut empty = [];
+        assert!(ensure_negative_term(&mut rng, &mut empty).is_none());
+        assert!(draw_bounded_rational_arithmetic_ast(&mut rng, &[]).is_none());
+    }
 }

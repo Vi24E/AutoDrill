@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createWasmDrillEngine } from '@/domain/wasm-adapter';
-import { DRILL_SCHEMA_VERSION, answerNodeText, emptyEditorState } from '@/domain/drill-engine';
+import { DRILL_SCHEMA_VERSION, answerNodeText } from '@/domain/drill-engine';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
+import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 import { fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet } from '@/test/fixtures';
 
 const envelope = (data: unknown) => ({ schema_version: DRILL_SCHEMA_VERSION, ok: true, data, error: null });
@@ -51,7 +52,7 @@ describe('versioned WASM adapter', () => {
       ...malformed.problems[0]!,
       canonical_answer: {
         type: 'tuple',
-        value: Array.from({ length: 18 }, () => ({ type: 'empty' as const })),
+        value: Array.from({ length: DRILL_CORE_CONTRACT.max_answer_ast_size }, () => ({ type: 'empty' as const })),
       },
     }, ...malformed.problems.slice(1)];
     const engine = createWasmDrillEngine({
@@ -99,7 +100,7 @@ describe('versioned WASM adapter', () => {
   });
 
 
-  it('accepts liar-puzzle DTOs with cardinality, pair, and implication statements', async () => {
+  it('accepts liar-puzzle DTOs with the current six statement variants', async () => {
     const worksheet = liarFixtureWorksheet();
     const generate = vi.fn().mockResolvedValue(envelope(worksheet));
     const engine = createWasmDrillEngine({ generate_worksheet: generate });
@@ -114,7 +115,7 @@ describe('versioned WASM adapter', () => {
     expect(prompt.kind).toBe('liar_puzzle');
     if (prompt.kind !== 'liar_puzzle') throw new Error('liar-puzzle prompt expected');
     expect(prompt.statements.map((statement) => statement.kind)).toEqual([
-      'says_liar', 'exact_liar_count', 'both_not_liar', 'implication',
+      'says_liar', 'exact_liar_count', 'both_not_liar', 'says_not_liar',
     ]);
   });
 
@@ -194,41 +195,23 @@ describe('versioned WASM adapter', () => {
     });
     await expect(attempts.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'generation_attempt_limit' });
   });
-
-  it('maps editor actions to Rust tags and grades every problem through the boundary', async () => {
-    const worksheet = fixtureWorksheet();
-    const gradeAnswer = vi.fn().mockResolvedValue(envelope({
-      status: 'correct',
-      is_correct: true,
-      expected: { type: 'integer', value: '2' },
-      actual: { type: 'integer', value: '2' },
-      warnings: ['fraction_not_reduced'],
-    }));
-    const applyEditorAction = vi.fn().mockResolvedValue(envelope(emptyEditorState()));
-    const engine = createWasmDrillEngine({ apply_editor_action: applyEditorAction, grade_answer: gradeAnswer });
-
-    await engine.applyEditorAction(emptyEditorState(), { type: 'clear' }, simpleInputInterface);
-    const result = await engine.gradeAnswer({
-      schema_version: DRILL_SCHEMA_VERSION,
-      worksheet,
-      answers: worksheet.problems.map((problem) => ({ problem_id: problem.problem_id, answer: { type: 'empty' } })),
-    });
-
-    expect(JSON.parse(applyEditorAction.mock.calls[0]?.[0] as string)).toEqual({
-      schema_version: DRILL_SCHEMA_VERSION,
-      input_interface: simpleInputInterface,
-      state: { answer: { type: 'empty' }, cursor: 0, active_path: [], committed: false },
-      action: { type: 'clear' },
-    });
-    expect(gradeAnswer).toHaveBeenCalledTimes(20);
-    expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string)).toEqual({
-      schema_version: DRILL_SCHEMA_VERSION,
-      expected: worksheet.problems[0]?.canonical_answer,
-      actual: { type: 'empty' },
-      answer_schema: worksheet.problems[0]?.answer_schema,
-    });
-    expect(result).toMatchObject({ schema_version: DRILL_SCHEMA_VERSION, correct_count: 20, total_count: 20 });
-    expect(result.items[0]?.warnings).toEqual(['fraction_not_reduced']);
+  it('preserves generator configuration and aggregate contract errors across the WASM boundary', async () => {
+    for (const kind of [
+      'invalid_sampling_strategy',
+      'invalid_registry',
+      'invalid_generated_problem',
+      'invalid_generated_worksheet',
+    ] as const) {
+      const engine = createWasmDrillEngine({
+        generate_worksheet: vi.fn().mockResolvedValue({
+          schema_version: DRILL_SCHEMA_VERSION,
+          ok: false,
+          data: null,
+          error: { code: kind, message: kind },
+        }),
+      });
+      await expect(engine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind });
+    }
   });
 
   it('maps MathLive LaTeX through the explicit Rust AnswerNode adapter boundary', async () => {
@@ -279,107 +262,7 @@ describe('versioned WASM adapter', () => {
     expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string).actual).toEqual(submitted);
     expect(result.items[0]).toMatchObject({ answer: '11/1', correct: false });
   });
-
-  it('maps structured templates and slot paths through the versioned editor boundary', async () => {
-    const applyEditorAction = vi.fn().mockResolvedValue(envelope({
-      answer: { type: 'empty' },
-      cursor: 0,
-      active_path: [],
-      committed: false,
-    }));
-    const engine = createWasmDrillEngine({ apply_editor_action: applyEditorAction });
-
-    await engine.applyEditorAction(emptyEditorState(), { type: 'insert_structure', structure: 'mixed_fraction' }, structuredInputInterface);
-    await engine.applyEditorAction({
-      answer: { type: 'fraction', value: { numerator: { type: 'empty' }, denominator: { type: 'empty' } } },
-      cursor: 0,
-      active_path: [0],
-      committed: false,
-    }, { type: 'select_slot', path: [1], cursor: 0 }, structuredInputInterface);
-
-    expect(JSON.parse(applyEditorAction.mock.calls[0]?.[0] as string).action).toEqual({
-      type: 'insert_structure',
-      structure: 'mixed_fraction',
-    });
-    expect(JSON.parse(applyEditorAction.mock.calls[0]?.[0] as string).input_interface).toEqual(structuredInputInterface);
-    expect(JSON.parse(applyEditorAction.mock.calls[1]?.[0] as string).action).toEqual({
-      type: 'select_slot',
-      path: [1],
-      cursor: 0,
-    });
-  });
-
-  it.each([
-    ['an impossible path', {
-      answer: { type: 'fraction', value: { numerator: { type: 'empty' }, denominator: { type: 'empty' } } },
-      cursor: 0, active_path: [2], committed: false,
-    }],
-    ['a path ending at a composite node', {
-      answer: { type: 'fraction', value: { numerator: { type: 'empty' }, denominator: { type: 'empty' } } },
-      cursor: 0, active_path: [], committed: false,
-    }],
-    ['a cursor beyond the selected slot', {
-      answer: { type: 'integer', value: '12' }, cursor: 3, active_path: [], committed: false,
-    }],
-    ['a directly signed numeric draft', {
-      answer: { type: 'integer', value: '-2' }, cursor: 2, active_path: [], committed: false,
-    }],
-    ['a path through a raw nan-error leaf', {
-      answer: { type: 'nan_error', value: '3.1.4.5' }, cursor: 7, active_path: [0], committed: false,
-    }],
-    ['an oversized exact-decimal AST', {
-      answer: { type: 'exact_decimal', value: { coefficient: '1', scale: 18 } },
-      cursor: 0, active_path: [], committed: false,
-    }],
-  ])('rejects editor states with %s', async (_caseName, state) => {
-    const engine = createWasmDrillEngine({
-      apply_editor_action: vi.fn().mockResolvedValue(envelope(state)),
-    });
-    await expect(engine.applyEditorAction(emptyEditorState(), { type: 'clear' }, simpleInputInterface))
-      .rejects.toMatchObject({ kind: 'invalid_dto' });
-  });
-
-  it('enforces the supplied interface for incoming and returned editor states while preserving clear recovery', async () => {
-    const applyEditorAction = vi.fn().mockResolvedValue(envelope(emptyEditorState()));
-    const engine = createWasmDrillEngine({ apply_editor_action: applyEditorAction });
-    const forbiddenState = {
-      answer: { type: 'exact_decimal', value: { coefficient: '12', scale: 1 } },
-      cursor: 0,
-      active_path: [],
-      committed: false,
-    } as const;
-
-    await expect(engine.applyEditorAction(forbiddenState, { type: 'commit' }, simpleInputInterface))
-      .rejects.toMatchObject({ kind: 'invalid_dto' });
-    expect(applyEditorAction).not.toHaveBeenCalled();
-
-    await expect(engine.applyEditorAction(forbiddenState, { type: 'clear' }, simpleInputInterface)).resolves.toEqual(emptyEditorState());
-    expect(applyEditorAction).toHaveBeenCalledTimes(1);
-
-    const returnedForbidden = createWasmDrillEngine({
-      apply_editor_action: vi.fn().mockResolvedValue(envelope({
-        answer: { type: 'fraction', value: { numerator: { type: 'empty' }, denominator: { type: 'empty' } } },
-        cursor: 0,
-        active_path: [0],
-        committed: false,
-      })),
-    });
-    await expect(returnedForbidden.applyEditorAction(emptyEditorState(), { type: 'insert_digit', digit: 1 }, simpleInputInterface))
-      .rejects.toMatchObject({ kind: 'invalid_dto' });
-  });
-
-  it('requires a strict SelectSlot cursor before dispatching to WASM', async () => {
-    const applyEditorAction = vi.fn().mockResolvedValue(envelope(emptyEditorState()));
-    const engine = createWasmDrillEngine({ apply_editor_action: applyEditorAction });
-    await expect(engine.applyEditorAction(
-      emptyEditorState(),
-      { type: 'select_slot', path: [] } as never,
-      simpleInputInterface,
-    )).rejects.toMatchObject({ kind: 'invalid_dto' });
-    expect(applyEditorAction).not.toHaveBeenCalled();
-  });
-
-  it('rejects runtime grade requests that do not use the current schema', async () => {
+ it('rejects runtime grade requests that do not use the current schema', async () => {
     const gradeAnswer = vi.fn();
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
     await expect(engine.gradeAnswer({
@@ -413,6 +296,29 @@ describe('versioned WASM adapter', () => {
         answer: { type: 'empty' },
       })),
     })).rejects.toMatchObject({ kind: 'invalid_dto' });
+  });
+
+  it.each([
+    ['invalid_answer_schema', 'invalid_answer_schema'],
+    ['expected_answer_outside_schema', 'expected_answer_outside_schema'],
+  ] as const)('preserves Rust grading error code %s', async (code, expectedKind) => {
+    const worksheet = fixtureWorksheet();
+    const gradeAnswer = vi.fn().mockResolvedValue({
+      schema_version: DRILL_SCHEMA_VERSION,
+      ok: false,
+      data: null,
+      error: { code, message: code },
+    });
+    const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
+
+    await expect(engine.gradeAnswer({
+      schema_version: DRILL_SCHEMA_VERSION,
+      worksheet,
+      answers: [{
+        problem_id: worksheet.problems[0]!.problem_id,
+        answer: { type: 'integer', value: '2' },
+      }],
+    })).rejects.toMatchObject({ kind: expectedKind });
   });
 
   it('accepts the generated integer-form warning used for answers such as 2/1', async () => {
@@ -522,38 +428,7 @@ describe('versioned WASM adapter', () => {
     const answerEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(unknownAnswer)) });
     await expect(answerEngine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
   });
-
-  it('preserves the typed answer AST size error from the editor boundary', async () => {
-    const runtime = {
-      apply_editor_action: vi.fn().mockResolvedValue({
-        schema_version: DRILL_SCHEMA_VERSION,
-        ok: false,
-        data: null,
-        error: { code: 'answer_ast_size_limit', details: { max_size: 18 } },
-      }),
-    };
-    const engine = createWasmDrillEngine(runtime);
-    await expect(engine.applyEditorAction(emptyEditorState(), { type: 'insert_digit', digit: 1 }, simpleInputInterface))
-      .rejects.toMatchObject({ kind: 'answer_ast_size_limit' });
-  });
-
-  it('preserves 18-digit integers as exact decimal strings', async () => {
-    const exact = '999999999999999999';
-    const runtime = {
-      apply_editor_action: vi.fn().mockResolvedValue(envelope({
-        answer: { type: 'integer', value: exact },
-        cursor: 18,
-        active_path: [],
-        committed: false,
-      })),
-    };
-    const engine = createWasmDrillEngine(runtime);
-    const result = await engine.applyEditorAction(emptyEditorState(), { type: 'insert_digit', digit: 9 }, simpleInputInterface);
-    expect(result.answer).toEqual({ type: 'integer', value: exact });
-    expect(JSON.parse(JSON.stringify(result.answer))).toEqual({ type: 'integer', value: exact });
-  });
-
-  it('preserves exact decimal text in the grade projection without number coercion', async () => {
+ it('preserves exact decimal text in the grade projection without number coercion', async () => {
     const worksheet = fixtureWorksheet();
     worksheet.problems = worksheet.problems.map((problem) => ({
       ...problem,
@@ -628,19 +503,5 @@ describe('versioned WASM adapter', () => {
     }, ...nonCanonical.problems.slice(1)];
     const nonCanonicalEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(nonCanonical)) });
     await expect(nonCanonicalEngine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
-  });
-
-  it('rejects exact-decimal scales outside the Rust u32 range', async () => {
-    const runtime = {
-      apply_editor_action: vi.fn().mockResolvedValue(envelope({
-        answer: { type: 'exact_decimal', value: { coefficient: '3', scale: -1 } },
-        cursor: 0,
-        active_path: [],
-        committed: false,
-      })),
-    };
-    const engine = createWasmDrillEngine(runtime);
-    await expect(engine.applyEditorAction(emptyEditorState(), { type: 'clear' }, simpleInputInterface))
-      .rejects.toMatchObject({ kind: 'invalid_dto' });
   });
 });

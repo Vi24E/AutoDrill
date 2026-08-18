@@ -1306,7 +1306,7 @@ Rust presentation metadataへ独立`worksheet_grid` capabilityを追加し、筆
 ### H-009 `Problem`と周辺domain typeがwire DTOを兼ね、invalid stateを型で排除できない
 
 **severity:** High
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/model.rs` (`Problem`, `ProblemPrompt`, `RationalCoefficient`, `AnswerInputInterface`, `AnswerSchema`, `Worksheet`, `EditorState`, `GradeResult`), `crates/drill-core/src/identity.rs` (`ProblemSetIdentity`), `crates/drill-wasm/src/lib.rs` (`CalculateEffortRequest`等)
 
 **具体的なコード上の証拠**
@@ -1344,12 +1344,23 @@ Rust presentation metadataへ独立`worksheet_grid` capabilityを追加し、筆
 - prompt/input/schema/canonical answer/worked solutionの不正組合せが型または単一validated conversion boundaryで拒否される。
 - draft-only answer状態とcanonical generated answerの境界が明示される。
 
+**2026-08-18 再監査対応メモ**
+
+2026-08-18再監査追補: `ProblemSetIdentity`は`from_parts`を唯一のvalidation pathとし、`new` / `FromStr` / custom `Deserialize`の全経路でschema・seed・nonzero theme/revisionを同一に検証する。`Problem`内部は生の`AnswerSchema` / `AnswerNode`ではなくprivate `ValidatedAnswerSchema` / `CanonicalAnswer`を保持し、`Problem::generated`でschema自体の構造条件、canonical answerの具体的range/shape、DigitGridのtuple length/digit域を一括検証する。Mini Sudokuは`MINI_SUDOKU_GRID_SPEC`をgivens validation・registration・answer contractの単一SoTとする。native Rust / WASM grading境界のexternal `AnswerSchema`もstructural/canonical-answer validationを通し、`grade_answer_with_schema`は不正schemaを`GradeError`として返す。MathLive parseのnative/WASM境界も`AnswerInputInterface`の構造条件を先に検証する。
+
+同日追加対応: `WorkedSolution`をgeneratorが任意field/enum literalとして構築するAPIを廃止し、`Problem::generated`がcolumn promptとcanonical answerからprivate worked-solution domain valueを一意に導出する。partial product / long-division stepのwire shapeは`wire.rs`だけがDTOとして所有するため、promptと無関係なdivisor/product/offsetをsafe generator APIから注入できない。Liar Puzzle canonical answerにもpeople-domain contractを追加し、昇順・重複なし・`1..=people_count`・空/all-liar除外をaggregate boundaryで保証する。candidate sourceは`Result<Option<Problem>, GenerationError>`となり、`ProblemInvariantError` / `WorksheetInvariantError`は`invalid_generated_problem` / `invalid_generated_worksheet`としてWASM/Webまで伝播し、production generatorの`Problem::generated(...).expect(...)`およびWorksheet invariantの`AttemptLimit`偽装を廃止した。独立再確認待ちのためPending。
+
+同日最終追補: 再監査で残った「schema上合法でもpromptの数学的正解ではないcanonical answerを`Problem::generated`へ渡せる」穴を閉じた。`semantics.rs`をgeneratorから独立した数学的authorityとして追加し、`Problem::generated`の`CanonicalAnswer` constructionがpromptごとのexact semantic verificationを必ず通す。Addition / Arithmetic / ColumnArithmeticはexact rational評価、Linear / Simultaneousは方程式への代入と一意性、Quadraticは解集合の個数とexact quadratic-number代入、Liar Puzzleはstatement truthから求めた唯一解mask、Mini Sudokuはgivensを保つ唯一の合法盤面との一致を検証する。既存`generator_support::evaluate_expression`、Liar solver、Mini Sudoku solverも同じ`semantics.rs`実装へ寄せ、validator専用の第二数学実装を作らない。`1+1=3`、`12×3=35`を含む全prompt familyのsemantic mismatch regression testを追加した。独立再確認待ちのためPending。
+
+2026-08-18独立再監査でH-009の全Close条件をPASS。prompt/canonical answer semantic consistencyを含め、safe Rust APIから不正aggregateを構築できないことを確認したためClosed。
+
+
 ---
 
 ### H-010 特殊effortを`Option<f64>`で逃がし、graph/vector/scalar/scoreを複数SoTとして保持している
 
 **severity:** High
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/model.rs::Problem`, `crates/drill-core/src/effort.rs::{SolutionGraph, calculate_effort, calculate_graph_effort}`, `crates/drill-core/src/themes/basic_arithmetic.rs`, `crates/drill-core/src/themes/mini_sudoku.rs`, `docs/architecture/effort-model.md`, M-024
 
 **具体的なコード上の証拠**
@@ -1400,12 +1411,19 @@ Rust presentation metadataへ独立`worksheet_grid` capabilityを追加し、筆
 - 特殊theme追加時にempty graph/zero vector sentinel規約を手動同期しない。
 - `SolutionGraph.depends_on`を残すならgraph invariantと用途が明確で、残さないなら不要なgraph abstractionを削る。
 
+**2026-08-18 再監査対応メモ**
+
+2026-08-18再監査追補: `OperationEffort`のcached scoreを削除し、通常modelは`EffortModel::Operations(OperationPlan)`としてprimitive operation列だけをevidenceに保持する。operation vectorとweighted scoreはplanから都度導出する。repository全体を確認してprerequisite edgeのproduct consumerが存在しなかったため、`SolutionGraph` / `SolutionStep` / `depends_on` DAG abstraction自体をcore・wire・Webから削除した。Web DTOは`operation_plan` / `operation_vector` / `theme_specific_effort` / `effort`を1つのmodelから投影する。将来DAGが必要なら実consumerが生じた時点で再設計する。最上位current文書`docs/principles.md`に残っていた`effort operation graph`表記も`effort operation plan`へ同期した。独立再確認待ちのためPending。
+
+2026-08-18独立再監査でH-010の全Close条件をPASS。その後のcleanupで意味を追加しない一field `OperationEffort` wrapperも削除し、`EffortModel::Operations(OperationPlan)`へ直接単純化した。
+
+
 ---
 
 ### H-011 `ProblemGenerator` traitがoptional/default methodの組合せでcapability protocolを表現している
 
 **severity:** High
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/generator.rs::ProblemGenerator`, `generate_with_generator`, layered/finite/answer-conditioned sampling;各theme generator impl
 
 **具体的なコード上の証拠**
@@ -1452,12 +1470,19 @@ traitが「共通behavior」を抽象化する代わりに、複数の独立capa
 - capability矛盾を理由にする`expect`や「defaultが指定answerを無視する」挙動がない。
 - 新sampling mode追加時に無関係themeへoptional methodを増やさない。
 
+**2026-08-18 再監査対応メモ**
+
+2026-08-18再監査追補: method組合せだけでなくstrategy valueのinvariantもconstruction時に検証する。`SamplingStrategy`のvariantはprivate化し、validated constructorだけをtheme側へ公開した。`AnswerDomain`はnon-empty、`SamplingLayers`はnon-emptyかつminimum合計がworksheet problem count以下、constructive multiplierは`NonZeroUsize`、classifierの生`usize`はbounded `LayerIndex`へ変換する。空domain/layerや範囲外classifierは`SamplingError`としてgeneration boundaryへ伝播し、`next_bounded(0)` panicや`AttemptLimit`への偽装を行わない。
+
+同日追加対応: answer-conditioned callbackの返却Problemはrequested canonical answerと即照合し、不一致は`SamplingError::AnswerConditionMismatch`とする。constructive-layered callbackもrequested layerと実classifier結果を照合し、不一致は`RequestedLayerMismatch`とする。single-problem / worksheet両経路で同じvalidationを使い、違反をretryや`AttemptLimit`へ変換しない。WASMの`invalid_sampling_strategy` / `invalid_registry`およびaggregate contract errorはWeb `DrillEngineErrorKind`でも独立kindを保持し、`invalid_dto`へ潰さない。独立再確認待ちのためPending。
+
+
 ---
 
 ### H-012 `ThemeRegistrationSpec`がnamed fieldsになっただけで、theme contractのinvalid combinationを許している
 
 **severity:** High
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/theme.rs::{ThemeRegistrationSpec, ThemeRegistration, ThemeAnswerContract, ThemeInputProfile, WorksheetLayoutProfile}`, `crates/drill-core/src/registry.rs`,各`themes/*.rs` registration
 
 **具体的なコード上の証拠**
@@ -1497,12 +1522,17 @@ named struct literalは位置引数事故を減らすだけで、domain invarian
 - fixed-grid等の同じdomain parameterをregistrationとproblem生成で別々に手入力しない。
 - duplicate theme identityや不正weightが通常のregistry利用時panicとして初めて発見されない。
 
+**2026-08-18 再監査対応メモ**
+
+2026-08-18再監査追補: 完成後の`ThemeRegistration`も全fieldをprivate化し、内部identityを`ThemeId` / `GeneratorRevision`のまま保持する。raw `u32`はgetterでのみprojectionする。registryは`LazyLock<Result<Registry, RegistryError>>`として構築結果を保持し、duplicate theme IDを最初のaccess時の`expect` panicにせず、registration/generator/Web contract/generation boundaryへ明示的に伝播する。Mini Sudokuの1/4/16 domain factは`MINI_SUDOKU_GRID_SPEC`へ一元化し、grid validation・input contract・answer tuple validationに加えてsolverのdigit iterationも同じspecを参照する。Web boundaryでも`invalid_registry`を`invalid_dto`へ潰さず独立kindとして保持する。独立再確認待ちのためPending。
+
+
 ---
 
 ### M-027 `うそつきだれだ`の論理式長を`Operation::Identity` node数へ偽装している
 
 **severity:** Medium
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/themes/liar_puzzle.rs::{statement_effort, solution_graph}`
 
 **具体的なコード上の証拠**
@@ -1528,12 +1558,17 @@ H-010のeffort model整理後、論理式長が真にtheme固有modelならtheme
 - liar puzzle effortが`Identity`等の無関係primitiveのweightに依存しない。
 - graph/operationを使うならnodeのoperationが実際の解法primitiveを表す。
 
+**2026-08-17 実装後メモ**
+
+2026-08-17対応: `Operation::Identity` node数によるformula-length偽装を削除し、うそつきだれだの式長を`EffortModel::ThemeSpecific`として明示した。無関係primitive weightへの依存は消滅した。独立確認待ちのためPending。
+
+
 ---
 
 ### M-028 MathLive移行後も旧`EditorState` / `apply_editor_action` state machineをcompatibility目的で保持している
 
 **severity:** Medium
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/editor.rs`, `model.rs::{EditorState, EditorAction}`, `lib.rs`, `crates/drill-wasm/src/lib.rs::apply_editor_action`, `export_web_wire_types.rs`, `contract.rs`, `docs/architecture/answer-ast.md`
 
 **具体的なコード上の証拠**
@@ -1562,12 +1597,17 @@ MathLive production pathで必要なcapability validationだけを小さな現�
 - MathLive parserが必要とするinput capability validationだけが現行責務として残る。
 - canonical docsが「compatibility boundaryを残す」前提を持たない。
 
+**2026-08-17 実装後メモ**
+
+2026-08-17対応: 旧`EditorState` / `EditorAction` / `apply_editor_action` state machine、WASM endpoint、wire export、Web adapterの未使用compatibility pathと対応testを削除した。MathLiveが必要とするinput capability validationだけを`input.rs`へ分離し、canonical architecture docsも現行pathへ更新した。独立確認待ちのためPending。
+
+
 ---
 
 ### M-029 theme capabilityが`ThemeTag`と`ThemePresentationPolicy`へ二重登録されている
 
 **severity:** Medium
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/theme.rs::{ThemeTag, ThemePresentationPolicy}`, `crates/drill-core/src/themes/column_arithmetic.rs`, generated Web contract consumers
 
 **具体的なコード上の証拠**
@@ -1593,12 +1633,17 @@ taxonomyとbehavioral capabilityを明確に分ける。`print_recommended` / `c
 - 同じcapabilityの真偽をtagとpresentation fieldへ別々に手入力しない。
 - Web/Rustの全consumerが1つのcanonical metadataから導出する。
 
+**2026-08-17 実装後メモ**
+
+2026-08-17対応: `ColumnArithmetic` / `PrintRecommended`をtaxonomy tagから削除し、behavioral capabilityは`ThemePresentationPolicy`のみをSoTとした。Webの印刷推奨表示・筆算分類・PDF testも`presentation`から導出するよう変更した。独立確認待ちのためPending。
+
+
 ---
 
 ### M-030 `problem_key()`がdedup keyとして`ProblemPrompt`全体を所有cloneし、sort比較中にも再構築している
 
 **severity:** Medium
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/generator.rs::{canonicalize_commutative_expression, problem_key, select_candidates_from_pool, generate_with_generator}`
 
 **具体的なコード上の証拠**
@@ -1625,12 +1670,19 @@ dedup identityを専用のborrowable/compact keyまたはtheme-owned semantic ke
 - dedup identityとwire/display promptの意味が型/API上分離される。
 - 新Prompt variant追加時のdedup semanticsが明示的かつ局所的である。
 
+**2026-08-17 実装後メモ**
+
+2026-08-17対応: dedup identityを専用`ProblemKey`へ分離し、`Candidate`生成時に一度だけcanonical keyを構築するよう変更した。sort comparatorはAST/Vecを含む`ProblemPrompt`を比較ごとにclone/rebuildしない。
+
+2026-08-18追加対応: 再監査で指摘されたdedup用HashSetへのowned `ProblemKey::clone()`も除去した。`Candidate.key`を`Rc<ProblemKey>`とし、AST / `Vec<LiarStatement>` / MiniSudoku gridを含むsemantic key本体はCandidate生成時の1 allocationだけを所有する。temporary dedup setへのinsertは`Rc` clone（参照カウント増加）のみで、heap-owning semantic keyを複製しない。collision-proneなhash-only identityには落としていない。独立再確認待ちのためPending。
+
+
 ---
 
 ### M-031 theme固有regression testが共通`generator.rs`へ集中し、theme追加の変更局所性を壊している
 
 **severity:** Medium
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/generator.rs`の`#[cfg(test)] mod tests`（`new_arithmetic_themes_generate_with_requested_domains`, `broad_seed_effort_invariants_hold_for_every_registered_theme`, column arithmetic/layered theme tests等）
 
 **具体的なコード上の証拠**
@@ -1663,12 +1715,17 @@ testだから多少の冗長性は許容できるが、module ownershipを反転
 - central generator testsにtheme IDごとの巨大match/歴史的修正対象listがない。
 - universal invariant testは全registryを自動走査する。
 
+**2026-08-18 再監査対応メモ**
+
+2026-08-18再監査追補: 再監査で中央に残っていた九九/逆九九の具体的effort testも削除した。`multiplication_table.rs`が`log10(answer)`のtheme-specific modelを、`division_table.rs`が3回のinverse-table probe planをそれぞれlocal testとして所有する。中央`generator.rs` testはregistry-wide invariantとsampling frameworkのvalue invariantだけを扱い、九九・分数・二次方程式・筆算等のtheme固有semanticsを参照しない。独立再確認待ちのためPending。
+
+
 ---
 
 ### L-006 現worktreeのRust sourceが`cargo fmt --all -- --check`を通らない
 
 **severity:** Low
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** 現在の未コミットRust差分（`generator.rs`, `generator_support.rs`, `model.rs`, `theme.rs`, `themes/basic_arithmetic.rs`, `themes/mini_sudoku.rs`, `themes/mod.rs`, `themes/multiplication_table.rs`等）
 
 **具体的なコード上の証拠**
@@ -1687,12 +1744,17 @@ formatting自体は意味論問題ではないが、Rust repositoryのcanonical 
 
 - `cargo fmt --all -- --check`がcleanにpassする。
 
+**2026-08-17 実装後メモ**
+
+2026-08-17対応: `cargo fmt --all`を適用し、後続のClippy/workspace testまで通過した。独立確認待ちのためPending。
+
+
 ---
 
 ### L-007 `SamplingLayerSpec.key`が宣言されるだけで一度も読まれていない
 
 **severity:** Low
-**状態:** Open
+**状態:** Closed (2026-08-18 independent verification)
 **該当:** `crates/drill-core/src/theme.rs::SamplingLayerSpec`, layered theme declarations
 
 **具体的なコード上の証拠**
@@ -1710,3 +1772,422 @@ formatting自体は意味論問題ではないが、Rust repositoryのcanonical 
 **Close条件**
 
 - `key`を削除するか、現行product requirementに基づく明確なconsumerが存在する。
+
+**2026-08-17 実装後メモ**
+
+2026-08-17対応: consumerのない`SamplingLayerSpec.key`を削除し、layer identityは現行samplerが実際に使用するindexだけに単純化した。独立確認待ちのためPending。
+
+---
+
+## 2026-08-18 post-audit cleanup
+
+### NEW-M-001 exact rational primitiveが`normalize.rs`と`semantics.rs`へ二重実装されている
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `crates/drill-core/src/exact.rs`, `normalize.rs`, `semantics.rs`
+
+独立監査で、exact rationalのcanonicalization・checked四則・符号反転が`normalize.rs`と`semantics.rs`のprivate `ExactRational`へ重複していることを確認した。prompt semantics自体は一元化されていたためH-009はClosedできるが、共有数学primitiveのSoT分裂として別Issueにする。
+
+**Close条件**
+
+- exact rationalのcanonicalization/checked arithmeticを1つのcrate-private primitiveへ統合する。
+- normalizationとprompt semanticsは責務を分離したまま同じprimitiveを再利用する。
+
+**2026-08-18 実装後メモ**
+
+`exact.rs::ExactRational`へcanonicalization、checked add/subtract/multiply/divide/negate、exact square rootを統合した。`normalize.rs`はAnswer AST→exact rational変換とAST projection、`semantics.rs`はprompt/equation/puzzle semanticsだけを所有し、同じexact arithmetic primitiveを共有する。2026-08-18再監査と修正後のrepository-wide確認でClose条件を満たすことを確認しClosed。
+
+**2026-08-18 再監査追補**
+
+再監査で`effort.rs`にchecked rational addの手書き再実装、`themes/equations.rs`にAnswerNode→RationalCoefficientの独自projectionが残っていることを確認して再Openした。修正では、加算を`RationalCoefficient::checked_add`へ直接委譲し、AnswerNode→coefficient projectionを`exact_value.rs::rational_coefficient_from_answer`へ統合した。
+
+**2026-08-18 検証**
+
+`rational_add` / theme-local AnswerNode rational projectionの残存がないことをrepository-wideで確認し、Rust fmt/check/clippy/testを通過したためClose。
+
+**2026-08-18 再々監査対応**
+
+独立再監査で、平方根簡約semanticが`effort.rs::square_root_decomposition`と`themes/equations.rs::simplify_square_root`へ重複していることを確認して再Openした。`exact.rs::square_free_sqrt_decomposition`へcheckedな平方根分解を集約し、equation constructionとquadratic-formula effortの双方が同じprimitiveを利用するよう修正した。人間が平方因子を探索するoperation-count生成はeffort固有semanticなので`effort.rs`へ残す。Rust全gate通過。独立再確認待ち。
+
+**2026-08-18 独立再判定**
+
+独立再判定で、平方根square-free分解が`exact.rs::square_free_sqrt_decomposition`へ一元化され、`effort.rs` / `themes/equations.rs`が共有primitiveを利用していることをcurrent codeから再確認した。Close可判定。
+
+### NEW-M-002 canonical architecture docsがcurrent codeと不一致
+
+**severity:** Medium
+**状態:** Closed
+**該当:** `docs/architecture/problem-schema.md`, `answer-ast.md`, `theme-system.md`
+
+独立監査で、Mini Sudoku registrationの記載漏れ、九九effortの旧`BigNum`説明、root/plus-minusの「数値評価未定義」という旧説明、theme family一覧のMini Sudoku漏れを確認した。
+
+**Close条件**
+
+- canonical architecture docsがcurrent registry / EffortModel / exact radical・plus-minus semantics / theme modulesと一致する。
+
+**2026-08-18 実装後メモ**
+
+Problem schemaのcurrent registration表へID 38 Mini Sudokuを追加し、九九を`EffortModel::ThemeSpecific(log10(c))`として記述した。Answer ASTはexact square-root normalization、quadratic radical semantics、plus-minus solution-set expansionを現行実装どおり記述し、Theme Systemのfamily一覧へ`mini_sudoku.rs`を追加した。2026-08-18再監査と修正後のrepository-wide確認でClose条件を満たすことを確認しClosed。
+
+### NEW-L-001 alpha 1.1互換引数がproduction PDF APIに残存
+
+**severity:** Low
+**状態:** Closed
+**該当:** `apps/web/src/pdf/worksheet-pdf.tsx::openWorksheetPdf`, `apps/web/src/components/AutoDrillApp.tsx::openWorksheetPdfLazy`
+
+`targetWindow`はコメント上alpha 1.1 call-site compatibility専用で、current callerはすべて`undefined`を渡していた。pre-releaseではhistoric compatibilityをproduction codeへ保持しない原則に反する。
+
+**Close条件**
+
+- `targetWindow`互換引数と対応cleanupをproduction API/call site/testから削除する。
+
+**2026-08-18 実装後メモ**
+
+`openWorksheetPdf` / lazy wrapperから`targetWindow`を削除し、current signatureを`(worksheet, metadata?)`へ単純化した。call siteとtestsを同期し、旧`window.open`前提のtest residueも削除した。2026-08-18再監査と修正後のrepository-wide確認でClose条件を満たすことを確認しClosed。
+
+### NEW-H-001 effort plan builderがsafe public API上のhidden preconditionをpanicへ逃がす
+
+**severity:** High
+**状態:** Closed (2026-08-18 re-audit verification)
+**該当:** `crates/drill-core/src/effort.rs`, `themes/basic_arithmetic.rs`, `themes/equations.rs`, `themes/column_arithmetic.rs`
+
+独立監査で、generator-specific effort builderが外部public APIとして公開され、zero divisor・singular system・overflow・one-digit domain等の条件を`debug_assert` / `expect("bounded ...")`へ依存していた。
+
+**対応**
+
+- generator-specific builderをcrate内部へ縮小した。
+- 一次・連立・二次方程式の失敗可能なplan構築を`Option<OperationPlan>`へ変更し、zero/singular/overflow/domain mismatchを明示的に失敗させる。
+- 一桁加減・二桁加算・余り付き整数除算も入力domainを入口で検証する。
+- theme callerは失敗をcandidate rejectionまたは`InvalidGeneratedProblem`として処理し、semantic validation前のpanicへ逃がさない。
+
+**Close条件**
+
+- safe external APIからgenerator固有のhidden preconditionを踏めない。
+- failure可能な方程式effort constructionがpanic conventionではなく型で失敗を表す。
+
+2026-08-18対応・検証済みのためClosed。
+
+**2026-08-18 再監査追補**
+
+再監査で`RationalCoefficient::new(i64::MIN, 3)`同士の除算effortがreciprocal denominator変換の`expect`へ到達できる反例を確認して再Openした。rational add/sub/mul/div、LCM/reduction周辺の失敗可能なoperation-plan構築を`Option`へ伝播し、巨大中間値はpanicではなくplan構築失敗として返す。さらに、整数乗算modelを呼ぶ前にchecked resultを確定し、private helperのbounded前提を呼出箇所で機械的に保証する。極値回帰testを追加した。
+
+**2026-08-18 検証**
+
+`bounded rational` / `bounded reciprocal` panic residueがないことを確認し、`i64::MIN/3`同士のdivision effortがpanicせず`None`を返す回帰testを追加した。Rust全gate通過のためClose。
+
+### NEW-M-003 Answer AST limitをRustとWebで二重管理している
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `crates/drill-core/src/contract.rs`, `apps/web/src/domain/wasm-adapter.ts`
+
+Webが`MAX_ANSWER_AST_SIZE = 18`を手入力しており、Rust側のlimit変更時にgenerated freshnessがPASSしたままdriftできた。
+
+**対応**
+
+`WebContract.max_answer_ast_size`をRust `MAX_ANSWER_AST_SIZE`から生成し、Web adapterはgenerated contract値を使用する。
+
+**Close条件**
+
+- AST size limitの数値SoTがRustに1つだけ存在する。
+
+2026-08-18 generated contract freshnessまで確認しClosed。
+
+**2026-08-18 再監査追補**
+
+production adapterはRust generated contractを参照していたが、Web testに`18`の手書き境界値が残っていたため再Openした。`wasm-adapter.test.ts`と`AutoDrillApp.test.tsx`も`DRILL_CORE_CONTRACT.max_answer_ast_size`から境界を導出するよう修正した。
+
+**2026-08-18 検証**
+
+WebのAST-limit testがgenerated `DRILL_CORE_CONTRACT.max_answer_ast_size`を参照し、手書き`repeat(18)` / `length: 18`が残っていないことを確認した。generated freshnessとWeb全test通過のためClose。
+
+**2026-08-18 再々監査対応**
+
+独立再監査で`apps/web/src/test/fixtures.ts`のmock MathLive parserに`latex.length > 18`が残っていることを確認して再Openした。fixtureもgenerated `DRILL_CORE_CONTRACT.max_answer_ast_size`を参照するよう修正し、Web source全体にAST-limit由来の手書き`18`が残っていないことを検索確認した。generated freshness・TypeScript・ESLint・Web全test通過。独立再確認待ち。
+
+**2026-08-18 独立再判定**
+
+独立再判定で、Web production/test/fixtureがすべてgenerated `DRILL_CORE_CONTRACT.max_answer_ast_size`へ追随し、AST limitの手書き18が残っていないことを確認した。Close可判定。
+
+### NEW-M-004 consumerのないWeightProfile / WeightMultipliers / resolved_weightsが残る
+
+**severity:** Medium
+**状態:** Closed
+**該当:** `crates/drill-core/src/effort.rs`, `registry.rs`
+
+現行productでgrade/theme/mastery multiplier layerのconsumerがなく、`resolved_weights(registration)`もregistrationを無視してdefault weightを返していた。
+
+**対応**
+
+`WeightProfile`, `WeightMultipliers`, `EffortWeights` alias, `resolved_weights`とalpha-era commentを削除し、現行generatorは`OperationWeights::default()`を直接使用する。将来必要になった時点でconsumerとともに再導入する。
+
+**Close条件**
+
+- future-only weight abstractionがproduction surfaceに存在しない。
+
+2026-08-18 repository-wide検索で残存なしを確認しClosed。
+
+### NEW-M-005 ProblemPrompt / worked solutionのi64をJS numberへ無条件に落とせる
+
+**severity:** Medium
+**状態:** Closed
+**該当:** `crates/drill-core/src/model.rs`, `apps/web/src/domain/wasm-adapter.ts`
+
+AnswerNode等はexact integerをdecimal string化していた一方、prompt/worked-solutionの`i64`はJavaScript `number`へ投影され、domain拡張時にsilent precision lossが可能だった。
+
+**対応**
+
+- `Problem::generated`がProblemPromptとderived WorkedSolutionのnumber-wire整数をJavaScript safe-integer範囲に制約する。
+- Web adapterも`Number.isSafeInteger`で検証する。
+- exact 64-bit rangeが必要なAnswerNode / AnswerSchema / BigNum等は従来どおりdecimal stringを使う。
+- safe-integer外promptを拒否するnegative testを追加した。
+
+**Close条件**
+
+- Rustが`number`としてwireへ出す整数についてexact JS表現可能性をdomain boundaryで保証する。
+
+2026-08-18検証済みのためClosed。
+
+### NEW-M-006 GradeErrorのsemantic codeがWASM/Web境界でgeneric errorへ潰れる
+
+**severity:** Medium
+**状態:** Closed
+**該当:** `crates/drill-core/src/grade.rs`, `crates/drill-wasm/src/lib.rs`, `apps/web/src/domain/wasm-adapter.ts`
+
+`InvalidAnswerSchema`と`ExpectedAnswerOutsideSchema`がWASMで`invalid_request`へ統合され、Webではさらに`invalid_dto`へ落ちていた。
+
+**対応**
+
+core `GradeError::code()`から`invalid_answer_schema` / `expected_answer_outside_schema`を定義し、WASM envelopeとWeb `DrillEngineErrorKind`まで保持する。Rust/WASMとWeb双方へ境界testを追加した。
+
+**Close条件**
+
+- grade invariant failureのsemantic codeがRust→WASM→Webで保存される。
+
+2026-08-18検証済みのためClosed。
+
+### NEW-H-002 public `DeterministicRng::next_bounded`がzero boundでpanicする
+
+**severity:** High
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `crates/drill-core/src/rng.rs`, `crates/drill-core/src/lib.rs`
+
+`DeterministicRng`がcrate外へpublic exportされている一方、`next_bounded(0)`は`assert!`でpanicするhidden preconditionを持っていた。現product consumerはdrill-core内部だけなので、pre-releaseで不要なexternal API surfaceを閉じる。
+
+**対応**
+
+- `DeterministicRng`とgeneration用methodを`pub(crate)`へ縮小する。
+- `lib.rs`から`DeterministicRng`のpublic re-exportを削除する。
+- external current consumerのないseed conversion helperもcrate-privateに保つ。
+
+**Close条件**
+
+- crate外safe APIから`next_bounded(0)`へ到達できない。
+
+**2026-08-18 検証**
+
+`DeterministicRng` / `next_bounded`はcrate-privateであることを確認した。
+
+**2026-08-18 再々監査対応**
+
+独立再監査で`seed_to_u64`にもcrate外current consumerが存在しないことを確認して再Openした。`seed_to_u64`を`pub(crate)`へ縮小し、`lib.rs`からre-exportを削除した。repository-wideでRNG関連の不要public surfaceがないこととRust全gate通過を確認した。独立再確認待ち。
+
+**2026-08-18 独立再判定**
+
+独立再判定で、`DeterministicRng` / `next_bounded` / `seed_to_u64`がcrate-privateとなり、`lib.rs`の不要public re-exportも消えていることを確認した。Close可判定。
+
+### NEW-M-007 generatorが生成しない`LiarStatement::Implication`がcurrent contract全体に残る
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `model.rs`, `themes/liar_puzzle.rs`, generated wire, Web formatter / adapter / fixtures
+
+現行「うそつきだれだ」は6種類のnon-implication statementだけを生成するのに、`Implication` variantのsemantics・effort・wire・Web表示・validationを維持していた。current consumerのないpre-release residueであり、Rust/Web間の余分なsemantic policyも生んでいた。
+
+**対応**
+
+- `LiarStatement::Implication`をdomain enumから削除する。
+- truth/effort/test branch、Web formatter/validator/fixtureを削除する。
+- generated TypeScript wire typeをRustから再生成する。
+
+**Close条件**
+
+- production/generated contractに`implication` variantが存在しない。
+- current 6 statement variantsのgeneration/format/boundary testが通る。
+
+**2026-08-18 検証**
+
+Rust production、generated wire、Web production/testから`Implication` / `implication`が消えていることを確認した。liar puzzleの6 statement variants testとWeb 164 testsが通過したためClose。
+
+**2026-08-18 再々監査対応**
+
+独立再監査で、残存6variantについてRustは`PeopleCount=3..=4`なのにWebが5人を許容し、`ExactLiarCount`の許容域もRust/Webで不一致であることを確認して再Openした。Rust側は`LiarCount`を1以上`MAX_LIAR_PUZZLE_PEOPLE`未満へ型で制約し、statement validationも`count < people_count`を要求する。Web boundaryはRust domain policyの数値再実装をやめ、current variantとwire field shapeのみ検証する。Rust invariant test・Web全test通過。独立再確認待ち。
+
+**2026-08-18 独立再判定**
+
+独立再判定で、liar puzzleのpeople/count invariantがRust側へ集約され、Webの独自range policyと`Implication` residueがないことを確認した。Close可判定。
+
+### NEW-M-008 `TimeTen` operation countにdefault weight由来のmagic `+5`が埋め込まれている
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 verification)
+**該当:** `crates/drill-core/src/effort.rs`, `docs/architecture/effort-model.md`, `curriculum.md`
+
+`TimeTen(n)`を`TimeTen`座標へ`n+5`として入れ、default weight 0.2との積で`1+0.2n`を作っていた。これはoperation countとweightの責務を混ぜ、weight override時に固定overheadまで連動して変化する。
+
+**対応**
+
+- vectorを`TimeTen × 1 + Count × n`へ分解する。
+- `TimeTen` default weightを1.0、既存`Count` weight 0.2として従来の`1+0.2n`を再現する。
+- weight変更時の固定/反復cost分離をtestで固定する。
+
+**Close条件**
+
+- operation vectorにdefault weightを逆算したmagic offsetがない。
+- default scoreは従来式を保ち、weight overrideが意味論どおり独立する。
+
+**2026-08-18 検証**
+
+`TimeTen`の`n + 5` hackとdefault weight 0.2直結が消え、vectorが`TimeTen=1`, `Count=n`になる回帰test、およびweight override時の独立性testが通過したためClose。
+
+### NEW-M-009 current README / curriculumに38 themes移行前・SolutionGraph移行前の記述が残る
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `README.md`, `curriculum.md`
+
+canonical architecture docsはcurrent codeと一致していたが、current READMEはactive themeを37個と記載し、`curriculum.md`は連立方程式effortをobsoleteな`SolutionGraph`構築として記述していた。`effort.rs`自身がcurriculumを現行仕様として参照するため、archiveではなくcurrent docs driftである。
+
+**対応**
+
+- READMEを38 active themesへ更新する。
+- 連立方程式の記述をcurrent `OperationPlan` strategy比較へ更新する。
+
+**Close条件**
+
+- current docsから37-theme / SolutionGraph production architectureを推論できない。
+
+**2026-08-18 検証**
+
+current source/docs範囲に`37個のactive theme` / `SolutionGraph`記述が残っていないことを確認した。READMEは38 themes、curriculumは`OperationPlan`比較へ同期したためClose。
+
+**2026-08-18 再々監査対応**
+
+独立再監査でREADMEにcurrent schemaを`現行v5`とするstale記述が残っていることを確認して再Openした。Rust SoTの`SCHEMA_VERSION = 7`に合わせ`現行v7`へ同期し、README/curriculum/canonical architectureのcurrent範囲にv5・37 themes・SolutionGraph residueがないことを検索確認した。独立再確認待ち。
+
+
+**2026-08-18 独立再判定**
+
+独立再判定で、current schema v7 / 38 themes / OperationPlan記述がREADME・curriculum・current architectureと一致することを確認した。Close可判定。
+
+### NEW-H-003 public raw `AnswerNode` semantic entrypointがAST structural limitを強制せずstack overflow可能
+
+**severity:** High
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `crates/drill-core/src/answer.rs`, `normalize.rs`, `grade.rs`, `model.rs`
+
+独立再監査で、crate外から任意深度の`AnswerNode`をsafe Rustだけで構築でき、`size` / `normalize_answer` / `grade_answer`等が無制限再帰へ入れることを確認した。WASM boundaryにはsize guardがあったがnative public semantic APIには同等のstructural guardがなかった。
+
+**対応**
+
+- `AnswerNode::size()`をexplicit stackによるiterative traversalへ変更する。
+- semantic recursion専用に、display-size policyと分離したiterative `is_within_structural_node_limit()`を導入する。
+- `normalize_answer` / `grade_answer` / `grade_answer_with_schema` / canonical-answer schema validationはrecursive semantic処理へ入る前にstructural budgetを検証する。
+- `grade_answer_with_schema`は超過時`GradeError::AnswerAstSizeLimit`を返す。
+- `exact_integer_magnitudes`もcrate-privateかつiterative traversalへ変更する。
+- 100,000階層のraw external treeを使うnative回帰testを追加する。
+- shallowだがdisplay sizeが大きい`i64::MIN`やextreme exact decimalは合法exact valueなので、structural recursion budgetとinteractive display-size limitを混同しない。
+
+**Close条件**
+
+- public semantic entrypointがunvalidated deep ASTをそのままrecursive traversalへ渡さない。
+- `size()`自体がdeep raw ASTでrecursive stackを消費しない。
+- existing exact-value normalization semanticsを壊さない。
+
+Rust 115 core tests + 7 wasm tests、fmt/check/clippyを通過。独立再確認待ち。
+
+**2026-08-18 独立再判定後の再修正**
+
+独立再判定で、semantic entrypointはboundedになった一方、public recursive enumのderive `Clone` と通常Dropが100,000階層でstack overflowする反例が実測され、回帰test自身も`mem::forget(deep)`でDropを回避していたため再修正。`AnswerNode`のDrop/Clone/Eq/Ord/Debugをexplicit-stack実装へ変更し、Serializeはstructural limit超過をrecursion前にerror、Deserializeはdepth guard + structural node checkでbounded化した。回帰testは`mem::forget`を削除し、100,000階層についてClone/Eq/Ord/Debug/Serialize rejection/Deserialize rejection/通常Dropを実行する。
+
+Rust/Web/generatedの全gate通過後も、状態は独立再確認待ちのままとする。
+
+### NEW-M-010 generator helperのpreconditionが型ではなく`debug_assert` / caller conventionに依存する
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `crates/drill-core/src/generator_support.rs`, current theme callers
+
+`draw_decimal_coefficient(0)`、`draw_decimal_operand(..., 0)`、`draw_signed_integer(..., 0)`、empty sliceの`ensure_negative_term` / `draw_bounded_rational_arithmetic_ast`等が`next_bounded(0)`や`len()-1`へ到達できるhidden preconditionを持っていた。
+
+**対応**
+
+- failure可能なhelperを`Option`化し、zero/negative/empty boundを入口でrejectする。
+- decimal digit power/range計算も`checked_pow` / checked arithmetic / checked conversionへ変更し、巨大boundでもpanicしない。
+- theme callerは`?`または`Option<Vec<_>>`でcandidate rejectionへ伝播する。
+- zero/negative/empty/`u32::MAX` boundの回帰testを追加する。
+
+**Close条件**
+
+- caller conventionや`debug_assert`をcorrectness条件に使わない。
+- helperの型で受け取れる異常boundがRNG panic/underflow/overflowへ到達しない。
+
+Rust全gate通過。独立再確認待ち。
+
+**2026-08-18 独立再判定後の再修正**
+
+独立再判定で、`generator_support.rs`の既知helperは直っていたが、`themes/column_arithmetic.rs::draw_integer_with_digits` / `draw_column_remainder`に同型の`debug_assert`・unchecked `pow`・zero-bound RNG preconditionが残っていたため再修正。両helperを`Option`化し、zero/invalid boundをreject、`checked_pow` / checked range conversionを使用し、callerは`?`でcandidate rejectionへ伝播する。0 / 1 / `i64::MIN` / `u32::MAX`の回帰testを追加。
+
+Rust/Web/generatedの全gate通過後も、状態は独立再確認待ちのままとする。
+
+### NEW-M-011 Web runtime validatorがRust domain policyを再実装している
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `apps/web/src/domain/wasm-adapter.ts`
+
+独立再監査で、liar people/count bounds、Mini Sudokuの`16` / `1..=4`、Arithmetic ExactDecimalの`scale <= 6`等、Rust domain側のsemantic policyをWeb runtime validatorが別実装していることを確認した。
+
+**対応**
+
+- Arithmetic ExactDecimalはwire shape (`coefficient` safe integer / `scale` u32)だけを検証し、Rustに存在しない`scale <= 6` ruleを削除する。
+- liar statementはcurrent discriminantとfield shapeを検証し、people/count/person domain policyはRust SoTへ委ねる。
+- Mini Sudokuのcell count/min/maxはhandwritten値ではなくgenerated theme input interfaceから取得する。
+- RationalCoefficientもWeb独自のsemantic canonicality判定を持たずwire field shapeに限定する。
+
+**Close条件**
+
+- auditで確認されたRust semantic constants/policiesをWebへ手入力しない。
+- theme-dependent grid boundsはgenerated contract由来である。
+
+TypeScript・ESLint・Web 164 tests・generated freshness通過。独立再確認待ち。
+
+**2026-08-18 独立再判定**
+
+独立再判定で、Web validatorがwire shape validationへ縮小され、Mini Sudoku boundsはgenerated contract由来、decimal `scale <= 6` / liar range policyの再実装が消えていることを確認した。Close可判定。
+
+### NEW-M-012 current consumerのないpublic Rust facadeが残っている
+
+**severity:** Medium
+**状態:** Closed (2026-08-18 independent re-verification)
+**該当:** `crates/drill-core/src/lib.rs`, `generator.rs`, `effort.rs`, `answer.rs`
+
+独立再監査で、`StepClock`、`calculate_plan_effort`、`big_num_operations`がcrate外current consumerなしでpublic exportされていた。
+
+**対応**
+
+- `StepClock`を`#[cfg(test)] pub(crate)`へ縮小する。
+- `calculate_plan_effort`をtest-only crate-private helperへ縮小する。
+- `big_num_operations`とそのsupport traversalをcrate-privateへ縮小する。
+- `lib.rs`のpublic re-exportから削除する。
+
+**Close条件**
+
+- current external product consumerのない対象facadeがcrate public surfaceに存在しない。
+
+repository-wide public-surface scanとRust clippy `-D warnings`を通過。独立再確認待ち。
+
+**2026-08-18 独立再判定**
+
+独立再判定で、`StepClock` / `calculate_plan_effort` / `big_num_operations`がcrate外public surfaceから消え、current internal/test consumerだけになっていることを確認した。Close可判定。

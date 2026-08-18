@@ -5,8 +5,6 @@ import {
   type AnswerNode,
   type DrillEngine,
   type DrillSettings,
-  type EditorAction,
-  type EditorState,
   type GradeRequest,
   type GradeResult,
   type ProblemDto,
@@ -18,6 +16,7 @@ import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-additio
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
 import { SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/themes/simultaneous-equation-1';
+import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 const FIXTURE_SEED = 'fixtureSeed';
 const FIXTURE_THEME_ID = ONE_DIGIT_ADDITION_DEFINITION.numeric_theme_id;
@@ -46,8 +45,9 @@ export function fixtureWorksheet(): WorksheetDto {
       input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
       answer_schema: { kind: 'integer', min: '1', max: '18' },
       canonical_answer: answer,
-      solution_graph: { steps: [] },
+      operation_plan: { operations: [] },
       operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+      theme_specific_effort: null,
       effort: 0,
     };
   });
@@ -101,8 +101,9 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
         ? { kind: 'integer', min: '-15', max: '15' }
         : { kind: 'rational', max_abs_numerator: 20, max_denominator: 12, require_reduced_fraction_form: true },
       canonical_answer: canonicalAnswer,
-      solution_graph: { steps: [] },
+      operation_plan: { operations: [] },
       operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+      theme_specific_effort: null,
       effort: 0,
     };
   });
@@ -142,8 +143,9 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       input_interface: definition.inputInterface,
       answer_schema: { kind: 'ordered_pair', min: '-15', max: '15' },
       canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: String(x) }, { type: 'integer', value: String(y) }] },
-      solution_graph: { steps: [] },
+      operation_plan: { operations: [] },
       operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+      theme_specific_effort: null,
       effort: 0,
     };
   });
@@ -171,7 +173,7 @@ export function liarFixtureWorksheet(): WorksheetDto {
     { kind: 'says_liar' as const, person: 2 },
     { kind: 'exact_liar_count' as const, count: 2 },
     { kind: 'both_not_liar' as const, first: 2, second: 4 },
-    { kind: 'implication' as const, antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false },
+    { kind: 'says_not_liar' as const, person: 3 },
   ];
   const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
     schema_version: DRILL_SCHEMA_VERSION,
@@ -182,8 +184,9 @@ export function liarFixtureWorksheet(): WorksheetDto {
     input_interface: definition.inputInterface,
     answer_schema: { kind: 'algebraic' },
     canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] },
-    solution_graph: { steps: [] },
+    operation_plan: { operations: [] },
     operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+    theme_specific_effort: null,
     effort: 0,
   }));
   return {
@@ -214,7 +217,7 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
       type: 'tuple',
       value: solution.map((value) => ({ type: 'integer' as const, value: String(value) })),
     },
-    solution_graph: { steps: [] },
+    operation_plan: { operations: [] },
     operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
     theme_specific_effort: 4.2,
     effort: 4.2,
@@ -237,55 +240,15 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
   };
 }
 
-function answerDigits(answer: AnswerNode): string {
-  return answer.type === 'integer' ? String(answer.value) : '';
-}
-
-function applyFixtureEditor(state: EditorState, action: EditorAction, _inputInterface: ProblemDto['input_interface']): EditorState {
-  const digits = [...answerDigits(state.answer)];
-  let cursor = Math.min(state.cursor, digits.length);
-  if (action.type === 'insert_digit' && digits.length >= 18) {
-    throw new DrillEngineError('answer_ast_size_limit', 'fixture answer AST size limit', { max_size: 18 });
-  }
-  if (action.type === 'insert_digit') {
-    digits.splice(cursor, 0, String(action.digit));
-    cursor += 1;
-  } else if (action.type === 'backspace' && cursor > 0) {
-    digits.splice(cursor - 1, 1);
-    cursor -= 1;
-  } else if (action.type === 'delete') {
-    digits.splice(cursor, 1);
-  } else if (action.type === 'move_left') {
-    cursor = Math.max(0, cursor - 1);
-  } else if (action.type === 'move_right') {
-    cursor = Math.min(digits.length, cursor + 1);
-  } else if (action.type === 'clear') {
-    digits.length = 0;
-    cursor = 0;
-  }
-  const normalized = digits.join('').replace(/^0+(?=\d)/, '');
-  return {
-    answer: normalized.length > 0
-      ? { type: 'integer', value: normalized }
-      : { type: 'empty' },
-    cursor: Math.min(cursor, normalized.length),
-    active_path: state.active_path,
-    committed: action.type === 'commit',
-  };
-}
-
 export function fixtureEngine(worksheet = fixtureWorksheet()): DrillEngine {
   return {
     async generateWorksheet() {
       return worksheet;
     },
-    async applyEditorAction(state, action, inputInterface) {
-      return applyFixtureEditor(state, action, inputInterface);
-    },
     async parseMathLiveAnswer(latex) {
       if (latex === '') return { type: 'empty' };
       if (/^\d+$/.test(latex)) {
-        if (latex.length > 18) throw new DrillEngineError('answer_ast_size_limit', 'Answer is too large.');
+        if (latex.length > DRILL_CORE_CONTRACT.max_answer_ast_size) throw new DrillEngineError('answer_ast_size_limit', 'Answer is too large.');
         return { type: 'integer', value: String(BigInt(latex)) };
       }
       return { type: 'nan_error', value: latex };

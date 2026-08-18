@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
 use drill_core::{
-    AnswerInputInterface, AnswerNode, EditorAction, EditorState, GenerateWorksheetRequest,
-    GradeResult, ProblemSetIdentity, Worksheet,
+    AnswerInputInterface, AnswerNode, GenerateWorksheetRequest, ProblemSetIdentity, WorksheetWire,
 };
 use ts_rs::TS;
 
@@ -15,13 +14,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // A small set of boundary roots is enough: export_all_to recursively emits
     // every canonical Rust dependency used by these wire payloads.
-    Worksheet::export_all_to(&output)?;
+    WorksheetWire::export_all_to(&output)?;
     ProblemSetIdentity::export_all_to(&output)?;
     AnswerNode::export_all_to(&output)?;
     AnswerInputInterface::export_all_to(&output)?;
-    EditorState::export_all_to(&output)?;
-    EditorAction::export_all_to(&output)?;
     GenerateWorksheetRequest::export_all_to(&output)?;
-    GradeResult::export_all_to(&output)?;
+    drill_core::GradeResultWire::export_all_to(&output)?;
     Ok(())
 }

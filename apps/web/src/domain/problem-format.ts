@@ -14,11 +14,6 @@ export function liarStatementText(statement: LiarStatement): string {
     case 'exact_liar_count': return `このなかの${statement.count}人がうそつきだ。`;
     case 'both_liar': return `${liarPersonLabel(statement.first)}さんと${liarPersonLabel(statement.second)}さんはうそつきだ。`;
     case 'both_not_liar': return `${liarPersonLabel(statement.first)}さんと${liarPersonLabel(statement.second)}さんはうそつきではない。`;
-    case 'implication': {
-      const antecedent = `${liarPersonLabel(statement.antecedent_person)}さんがうそつき${statement.antecedent_is_liar ? '' : 'でない'}`;
-      const consequent = `${liarPersonLabel(statement.consequent_person)}さんはうそつき${statement.consequent_is_liar ? 'だ' : 'ではない'}`;
-      return `${antecedent}なら、${consequent}。`;
-    }
   }
 }
 

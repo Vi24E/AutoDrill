@@ -212,8 +212,6 @@ describe('problemExpression', () => {
     expect(liarStatementText({ kind: 'exact_liar_count', count: 2 })).toBe('このなかの2人がうそつきだ。');
     expect(liarStatementText({ kind: 'both_liar', first: 1, second: 3 })).toBe('AさんとCさんはうそつきだ。');
     expect(liarStatementText({ kind: 'both_not_liar', first: 2, second: 4 })).toBe('BさんとDさんはうそつきではない。');
-    expect(liarStatementText({ kind: 'implication', antecedent_person: 1, antecedent_is_liar: true, consequent_person: 3, consequent_is_liar: false })).toBe('Aさんがうそつきなら、Cさんはうそつきではない。');
-    expect(liarStatementText({ kind: 'implication', antecedent_person: 2, antecedent_is_liar: false, consequent_person: 4, consequent_is_liar: true })).toBe('Bさんがうそつきでないなら、Dさんはうそつきだ。');
   });
 
 });

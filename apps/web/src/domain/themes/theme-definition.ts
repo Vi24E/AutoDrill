@@ -20,8 +20,6 @@ export const THEME_TAG_VALUES = [
   'simultaneous_equation',
   'quadratic_equation',
   'bonus',
-  'column_arithmetic',
-  'print_recommended',
 ] as const;
 export type ThemeTag = typeof THEME_TAG_VALUES[number];
 export type DerivedGradeTag =

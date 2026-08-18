@@ -24,8 +24,9 @@ function problem(overrides: Partial<ProblemDto> = {}): ProblemDto {
     input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
     answer_schema: { kind: 'integer', min: '0', max: '99999' },
     canonical_answer: { type: 'integer', value: '5506' },
-    solution_graph: { steps: [] },
+    operation_plan: { operations: [] },
     operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
+    theme_specific_effort: null,
     effort: 0,
     ...overrides,
   };

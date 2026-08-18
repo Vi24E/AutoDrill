@@ -9,7 +9,7 @@
 - [`generator.md`](generator.md) — generator / sampling / determinism
 - [`problem-schema.md`](problem-schema.md) — Problem / worksheet schema
 - [`answer-ast.md`](answer-ast.md) — Answer AST / structured input
-- [`effort-model.md`](effort-model.md) — effort primitive / solution graph
+- [`effort-model.md`](effort-model.md) — effort primitive / operation plan
 - [`web-print.md`](web-print.md) — Web / MathLive / print presentation
 - [`deployment-security.md`](deployment-security.md) — static deployment / security
 

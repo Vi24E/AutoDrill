@@ -1,24 +1,25 @@
 use std::sync::OnceLock;
 
 use crate::effort::{
-    arithmetic_expression_graph, calculate_graph_effort, Operation, OperationWeights,
-    SolutionGraph, SolutionStep,
+    arithmetic_expression_plan, EffortModel, Operation, OperationPlan, OperationWeights,
 };
-use crate::generator::{GeneratorEntry, ProblemGenerator};
+use crate::error::GenerationError;
+use crate::generator::{
+    BootstrapDedup, ConstructiveLayeredCandidateSource, GeneratorEntry, ProblemGenerator,
+    RandomCandidateSource, SamplingStrategy,
+};
 use crate::generator_support::{
-    binary_expression, input_interface, mixed_number_answer, rational_answer, rational_expression,
+    binary_expression, mixed_number_answer, rational_answer, rational_expression,
 };
 use crate::model::{
     AnswerSchema, ArithmeticExpression, ArithmeticOperator, Problem, ProblemPrompt,
     RationalCoefficient,
 };
 use crate::rng::DeterministicRng;
-use crate::schema::SCHEMA_VERSION;
 use crate::theme::{
     CurriculumSafetyPolicy as Safety, DedupPolicy as Dedup,
-    FractionPresentationPolicy as FractionPresentation, SamplingLayerSpec,
-    ThemeAnswerContract as AnswerContract, ThemeAnswerSchemaKind as Schema,
-    ThemeInputProfile as Input, ThemePresentationPolicy as Presentation, ThemePromptKind as Prompt,
+    FractionPresentationPolicy as FractionPresentation, SamplingLayerSpec, SchoolGrade,
+    ThemeAnswerContract as AnswerContract, ThemePresentationPolicy as Presentation,
     ThemeRegistration, ThemeRegistrationSpec, ThemeTag, COMPACT_16_LAYOUT,
 };
 
@@ -70,22 +71,18 @@ const SUMMARY: &[ThemeTag] = &[
 
 pub const SUMMARY_LAYERS: [SamplingLayerSpec; 4] = [
     SamplingLayerSpec {
-        key: "addition",
         weight: 1,
         minimum: 1,
     },
     SamplingLayerSpec {
-        key: "subtraction",
         weight: 1,
         minimum: 1,
     },
     SamplingLayerSpec {
-        key: "multiplication",
         weight: 1,
         minimum: 1,
     },
     SamplingLayerSpec {
-        key: "division",
         weight: 1,
         minimum: 1,
     },
@@ -95,19 +92,17 @@ const MIXED_PRESENTATION: Presentation =
     Presentation::STANDARD.with_fraction(FractionPresentation::MixedNumberWhenImproper);
 const IMPROPER_PRESENTATION: Presentation =
     Presentation::STANDARD.with_fraction(FractionPresentation::KeepImproperFraction);
-const FRACTION_ANSWER: AnswerContract = AnswerContract {
-    prompt_kind: Prompt::Arithmetic,
-    answer_schema_kind: Schema::Rational,
-    input_profile: Input::Fraction,
-};
+const FRACTION_ANSWER: AnswerContract = AnswerContract::ArithmeticFraction;
 
 pub const FRACTION_ADDITION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_ADDITION,
-        generator_revision: GENERATOR_REVISION_FRACTION_ADDITION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_ADDITION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_ADDITION,
+        ),
         skill_id: SKILL_ID_FRACTION_ADDITION,
         curriculum_path: &CURRICULUM_PATH_FRACTION_ADDITION,
-        grade: Some(5),
+        grade: Some(SchoolGrade::Elementary5),
         tags: ADDITION,
         safety: Safety::NonNegativeOnly,
         presentation: MIXED_PRESENTATION,
@@ -117,11 +112,13 @@ pub const FRACTION_ADDITION_REGISTRATION: ThemeRegistration =
     });
 pub const FRACTION_SUBTRACTION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_SUBTRACTION,
-        generator_revision: GENERATOR_REVISION_FRACTION_SUBTRACTION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_SUBTRACTION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_SUBTRACTION,
+        ),
         skill_id: SKILL_ID_FRACTION_SUBTRACTION,
         curriculum_path: &CURRICULUM_PATH_FRACTION_SUBTRACTION,
-        grade: Some(5),
+        grade: Some(SchoolGrade::Elementary5),
         tags: SUBTRACTION,
         safety: Safety::NonNegativeOnly,
         presentation: MIXED_PRESENTATION,
@@ -131,11 +128,13 @@ pub const FRACTION_SUBTRACTION_REGISTRATION: ThemeRegistration =
     });
 pub const FRACTION_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_MULTIPLICATION,
-        generator_revision: GENERATOR_REVISION_FRACTION_MULTIPLICATION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_MULTIPLICATION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_MULTIPLICATION,
+        ),
         skill_id: SKILL_ID_FRACTION_MULTIPLICATION,
         curriculum_path: &CURRICULUM_PATH_FRACTION_MULTIPLICATION,
-        grade: Some(6),
+        grade: Some(SchoolGrade::Elementary6),
         tags: MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
         presentation: MIXED_PRESENTATION,
@@ -145,11 +144,13 @@ pub const FRACTION_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     });
 pub const FRACTION_DIVISION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_DIVISION,
-        generator_revision: GENERATOR_REVISION_FRACTION_DIVISION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_DIVISION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_DIVISION,
+        ),
         skill_id: SKILL_ID_FRACTION_DIVISION,
         curriculum_path: &CURRICULUM_PATH_FRACTION_DIVISION,
-        grade: Some(6),
+        grade: Some(SchoolGrade::Elementary6),
         tags: DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: MIXED_PRESENTATION,
@@ -159,11 +160,13 @@ pub const FRACTION_DIVISION_REGISTRATION: ThemeRegistration =
     });
 pub const FRACTION_INTEGER_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_INTEGER_MULTIPLICATION,
-        generator_revision: GENERATOR_REVISION_FRACTION_INTEGER_MULTIPLICATION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_INTEGER_MULTIPLICATION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_INTEGER_MULTIPLICATION,
+        ),
         skill_id: SKILL_ID_FRACTION_INTEGER_MULTIPLICATION,
         curriculum_path: &CURRICULUM_PATH_FRACTION_INTEGER_MULTIPLICATION,
-        grade: Some(6),
+        grade: Some(SchoolGrade::Elementary6),
         tags: MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
         presentation: MIXED_PRESENTATION,
@@ -173,11 +176,13 @@ pub const FRACTION_INTEGER_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     });
 pub const FRACTION_INTEGER_DIVISION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_INTEGER_DIVISION,
-        generator_revision: GENERATOR_REVISION_FRACTION_INTEGER_DIVISION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_INTEGER_DIVISION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_INTEGER_DIVISION,
+        ),
         skill_id: SKILL_ID_FRACTION_INTEGER_DIVISION,
         curriculum_path: &CURRICULUM_PATH_FRACTION_INTEGER_DIVISION,
-        grade: Some(6),
+        grade: Some(SchoolGrade::Elementary6),
         tags: DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: MIXED_PRESENTATION,
@@ -187,11 +192,13 @@ pub const FRACTION_INTEGER_DIVISION_REGISTRATION: ThemeRegistration =
     });
 pub const FRACTION_SUMMARY_IMPROPER_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_FRACTION_SUMMARY_IMPROPER,
-        generator_revision: GENERATOR_REVISION_FRACTION_SUMMARY_IMPROPER,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_FRACTION_SUMMARY_IMPROPER),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_FRACTION_SUMMARY_IMPROPER,
+        ),
         skill_id: SKILL_ID_FRACTION_SUMMARY_IMPROPER,
         curriculum_path: &CURRICULUM_PATH_FRACTION_SUMMARY_IMPROPER,
-        grade: Some(6),
+        grade: Some(SchoolGrade::Elementary6),
         tags: SUMMARY,
         safety: Safety::NonNegativeOnly,
         presentation: IMPROPER_PRESENTATION,
@@ -230,38 +237,52 @@ impl ProblemGenerator for Generator {
         self.registration
     }
 
-    fn sampling_layers(&self) -> Option<&'static [SamplingLayerSpec]> {
-        (self.mode == Mode::SummaryImproper).then_some(&SUMMARY_LAYERS)
+    fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
+        if self.mode == Mode::SummaryImproper {
+            SamplingStrategy::constructive_layered(
+                self,
+                BootstrapDedup::Deduplicate,
+                1,
+                self.registration.layout().problem_count(),
+            )
+        } else {
+            Ok(SamplingStrategy::random(self, BootstrapDedup::Deduplicate))
+        }
+    }
+}
+
+impl RandomCandidateSource for Generator {
+    fn draw_candidate(
+        &self,
+        rng: &mut DeterministicRng,
+        ordinal: u32,
+        weights: &OperationWeights,
+    ) -> Result<Option<Problem>, GenerationError> {
+        let Some(entry) = draw_constructive_entry(self.mode, rng) else {
+            return Ok(None);
+        };
+        build_problem(self.registration, self.mode, ordinal, weights, entry).map(Some)
+    }
+}
+
+impl ConstructiveLayeredCandidateSource for Generator {
+    fn layers(&self) -> &'static [SamplingLayerSpec] {
+        &SUMMARY_LAYERS
     }
 
-    fn sampling_layer(&self, problem: &Problem) -> Option<usize> {
-        if self.mode != Mode::SummaryImproper {
-            return None;
-        }
+    fn layer_of(&self, problem: &Problem) -> usize {
         let ProblemPrompt::Arithmetic {
             expression: ArithmeticExpression::Binary { operator, .. },
-        } = &problem.prompt
+        } = problem.prompt()
         else {
-            return None;
+            unreachable!("fraction summary generator always emits arithmetic binary prompts");
         };
         match operator {
-            ArithmeticOperator::Add => Some(0),
-            ArithmeticOperator::Subtract => Some(1),
-            ArithmeticOperator::Multiply => Some(2),
-            ArithmeticOperator::Divide => Some(3),
+            ArithmeticOperator::Add => 0,
+            ArithmeticOperator::Subtract => 1,
+            ArithmeticOperator::Multiply => 2,
+            ArithmeticOperator::Divide => 3,
         }
-    }
-
-    fn bootstrap_layer_multiplier(&self) -> usize {
-        1
-    }
-
-    fn deduplicate_bootstrap_pool(&self) -> bool {
-        true
-    }
-
-    fn constructive_layer_sampling(&self) -> bool {
-        self.mode == Mode::SummaryImproper
     }
 
     fn draw_candidate_for_layer(
@@ -270,34 +291,11 @@ impl ProblemGenerator for Generator {
         ordinal: u32,
         weights: &OperationWeights,
         layer: usize,
-    ) -> Option<Problem> {
-        if !self.constructive_layer_sampling() {
-            return None;
-        }
-        let entry = draw_summary_entry_for_layer(layer, rng)?;
-        Some(build_problem(
-            self.registration,
-            self.mode,
-            ordinal,
-            weights,
-            entry,
-        ))
-    }
-
-    fn draw_candidate(
-        &self,
-        rng: &mut DeterministicRng,
-        ordinal: u32,
-        weights: &OperationWeights,
-    ) -> Option<Problem> {
-        let entry = draw_constructive_entry(self.mode, rng)?;
-        Some(build_problem(
-            self.registration,
-            self.mode,
-            ordinal,
-            weights,
-            entry,
-        ))
+    ) -> Result<Option<Problem>, GenerationError> {
+        let Some(entry) = draw_summary_entry_for_layer(layer, rng) else {
+            return Ok(None);
+        };
+        build_problem(self.registration, self.mode, ordinal, weights, entry).map(Some)
     }
 }
 
@@ -368,7 +366,7 @@ fn draw_pair_from_domain(
 }
 
 fn small_positive_integer(value: RationalCoefficient) -> bool {
-    value.denominator == 1 && (1..=9).contains(&value.numerator)
+    value.denominator() == 1 && (1..=9).contains(&value.numerator())
 }
 
 fn draw_standard_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Option<FractionEntry> {
@@ -384,12 +382,12 @@ fn draw_standard_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Optio
         ArithmeticOperator::Multiply => left.multiply(right),
         ArithmeticOperator::Divide => left.divide(right),
     }?;
-    if result.numerator <= 0 {
+    if result.numerator() <= 0 {
         return None;
     }
     let allowed = match mode {
         Mode::Addition => {
-            result.denominator > 1 && result.numerator <= 65 && result.denominator <= 72
+            result.denominator() > 1 && result.numerator() <= 65 && result.denominator() <= 72
         }
         Mode::Subtraction | Mode::Multiplication => operand_domain_v1().contains(&result),
         Mode::Division => operand_domain_v1().contains(&result) || small_positive_integer(result),
@@ -418,7 +416,7 @@ fn draw_integer_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Option
         ArithmeticOperator::Divide => left.divide(right),
         _ => return None,
     }?;
-    let allowed = result.numerator > 0
+    let allowed = result.numerator() > 0
         && (operand_domain_v1().contains(&result) || small_positive_integer(result));
     allowed.then_some(FractionEntry {
         operator,
@@ -460,7 +458,7 @@ fn draw_summary_entry_for_layer(layer: usize, rng: &mut DeterministicRng) -> Opt
                 ArithmeticOperator::Divide => left.divide(right),
                 _ => unreachable!(),
             }?;
-            (result.numerator > 0 && result.numerator <= 200 && result.denominator <= 196)
+            (result.numerator() > 0 && result.numerator() <= 200 && result.denominator() <= 196)
                 .then_some(FractionEntry {
                     operator,
                     left,
@@ -498,7 +496,7 @@ pub(crate) fn operand_domain_v1() -> &'static [RationalCoefficient] {
                 let Some(value) = RationalCoefficient::new(numerator, denominator) else {
                     continue;
                 };
-                if value.denominator == 1 {
+                if value.denominator() == 1 {
                     continue;
                 }
                 values.push(value);
@@ -524,9 +522,9 @@ fn build_problem(
     registration: &ThemeRegistration,
     mode: Mode,
     id: u32,
-    weights: &OperationWeights,
+    _weights: &OperationWeights,
     entry: FractionEntry,
-) -> Problem {
+) -> Result<Problem, GenerationError> {
     let FractionEntry {
         operator,
         left,
@@ -544,19 +542,15 @@ fn build_problem(
         mixed_number_answer(result)
     };
     let self_division = operator == ArithmeticOperator::Divide && left == right;
-    let solution_graph = if self_division {
-        SolutionGraph {
-            steps: vec![SolutionStep {
-                id: 1,
-                operation: Operation::FractionSelfDivision,
-                depends_on: vec![],
-            }],
-        }
+    let operation_plan = if self_division {
+        OperationPlan::new(vec![Operation::FractionSelfDivision])
     } else {
-        arithmetic_expression_graph(&expression, &rational_answer(result))
-            .expect("accepted fraction-domain expression must have an effort graph")
+        arithmetic_expression_plan(&expression, &rational_answer(result)).ok_or(
+            GenerationError::InvalidGeneratedProblem {
+                reason: "fraction generator produced an expression unsupported by the effort model",
+            },
+        )?
     };
-    let effort = calculate_graph_effort(&solution_graph, weights);
     let (max_abs_numerator, max_denominator) = match mode {
         Mode::Addition => (65, 72),
         Mode::Subtraction
@@ -566,24 +560,19 @@ fn build_problem(
         | Mode::IntegerDivision => (13, 14),
         Mode::SummaryImproper => (200, 196),
     };
-    Problem {
-        schema_version: SCHEMA_VERSION,
+    Problem::generated(
+        registration,
         id,
-        numeric_theme_id: registration.numeric_theme_id,
-        prompt: ProblemPrompt::Arithmetic { expression },
-        input_interface: input_interface(registration.answer_contract.input_profile),
-        answer_schema: AnswerSchema::Rational {
+        ProblemPrompt::Arithmetic { expression },
+        AnswerSchema::Rational {
             max_abs_numerator,
             max_denominator,
             require_reduced_fraction_form: true,
         },
-        canonical_answer: answer,
-        worked_solution: None,
-        solution_graph,
-        operation_vector: effort.operation_vector,
-        theme_specific_effort: None,
-        effort: effort.value,
-    }
+        answer,
+        EffortModel::operations(operation_plan),
+    )
+    .map_err(GenerationError::from)
 }
 
 /// Current generators owned by this theme family.
@@ -617,13 +606,164 @@ mod tests {
                 right: value,
                 result: one,
             },
-        );
-        assert_eq!(problem.effort, 1.0);
+        )
+        .expect("fraction candidate must satisfy its problem contract");
+        assert_eq!(problem.effort(), 1.0);
         assert_eq!(
             problem
-                .operation_vector
+                .operation_vector()
                 .get(OperationKind::FractionSelfDivision),
             1.0
         );
+    }
+}
+
+#[cfg(test)]
+mod curriculum_tests {
+    use super::*;
+    use crate::generator::{generate_worksheet_request, ConstructiveLayeredCandidateSource};
+    use crate::identity::Difficulty;
+    use crate::model::{EditorStructure, GenerateWorksheetRequest};
+    use crate::schema::SCHEMA_VERSION;
+
+    fn draw_entry(mode: Mode, rng: &mut DeterministicRng) -> FractionEntry {
+        for _ in 0..10_000 {
+            if let Some(entry) = draw_constructive_entry(mode, rng) {
+                return entry;
+            }
+        }
+        panic!("fraction mode failed to produce an accepted entry");
+    }
+
+    #[test]
+    fn fraction_modes_obey_family_owned_operand_and_result_domains() {
+        let mut rng = DeterministicRng::from_seed("FractionDomainA1");
+        for mode in [
+            Mode::Addition,
+            Mode::Subtraction,
+            Mode::Multiplication,
+            Mode::Division,
+        ] {
+            for _ in 0..512 {
+                let entry = draw_entry(mode, &mut rng);
+                assert!(operand_domain_v1().contains(&entry.left));
+                assert!(operand_domain_v1().contains(&entry.right));
+                assert!(entry.left.numerator() > 0 && entry.right.numerator() > 0);
+                assert!(entry.result.numerator() > 0);
+                match mode {
+                    Mode::Addition => {
+                        assert_eq!(entry.operator, ArithmeticOperator::Add);
+                        assert!(entry.result.denominator() > 1);
+                        assert!(entry.result.numerator() <= 65);
+                        assert!(entry.result.denominator() <= 72);
+                    }
+                    Mode::Subtraction => {
+                        assert_eq!(entry.operator, ArithmeticOperator::Subtract);
+                        assert!(operand_domain_v1().contains(&entry.result));
+                    }
+                    Mode::Multiplication => {
+                        assert_eq!(entry.operator, ArithmeticOperator::Multiply);
+                        assert!(operand_domain_v1().contains(&entry.result));
+                    }
+                    Mode::Division => {
+                        assert_eq!(entry.operator, ArithmeticOperator::Divide);
+                        assert!(
+                            operand_domain_v1().contains(&entry.result)
+                                || small_positive_integer(entry.result)
+                        );
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn integer_fraction_units_keep_integer_operands_out_of_standard_units() {
+        let mut rng = DeterministicRng::from_seed("FractionIntegerB2");
+        for _ in 0..512 {
+            for mode in [Mode::Multiplication, Mode::Division] {
+                let entry = draw_entry(mode, &mut rng);
+                assert!(!entry.left.is_integer());
+                assert!(!entry.right.is_integer());
+            }
+            let multiplication = draw_entry(Mode::IntegerMultiplication, &mut rng);
+            assert!(!multiplication.left.is_integer());
+            assert!(multiplication.right.is_integer());
+
+            let division = draw_entry(Mode::IntegerDivision, &mut rng);
+            assert_ne!(division.left.is_integer(), division.right.is_integer());
+        }
+    }
+
+    #[test]
+    fn fraction_answer_contract_allows_decimal_compatibility_input() {
+        for registration in [
+            &FRACTION_ADDITION_REGISTRATION,
+            &FRACTION_SUBTRACTION_REGISTRATION,
+            &FRACTION_MULTIPLICATION_REGISTRATION,
+            &FRACTION_DIVISION_REGISTRATION,
+            &FRACTION_INTEGER_MULTIPLICATION_REGISTRATION,
+            &FRACTION_INTEGER_DIVISION_REGISTRATION,
+            &FRACTION_SUMMARY_IMPROPER_REGISTRATION,
+        ] {
+            let interface =
+                crate::input::input_interface(registration.answer_contract().input_profile());
+            assert!(interface.allows_structure(EditorStructure::Decimal));
+        }
+    }
+
+    #[test]
+    fn hard_fraction_addition_does_not_collapse_to_equal_denominators() {
+        for seed in ["FracHardA1", "FracHardB2", "FracHardC3", "FracHardD4"] {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: THEME_ID_FRACTION_ADDITION,
+                seed: seed.to_owned(),
+                difficulty: Difficulty::try_from(3).unwrap(),
+                timeout_ms: Some(1_000),
+                max_attempts: Some(50_000),
+            })
+            .unwrap();
+            let unlike = worksheet
+                .problems()
+                .iter()
+                .filter(|problem| {
+                    let ProblemPrompt::Arithmetic {
+                        expression: ArithmeticExpression::Binary { left, right, .. },
+                    } = problem.prompt()
+                    else {
+                        unreachable!()
+                    };
+                    let (
+                        ArithmeticExpression::Rational { value: left },
+                        ArithmeticExpression::Rational { value: right },
+                    ) = (&**left, &**right)
+                    else {
+                        unreachable!()
+                    };
+                    left.denominator() != right.denominator()
+                })
+                .count();
+            assert!(unlike >= worksheet.problems().len() / 2);
+        }
+    }
+
+    #[test]
+    fn summary_layer_classifier_is_family_owned_and_total() {
+        let mut rng = DeterministicRng::from_seed("FractionLayerC3");
+        let weights = OperationWeights::default();
+        for layer in 0..SUMMARY_LAYERS.len() {
+            for ordinal in 1..=32 {
+                let problem = (0..10_000)
+                    .find_map(|_| {
+                        SUMMARY_IMPROPER_GENERATOR
+                            .draw_candidate_for_layer(&mut rng, ordinal, &weights, layer)
+                            .expect("candidate construction must preserve the problem contract")
+                    })
+                    .expect("every summary layer must have accepted candidates");
+                assert_eq!(SUMMARY_IMPROPER_GENERATOR.layer_of(&problem), layer);
+            }
+        }
     }
 }

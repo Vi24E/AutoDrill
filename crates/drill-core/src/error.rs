@@ -3,6 +3,29 @@ use std::time::Duration;
 use thiserror::Error;
 
 use crate::identity::IdentityError;
+use crate::model::{ProblemInvariantError, WorksheetInvariantError};
+use crate::registry::RegistryError;
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+pub enum SamplingError {
+    #[error("answer-conditioned sampling requires a non-empty answer domain")]
+    EmptyAnswerDomain,
+    #[error("layered sampling requires at least one layer")]
+    EmptyLayers,
+    #[error("layer minimum quota {minimum_total} exceeds worksheet size {problem_count}")]
+    LayerMinimumExceedsWorksheet {
+        minimum_total: usize,
+        problem_count: usize,
+    },
+    #[error("sampling layer index {index} is outside 0..{layer_count}")]
+    LayerOutOfRange { index: usize, layer_count: usize },
+    #[error("constructive layered bootstrap multiplier must be nonzero")]
+    ZeroBootstrapMultiplier,
+    #[error("answer-conditioned generator returned a problem for a different canonical answer")]
+    AnswerConditionMismatch,
+    #[error("constructive layered generator returned layer {actual} when layer {requested} was requested")]
+    RequestedLayerMismatch { requested: usize, actual: usize },
+}
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum GenerationError {
@@ -21,6 +44,30 @@ pub enum GenerationError {
     },
     #[error(transparent)]
     InvalidIdentity(#[from] IdentityError),
+    #[error(transparent)]
+    InvalidRegistry(#[from] RegistryError),
+    #[error(transparent)]
+    InvalidSampling(#[from] SamplingError),
+    #[error("generated problem violates its domain contract: {reason}")]
+    InvalidGeneratedProblem { reason: &'static str },
+    #[error("generated worksheet violates its domain contract: {reason}")]
+    InvalidGeneratedWorksheet { reason: &'static str },
+}
+
+impl From<ProblemInvariantError> for GenerationError {
+    fn from(error: ProblemInvariantError) -> Self {
+        Self::InvalidGeneratedProblem {
+            reason: error.description(),
+        }
+    }
+}
+
+impl From<WorksheetInvariantError> for GenerationError {
+    fn from(error: WorksheetInvariantError) -> Self {
+        Self::InvalidGeneratedWorksheet {
+            reason: error.description(),
+        }
+    }
 }
 
 impl GenerationError {
@@ -35,6 +82,10 @@ impl GenerationError {
                 "unsupported_schema_version"
             }
             Self::InvalidIdentity(_) => "invalid_problem_set_identity",
+            Self::InvalidRegistry(_) => "invalid_registry",
+            Self::InvalidSampling(_) => "invalid_sampling_strategy",
+            Self::InvalidGeneratedProblem { .. } => "invalid_generated_problem",
+            Self::InvalidGeneratedWorksheet { .. } => "invalid_generated_worksheet",
         }
     }
 
@@ -47,21 +98,9 @@ impl GenerationError {
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum EditorError {
-    #[error("digit must be between 0 and 9")]
-    InvalidDigit,
     #[error("answer AST size cannot exceed {max_size}")]
     AnswerSizeLimit { max_size: usize },
-    #[error("the integer draft is outside the supported range")]
-    IntegerOverflow,
-    #[error("editing a negative integer draft is not supported")]
-    NegativeDraft,
-    #[error("the editor only supports integer draft nodes")]
-    UnsupportedDraftNode,
-    #[error("the editor path does not select an editable slot")]
-    InvalidPath,
-    #[error("the decimal draft is invalid")]
-    InvalidDecimalDraft,
-    #[error("the editor structure {structure:?} is not allowed by the input interface")]
+    #[error("the input structure {structure:?} is not allowed by the input interface")]
     StructureNotAllowed {
         structure: crate::model::EditorStructure,
     },

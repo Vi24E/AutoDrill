@@ -11,19 +11,18 @@ use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
 use drill_core::generate_worksheet_request as core_generate_worksheet_request;
-use drill_core::{
-    apply_editor_action as core_apply_editor_action, calculate_effort as core_calculate_effort,
-    generate_problem_request as core_generate_problem_request,
-    grade_answer_with_schema as core_grade_answer_with_schema,
-    normalize_answer as core_normalize_answer, parse_mathlive_answer as core_parse_mathlive_answer,
-    AnswerInputInterface, AnswerNode, AnswerSchema, EditorAction, EditorError, EditorState,
-    EffortWeights, GenerateProblemRequest, GenerateWorksheetRequest, GenerationError, Problem,
-    ProblemSetIdentity, MAX_ANSWER_AST_SIZE, SCHEMA_VERSION,
-};
 #[cfg(target_arch = "wasm32")]
 use drill_core::{
     generate_identity_with_clock, generate_worksheet_request_with_clock, GenerationConfig,
     MonotonicClock,
+};
+use drill_core::{
+    generate_problem_request as core_generate_problem_request,
+    grade_answer_with_schema as core_grade_answer_with_schema,
+    normalize_answer as core_normalize_answer, parse_mathlive_answer as core_parse_mathlive_answer,
+    AnswerInputInterface, AnswerNode, AnswerSchema, EditorError, GenerateProblemRequest,
+    GenerateWorksheetRequest, GenerationError, GradeError, ProblemSetIdentity, MAX_ANSWER_AST_SIZE,
+    SCHEMA_VERSION,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -113,14 +112,6 @@ impl MonotonicClock for BrowserClock {
 }
 
 #[derive(Debug, Deserialize)]
-struct EditorActionRequest {
-    schema_version: u16,
-    input_interface: AnswerInputInterface,
-    state: EditorState,
-    action: EditorAction,
-}
-
-#[derive(Debug, Deserialize)]
 struct ParseMathLiveAnswerRequest {
     schema_version: u16,
     input_interface: AnswerInputInterface,
@@ -140,14 +131,6 @@ struct GradeAnswerRequest {
     actual: AnswerNode,
     #[serde(default)]
     answer_schema: Option<AnswerSchema>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CalculateEffortRequest {
-    schema_version: u16,
-    problem: Problem,
-    #[serde(default)]
-    weights: Option<EffortWeights>,
 }
 
 #[derive(Debug, Serialize)]
@@ -225,18 +208,12 @@ fn regenerate_for_platform(
 }
 
 #[wasm_bindgen]
-pub fn apply_editor_action(input_json: &str) -> String {
-    respond_with(input_json, |request: EditorActionRequest| {
-        validate_schema(request.schema_version)?;
-        core_apply_editor_action(&request.state, &request.action, &request.input_interface)
-            .map_err(editor_error)
-    })
-}
-
-#[wasm_bindgen]
 pub fn parse_mathlive_answer(input_json: &str) -> String {
     respond_with(input_json, |request: ParseMathLiveAnswerRequest| {
         validate_schema(request.schema_version)?;
+        if !request.input_interface.is_structurally_valid() {
+            return Err(invalid_request("input_interface is structurally invalid"));
+        }
         core_parse_mathlive_answer(&request.latex, &request.input_interface).map_err(editor_error)
     })
 }
@@ -256,23 +233,12 @@ pub fn grade_answer(input_json: &str) -> String {
         validate_schema(request.schema_version)?;
         validate_answer_size(&request.expected)?;
         validate_answer_size(&request.actual)?;
-        Ok(core_grade_answer_with_schema(
+        core_grade_answer_with_schema(
             &request.expected,
             &request.actual,
             request.answer_schema.as_ref(),
-        ))
-    })
-}
-
-#[wasm_bindgen]
-pub fn calculate_effort(input_json: &str) -> String {
-    respond_with(input_json, |request: CalculateEffortRequest| {
-        validate_schema(request.schema_version)?;
-        validate_schema(request.problem.schema_version)?;
-        Ok(core_calculate_effort(
-            &request.problem,
-            &request.weights.unwrap_or_default(),
-        ))
+        )
+        .map_err(grade_error)
     })
 }
 
@@ -330,7 +296,13 @@ fn generation_error(error: GenerationError) -> ApiError {
             received,
             expected,
         }) => Some(json!({ "received": received, "expected": expected })),
-        GenerationError::InvalidIdentity(_) => None,
+        GenerationError::InvalidGeneratedProblem { reason }
+        | GenerationError::InvalidGeneratedWorksheet { reason } => {
+            Some(json!({ "reason": reason }))
+        }
+        GenerationError::InvalidIdentity(_)
+        | GenerationError::InvalidRegistry(_)
+        | GenerationError::InvalidSampling(_) => None,
     };
     ApiError {
         code: error.code().to_owned(),
@@ -339,23 +311,25 @@ fn generation_error(error: GenerationError) -> ApiError {
     }
 }
 
+fn grade_error(error: GradeError) -> ApiError {
+    ApiError {
+        code: error.code().to_owned(),
+        message: error.to_string(),
+        details: None,
+    }
+}
+
 fn editor_error(error: EditorError) -> ApiError {
     let (code, details) = match &error {
-        EditorError::InvalidDigit => ("editor_invalid_digit", None),
         EditorError::AnswerSizeLimit { max_size } => (
             "answer_ast_size_limit",
             Some(json!({ "max_size": max_size })),
         ),
-        EditorError::IntegerOverflow => ("editor_integer_overflow", None),
-        EditorError::NegativeDraft => ("editor_negative_draft", None),
-        EditorError::UnsupportedDraftNode => ("editor_unsupported_draft_node", None),
-        EditorError::InvalidPath => ("editor_invalid_path", None),
-        EditorError::InvalidDecimalDraft => ("editor_invalid_decimal_draft", None),
         EditorError::StructureNotAllowed { structure } => (
-            "editor_structure_not_allowed",
+            "input_structure_not_allowed",
             Some(json!({ "structure": structure })),
         ),
-        EditorError::InputInterfaceViolation => ("editor_input_interface_violation", None),
+        EditorError::InputInterfaceViolation => ("input_interface_violation", None),
     };
     ApiError {
         code: code.to_owned(),
@@ -424,20 +398,16 @@ mod tests {
         })
     }
 
-    fn structured_input_interface() -> Value {
-        json!({
-            "type": "structured_math",
-            "allowed_structures": [
-                "fraction", "mixed_fraction", "decimal", "root", "negative",
-                "plus_minus", "tuple"
-            ]
-        })
-    }
-
     #[test]
     fn worksheet_boundary_matches_current_schema_and_identity() {
         let output = generate_worksheet(
-            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "numeric_theme_id": 1,
+                "seed": "Ab3Z",
+                "difficulty": 3
+            })
+            .to_string(),
         );
         let value = parse(&output);
         assert_eq!(value["schema_version"], SCHEMA_VERSION);
@@ -464,13 +434,13 @@ mod tests {
             simple_input_interface()
         );
         assert!(value["data"]["problems"][0]["canonical_answer"]["value"].is_string());
-        let big_num_step = value["data"]["problems"][0]["solution_graph"]["steps"]
+        let big_num_operation = value["data"]["problems"][0]["operation_plan"]["operations"]
             .as_array()
             .unwrap()
             .iter()
-            .find(|step| step["operation"]["kind"] == "big_num")
+            .find(|operation| operation["kind"] == "big_num")
             .unwrap();
-        assert!(big_num_step["operation"]["magnitude"].is_string());
+        assert!(big_num_operation["magnitude"].is_string());
 
         let regenerated_id = format!(
             "\"{}-1-{}-Ab3Z-3\"",
@@ -494,473 +464,35 @@ mod tests {
             r#"{"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
         ));
         assert_eq!(missing_schema["error"]["code"], "invalid_request");
-
-        let missing_editor_path = parse(&apply_editor_action(
-            r#"{"schema_version":6,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"empty"},"cursor":0,"committed":false},"action":{"type":"insert_digit","digit":4}}"#,
-        ));
-        assert_eq!(missing_editor_path["error"]["code"], "invalid_request");
     }
 
     #[test]
     fn timeout_and_attempt_errors_remain_distinct() {
         let timeout = parse(&generate_worksheet(
-            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3,"timeout_ms":0}"#,
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "numeric_theme_id": 1,
+                "seed": "Ab3Z",
+                "difficulty": 3,
+                "timeout_ms": 0
+            })
+            .to_string(),
         ));
         assert_eq!(timeout["error"]["code"], "generation_timeout");
 
         let attempts = parse(&generate_worksheet(
-            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3,"timeout_ms":1000,"max_attempts":0}"#,
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "numeric_theme_id": 1,
+                "seed": "Ab3Z",
+                "difficulty": 3,
+                "timeout_ms": 1000,
+                "max_attempts": 0
+            })
+            .to_string(),
         ));
         assert_eq!(attempts["error"]["code"], "generation_attempt_limit");
     }
-
-    #[test]
-    fn ast_editor_grade_and_effort_use_matching_json_dtos() {
-        let edited = parse(&apply_editor_action(
-            r#"{"schema_version":6,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"empty"},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_digit","digit":4}}"#,
-        ));
-        assert_eq!(
-            edited["data"]["answer"],
-            json!({"type":"integer","value":"4"})
-        );
-        assert_eq!(edited["data"]["active_path"], json!([]));
-
-        let structured = parse(&apply_editor_action(
-            r#"{"schema_version":6,"input_interface":{"type":"structured_math","allowed_structures":["fraction"]},"state":{"answer":{"type":"empty"},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_structure","structure":"fraction"}}"#,
-        ));
-        assert_eq!(
-            structured["data"]["answer"],
-            json!({"type":"fraction","value":{"numerator":{"type":"empty"},"denominator":{"type":"empty"}}})
-        );
-        assert_eq!(structured["data"]["active_path"], json!([0]));
-
-        let oversized_decimal = parse(&apply_editor_action(
-            r#"{"schema_version":6,"input_interface":{"type":"simple_numeric","allow_decimal":false,"allow_negative":false},"state":{"answer":{"type":"exact_decimal","value":{"coefficient":"0","scale":4294967295}},"cursor":0,"active_path":[],"committed":false},"action":{"type":"insert_digit","digit":1}}"#,
-        ));
-        assert_eq!(oversized_decimal["ok"], false);
-        assert_eq!(oversized_decimal["error"]["code"], "answer_ast_size_limit");
-
-        let normalized = parse(&normalize_answer(
-            r#"{"schema_version":6,"answer":{"type":"exact_decimal","value":{"coefficient":"300","scale":3}}}"#,
-        ));
-        assert_eq!(
-            normalized["data"],
-            json!({"type":"fraction","value":{"numerator":{"type":"integer","value":"3"},"denominator":{"type":"integer","value":"10"}}})
-        );
-
-        let graded = parse(&grade_answer(
-            r#"{"schema_version":6,"expected":{"type":"integer","value":"4"},"actual":{"type":"integer","value":"4"}}"#,
-        ));
-        assert_eq!(graded["data"]["is_correct"], true);
-        assert_eq!(graded["data"]["warnings"], json!([]));
-
-        let equivalent_fraction = parse(&grade_answer(
-            r#"{"schema_version":6,"expected":{"type":"fraction","value":{"numerator":{"type":"integer","value":"1"},"denominator":{"type":"integer","value":"2"}}},"actual":{"type":"exact_decimal","value":{"coefficient":"5","scale":1}}}"#,
-        ));
-        assert_eq!(equivalent_fraction["data"]["is_correct"], true);
-        assert_eq!(equivalent_fraction["data"]["warnings"], json!([]));
-
-        let reducible_fraction = parse(&grade_answer(
-            r#"{"schema_version":6,"expected":{"type":"fraction","value":{"numerator":{"type":"integer","value":"1"},"denominator":{"type":"integer","value":"2"}}},"actual":{"type":"fraction","value":{"numerator":{"type":"integer","value":"2"},"denominator":{"type":"integer","value":"4"}}}}"#,
-        ));
-        assert_eq!(reducible_fraction["data"]["is_correct"], true);
-        assert_eq!(
-            reducible_fraction["data"]["warnings"],
-            json!(["fraction_not_reduced"])
-        );
-
-        let generated = parse(&generate_problem(
-            r#"{"schema_version":6,"numeric_theme_id":1,"seed":"Ab3Z"}"#,
-        ));
-        let effort_request = json!({
-            "schema_version": SCHEMA_VERSION,
-            "problem": generated["data"]
-        });
-        let effort = parse(&calculate_effort(&effort_request.to_string()));
-        assert_eq!(effort["ok"], true);
-        assert!(effort["data"]["value"].as_f64().unwrap() >= 3.0);
-    }
-
-    #[test]
-    fn editor_interface_is_authoritative_and_nan_error_is_recoverable() {
-        let blocked = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "empty"}, "cursor": 0, "active_path": [], "committed": false},
-                "action": {"type": "insert_structure", "structure": "fraction"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(blocked["error"]["code"], "editor_structure_not_allowed");
-        assert_eq!(blocked["error"]["details"]["structure"], "fraction");
-
-        for structure in ["decimal", "negative"] {
-            let blocked = parse(&apply_editor_action(
-                &json!({
-                    "schema_version": SCHEMA_VERSION,
-                    "input_interface": simple_input_interface(),
-                    "state": {"answer": {"type": "empty"}, "cursor": 0, "active_path": [], "committed": false},
-                    "action": {"type": "insert_structure", "structure": structure}
-                })
-                .to_string(),
-            ));
-            assert_eq!(blocked["error"]["code"], "editor_structure_not_allowed");
-            assert_eq!(blocked["error"]["details"]["structure"], structure);
-        }
-
-        let nan = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {
-                    "answer": {"type": "nan_error", "value": "3.1.4.5"},
-                    "cursor": 7,
-                    "active_path": [],
-                    "committed": false
-                },
-                "action": {"type": "insert_digit", "digit": 9}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            nan["data"]["answer"],
-            json!({"type": "nan_error", "value": "3.1.4.59"})
-        );
-
-        let graded = parse(&grade_answer(
-            r#"{"schema_version":6,"expected":{"type":"integer","value":"4"},"actual":{"type":"nan_error","value":"3.1.4.5"}}"#,
-        ));
-        assert_eq!(graded["data"]["is_correct"], false);
-        assert_eq!(graded["data"]["warnings"], json!([]));
-    }
-
-    #[test]
-    fn editor_boundary_rejects_bad_positions_and_capability_violations() {
-        let cleared_malformed = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "variable", "value": "x"}, "cursor": 999, "active_path": [9], "committed": true},
-                "action": {"type": "clear"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(cleared_malformed["ok"], true);
-        assert_eq!(cleared_malformed["data"]["answer"]["type"], "empty");
-
-        let invalid_path = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "integer", "value": "12"}, "cursor": 0, "active_path": [7], "committed": false},
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(invalid_path["error"]["code"], "editor_invalid_path");
-
-        let invalid_cursor = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "integer", "value": "12"}, "cursor": 3, "active_path": [], "committed": false},
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(invalid_cursor["error"]["code"], "editor_invalid_path");
-
-        let unicode = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "nan_error", "value": "😀1"}, "cursor": 1, "active_path": [], "committed": false},
-                "action": {"type": "insert_digit", "digit": 9}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            unicode["data"]["answer"],
-            json!({"type": "nan_error", "value": "😀91"})
-        );
-        assert_eq!(unicode["data"]["cursor"], 2);
-
-        let select_invalid = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": {"answer": {"type": "tuple", "value": [
-                    {"type": "integer", "value": "1"}, {"type": "integer", "value": "2"}
-                ]}, "cursor": 1, "active_path": [0], "committed": false},
-                "action": {"type": "select_slot", "path": [9], "cursor": 0}
-            })
-            .to_string(),
-        ));
-        assert_eq!(select_invalid["error"]["code"], "editor_invalid_path");
-
-        let select_missing_cursor = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": {"answer": {"type": "tuple", "value": [
-                    {"type": "integer", "value": "1"}, {"type": "integer", "value": "2"}
-                ]}, "cursor": 1, "active_path": [0], "committed": false},
-                "action": {"type": "select_slot", "path": [1]}
-            })
-            .to_string(),
-        ));
-        assert_eq!(select_missing_cursor["error"]["code"], "invalid_request");
-
-        let select_cursor = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": {"answer": {"type": "tuple", "value": [
-                    {"type": "integer", "value": "1"}, {"type": "integer", "value": "2"}
-                ]}, "cursor": 1, "active_path": [0], "committed": false},
-                "action": {"type": "select_slot", "path": [1], "cursor": 2}
-            })
-            .to_string(),
-        ));
-        assert_eq!(select_cursor["error"]["code"], "editor_invalid_path");
-
-        let existing_decimal = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "exact_decimal", "value": {"coefficient": "12", "scale": 1}}, "cursor": 3, "active_path": [], "committed": false},
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            existing_decimal["error"]["code"],
-            "editor_input_interface_violation"
-        );
-
-        let structured_existing = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": {"type": "structured_math", "allowed_structures": ["fraction"]},
-                "state": {"answer": {"type": "tuple", "value": [{"type": "integer", "value": "1"}]}, "cursor": 1, "active_path": [0], "committed": false},
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            structured_existing["error"]["code"],
-            "editor_input_interface_violation"
-        );
-
-        let signed_nested = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": {"type": "structured_math", "allowed_structures": ["fraction"]},
-                "state": {
-                    "answer": {"type": "fraction", "value": {
-                        "numerator": {"type": "integer", "value": "-1"},
-                        "denominator": {"type": "integer", "value": "2"}
-                    }},
-                    "cursor": 1,
-                    "active_path": [1],
-                    "committed": false
-                },
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            signed_nested["error"]["code"],
-            "editor_input_interface_violation"
-        );
-
-        let retained_nan = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "nan_error", "value": "1.2"}, "cursor": 2, "active_path": [], "committed": false},
-                "action": {"type": "delete"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            retained_nan["data"]["answer"],
-            json!({"type": "nan_error", "value": "1."})
-        );
-
-        let digits_recovered = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": simple_input_interface(),
-                "state": {"answer": {"type": "nan_error", "value": "12x3"}, "cursor": 2, "active_path": [], "committed": false},
-                "action": {"type": "delete"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(
-            digits_recovered["data"]["answer"],
-            json!({"type": "integer", "value": "123"})
-        );
-    }
-
-    #[test]
-    fn oversized_answers_are_rejected_at_editor_and_answer_boundaries() {
-        let oversized_answer = json!({
-            "type": "tuple",
-            "value": (0..=MAX_ANSWER_AST_SIZE)
-                .map(|_| json!({"type": "integer", "value": "1"}))
-                .collect::<Vec<_>>()
-        });
-        let oversized_empty_answer = json!({
-            "type": "tuple",
-            "value": (0..=MAX_ANSWER_AST_SIZE)
-                .map(|_| json!({"type": "empty"}))
-                .collect::<Vec<_>>()
-        });
-        let oversized_state = json!({
-            "answer": oversized_answer.clone(),
-            "cursor": 0,
-            "active_path": [0],
-            "committed": false
-        });
-        let assert_size_limit = |value: &Value| {
-            assert_eq!(value["ok"], false);
-            assert_eq!(value["error"]["code"], "answer_ast_size_limit");
-            assert_eq!(value["error"]["details"]["max_size"], MAX_ANSWER_AST_SIZE);
-        };
-
-        let commit = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": oversized_state.clone(),
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&commit);
-
-        let select_slot = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": oversized_state.clone(),
-                "action": {"type": "select_slot", "path": [0], "cursor": 0}
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&select_slot);
-
-        let oversized_empty_state = json!({
-            "answer": oversized_empty_answer.clone(),
-            "cursor": 0,
-            "active_path": [0],
-            "committed": false
-        });
-        let empty_commit = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": oversized_empty_state.clone(),
-                "action": {"type": "commit"}
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&empty_commit);
-        let empty_select_slot = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": oversized_empty_state.clone(),
-                "action": {"type": "select_slot", "path": [0], "cursor": 0}
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&empty_select_slot);
-
-        let cleared_empty = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": oversized_empty_state,
-                "action": {"type": "clear"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(cleared_empty["ok"], true);
-        assert_eq!(
-            cleared_empty["data"],
-            json!({
-                "answer": {"type": "empty"},
-                "cursor": 0,
-                "active_path": [],
-                "committed": false
-            })
-        );
-
-        let cleared = parse(&apply_editor_action(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "input_interface": structured_input_interface(),
-                "state": oversized_state,
-                "action": {"type": "clear"}
-            })
-            .to_string(),
-        ));
-        assert_eq!(cleared["ok"], true);
-        assert_eq!(cleared["data"]["answer"], json!({"type": "empty"}));
-
-        let normalized = parse(&normalize_answer(
-            &json!({"schema_version": SCHEMA_VERSION, "answer": oversized_answer.clone()})
-                .to_string(),
-        ));
-        assert_size_limit(&normalized);
-        let normalized_empty = parse(&normalize_answer(
-            &json!({"schema_version": SCHEMA_VERSION, "answer": oversized_empty_answer.clone()})
-                .to_string(),
-        ));
-        assert_size_limit(&normalized_empty);
-
-        let graded_composite = parse(&grade_answer(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "expected": oversized_answer,
-                "actual": {"type": "integer", "value": "1"}
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&graded_composite);
-        let graded_empty_composite = parse(&grade_answer(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "expected": oversized_empty_answer,
-                "actual": {"type": "empty"}
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&graded_empty_composite);
-
-        let extreme_decimal = json!({
-            "type": "exact_decimal",
-            "value": {"coefficient": "0", "scale": u32::MAX}
-        });
-        let normalized_extreme = parse(&normalize_answer(
-            &json!({"schema_version": SCHEMA_VERSION, "answer": extreme_decimal.clone()})
-                .to_string(),
-        ));
-        assert_size_limit(&normalized_extreme);
-        let graded_extreme = parse(&grade_answer(
-            &json!({
-                "schema_version": SCHEMA_VERSION,
-                "expected": {"type": "integer", "value": "0"},
-                "actual": extreme_decimal
-            })
-            .to_string(),
-        ));
-        assert_size_limit(&graded_extreme);
-    }
-
     #[test]
     fn partially_empty_fraction_mixed_and_root_answers_stay_accepted() {
         for answer in [
@@ -1007,11 +539,51 @@ mod tests {
     }
 
     #[test]
+    fn grade_error_codes_survive_the_wasm_boundary() {
+        let invalid_schema = parse(&grade_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "expected": {"type": "integer", "value": "1"},
+                "actual": {"type": "integer", "value": "1"},
+                "answer_schema": {
+                    "kind": "rational",
+                    "max_abs_numerator": 1,
+                    "max_denominator": 0,
+                    "require_reduced_fraction_form": true
+                }
+            })
+            .to_string(),
+        ));
+        assert_eq!(invalid_schema["ok"], false);
+        assert_eq!(invalid_schema["error"]["code"], "invalid_answer_schema");
+
+        let expected_outside = parse(&grade_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "expected": {"type": "integer", "value": "1"},
+                "actual": {"type": "integer", "value": "1"},
+                "answer_schema": {"kind": "integer", "min": "0", "max": "0"}
+            })
+            .to_string(),
+        ));
+        assert_eq!(expected_outside["ok"], false);
+        assert_eq!(
+            expected_outside["error"]["code"],
+            "expected_answer_outside_schema"
+        );
+    }
+
+    #[test]
     fn answer_i64_payloads_cross_json_as_exact_decimal_strings() {
         let exact = "999999999999999999";
-        let graded = parse(&grade_answer(&format!(
-            r#"{{"schema_version":6,"expected":{{"type":"integer","value":"{exact}"}},"actual":{{"type":"integer","value":"{exact}"}}}}"#
-        )));
+        let graded = parse(&grade_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "expected": {"type": "integer", "value": exact},
+                "actual": {"type": "integer", "value": exact}
+            })
+            .to_string(),
+        ));
         assert_eq!(graded["data"]["is_correct"], true);
         assert_eq!(graded["data"]["actual"]["value"], exact);
     }

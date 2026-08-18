@@ -22,6 +22,8 @@
 
 `AnswerRepresentation`はユーザーが入力・表示したtreeと採点用のnormalized treeを別fieldで保持する。`normalize_answer`は新しいcanonical treeを返し、呼び出し側のdisplay treeを書き換えない。整数、有限小数、分数、帯分数、negativeから構成できる正確な数値は、Floatを使わず符号を分子へ集約した既約分数（分母1ならinteger）へ統一する。従って`2/4`、`0.5`、`1/2`は同じnormalized treeになり、`4.0`はinteger `4`になる。
 
+`AnswerNode`自体はediting/draft syntaxも表せるため、生成済み`Problem`の内部では生の`AnswerNode`をcanonical answerの型として保持しない。`Problem::generated`がdraft-only nodeを拒否し、具体的`AnswerSchema`のrange/shapeとtheme contractを満たすことを確認した後、private `CanonicalAnswer` wrapperとして格納する。同様にschemaもprivate `ValidatedAnswerSchema`として保持する。native Rust / WASM grading boundaryでexternal schemaを受け取る場合も、expected canonical answerとの整合性を検証してから採点へ渡す。`grade_answer_with_schema`はfallible APIであり、不正なboundary schemaを採点結果へ偽装しない。
+
 ## Structured editor
 
 入力許可は`Problem.input_interface`が所有し、`answer_schema`とは直交する。`simple_numeric`は桁入力を
@@ -36,18 +38,17 @@ Webの編集・caret・placeholder移動・fraction/root layoutはMathLiveが担
 `input_interface`検証で拒否する。
 
 MathLive worksheetの回答stateはRustが受理した`AnswerNode`そのものとし、採点にも`AnswerNode`を直接渡す。
-旧`EditorState.active_path`/`cursor`は`apply_editor_action`互換境界だけに残し、MathLive production pathでは
-生成・検証しない。selectionはMathLiveだけが所有する。空placeholderでのBackspaceはMathLiveの公開
+selection/caretはMathLiveだけが所有し、旧`EditorState` / `EditorAction` / `apply_editor_action` state machineは
+pre-releaseの不要な互換層として削除した。Rust側にはMathLive parse結果が`input_interface`を満たすかを
+検証する現行capability validatorだけを残す。空placeholderでのBackspaceはMathLiveの公開
 range/selection/command APIから最小の空構造を削除し、その直後のfield値を明示的に再parseして
 `AnswerNode`へ同期する。自前caret overlayやfraction/rootのpixel geometryは持たない。
 
-小数は表示文字列をFloatへ変換せず、adapterが`ExactDecimal { coefficient, scale }`へ戻す。rootと
-plusminusは今回構文として保持・表示するが、数値評価規則はまだ定義しない。解析不能なbounded raw textは
-`nan_error`として保持し、JavaScript `number`へcoerceしない。`nan_error`を含む回答は採点で常に不正解である。
+小数は表示文字列をFloatへ変換せず、adapterが`ExactDecimal { coefficient, scale }`へ戻す。`root`はindex省略時の平方根をexactに評価できる場合は正規化・数学的同値性判定に利用し、二次方程式では非平方根を含むradicalも`semantics.rs`のexact quadratic-number表現で解検証する。`plus_minus`は採点時に最大4 branchのexact solution setへ展開し、Tupleで列挙した複数解と数学的に比較する。どちらもbinary float近似へ落とさない。解析不能なbounded raw textは`nan_error`として保持し、JavaScript `number`へcoerceしない。`nan_error`を含む回答は採点で常に不正解である。 exact rational arithmeticのcanonicalization/checked四則/平方根判定は`exact.rs::ExactRational`を唯一のprimitiveとし、AnswerNodeからexact valueへの中立なprojectionは`exact_value.rs`が所有する。`normalize.rs`と`semantics.rs`は互いの内部実装へ依存せず、この共有層を利用する。
 
 ## Structural size
 
-emptyは0、integerは符号を除いた十進桁数である。ExactDecimalはcoefficientの桁数と、小数点以下桁を表すために必要な`scale + 1`の大きい方を使う。Composite nodeは親1に全childのsizeを加える。従って`frac(num(12), num(42))`は`1 + 2 + 2 = 5`。この表示サイズとは別に、入力検証では構造node数も最大18とする。検証は19個目のnodeを見つけた時点で短絡して拒否するため、empty childだけのtupleもnode予算を消費する。structured editorとWASMのnormalize/grade境界は、両方の上限を適用前に検証する。
+emptyは0、integerは符号を除いた十進桁数である。ExactDecimalはcoefficientの桁数と、小数点以下桁を表すために必要な`scale + 1`の大きい方を使う。Composite nodeは親1に全childのsizeを加える。従って`frac(num(12), num(42))`は`1 + 2 + 2 = 5`。この表示サイズとは別に、入力検証では構造node数も最大18とする。検証は19個目のnodeを見つけた時点で短絡して拒否するため、empty childだけのtupleもnode予算を消費する。MathLive parse adapterとWASMのnormalize/grade境界は、両方の上限を適用前に検証する。
 
 Serde表現は`type` discriminatorと`value` payloadを使用する。
 

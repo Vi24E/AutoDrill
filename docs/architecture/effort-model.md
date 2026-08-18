@@ -38,7 +38,7 @@ Effortは、標準解法を人間が定数時間で実行できるprimitiveへ�
 
 その他の既存primitiveは`Round`, `Transposition`, `OverheadPF/GCD/LCM/Negative/Carry*`, `OverheadLinear/Distribution/EqSystem/Factor*/Quadratic`である。既定weightは`OperationWeights::default()`を正とする。
 
-OperationVectorの現行schema v6は32次元で、31=`FractionSelfDivision`である。pre-releaseでは旧schemaのwire次元を保持せず、現行32次元だけをproduction contractとする。
+OperationVectorの現行schema v7は32次元で、31=`FractionSelfDivision`である。pre-releaseでは旧schemaのwire次元を保持せず、現行32次元だけをproduction contractとする。 `TimeTen(n)`はvector上で`TimeTen × 1 + Count × n`へ分解し、固定作業と移動桁数を別weightで表す。既定weightでは`1 + 0.2n`となり、特定weight値を逆算したmagic offsetをoperation countへ埋め込まない。
 
 ## 共通整数builder
 
@@ -108,6 +108,8 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 教材上同一worksheet内で複数アーキタイプのcoverageを保証する必要があるテーマだけ、generator内部metadataとしてlayerを宣言できる。quotaは各layerのminimumを確保してからweight比例のlargest-remainder方式で残数を配分し、各layer内で既存のscalar effort samplerを独立に適用する。randomもlayer quotaを守った上でlayer内random samplingする。layer情報は公開Worksheet schemaへ含めない。
 
+`SamplingStrategy`は自由なenum literalではなくvalidated constructorから作る。answer-conditioned strategyはnon-empty answer domain、layered strategyはnon-empty layer setと`minimum`合計がworksheet problem count以下であること、constructive layered strategyはさらにnonzero bootstrap multiplierをconstruction時に保証する。themeのclassifierが返す生の`usize`はframework内でbounded `LayerIndex`へ変換し、範囲外は`SamplingError`として明示的に失敗させる。answer-conditioned callbackの返却answerとrequested answer、constructive-layered callbackの返却layerとrequested layerもsampling直後に照合する。capability contract違反を`next_bounded(0)` panic・silent retry・`AttemptLimit`へ化かさない。
+
 現行のlayered themeは次の3つ。
 
 - 小数の足し算と引き算: Addition / Subtraction（20問で10/10）
@@ -126,7 +128,7 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 一次方程式は`ax+b=cx+d -> Ax=B -> x=B/A`。係数整理・除算は共通整数/有理数builderへ委譲する。
 
-連立方程式はx消去・y消去の完全な加減法graphを両方作り、weight適用後の小さい方を採用する。内部四則はすべて共通builder。
+連立方程式はx消去・y消去の完全な加減法operation planを両方作り、weight適用後の小さい方を採用する。内部四則はすべて共通builder。
 
 二次方程式(1)はformと係数を見て移項・除算・平方根modelを組み合わせる。
 
@@ -140,19 +142,22 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 ## 明示的なテーマ例外
 
-通常themeは`OperationVector · OperationWeights`をeffortのsource of truthとする。一方、標準解法primitiveへ意味を保ったまま分解できない真正のtheme固有式は、`Problem.theme_specific_effort: Option<f64>`を使う。
+coreではeffort evidenceを`EffortModel`というsum typeで一元化する。
 
-- `None`: 通常経路。`solution_graph -> operation_vector -> weighted_sum`でeffortを決める。
-- `Some(value)`: theme固有経路。`effort = value`とし、通常operation graph/vectorは空にする。既存primitiveの数値上の重みを流用して特殊式を偽装しない。
+- `EffortModel::Operations`: `OperationPlan`（標準解法を構成するprimitive operationの順序付き列）だけをevidenceとして保持する。operation vectorとweighted scoreはplanから都度導出し、cached scoreを保存しない。
+- `EffortModel::ThemeSpecific`: 標準解法primitiveへ意味を保ったまま分解できない真正のtheme固有scalarを、finite/nonnegativeを保証したvalueとして保持する。
+
+現行productには解法primitive間のprerequisite edgeを消費する機能がないため、coreにDAG/`depends_on` metadataを持たせない。将来、解説表示等で依存関係そのものがproduct requirementになった時点で、そのconsumerとinvariantを伴う型として再導入する。
+
+従って通常modelと特殊modelを同時に格納する状態、planとvectorだけが食い違う状態、stored scoreだけが古い状態はcore型として作らない。Web wire上の`operation_plan` / `operation_vector` / `theme_specific_effort` / `effort`は1つの`EffortModel`からのprojectionであり、独立したsource of truthではない。
 
 現行のtheme固有経路:
 
 - 九九: `log10(answer)`。旧実装の`BigNum`借用は廃止した。
 - すうじはひとりぼっち: `(非自明な空マス数) + 0.3 × (自明な空マス数)`。自明な空マスは、行・列・2×2 blockのいずれかに既知値が3つある空マス。
+- うそつきだれだ: statement formula length。`Operation::Identity`等の無関係primitiveへ数値を偽装しない。
 
-九九の逆算は`BaseTimes×3 + BigNum(dividend)`、うそつきだれだはSAT式が参照するliteral数として通常operation graphで意味を表せるため、`theme_specific_effort`を使わない。
-
-特殊式の計算自体は`effort.rs`へtheme名の分岐を入れず、`crates/drill-core/src/themes/<theme>.rs`側が所有する。generic generator / wire validatorは「特殊effortと通常operation modelを混在させない」という不変条件だけを検証する。
+九九の逆算は`BaseTimes×3 + BigNum(dividend)`として通常operation modelを使う。特殊式の計算自体は`effort.rs`へtheme名の分岐を入れず、`crates/drill-core/src/themes/<theme>.rs`側が所有する。
 
 ## Versioning
 

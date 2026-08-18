@@ -30,7 +30,7 @@ server/client architectureが必要になった場合でも、Rust domain core�
 - normalization
 - grading
 - generation validation
-- effort solution graph / operation counts
+- effort operation plan / operation counts
 - reusable arithmetic helpers
 - current generator revision identity and deterministic regeneration
 

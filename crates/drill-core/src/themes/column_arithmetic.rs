@@ -1,26 +1,23 @@
 use crate::answer::AnswerNode;
 use crate::effort::{
-    arithmetic_expression_graph, calculate_graph_effort, integer_division_with_remainder_graph,
-    OperationWeights,
+    arithmetic_expression_plan, integer_division_with_remainder_plan, EffortModel, OperationWeights,
 };
-use crate::generator::{GeneratorEntry, ProblemGenerator};
+use crate::error::GenerationError;
+use crate::generator::{
+    BootstrapDedup, GeneratorEntry, LayeredCandidateSource, ProblemGenerator,
+    RandomCandidateSource, SamplingStrategy,
+};
 use crate::generator_support::{
     arithmetic_leaf_column_grid_cells, arithmetic_leaf_significant_digits, binary_expression,
     draw_decimal_coefficient, draw_decimal_operand, exact_decimal_expression,
-    exact_decimal_rational, input_interface, integer_expression, rational_less_than,
+    exact_decimal_rational, integer_expression, rational_less_than,
     rational_to_arithmetic_expression, rational_to_exact_decimal_answer,
 };
-use crate::model::{
-    AnswerInputInterface, AnswerSchema, ArithmeticExpression, ArithmeticOperator,
-    ColumnMultiplicationPartial, EditorStructure, LongDivisionStep, Problem, ProblemPrompt,
-    RationalCoefficient, WorkedSolution,
-};
+use crate::model::{AnswerSchema, ArithmeticOperator, Problem, ProblemPrompt, RationalCoefficient};
 use crate::rng::DeterministicRng;
-use crate::schema::SCHEMA_VERSION;
 use crate::theme::{
-    CurriculumSafetyPolicy as Safety, DedupPolicy as Dedup, SamplingLayerSpec,
-    ThemeAnswerContract as AnswerContract, ThemeAnswerSchemaKind as Schema,
-    ThemeInputProfile as Input, ThemePresentationPolicy as Presentation, ThemePromptKind as Prompt,
+    CurriculumSafetyPolicy as Safety, DedupPolicy as Dedup, SamplingLayerSpec, SchoolGrade,
+    ThemeAnswerContract as AnswerContract, ThemePresentationPolicy as Presentation,
     ThemeRegistration, ThemeRegistrationSpec, ThemeTag, COLUMN_16_LAYOUT,
     COLUMN_DIVISION_12_LAYOUT,
 };
@@ -114,82 +111,42 @@ pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION: [&str; 4] = [
     "小数の割り算の筆算",
 ];
 
-const ADDITION: &[ThemeTag] = &[
-    ThemeTag::Addition,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
-];
-const SUBTRACTION: &[ThemeTag] = &[
-    ThemeTag::Subtraction,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
-];
-const MULTIPLICATION: &[ThemeTag] = &[
-    ThemeTag::Multiplication,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
-];
-const DIVISION: &[ThemeTag] = &[
-    ThemeTag::Division,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
-];
+const ADDITION: &[ThemeTag] = &[ThemeTag::Addition];
+const SUBTRACTION: &[ThemeTag] = &[ThemeTag::Subtraction];
+const MULTIPLICATION: &[ThemeTag] = &[ThemeTag::Multiplication];
+const DIVISION: &[ThemeTag] = &[ThemeTag::Division];
 const DECIMAL_ADD_SUBTRACT: &[ThemeTag] = &[
     ThemeTag::Decimals,
     ThemeTag::Addition,
     ThemeTag::Subtraction,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
 ];
-const DECIMAL_MULTIPLICATION: &[ThemeTag] = &[
-    ThemeTag::Decimals,
-    ThemeTag::Multiplication,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
-];
-const DECIMAL_DIVISION: &[ThemeTag] = &[
-    ThemeTag::Decimals,
-    ThemeTag::Division,
-    ThemeTag::ColumnArithmetic,
-    ThemeTag::PrintRecommended,
-];
+const DECIMAL_MULTIPLICATION: &[ThemeTag] = &[ThemeTag::Decimals, ThemeTag::Multiplication];
+const DECIMAL_DIVISION: &[ThemeTag] = &[ThemeTag::Decimals, ThemeTag::Division];
 
 pub const DECIMAL_ADD_SUBTRACT_LAYERS: [SamplingLayerSpec; 2] = [
     SamplingLayerSpec {
-        key: "addition",
         weight: 1,
         minimum: 0,
     },
     SamplingLayerSpec {
-        key: "subtraction",
         weight: 1,
         minimum: 0,
     },
 ];
 
-const INTEGER_COLUMN: AnswerContract = AnswerContract {
-    prompt_kind: Prompt::ColumnArithmetic,
-    answer_schema_kind: Schema::Integer,
-    input_profile: Input::SimplePositive,
-};
-const INTEGER_DIVISION_COLUMN: AnswerContract = AnswerContract {
-    prompt_kind: Prompt::ColumnArithmetic,
-    answer_schema_kind: Schema::OrderedPair,
-    input_profile: Input::TupleOnly,
-};
-const DECIMAL_COLUMN: AnswerContract = AnswerContract {
-    prompt_kind: Prompt::ColumnArithmetic,
-    answer_schema_kind: Schema::Decimal,
-    input_profile: Input::SimpleDecimal,
-};
+const INTEGER_COLUMN: AnswerContract = AnswerContract::ColumnInteger;
+const INTEGER_DIVISION_COLUMN: AnswerContract = AnswerContract::ColumnIntegerDivision;
+const DECIMAL_COLUMN: AnswerContract = AnswerContract::ColumnDecimal;
 
 pub const COLUMN_ADD_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_ADD_2DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_ADD_2DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_ADD_2DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_ADD_2DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_ADD_2DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_ADD_2DIGIT,
-        grade: Some(2),
+        grade: Some(SchoolGrade::Elementary2),
         tags: ADDITION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -200,11 +157,13 @@ pub const COLUMN_ADD_2DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_SUBTRACT_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_SUBTRACT_2DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_SUBTRACT_2DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_SUBTRACT_2DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT,
-        grade: Some(2),
+        grade: Some(SchoolGrade::Elementary2),
         tags: SUBTRACTION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -215,11 +174,13 @@ pub const COLUMN_SUBTRACT_2DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_ADD_3_4DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_ADD_3_4DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_ADD_3_4DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_ADD_3_4DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_ADD_3_4DIGIT,
-        grade: Some(3),
+        grade: Some(SchoolGrade::Elementary3),
         tags: ADDITION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -230,11 +191,13 @@ pub const COLUMN_ADD_3_4DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_SUBTRACT_3_4DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_SUBTRACT_3_4DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_SUBTRACT_3_4DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_SUBTRACT_3_4DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_SUBTRACT_3_4DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_SUBTRACT_3_4DIGIT,
-        grade: Some(3),
+        grade: Some(SchoolGrade::Elementary3),
         tags: SUBTRACTION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -245,11 +208,13 @@ pub const COLUMN_SUBTRACT_3_4DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_MULTIPLY_1DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_MULTIPLY_1DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_MULTIPLY_1DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_MULTIPLY_1DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_MULTIPLY_1DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_MULTIPLY_1DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_MULTIPLY_1DIGIT,
-        grade: Some(3),
+        grade: Some(SchoolGrade::Elementary3),
         tags: MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -260,11 +225,13 @@ pub const COLUMN_MULTIPLY_1DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_MULTIPLY_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_MULTIPLY_2DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_MULTIPLY_2DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_MULTIPLY_2DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_MULTIPLY_2DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_MULTIPLY_2DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_MULTIPLY_2DIGIT,
-        grade: Some(3),
+        grade: Some(SchoolGrade::Elementary3),
         tags: MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -275,11 +242,13 @@ pub const COLUMN_MULTIPLY_2DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DIVIDE_1DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_DIVIDE_1DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DIVIDE_1DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DIVIDE_1DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_DIVIDE_1DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DIVIDE_1DIGIT,
-        grade: Some(3),
+        grade: Some(SchoolGrade::Elementary3),
         tags: DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -290,11 +259,13 @@ pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DIVIDE_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DIVIDE_2DIGIT,
-        generator_revision: GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DIVIDE_2DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT,
+        ),
         skill_id: SKILL_ID_COLUMN_DIVIDE_2DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DIVIDE_2DIGIT,
-        grade: Some(4),
+        grade: Some(SchoolGrade::Elementary4),
         tags: DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -305,11 +276,13 @@ pub const COLUMN_DIVIDE_2DIGIT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
-        generator_revision: GENERATOR_REVISION_COLUMN_DECIMAL_ADD_SUBTRACT,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_ADD_SUBTRACT,
+        ),
         skill_id: SKILL_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_ADD_SUBTRACT,
-        grade: Some(4),
+        grade: Some(SchoolGrade::Elementary4),
         tags: DECIMAL_ADD_SUBTRACT,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -320,11 +293,13 @@ pub const COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
-        generator_revision: GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+        ),
         skill_id: SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLY_INTEGER,
-        grade: Some(4),
+        grade: Some(SchoolGrade::Elementary4),
         tags: DECIMAL_MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -335,11 +310,13 @@ pub const COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DECIMAL_DIVIDE_INTEGER_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
-        generator_revision: GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER,
+        ),
         skill_id: SKILL_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_DIVIDE_INTEGER,
-        grade: Some(4),
+        grade: Some(SchoolGrade::Elementary4),
         tags: DECIMAL_DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -350,11 +327,13 @@ pub const COLUMN_DECIMAL_DIVIDE_INTEGER_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DECIMAL_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
-        generator_revision: GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_MULTIPLICATION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION,
+        ),
         skill_id: SKILL_ID_COLUMN_DECIMAL_MULTIPLICATION,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLICATION,
-        grade: Some(5),
+        grade: Some(SchoolGrade::Elementary5),
         tags: DECIMAL_MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -365,11 +344,13 @@ pub const COLUMN_DECIMAL_MULTIPLICATION_REGISTRATION: ThemeRegistration =
 
 pub const COLUMN_DECIMAL_DIVISION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: THEME_ID_COLUMN_DECIMAL_DIVISION,
-        generator_revision: GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION,
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_DIVISION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION,
+        ),
         skill_id: SKILL_ID_COLUMN_DECIMAL_DIVISION,
         curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION,
-        grade: Some(5),
+        grade: Some(SchoolGrade::Elementary5),
         tags: DECIMAL_DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_ARITHMETIC,
@@ -406,22 +387,36 @@ impl ProblemGenerator for Generator {
         self.registration
     }
 
-    fn sampling_layers(&self) -> Option<&'static [SamplingLayerSpec]> {
-        (self.mode == Mode::DecimalAddSubtract).then_some(&DECIMAL_ADD_SUBTRACT_LAYERS)
+    fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
+        if self.mode == Mode::DecimalAddSubtract {
+            SamplingStrategy::layered(
+                self,
+                BootstrapDedup::AllowDuplicates,
+                self.registration.layout().problem_count(),
+            )
+        } else {
+            Ok(SamplingStrategy::random(
+                self,
+                BootstrapDedup::AllowDuplicates,
+            ))
+        }
     }
+}
 
-    fn sampling_layer(&self, problem: &Problem) -> Option<usize> {
-        if self.mode != Mode::DecimalAddSubtract {
-            return None;
-        }
-        let ProblemPrompt::ColumnArithmetic { operator, .. } = &problem.prompt else {
-            return None;
-        };
-        match operator {
-            ArithmeticOperator::Add => Some(0),
-            ArithmeticOperator::Subtract => Some(1),
-            _ => None,
-        }
+impl RandomCandidateSource for Generator {
+    fn draw_candidate(
+        &self,
+        rng: &mut DeterministicRng,
+        ordinal: u32,
+        weights: &OperationWeights,
+    ) -> Result<Option<Problem>, GenerationError> {
+        draw_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
+    }
+}
+
+impl LayeredCandidateSource for Generator {
+    fn layers(&self) -> &'static [SamplingLayerSpec] {
+        &DECIMAL_ADD_SUBTRACT_LAYERS
     }
 
     fn draw_candidate(
@@ -429,8 +424,21 @@ impl ProblemGenerator for Generator {
         rng: &mut DeterministicRng,
         ordinal: u32,
         weights: &OperationWeights,
-    ) -> Option<Problem> {
-        draw_problem(self.registration, self.mode, rng, ordinal, weights)
+    ) -> Result<Option<Problem>, GenerationError> {
+        draw_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
+    }
+
+    fn layer_of(&self, problem: &Problem) -> usize {
+        let ProblemPrompt::ColumnArithmetic { operator, .. } = problem.prompt() else {
+            unreachable!("column decimal add/sub generator always emits column prompts");
+        };
+        match operator {
+            ArithmeticOperator::Add => 0,
+            ArithmeticOperator::Subtract => 1,
+            ArithmeticOperator::Multiply | ArithmeticOperator::Divide => {
+                unreachable!("column decimal add/sub generator emitted the wrong operator")
+            }
+        }
     }
 }
 
@@ -509,166 +517,37 @@ generator!(
     DecimalDivision
 );
 
-fn simple_integer_input(allow_negative: bool) -> AnswerInputInterface {
-    input_interface(if allow_negative {
-        Input::SimpleSigned
-    } else {
-        Input::SimplePositive
-    })
-}
-
-fn simple_decimal_input() -> AnswerInputInterface {
-    input_interface(Input::SimpleDecimal)
-}
-
-fn leaf_scaled_integer(expression: &ArithmeticExpression) -> Option<(i64, u32)> {
-    match expression {
-        ArithmeticExpression::Integer { value } => Some((*value, 0)),
-        ArithmeticExpression::ExactDecimal { coefficient, scale } => Some((*coefficient, *scale)),
-        _ => None,
+fn draw_integer_with_digits(rng: &mut DeterministicRng, digits: u32) -> Option<i64> {
+    if digits == 0 {
+        return None;
     }
-}
-
-fn quotient_answer(answer: &AnswerNode) -> &AnswerNode {
-    match answer {
-        AnswerNode::Tuple(values) => values.first().unwrap_or(answer),
-        _ => answer,
-    }
-}
-
-fn answer_scale(answer: &AnswerNode) -> u32 {
-    match answer {
-        AnswerNode::ExactDecimal { scale, .. } => *scale,
-        _ => 0,
-    }
-}
-
-fn build_worked_solution(
-    operator: ArithmeticOperator,
-    left: &ArithmeticExpression,
-    right: &ArithmeticExpression,
-    answer: &AnswerNode,
-) -> Option<WorkedSolution> {
-    match operator {
-        ArithmeticOperator::Multiply => {
-            let (left_coefficient, _) = leaf_scaled_integer(left)?;
-            let (right_coefficient, _) = leaf_scaled_integer(right)?;
-            let multiplicand = left_coefficient.unsigned_abs();
-            let multiplier_digits = right_coefficient.unsigned_abs().to_string();
-            let partial_products = multiplier_digits
-                .bytes()
-                .rev()
-                .enumerate()
-                .map(|(place, digit)| {
-                    let digit = u64::from(digit - b'0');
-                    let value = multiplicand.checked_mul(digit)?;
-                    Some(ColumnMultiplicationPartial {
-                        value: i64::try_from(value).ok()?,
-                        place: u32::try_from(place).ok()?,
-                    })
-                })
-                .collect::<Option<Vec<_>>>()?;
-            Some(WorkedSolution::ColumnMultiplication { partial_products })
-        }
-        ArithmeticOperator::Divide => {
-            let (mut normalized_dividend_coefficient, left_scale) = leaf_scaled_integer(left)?;
-            let (right_coefficient, right_scale) = leaf_scaled_integer(right)?;
-            let normalized_dividend_scale = if right_scale <= left_scale {
-                left_scale - right_scale
-            } else {
-                normalized_dividend_coefficient = normalized_dividend_coefficient
-                    .checked_mul(10_i64.checked_pow(right_scale - left_scale)?)?;
-                0
-            };
-            let divisor = i64::try_from(right_coefficient.unsigned_abs()).ok()?;
-            if divisor == 0 {
-                return None;
-            }
-            let quotient_scale = answer_scale(quotient_answer(answer));
-            let target_scale = normalized_dividend_scale.max(quotient_scale);
-            let appended_zeros = target_scale.checked_sub(normalized_dividend_scale)?;
-            let dividend_magnitude = normalized_dividend_coefficient.unsigned_abs();
-            let base_digits = format!(
-                "{:0width$}",
-                dividend_magnitude,
-                width = normalized_dividend_scale as usize + 1
-            );
-            let mut digits = base_digits;
-            digits.extend(std::iter::repeat_n('0', appended_zeros as usize));
-            let dividend_coefficient =
-                i64::try_from(dividend_magnitude.checked_mul(10_u64.checked_pow(appended_zeros)?)?)
-                    .ok()?;
-
-            let mut steps = Vec::new();
-            let mut current = 0_i64;
-            let mut started = false;
-            let digit_bytes = digits.as_bytes();
-            for (index, byte) in digit_bytes.iter().enumerate() {
-                let digit = i64::from(byte - b'0');
-                current = current.checked_mul(10)?.checked_add(digit)?;
-                let quotient_digit = current / divisor;
-                let has_more = index + 1 < digit_bytes.len();
-                if !started && quotient_digit == 0 && has_more {
-                    continue;
-                }
-                started = true;
-                let product = quotient_digit.checked_mul(divisor)?;
-                let remainder = current.checked_sub(product)?;
-                let product_offset = u32::try_from(digit_bytes.len() - index - 1).ok()?;
-                let after = if has_more {
-                    remainder
-                        .checked_mul(10)?
-                        .checked_add(i64::from(digit_bytes[index + 1] - b'0'))?
-                } else {
-                    remainder
-                };
-                let after_offset = if has_more {
-                    product_offset.saturating_sub(1)
-                } else {
-                    product_offset
-                };
-                steps.push(LongDivisionStep {
-                    product,
-                    after,
-                    product_offset,
-                    after_offset,
-                });
-                current = remainder;
-            }
-            Some(WorkedSolution::LongDivision {
-                divisor,
-                dividend_coefficient,
-                dividend_scale: target_scale,
-                quotient_trailing_cells: target_scale.saturating_sub(quotient_scale),
-                steps,
-            })
-        }
-        ArithmeticOperator::Add | ArithmeticOperator::Subtract => None,
-    }
-}
-
-fn draw_integer_with_digits(rng: &mut DeterministicRng, digits: u32) -> i64 {
-    debug_assert!(digits >= 1);
     let lower = if digits == 1 {
         1
     } else {
-        10_i64.pow(digits - 1)
+        10_i64.checked_pow(digits - 1)?
     };
-    let upper = 10_i64.pow(digits) - 1;
-    lower + rng.next_bounded((upper - lower + 1) as u64) as i64
+    let upper = 10_i64.checked_pow(digits)?.checked_sub(1)?;
+    let width = upper.checked_sub(lower)?.checked_add(1)?;
+    let offset = i64::try_from(rng.next_bounded(u64::try_from(width).ok()?)).ok()?;
+    lower.checked_add(offset)
 }
 
-fn draw_three_or_four_digit_integer(rng: &mut DeterministicRng) -> i64 {
+fn draw_three_or_four_digit_integer(rng: &mut DeterministicRng) -> Option<i64> {
     let digits = if rng.next_bounded(2) == 0 { 3 } else { 4 };
     draw_integer_with_digits(rng, digits)
 }
 
-fn draw_column_remainder(rng: &mut DeterministicRng, divisor: i64) -> i64 {
-    debug_assert!(divisor >= 2);
+fn draw_column_remainder(rng: &mut DeterministicRng, divisor: i64) -> Option<i64> {
+    let positive_remainders = divisor.checked_sub(1)?;
+    if positive_remainders <= 0 {
+        return None;
+    }
     if rng.next_bounded(2) == 0 {
-        0
+        Some(0)
     } else {
-        1 + rng.next_bounded((divisor - 1) as u64) as i64
+        let offset =
+            i64::try_from(rng.next_bounded(u64::try_from(positive_remainders).ok()?)).ok()?;
+        offset.checked_add(1)
     }
 }
 
@@ -679,32 +558,30 @@ fn draw_problem(
     mode: Mode,
     rng: &mut DeterministicRng,
     id: u32,
-    weights: &OperationWeights,
-) -> Option<Problem> {
-    let (operator, left, right, answer, solution_graph, input_interface, answer_schema) = match mode
-    {
+    _weights: &OperationWeights,
+) -> Option<Result<Problem, GenerationError>> {
+    let (operator, left, right, answer, operation_plan, answer_schema) = match mode {
         Mode::AddTwoDigit => {
-            let left_value = draw_integer_with_digits(rng, 2);
-            let right_value = draw_integer_with_digits(rng, 2);
+            let left_value = draw_integer_with_digits(rng, 2)?;
+            let right_value = draw_integer_with_digits(rng, 2)?;
             let answer = AnswerNode::Integer(left_value.checked_add(right_value)?);
             let left = integer_expression(left_value);
             let right = integer_expression(right_value);
             let expression =
                 binary_expression(ArithmeticOperator::Add, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Add,
                 left,
                 right,
                 answer,
-                graph,
-                simple_integer_input(false),
+                plan,
                 AnswerSchema::Integer { min: 20, max: 198 },
             )
         }
         Mode::SubtractTwoDigit => {
-            let first = draw_integer_with_digits(rng, 2);
-            let second = draw_integer_with_digits(rng, 2);
+            let first = draw_integer_with_digits(rng, 2)?;
+            let second = draw_integer_with_digits(rng, 2)?;
             let (left_value, right_value) = if first >= second {
                 (first, second)
             } else {
@@ -715,33 +592,31 @@ fn draw_problem(
             let right = integer_expression(right_value);
             let expression =
                 binary_expression(ArithmeticOperator::Subtract, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Subtract,
                 left,
                 right,
                 answer,
-                graph,
-                simple_integer_input(false),
+                plan,
                 AnswerSchema::Integer { min: 0, max: 89 },
             )
         }
         Mode::AddThreeFourDigit => {
-            let left_value = draw_three_or_four_digit_integer(rng);
-            let right_value = draw_three_or_four_digit_integer(rng);
+            let left_value = draw_three_or_four_digit_integer(rng)?;
+            let right_value = draw_three_or_four_digit_integer(rng)?;
             let answer = AnswerNode::Integer(left_value.checked_add(right_value)?);
             let left = integer_expression(left_value);
             let right = integer_expression(right_value);
             let expression =
                 binary_expression(ArithmeticOperator::Add, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Add,
                 left,
                 right,
                 answer,
-                graph,
-                simple_integer_input(false),
+                plan,
                 AnswerSchema::Integer {
                     min: 200,
                     max: 19_998,
@@ -749,8 +624,8 @@ fn draw_problem(
             )
         }
         Mode::SubtractThreeFourDigit => {
-            let first = draw_three_or_four_digit_integer(rng);
-            let second = draw_three_or_four_digit_integer(rng);
+            let first = draw_three_or_four_digit_integer(rng)?;
+            let second = draw_three_or_four_digit_integer(rng)?;
             let (left_value, right_value) = if first >= second {
                 (first, second)
             } else {
@@ -761,22 +636,21 @@ fn draw_problem(
             let right = integer_expression(right_value);
             let expression =
                 binary_expression(ArithmeticOperator::Subtract, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Subtract,
                 left,
                 right,
                 answer,
-                graph,
-                simple_integer_input(false),
+                plan,
                 AnswerSchema::Integer { min: 0, max: 9_899 },
             )
         }
         Mode::MultiplyOneDigit => {
             let multiplicand = if rng.next_bounded(2) == 0 {
-                draw_integer_with_digits(rng, 2)
+                draw_integer_with_digits(rng, 2)?
             } else {
-                draw_integer_with_digits(rng, 3)
+                draw_integer_with_digits(rng, 3)?
             };
             let multiplier = 2 + rng.next_bounded(8) as i64;
             let answer = AnswerNode::Integer(multiplicand.checked_mul(multiplier)?);
@@ -784,14 +658,13 @@ fn draw_problem(
             let right = integer_expression(multiplier);
             let expression =
                 binary_expression(ArithmeticOperator::Multiply, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Multiply,
                 left,
                 right,
                 answer,
-                graph,
-                simple_integer_input(false),
+                plan,
                 AnswerSchema::Integer {
                     min: 20,
                     max: 8_991,
@@ -800,24 +673,23 @@ fn draw_problem(
         }
         Mode::MultiplyTwoDigit => {
             let multiplicand = if rng.next_bounded(2) == 0 {
-                draw_integer_with_digits(rng, 2)
+                draw_integer_with_digits(rng, 2)?
             } else {
-                draw_integer_with_digits(rng, 3)
+                draw_integer_with_digits(rng, 3)?
             };
-            let multiplier = draw_integer_with_digits(rng, 2);
+            let multiplier = draw_integer_with_digits(rng, 2)?;
             let answer = AnswerNode::Integer(multiplicand.checked_mul(multiplier)?);
             let left = integer_expression(multiplicand);
             let right = integer_expression(multiplier);
             let expression =
                 binary_expression(ArithmeticOperator::Multiply, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Multiply,
                 left,
                 right,
                 answer,
-                graph,
-                simple_integer_input(false),
+                plan,
                 AnswerSchema::Integer {
                     min: 100,
                     max: 98_901,
@@ -828,35 +700,32 @@ fn draw_problem(
             let divisor = if mode == Mode::DivideOneDigit {
                 2 + rng.next_bounded(8) as i64
             } else {
-                draw_integer_with_digits(rng, 2)
+                draw_integer_with_digits(rng, 2)?
             };
             let quotient = if mode == Mode::DivideOneDigit {
-                draw_integer_with_digits(rng, 2)
+                draw_integer_with_digits(rng, 2)?
             } else {
                 2 + rng.next_bounded(98) as i64
             };
-            let remainder = draw_column_remainder(rng, divisor);
+            let remainder = draw_column_remainder(rng, divisor)?;
             let dividend = divisor.checked_mul(quotient)?.checked_add(remainder)?;
             let answer = AnswerNode::Tuple(vec![
                 AnswerNode::Integer(quotient),
                 AnswerNode::Integer(remainder),
             ]);
-            let graph = integer_division_with_remainder_graph(dividend, divisor, &answer);
+            let plan = integer_division_with_remainder_plan(dividend, divisor, &answer)?;
             (
                 ArithmeticOperator::Divide,
                 integer_expression(dividend),
                 integer_expression(divisor),
                 answer,
-                graph,
-                AnswerInputInterface::StructuredMath {
-                    allowed_structures: vec![EditorStructure::Tuple],
-                },
+                plan,
                 AnswerSchema::OrderedPair,
             )
         }
         Mode::DecimalAddSubtract => {
-            let (mut left_coefficient, mut left_scale) = draw_decimal_operand(rng, 3, 3);
-            let (mut right_coefficient, mut right_scale) = draw_decimal_operand(rng, 3, 3);
+            let (mut left_coefficient, mut left_scale) = draw_decimal_operand(rng, 3, 3)?;
+            let (mut right_coefficient, mut right_scale) = draw_decimal_operand(rng, 3, 3)?;
             let mut left_value = exact_decimal_rational(left_coefficient, left_scale)?;
             let mut right_value = exact_decimal_rational(right_coefficient, right_scale)?;
             let operator = if rng.next_bounded(2) == 0 {
@@ -880,19 +749,18 @@ fn draw_problem(
             let left = exact_decimal_expression(left_coefficient, left_scale);
             let right = exact_decimal_expression(right_coefficient, right_scale);
             let expression = binary_expression(operator, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 operator,
                 left,
                 right,
                 answer,
-                graph,
-                simple_decimal_input(),
+                plan,
                 AnswerSchema::Decimal { max_scale: 3 },
             )
         }
         Mode::DecimalMultiplyInteger => {
-            let (coefficient, scale) = draw_decimal_operand(rng, 3, 2);
+            let (coefficient, scale) = draw_decimal_operand(rng, 3, 2)?;
             let integer = 2 + rng.next_bounded(8) as i64;
             let left_value = exact_decimal_rational(coefficient, scale)?;
             let result = left_value.multiply(RationalCoefficient::new(integer, 1)?)?;
@@ -901,19 +769,18 @@ fn draw_problem(
             let right = integer_expression(integer);
             let expression =
                 binary_expression(ArithmeticOperator::Multiply, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Multiply,
                 left,
                 right,
                 answer,
-                graph,
-                simple_decimal_input(),
+                plan,
                 AnswerSchema::Decimal { max_scale: 3 },
             )
         }
         Mode::DecimalDivideInteger => {
-            let (quotient_coefficient, quotient_scale) = draw_decimal_operand(rng, 3, 2);
+            let (quotient_coefficient, quotient_scale) = draw_decimal_operand(rng, 3, 2)?;
             let quotient = exact_decimal_rational(quotient_coefficient, quotient_scale)?;
             let divisor = 2 + rng.next_bounded(8) as i64;
             let dividend = quotient.multiply(RationalCoefficient::new(divisor, 1)?)?;
@@ -925,20 +792,19 @@ fn draw_problem(
             let answer = rational_to_exact_decimal_answer(quotient, 2)?;
             let expression =
                 binary_expression(ArithmeticOperator::Divide, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Divide,
                 left,
                 right,
                 answer,
-                graph,
-                simple_decimal_input(),
+                plan,
                 AnswerSchema::Decimal { max_scale: 2 },
             )
         }
         Mode::DecimalMultiplication => {
-            let (left_coefficient, left_scale) = draw_decimal_operand(rng, 2, 2);
-            let (right_coefficient, right_scale) = draw_decimal_operand(rng, 2, 2);
+            let (left_coefficient, left_scale) = draw_decimal_operand(rng, 2, 2)?;
+            let (right_coefficient, right_scale) = draw_decimal_operand(rng, 2, 2)?;
             let left_value = exact_decimal_rational(left_coefficient, left_scale)?;
             let right_value = exact_decimal_rational(right_coefficient, right_scale)?;
             let result = left_value.multiply(right_value)?;
@@ -947,14 +813,13 @@ fn draw_problem(
             let right = exact_decimal_expression(right_coefficient, right_scale);
             let expression =
                 binary_expression(ArithmeticOperator::Multiply, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Multiply,
                 left,
                 right,
                 answer,
-                graph,
-                simple_decimal_input(),
+                plan,
                 AnswerSchema::Decimal { max_scale: 4 },
             )
         }
@@ -966,10 +831,10 @@ fn draw_problem(
             // decimal-point shifting while keeping the original vertical setup
             // at six page-grid cells or fewer without shrinking the font.
             let divisor_scale = 1 + rng.next_bounded(2) as u32;
-            let divisor_coefficient = draw_decimal_coefficient(rng, 2);
+            let divisor_coefficient = draw_decimal_coefficient(rng, 2)?;
             let divisor = exact_decimal_rational(divisor_coefficient, divisor_scale)?;
             let (quotient, answer) = if divisor_scale == 1 {
-                let quotient_coefficient = draw_decimal_coefficient(rng, 2);
+                let quotient_coefficient = draw_decimal_coefficient(rng, 2)?;
                 let quotient_scale = 1;
                 let quotient = exact_decimal_rational(quotient_coefficient, quotient_scale)?;
                 let answer = rational_to_exact_decimal_answer(quotient, 1)?;
@@ -989,39 +854,33 @@ fn draw_problem(
             );
             let expression =
                 binary_expression(ArithmeticOperator::Divide, left.clone(), right.clone());
-            let graph = arithmetic_expression_graph(&expression, &answer)?;
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
             (
                 ArithmeticOperator::Divide,
                 left,
                 right,
                 answer,
-                graph,
-                simple_decimal_input(),
+                plan,
                 AnswerSchema::Decimal { max_scale: 2 },
             )
         }
     };
 
-    let effort = calculate_graph_effort(&solution_graph, weights);
-    let worked_solution = build_worked_solution(operator, &left, &right, &answer);
-    Some(Problem {
-        schema_version: SCHEMA_VERSION,
-        id,
-        numeric_theme_id: registration.numeric_theme_id,
-        prompt: ProblemPrompt::ColumnArithmetic {
-            operator,
-            left,
-            right,
-        },
-        input_interface,
-        answer_schema,
-        canonical_answer: answer,
-        worked_solution,
-        solution_graph,
-        operation_vector: effort.operation_vector,
-        theme_specific_effort: None,
-        effort: effort.value,
-    })
+    Some(
+        Problem::generated(
+            registration,
+            id,
+            ProblemPrompt::ColumnArithmetic {
+                operator,
+                left,
+                right,
+            },
+            answer_schema,
+            answer,
+            EffortModel::operations(operation_plan),
+        )
+        .map_err(GenerationError::from),
+    )
 }
 
 /// Current generators owned by this theme family.
@@ -1040,3 +899,302 @@ pub(crate) static GENERATORS: [GeneratorEntry; 13] = [
     GeneratorEntry::current(&DECIMAL_MULTIPLICATION_GENERATOR),
     GeneratorEntry::current(&DECIMAL_DIVISION_GENERATOR),
 ];
+
+#[cfg(test)]
+mod curriculum_tests {
+    use super::*;
+    use crate::generator::generate_worksheet_request;
+    use crate::model::{ArithmeticExpression, GenerateWorksheetRequest};
+    use crate::schema::SCHEMA_VERSION;
+
+    fn answer_integer(answer: &AnswerNode) -> i64 {
+        let AnswerNode::Integer(value) = answer else {
+            panic!("expected integer answer, got {answer:?}");
+        };
+        *value
+    }
+
+    fn quotient_remainder(answer: &AnswerNode) -> (i64, i64) {
+        let AnswerNode::Tuple(values) = answer else {
+            panic!("column division answer must be an ordered pair");
+        };
+        assert_eq!(values.len(), 2);
+        (answer_integer(&values[0]), answer_integer(&values[1]))
+    }
+
+    fn column_leaf_value(expression: &ArithmeticExpression) -> RationalCoefficient {
+        match expression {
+            ArithmeticExpression::Integer { value } => RationalCoefficient::new(*value, 1).unwrap(),
+            ArithmeticExpression::ExactDecimal { coefficient, scale } => {
+                crate::generator_support::exact_decimal_rational(*coefficient, *scale).unwrap()
+            }
+            other => panic!("column arithmetic must use a scalar display operand: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn local_draw_helpers_reject_invalid_bounds_without_rng_panics() {
+        let mut rng = DeterministicRng::from_seed("ColumnHelperBounds");
+        assert_eq!(draw_integer_with_digits(&mut rng, 0), None);
+        assert_eq!(draw_integer_with_digits(&mut rng, u32::MAX), None);
+        assert_eq!(draw_column_remainder(&mut rng, i64::MIN), None);
+        assert_eq!(draw_column_remainder(&mut rng, 0), None);
+        assert_eq!(draw_column_remainder(&mut rng, 1), None);
+
+        let two_digit = draw_integer_with_digits(&mut rng, 2).unwrap();
+        assert!((10..=99).contains(&two_digit));
+        let remainder = draw_column_remainder(&mut rng, 7).unwrap();
+        assert!((0..7).contains(&remainder));
+    }
+
+    #[test]
+    fn column_arithmetic_themes_follow_curriculum_domains_and_print_layouts() {
+        use crate::themes::column_arithmetic::*;
+        const IDS: [u32; 13] = [
+            THEME_ID_COLUMN_ADD_2DIGIT,
+            THEME_ID_COLUMN_SUBTRACT_2DIGIT,
+            THEME_ID_COLUMN_ADD_3_4DIGIT,
+            THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
+            THEME_ID_COLUMN_MULTIPLY_1DIGIT,
+            THEME_ID_COLUMN_MULTIPLY_2DIGIT,
+            THEME_ID_COLUMN_DIVIDE_1DIGIT,
+            THEME_ID_COLUMN_DIVIDE_2DIGIT,
+            THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
+            THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+            THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
+            THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
+            THEME_ID_COLUMN_DECIMAL_DIVISION,
+        ];
+        let seeds = ["CoA1", "CoB2", "CoC3", "CoD4", "CoE5", "CoF6"];
+
+        for theme_id in IDS {
+            let registration = crate::registry::active_registration(theme_id)
+                .unwrap()
+                .unwrap();
+            let is_division = matches!(
+                theme_id,
+                THEME_ID_COLUMN_DIVIDE_1DIGIT
+                    | THEME_ID_COLUMN_DIVIDE_2DIGIT
+                    | THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER
+                    | THEME_ID_COLUMN_DECIMAL_DIVISION
+            );
+            let (expected_count, expected_columns, expected_rows) =
+                if is_division { (12, 4, 3) } else { (16, 4, 4) };
+            assert_eq!(registration.layout().problem_count(), expected_count);
+            assert_eq!(
+                (
+                    registration.layout().columns(),
+                    registration.layout().rows()
+                ),
+                (expected_columns, expected_rows)
+            );
+            for seed in seeds {
+                let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                    schema_version: SCHEMA_VERSION,
+                    numeric_theme_id: theme_id,
+                    seed: seed.to_owned(),
+                    difficulty: crate::identity::Difficulty::try_from(4).unwrap(),
+                    timeout_ms: Some(1_000),
+                    max_attempts: Some(50_000),
+                })
+                .unwrap_or_else(|error| {
+                    panic!("column theme {theme_id} failed for {seed}: {error}")
+                });
+                assert_eq!(worksheet.layout().problem_count, expected_count);
+                assert_eq!(
+                    (worksheet.layout().columns, worksheet.layout().rows),
+                    (expected_columns, expected_rows)
+                );
+                assert_eq!(worksheet.problems().len(), expected_count);
+
+                for problem in worksheet.into_problems() {
+                    let ProblemPrompt::ColumnArithmetic {
+                        operator,
+                        left,
+                        right,
+                    } = problem.prompt()
+                    else {
+                        panic!("column theme {theme_id} returned a non-column prompt");
+                    };
+                    let left_value = column_leaf_value(left);
+                    let right_value = column_leaf_value(right);
+                    assert!(left_value.numerator() >= 0 && right_value.numerator() >= 0);
+
+                    let expression = crate::generator_support::binary_expression(
+                        *operator,
+                        left.clone(),
+                        right.clone(),
+                    );
+                    let expected = crate::generator_support::evaluate_expression(&expression)
+                        .expect("column expression evaluates exactly");
+                    match theme_id {
+                        THEME_ID_COLUMN_ADD_2DIGIT => {
+                            assert_eq!(*operator, ArithmeticOperator::Add);
+                            assert!((10..=99).contains(&left_value.numerator()));
+                            assert!((10..=99).contains(&right_value.numerator()));
+                            assert_eq!(left_value.denominator(), 1);
+                            assert_eq!(right_value.denominator(), 1);
+                        }
+                        THEME_ID_COLUMN_SUBTRACT_2DIGIT => {
+                            assert_eq!(*operator, ArithmeticOperator::Subtract);
+                            assert!((10..=99).contains(&left_value.numerator()));
+                            assert!((10..=99).contains(&right_value.numerator()));
+                            assert!(left_value.numerator() >= right_value.numerator());
+                        }
+                        THEME_ID_COLUMN_ADD_3_4DIGIT | THEME_ID_COLUMN_SUBTRACT_3_4DIGIT => {
+                            assert!(matches!(
+                                operator,
+                                ArithmeticOperator::Add | ArithmeticOperator::Subtract
+                            ));
+                            assert!((100..=9_999).contains(&left_value.numerator()));
+                            assert!((100..=9_999).contains(&right_value.numerator()));
+                            if *operator == ArithmeticOperator::Subtract {
+                                assert!(left_value.numerator() >= right_value.numerator());
+                            }
+                        }
+                        THEME_ID_COLUMN_MULTIPLY_1DIGIT => {
+                            assert_eq!(*operator, ArithmeticOperator::Multiply);
+                            assert!((10..=999).contains(&left_value.numerator()));
+                            assert!((2..=9).contains(&right_value.numerator()));
+                        }
+                        THEME_ID_COLUMN_MULTIPLY_2DIGIT => {
+                            assert_eq!(*operator, ArithmeticOperator::Multiply);
+                            assert!((10..=999).contains(&left_value.numerator()));
+                            assert!((10..=99).contains(&right_value.numerator()));
+                        }
+                        THEME_ID_COLUMN_DIVIDE_1DIGIT | THEME_ID_COLUMN_DIVIDE_2DIGIT => {
+                            assert_eq!(*operator, ArithmeticOperator::Divide);
+                            assert_eq!(left_value.denominator(), 1);
+                            assert_eq!(right_value.denominator(), 1);
+                            let divisor = right_value.numerator();
+                            if theme_id == THEME_ID_COLUMN_DIVIDE_1DIGIT {
+                                assert!((2..=9).contains(&divisor));
+                            } else {
+                                assert!((10..=99).contains(&divisor));
+                            }
+                            let (quotient, remainder) =
+                                quotient_remainder(problem.canonical_answer());
+                            if theme_id == THEME_ID_COLUMN_DIVIDE_1DIGIT {
+                                assert!((10..=99).contains(&quotient));
+                            } else {
+                                assert!((2..=99).contains(&quotient));
+                            }
+                            assert!((0..divisor).contains(&remainder));
+                            assert_eq!(left_value.numerator(), divisor * quotient + remainder);
+                            assert_eq!(problem.answer_schema(), &AnswerSchema::OrderedPair);
+                            continue;
+                        }
+                        THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT => {
+                            assert!(matches!(
+                                operator,
+                                ArithmeticOperator::Add | ArithmeticOperator::Subtract
+                            ));
+                            assert!(matches!(left, ArithmeticExpression::ExactDecimal { .. }));
+                            assert!(matches!(right, ArithmeticExpression::ExactDecimal { .. }));
+                            if *operator == ArithmeticOperator::Subtract {
+                                assert!(!crate::generator_support::rational_less_than(
+                                    left_value,
+                                    right_value
+                                ));
+                            }
+                        }
+                        THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER => {
+                            assert_eq!(*operator, ArithmeticOperator::Multiply);
+                            assert!(matches!(left, ArithmeticExpression::ExactDecimal { .. }));
+                            assert!((2..=9).contains(&right_value.numerator()));
+                            assert_eq!(right_value.denominator(), 1);
+                        }
+                        THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER => {
+                            assert_eq!(*operator, ArithmeticOperator::Divide);
+                            assert!((2..=9).contains(&right_value.numerator()));
+                            assert_eq!(right_value.denominator(), 1);
+                        }
+                        THEME_ID_COLUMN_DECIMAL_MULTIPLICATION => {
+                            assert_eq!(*operator, ArithmeticOperator::Multiply);
+                            assert!(matches!(left, ArithmeticExpression::ExactDecimal { .. }));
+                            assert!(matches!(right, ArithmeticExpression::ExactDecimal { .. }));
+                        }
+                        THEME_ID_COLUMN_DECIMAL_DIVISION => {
+                            assert_eq!(*operator, ArithmeticOperator::Divide);
+                            assert!(matches!(right, ArithmeticExpression::ExactDecimal { .. }));
+                            assert!(
+                                crate::generator_support::arithmetic_leaf_column_grid_cells(left)
+                                    .unwrap()
+                                    + crate::generator_support::arithmetic_leaf_column_grid_cells(
+                                        right
+                                    )
+                                    .unwrap()
+                                    <= 6,
+                                "decimal column division must fit the printable long-division grid"
+                            );
+                        }
+                        _ => unreachable!(),
+                    }
+                    assert_eq!(
+                        crate::normalize::normalize_answer(
+                            &crate::generator_support::rational_answer(expected)
+                        ),
+                        crate::normalize::normalize_answer(problem.canonical_answer()),
+                        "theme {theme_id} canonical answer disagrees with its displayed operands"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn column_arithmetic_difficulty_tracks_shared_scalar_effort() {
+        use crate::themes::column_arithmetic::*;
+        const IDS: [u32; 13] = [
+            THEME_ID_COLUMN_ADD_2DIGIT,
+            THEME_ID_COLUMN_SUBTRACT_2DIGIT,
+            THEME_ID_COLUMN_ADD_3_4DIGIT,
+            THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
+            THEME_ID_COLUMN_MULTIPLY_1DIGIT,
+            THEME_ID_COLUMN_MULTIPLY_2DIGIT,
+            THEME_ID_COLUMN_DIVIDE_1DIGIT,
+            THEME_ID_COLUMN_DIVIDE_2DIGIT,
+            THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
+            THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
+            THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
+            THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
+            THEME_ID_COLUMN_DECIMAL_DIVISION,
+        ];
+        const SEEDS: [&str; 8] = [
+            "EfA1", "EfB2", "EfC3", "EfD4", "EfE5", "EfF6", "EfG7", "EfH8",
+        ];
+
+        for theme_id in IDS {
+            let mut means = [0.0_f64; 3];
+            for difficulty_value in 1_u8..=3 {
+                let mut total = 0.0;
+                let mut count = 0_usize;
+                for seed in SEEDS {
+                    let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty_value)
+                            .unwrap(),
+                        timeout_ms: Some(1_000),
+                        max_attempts: Some(50_000),
+                    })
+                    .unwrap_or_else(|error| {
+                        panic!("theme {theme_id} difficulty {difficulty_value} failed: {error}")
+                    });
+                    total += worksheet
+                        .problems()
+                        .iter()
+                        .map(|problem| problem.effort())
+                        .sum::<f64>();
+                    count += worksheet.problems().len();
+                }
+                means[(difficulty_value - 1) as usize] = total / count as f64;
+            }
+            assert!(
+                means[0] <= means[1] && means[1] <= means[2],
+                "column theme {theme_id} lost scalar effort separation: {means:?}"
+            );
+        }
+    }
+}

@@ -70,7 +70,7 @@ safety policyを表示labelから推測しない。
 
 ## Unified theme API
 
-Rustのtheme/family moduleは、可能な限り1つの構造化されたdefinitionとしてregistrationとgenerator policyを同じ場所で所有する。現行では `themes/basic_arithmetic.rs`, `fractions.rs`, `decimals.rs`, `equations.rs`, `column_arithmetic.rs`, `liar_puzzle.rs` がこの境界である。
+Rustのtheme/family moduleは、可能な限り1つの構造化されたdefinitionとしてregistrationとgenerator policyを同じ場所で所有する。現行では `themes/basic_arithmetic.rs`, `fractions.rs`, `decimals.rs`, `equations.rs`, `column_arithmetic.rs`, `liar_puzzle.rs`, `mini_sudoku.rs` がこの境界である。
 
 各moduleが所有するもの:
 
@@ -84,7 +84,11 @@ Rustのtheme/family moduleは、可能な限り1つの構造化されたdefiniti
 
 共通 `generator.rs` は `ProblemGenerator` API、deterministic RNG、bootstrap/difficulty selection、dedup framework、timeout/work budget等のmechanismだけを扱い、numeric theme IDによる教材固有special caseを持たない。複数themeで意味まで同一の式AST構築・exact decimal変換等だけを `generator_support.rs` に置く。
 
-各theme/family moduleは**現行generatorだけ**を`GENERATORS`集合として所有する。pre-releaseでは1つのnumeric theme IDに1つのcurrent generatorを対応させ、中央にactive registryとgenerator registryを二重定義しない。coreはfamilyのgenerator集合を統一iteratorへchainし、`registration()` / `active_registration()` / Web contractをそこから導出する。既存familyへthemeを追加するとき、numeric ID・revision・metadata・generatorを別の中央matchへ追記してはならない。layered theme固有の構成的bootstrapは`draw_candidate_for_layer`等のtrait capabilityとして宣言する。
+各theme/family moduleは**現行generatorだけ**を`GENERATORS`集合として所有する。registration constructionではnonzeroを保証する`ThemeId` / `GeneratorRevision`を使い、完成した`ThemeRegistration`もprivate fieldとしてそのtyped identityを保持する。外部利用者はgetter経由でのみraw numeric projectionを得るため、validated registrationを任意のpublic field集合へ戻さない。
+
+family集合からのregistry constructionは`LazyLock<Result<Registry, RegistryError>>`として一度だけ実行する。duplicate current theme IDは`RegistryError::DuplicateThemeId`となり、`registration()` / `active_registration()` / generator lookup / Web contract / generation boundaryがfallible resultとして伝播させる。最初のregistry accessで`expect`/`assert` panicして初めて設定不整合を発見する設計にはしない。別の中央matchや二重registryも持たない。既存familyへthemeを追加するとき、numeric ID・revision・metadata・generatorを別の中央表へ追記してはならない。
+
+未使用のtheme-level weight override fieldは持たず、必要な拡張は実際のconsumerが生じた時点でtyped APIとして設計する。sampling policyはvalidated `SamplingStrategy` constructorで宣言し、answer-conditioned domainのnon-empty、layer setのnon-empty/quota整合、constructive multiplierのnonzero、classifierのbounded `LayerIndex`変換を共通frameworkが保証する。callbackがrequested answer/layerを無視した場合も共通frameworkが返却Problemを検証し、`SamplingError`として即時fail closedする。candidate callback自体は`Result<Option<Problem>, GenerationError>`で、通常のrejectionとdomain-contract violationを型で分離する。
 
 ### Historic revision rulesets
 
@@ -149,7 +153,7 @@ column arithmetic capabilityは筆算固有のanswer placement / work geometry /
 
 ## Fixed digit-grid input
 
-固定cellへ有限digitを入れるthemeはRust `AnswerInputInterface::DigitGrid { min_digit, max_digit, cell_count }`をcanonical capabilityとして使う。Webはこのcontractからkeypad範囲・cell数を取得し、tuple-only MathLive等へ偽装しない。数独固有の2×2 block規則は`ProblemPrompt::MiniSudoku`のdomain semanticsであり、generic input capabilityへ混ぜない。
+固定cellへ有限digitを入れるthemeはRust `DigitGridSpec { min_digit, max_digit, cell_count }`をdomain parameterのcanonical sourceとし、`ThemeAnswerContract::DigitGrid(spec)`から`AnswerInputInterface::DigitGrid`へ投影する。Webはこのcontractからkeypad範囲・cell数を取得し、tuple-only MathLive等へ偽装しない。Mini Sudokuは`MINI_SUDOKU_GRID_SPEC`を1箇所だけ定義し、`MiniSudokuGrid`のdigit validation、registration、canonical answer tuple長/digit域のvalidation、solverが試すdigit rangeのすべてが同じspecを参照する。数独固有の2×2 block規則は`ProblemPrompt::MiniSudoku`のdomain semanticsであり、generic input capabilityへ混ぜない。
 
 ## Fraction presentation
 

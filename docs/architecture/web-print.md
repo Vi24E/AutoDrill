@@ -18,16 +18,16 @@ Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイ�
 
 ## WASM adapter
 
-`src/domain/wasm-adapter.ts`がproductionの数学境界です。generated Rust Web contractのcurrent schema（現行v5）JSON DTOを使い、以下をRust/WASMへ委譲します。
+`src/domain/wasm-adapter.ts`がproductionの数学境界です。generated Rust Web contractのcurrent schema（現行v7）JSON DTOを使い、以下をRust/WASMへ委譲します。
 
 - worksheet generation
 - MathLive LaTeX → AnswerNode
-- typed editor action
+- AnswerNode/input capability validation
 - grading
 
 Webはnormalization、正誤判定、effort、generator条件を再実装しません。
 
-`i64`/`u64`のexact payloadはcanonical decimal stringでJSON越境し、JavaScript `number`へ落としません。effort/vectorの評価値のみ有限`number`を許可します。
+AnswerNode、AnswerSchema、BigNum等で64-bit exactnessが必要なpayloadはcanonical decimal stringでJSON越境します。ProblemPrompt / worked solutionで`number`として越境する整数は`Problem::generated`がJavaScript safe-integer範囲をinvariantとして検証し、Web adapterも`Number.isSafeInteger`で境界検査します。effort/vectorの評価値のみ有限の非整数`number`を許可します。
 
 ## MathLive
 
@@ -80,7 +80,7 @@ MathLive custom elementのrender完了と`document.fonts.ready`を待った後�
 
 ## Tests
 
-unit testは全37 active themeについて2page print DOMを生成します。筆算ではページ全面方眼classと各問題の方眼lane変数も検証します。通常数式は`math-span`（Webと同じMathLive static element）、筆算は同じ`ColumnArithmeticExpression`へ投影されることを確認します。4×4筆算では16 cell・行優先の問題順・縦区切りなし・筆算本体と答案位置の整合を検証します。解答pageでは加減算の最終結果、掛け算の部分積、割り算の商と途中の掛け算/引き算/余りまでを含む完成した筆算を同じpresentationから描画します。browser acceptanceはsitemapの全routeを複数Seedで生成し、各cell境界に対するclipping/overlapを確認します。筆算では実際の`.column-digit-answer`を検査対象にし、rule右端との水平整合だけでなく、`answer.top = rule.bottom + workingRows × gridCell`という縦方向のgrid invariantも検証します。staleな旧input selectorで検査がskipされないよう、digit-slot DOMを直接対象にします。さらに筆算previewからactual Chrome `Page.printToPDF`を実行し、2page PDFが生成されることを確認します。
+unit testは全38 active themeについて2page print DOMを生成します。筆算ではページ全面方眼classと各問題の方眼lane変数も検証します。通常数式は`math-span`（Webと同じMathLive static element）、筆算は同じ`ColumnArithmeticExpression`へ投影されることを確認します。4×4筆算では16 cell・行優先の問題順・縦区切りなし・筆算本体と答案位置の整合を検証します。解答pageでは加減算の最終結果、掛け算の部分積、割り算の商と途中の掛け算/引き算/余りまでを含む完成した筆算を同じpresentationから描画します。browser acceptanceはsitemapの全routeを複数Seedで生成し、各cell境界に対するclipping/overlapを確認します。筆算では実際の`.column-digit-answer`を検査対象にし、rule右端との水平整合だけでなく、`answer.top = rule.bottom + workingRows × gridCell`という縦方向のgrid invariantも検証します。staleな旧input selectorで検査がskipされないよう、digit-slot DOMを直接対象にします。さらに筆算previewからactual Chrome `Page.printToPDF`を実行し、2page PDFが生成されることを確認します。
 
 印刷UIのintegration testはPDF moduleをmockせず、主要な到達経路を状態遷移ごとに通します。現在の必須経路は、設定画面→印刷preview、preview→native印刷、worksheet editing→preview→戻る、answer input選択中→preview→戻る、graded worksheet→preview→戻るです。各経路でpreview表示前に`window.print()`が呼ばれないこと、戻った後に元のworksheet状態が維持されることも確認します。
 

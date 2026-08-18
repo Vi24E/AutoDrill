@@ -60,32 +60,100 @@ impl<'de> Deserialize<'de> for Difficulty {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct ProblemSetIdentity {
-    pub schema_version: u16,
-    pub numeric_theme_id: u32,
-    pub generator_revision: u32,
-    pub seed: String,
-    pub difficulty: Difficulty,
+    schema_version: u16,
+    numeric_theme_id: u32,
+    generator_revision: u32,
+    seed: String,
+    difficulty: Difficulty,
 }
 
 impl ProblemSetIdentity {
+    pub const fn schema_version(&self) -> u16 {
+        self.schema_version
+    }
+    pub const fn numeric_theme_id(&self) -> u32 {
+        self.numeric_theme_id
+    }
+    pub const fn generator_revision(&self) -> u32 {
+        self.generator_revision
+    }
+    pub fn seed(&self) -> &str {
+        &self.seed
+    }
+    pub const fn difficulty(&self) -> Difficulty {
+        self.difficulty
+    }
+
     pub fn new(
         numeric_theme_id: u32,
         generator_revision: u32,
         seed: impl Into<String>,
         difficulty: Difficulty,
     ) -> Result<Self, IdentityError> {
-        let seed = seed.into();
+        Self::from_parts(
+            SCHEMA_VERSION,
+            numeric_theme_id,
+            generator_revision,
+            seed.into(),
+            difficulty,
+        )
+    }
+
+    fn from_parts(
+        schema_version: u16,
+        numeric_theme_id: u32,
+        generator_revision: u32,
+        seed: String,
+        difficulty: Difficulty,
+    ) -> Result<Self, IdentityError> {
+        if !is_supported_schema_version(schema_version) {
+            return Err(IdentityError::UnsupportedSchemaVersion {
+                received: schema_version,
+                expected: SCHEMA_VERSION,
+            });
+        }
+        if numeric_theme_id == 0 {
+            return Err(IdentityError::InvalidThemeId);
+        }
+        if generator_revision == 0 {
+            return Err(IdentityError::InvalidGeneratorRevision);
+        }
         validate_seed(&seed)?;
         Ok(Self {
-            schema_version: SCHEMA_VERSION,
+            schema_version,
             numeric_theme_id,
             generator_revision,
             seed,
             difficulty,
         })
+    }
+}
+
+impl<'de> Deserialize<'de> for ProblemSetIdentity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Repr {
+            schema_version: u16,
+            numeric_theme_id: u32,
+            generator_revision: u32,
+            seed: String,
+            difficulty: Difficulty,
+        }
+        let repr = Repr::deserialize(deserializer)?;
+        Self::from_parts(
+            repr.schema_version,
+            repr.numeric_theme_id,
+            repr.generator_revision,
+            repr.seed,
+            repr.difficulty,
+        )
+        .map_err(serde::de::Error::custom)
     }
 }
 
@@ -120,20 +188,13 @@ impl FromStr for ProblemSetIdentity {
         if parts.next().is_some() {
             return Err(IdentityError::MalformedProblemSetId);
         }
-        if !is_supported_schema_version(schema_version) {
-            return Err(IdentityError::UnsupportedSchemaVersion {
-                received: schema_version,
-                expected: SCHEMA_VERSION,
-            });
-        }
-        validate_seed(&seed)?;
-        Ok(Self {
+        Self::from_parts(
             schema_version,
             numeric_theme_id,
             generator_revision,
             seed,
             difficulty,
-        })
+        )
     }
 }
 
@@ -171,10 +232,52 @@ pub enum IdentityError {
     InvalidNumericPart { name: &'static str },
     #[error("schema version {received} is unsupported; expected {expected}")]
     UnsupportedSchemaVersion { received: u16, expected: u16 },
+    #[error("theme ID must be nonzero")]
+    InvalidThemeId,
+    #[error("generator revision must be nonzero")]
+    InvalidGeneratorRevision,
     #[error("difficulty {value} is outside 1..=4")]
     InvalidDifficulty { value: u8 },
     #[error("seed length {length} is outside 1..={max}")]
     InvalidSeedLength { length: usize, max: usize },
     #[error("seed contains a character outside the versioned seed alphabet")]
     InvalidSeedCharacter,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_identity_construction_path_rejects_zero_theme_or_revision() {
+        let difficulty = DEFAULT_DIFFICULTY;
+        assert_eq!(
+            ProblemSetIdentity::new(0, 1, "Ab3Z", difficulty),
+            Err(IdentityError::InvalidThemeId)
+        );
+        assert_eq!(
+            ProblemSetIdentity::new(1, 0, "Ab3Z", difficulty),
+            Err(IdentityError::InvalidGeneratorRevision)
+        );
+        assert_eq!(
+            format!("{SCHEMA_VERSION}-0-1-Ab3Z-{}", difficulty.value())
+                .parse::<ProblemSetIdentity>(),
+            Err(IdentityError::InvalidThemeId)
+        );
+        assert_eq!(
+            format!("{SCHEMA_VERSION}-1-0-Ab3Z-{}", difficulty.value())
+                .parse::<ProblemSetIdentity>(),
+            Err(IdentityError::InvalidGeneratorRevision)
+        );
+        assert!(
+            serde_json::from_value::<ProblemSetIdentity>(serde_json::json!({
+                "schema_version": SCHEMA_VERSION,
+                "numeric_theme_id": 0,
+                "generator_revision": 1,
+                "seed": "Ab3Z",
+                "difficulty": difficulty.value(),
+            }))
+            .is_err()
+        );
+    }
 }
