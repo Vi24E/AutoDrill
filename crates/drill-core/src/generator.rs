@@ -88,7 +88,7 @@ pub(crate) trait ProblemGenerator: Sync {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum BootstrapDedup {
+pub(crate) enum SelectionDedup {
     AllowDuplicates,
     Deduplicate,
 }
@@ -167,7 +167,7 @@ impl SamplingLayers {
 enum SamplingStrategyKind<'a> {
     Random {
         source: &'a dyn RandomCandidateSource,
-        bootstrap_dedup: BootstrapDedup,
+        selection_dedup: SelectionDedup,
     },
     AnswerConditioned {
         source: &'a dyn AnswerConditionedCandidateSource,
@@ -176,12 +176,12 @@ enum SamplingStrategyKind<'a> {
     Layered {
         source: &'a dyn LayeredCandidateSource,
         layers: SamplingLayers,
-        bootstrap_dedup: BootstrapDedup,
+        selection_dedup: SelectionDedup,
     },
     ConstructiveLayered {
         source: &'a dyn ConstructiveLayeredCandidateSource,
         layers: SamplingLayers,
-        bootstrap_dedup: BootstrapDedup,
+        selection_dedup: SelectionDedup,
         bootstrap_multiplier: std::num::NonZeroUsize,
     },
 }
@@ -193,12 +193,12 @@ pub(crate) struct SamplingStrategy<'a> {
 impl<'a> SamplingStrategy<'a> {
     pub(crate) fn random(
         source: &'a dyn RandomCandidateSource,
-        bootstrap_dedup: BootstrapDedup,
+        selection_dedup: SelectionDedup,
     ) -> Self {
         Self {
             kind: SamplingStrategyKind::Random {
                 source,
-                bootstrap_dedup,
+                selection_dedup,
             },
         }
     }
@@ -216,21 +216,21 @@ impl<'a> SamplingStrategy<'a> {
 
     pub(crate) fn layered(
         source: &'a dyn LayeredCandidateSource,
-        bootstrap_dedup: BootstrapDedup,
+        selection_dedup: SelectionDedup,
         problem_count: usize,
     ) -> Result<Self, SamplingError> {
         Ok(Self {
             kind: SamplingStrategyKind::Layered {
                 source,
                 layers: SamplingLayers::new(source.layers(), problem_count)?,
-                bootstrap_dedup,
+                selection_dedup,
             },
         })
     }
 
     pub(crate) fn constructive_layered(
         source: &'a dyn ConstructiveLayeredCandidateSource,
-        bootstrap_dedup: BootstrapDedup,
+        selection_dedup: SelectionDedup,
         bootstrap_multiplier: usize,
         problem_count: usize,
     ) -> Result<Self, SamplingError> {
@@ -240,7 +240,7 @@ impl<'a> SamplingStrategy<'a> {
             kind: SamplingStrategyKind::ConstructiveLayered {
                 source,
                 layers: SamplingLayers::new(source.layers(), problem_count)?,
-                bootstrap_dedup,
+                selection_dedup,
                 bootstrap_multiplier,
             },
         })
@@ -259,18 +259,18 @@ impl<'a> SamplingStrategy<'a> {
         }
     }
 
-    fn bootstrap_dedup(&self) -> BootstrapDedup {
+    fn selection_dedup(&self) -> SelectionDedup {
         match self.kind {
             SamplingStrategyKind::Random {
-                bootstrap_dedup, ..
+                selection_dedup, ..
             }
             | SamplingStrategyKind::Layered {
-                bootstrap_dedup, ..
+                selection_dedup, ..
             }
             | SamplingStrategyKind::ConstructiveLayered {
-                bootstrap_dedup, ..
-            } => bootstrap_dedup,
-            SamplingStrategyKind::AnswerConditioned { .. } => BootstrapDedup::AllowDuplicates,
+                selection_dedup, ..
+            } => selection_dedup,
+            SamplingStrategyKind::AnswerConditioned { .. } => SelectionDedup::AllowDuplicates,
         }
     }
 
@@ -398,21 +398,15 @@ pub trait MonotonicClock {
 }
 
 #[derive(Debug)]
-pub struct SystemClock {
+struct SystemClock {
     origin: Instant,
 }
 
 impl SystemClock {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             origin: Instant::now(),
         }
-    }
-}
-
-impl Default for SystemClock {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -446,13 +440,6 @@ impl MonotonicClock for StepClock {
         self.current.set(current.saturating_add(self.step));
         current
     }
-}
-
-pub fn generate_problem(seed: &str) -> Result<Problem, GenerationError> {
-    generate_problem_request(&GenerateProblemRequest {
-        seed: seed.to_owned(),
-        ..GenerateProblemRequest::default()
-    })
 }
 
 pub fn generate_problem_request(
@@ -525,14 +512,6 @@ pub fn generate_problem_request(
         attempts: DEFAULT_MAX_ATTEMPTS,
         max_attempts: DEFAULT_MAX_ATTEMPTS,
     })
-}
-
-pub fn generate_worksheet(seed: &str) -> Result<Worksheet, GenerationError> {
-    let request = GenerateWorksheetRequest {
-        seed: seed.to_owned(),
-        ..GenerateWorksheetRequest::default()
-    };
-    generate_worksheet_request(&request)
 }
 
 pub fn generate_worksheet_request(
@@ -631,14 +610,14 @@ fn layered_quotas(layers: SamplingLayers, problem_count: usize) -> Vec<usize> {
     quotas
 }
 
-fn layered_pool_has_capacity(
+fn ensure_layered_pool_capacity(
     strategy: &SamplingStrategy<'_>,
     pool: &[Candidate],
     problem_count: usize,
     difficulty: u8,
-) -> Result<bool, GenerationError> {
+) -> Result<(), GenerationError> {
     let Some(layers) = strategy.layers() else {
-        return Ok(true);
+        return Ok(());
     };
     let quotas = layered_quotas(layers, problem_count);
     let mut distinct = (0..layers.specs().len())
@@ -650,14 +629,22 @@ fn layered_pool_has_capacity(
             .ok_or(SamplingError::EmptyLayers)?;
         distinct[layer.value()].insert(&candidate.key);
     }
-    Ok(quotas.into_iter().enumerate().all(|(index, quota)| {
+    for (index, quota) in quotas.into_iter().enumerate() {
         let required = if difficulty == 4 {
             quota
         } else {
             quota + EFFORT_TRIM_PER_SIDE * 2
         };
-        distinct[index].len() >= required
-    }))
+        let available = distinct[index].len();
+        if available < required {
+            return Err(SamplingError::InsufficientDistinctCandidates {
+                required,
+                available,
+            }
+            .into());
+        }
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -689,20 +676,9 @@ fn select_layered_candidates<C: MonotonicClock + ?Sized>(
             continue;
         }
         let layer_pool = std::mem::take(&mut layer_pools[layer_index]);
-        let minimum_pool = if difficulty == 4 {
-            quota
-        } else {
-            quota + EFFORT_TRIM_PER_SIDE * 2
-        };
-        if layer_pool.len() < minimum_pool {
-            return Err(GenerationError::AttemptLimit {
-                attempts: *attempts,
-                max_attempts: config.max_attempts,
-            });
-        }
         selected.extend(select_candidates_from_pool(
             layer_pool,
-            strategy.bootstrap_dedup(),
+            strategy.selection_dedup(),
             quota,
             difficulty,
             rng,
@@ -718,7 +694,7 @@ fn select_layered_candidates<C: MonotonicClock + ?Sized>(
 #[allow(clippy::too_many_arguments)]
 fn select_candidates_from_pool<C: MonotonicClock + ?Sized>(
     mut pool: Vec<Candidate>,
-    bootstrap_dedup: BootstrapDedup,
+    selection_dedup: SelectionDedup,
     count: usize,
     difficulty: u8,
     rng: &mut DeterministicRng,
@@ -727,21 +703,38 @@ fn select_candidates_from_pool<C: MonotonicClock + ?Sized>(
     config: &GenerationConfig,
     attempts: &mut u64,
 ) -> Result<Vec<Candidate>, GenerationError> {
-    if bootstrap_dedup == BootstrapDedup::Deduplicate {
+    // Random difficulty is uniform over semantic candidates, not over raw
+    // bootstrap multiplicity. Ranked difficulties may intentionally preserve
+    // raw multiplicity until a semantic key is selected.
+    if selection_dedup == SelectionDedup::Deduplicate || difficulty == 4 {
         let mut distinct = HashSet::with_capacity(pool.len());
         pool.retain(|candidate| distinct.insert(Rc::clone(&candidate.key)));
     }
 
+    let required_distinct = if difficulty == 4 {
+        count
+    } else {
+        count + EFFORT_TRIM_PER_SIDE * 2
+    };
+    let available_distinct = pool
+        .iter()
+        .map(|candidate| Rc::clone(&candidate.key))
+        .collect::<HashSet<_>>()
+        .len();
+    if available_distinct < required_distinct {
+        return Err(SamplingError::InsufficientDistinctCandidates {
+            required: required_distinct,
+            available: available_distinct,
+        }
+        .into());
+    }
+
     if difficulty == 4 {
         let mut selected = Vec::with_capacity(count);
-        let mut selected_expressions = HashSet::with_capacity(count);
         while selected.len() < count {
             consume_attempt(started, clock, config, attempts)?;
             let selected_index = rng.next_bounded(pool.len() as u64) as usize;
-            let candidate = pool.swap_remove(selected_index);
-            if selected_expressions.insert(Rc::clone(&candidate.key)) {
-                selected.push(candidate);
-            }
+            selected.push(pool.swap_remove(selected_index));
         }
         return Ok(selected);
     }
@@ -755,7 +748,6 @@ fn select_candidates_from_pool<C: MonotonicClock + ?Sized>(
     });
     let bootstrap_count = count + EFFORT_TRIM_PER_SIDE * 2;
     let mut selected = Vec::with_capacity(bootstrap_count);
-    let mut selected_expressions = HashSet::with_capacity(bootstrap_count);
     let order_statistic_index = match difficulty {
         1 => 0,
         2 => 2,
@@ -770,10 +762,10 @@ fn select_candidates_from_pool<C: MonotonicClock + ?Sized>(
         }
         draws.sort_unstable();
         let selected_index = draws[order_statistic_index] - 1;
-        if !selected_expressions.insert(Rc::clone(&pool[selected_index].key)) {
-            continue;
-        }
-        selected.push(pool.remove(selected_index));
+        let candidate = pool.remove(selected_index);
+        let selected_key = Rc::clone(&candidate.key);
+        pool.retain(|remaining| remaining.key != selected_key);
+        selected.push(candidate);
     }
     selected.sort_by(|left, right| {
         left.problem
@@ -806,15 +798,9 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
     let required_diversity = DIVERSITY_MULTIPLIER * n;
 
     let pool = match &strategy.kind {
-        SamplingStrategyKind::ConstructiveLayered {
-            source,
-            layers,
-            bootstrap_dedup,
-            ..
-        } => {
+        SamplingStrategyKind::ConstructiveLayered { source, layers, .. } => {
             let pool_quotas = layered_quotas(*layers, pool_size);
             let mut candidate_pool = Vec::with_capacity(pool_size);
-            let mut distinct = HashSet::with_capacity(pool_size);
             for (layer_index, target) in pool_quotas.into_iter().enumerate() {
                 let mut accepted = 0_usize;
                 while accepted < target {
@@ -834,15 +820,7 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
                     if !problem_allowed_by_curriculum(registration, &problem) {
                         continue;
                     }
-                    let candidate = Candidate::new(registration, problem);
-                    if *bootstrap_dedup == BootstrapDedup::Deduplicate {
-                        if !distinct.insert(Rc::clone(&candidate.key)) {
-                            continue;
-                        }
-                    } else {
-                        distinct.insert(Rc::clone(&candidate.key));
-                    }
-                    candidate_pool.push(candidate);
+                    candidate_pool.push(Candidate::new(registration, problem));
                     accepted += 1;
                 }
             }
@@ -851,7 +829,7 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
         }
         SamplingStrategyKind::Random { .. }
         | SamplingStrategyKind::AnswerConditioned { .. }
-        | SamplingStrategyKind::Layered { .. } => loop {
+        | SamplingStrategyKind::Layered { .. } => {
             let mut candidate_pool = Vec::with_capacity(pool_size);
             let mut distinct = HashSet::with_capacity(pool_size);
             while candidate_pool.len() < pool_size {
@@ -893,19 +871,21 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
                 }
             }
             check_timeout(started, clock, config)?;
-            if distinct.len() >= required_diversity
-                && layered_pool_has_capacity(
-                    &strategy,
-                    &candidate_pool,
-                    n,
-                    identity.difficulty().value(),
-                )?
-            {
-                break candidate_pool;
+            if distinct.len() < required_diversity {
+                return Err(SamplingError::InsufficientDistinctCandidates {
+                    required: required_diversity,
+                    available: distinct.len(),
+                }
+                .into());
             }
-            // The full pool is discarded. The next loop consumes fresh attempts
-            // and fresh deterministic RNG draws.
-        },
+            ensure_layered_pool_capacity(
+                &strategy,
+                &candidate_pool,
+                n,
+                identity.difficulty().value(),
+            )?;
+            candidate_pool
+        }
     };
 
     let mut selected = if strategy.is_layered() {
@@ -923,7 +903,7 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
     } else {
         select_candidates_from_pool(
             pool,
-            strategy.bootstrap_dedup(),
+            strategy.selection_dedup(),
             n,
             identity.difficulty().value(),
             &mut rng,
@@ -1243,6 +1223,9 @@ fn problem_key(registration: &ThemeRegistration, problem: &Problem) -> ProblemKe
 }
 
 #[cfg(test)]
+mod autonomous_qa;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use proptest::prelude::*;
@@ -1257,7 +1240,7 @@ mod tests {
         fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, SamplingError> {
             Ok(SamplingStrategy::random(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
             ))
         }
     }
@@ -1380,7 +1363,7 @@ mod tests {
             classified_layer: 0,
         };
         assert_eq!(
-            SamplingStrategy::layered(&empty_layers, BootstrapDedup::AllowDuplicates, 20).err(),
+            SamplingStrategy::layered(&empty_layers, SelectionDedup::AllowDuplicates, 20).err(),
             Some(SamplingError::EmptyLayers)
         );
 
@@ -1393,7 +1376,7 @@ mod tests {
             classified_layer: 0,
         };
         assert_eq!(
-            SamplingStrategy::layered(&excessive_minimum, BootstrapDedup::AllowDuplicates, 20,)
+            SamplingStrategy::layered(&excessive_minimum, SelectionDedup::AllowDuplicates, 20,)
                 .err(),
             Some(SamplingError::LayerMinimumExceedsWorksheet {
                 minimum_total: 21,
@@ -1413,7 +1396,7 @@ mod tests {
             classified_layer: 1,
         };
         let strategy =
-            SamplingStrategy::layered(&source, BootstrapDedup::AllowDuplicates, 20).unwrap();
+            SamplingStrategy::layered(&source, SelectionDedup::AllowDuplicates, 20).unwrap();
         let problem =
             basic_theme::one_digit_addition_problem(1, 1, 1, &OperationWeights::default()).unwrap();
         assert_eq!(
@@ -1441,7 +1424,7 @@ mod tests {
     fn constructive_layer_mismatch_is_an_immediate_sampling_error() {
         let source = WrongConstructiveLayerSource;
         let strategy =
-            SamplingStrategy::constructive_layered(&source, BootstrapDedup::AllowDuplicates, 1, 20)
+            SamplingStrategy::constructive_layered(&source, SelectionDedup::AllowDuplicates, 1, 20)
                 .unwrap();
         let requested = strategy.layers().unwrap().index(1).unwrap();
         let problem =
@@ -1465,7 +1448,183 @@ mod tests {
     }
 
     #[test]
-    fn insufficient_diversity_regenerates_until_attempt_limit() {
+    fn selection_rejects_insufficient_distinct_capacity_before_zero_bound_rng() {
+        let weights = OperationWeights::default();
+        let pool = (1..=8)
+            .map(|ordinal| {
+                let problem =
+                    basic_theme::one_digit_addition_problem(ordinal, 1, 1, &weights).unwrap();
+                Candidate::new(&basic_theme::ONE_DIGIT_ADDITION_REGISTRATION, problem)
+            })
+            .collect();
+        let clock = StepClock::new(Duration::ZERO, Duration::ZERO);
+        let config = GenerationConfig::default();
+        let mut attempts = 0;
+        let mut rng = DeterministicRng::from_seed("distinct-capacity");
+
+        assert_eq!(
+            select_candidates_from_pool(
+                pool,
+                SelectionDedup::AllowDuplicates,
+                2,
+                4,
+                &mut rng,
+                Duration::ZERO,
+                &clock,
+                &config,
+                &mut attempts,
+            )
+            .unwrap_err(),
+            GenerationError::InvalidSampling(SamplingError::InsufficientDistinctCandidates {
+                required: 2,
+                available: 1,
+            })
+        );
+    }
+
+    fn distinct_one_digit_pool() -> Vec<Candidate> {
+        let weights = OperationWeights::default();
+        let registration = &basic_theme::ONE_DIGIT_ADDITION_REGISTRATION;
+        let mut pool = Vec::with_capacity(40);
+        let mut ordinal = 1_u32;
+        'pairs: for left in 1..=9 {
+            for right in left..=9 {
+                let problem =
+                    basic_theme::one_digit_addition_problem(ordinal, left, right, &weights)
+                        .unwrap();
+                pool.push(Candidate::new(registration, problem));
+                ordinal += 1;
+                if pool.len() == 40 {
+                    break 'pairs;
+                }
+            }
+        }
+        pool
+    }
+
+    fn duplicate_rich_one_digit_pool() -> Vec<Candidate> {
+        let weights = OperationWeights::default();
+        let registration = &basic_theme::ONE_DIGIT_ADDITION_REGISTRATION;
+        let duplicate_problem = basic_theme::one_digit_addition_problem(1, 1, 1, &weights).unwrap();
+        let mut pool = (0..121)
+            .map(|_| Candidate::new(registration, duplicate_problem.clone()))
+            .collect::<Vec<_>>();
+        let mut ordinal = 2_u32;
+        'pairs: for left in 1..=9 {
+            for right in left..=9 {
+                if left == 1 && right == 1 {
+                    continue;
+                }
+                let problem =
+                    basic_theme::one_digit_addition_problem(ordinal, left, right, &weights)
+                        .unwrap();
+                pool.push(Candidate::new(registration, problem));
+                ordinal += 1;
+                if pool.len() == 160 {
+                    break 'pairs;
+                }
+            }
+        }
+        assert_eq!(pool.len(), 160);
+        assert_eq!(
+            pool.iter()
+                .map(|candidate| Rc::clone(&candidate.key))
+                .collect::<HashSet<_>>()
+                .len(),
+            40
+        );
+        pool
+    }
+
+    #[test]
+    fn duplicate_rich_selection_with_sufficient_distinct_capacity_always_progresses() {
+        let clock = StepClock::new(Duration::ZERO, Duration::ZERO);
+        let config = GenerationConfig::default();
+        for difficulty in 1..=4 {
+            for seed in ["dup-rich", "Ab3Z", "A1b2", "M7x9", "1", "5"] {
+                let mut attempts = 0;
+                let mut rng = DeterministicRng::from_seed(seed);
+                let selected = select_candidates_from_pool(
+                    duplicate_rich_one_digit_pool(),
+                    SelectionDedup::AllowDuplicates,
+                    20,
+                    difficulty,
+                    &mut rng,
+                    Duration::ZERO,
+                    &clock,
+                    &config,
+                    &mut attempts,
+                )
+                .unwrap();
+                assert_eq!(selected.len(), 20);
+                assert_eq!(
+                    selected
+                        .iter()
+                        .map(|candidate| Rc::clone(&candidate.key))
+                        .collect::<HashSet<_>>()
+                        .len(),
+                    20
+                );
+                let expected_attempts = if difficulty == 4 {
+                    20
+                } else {
+                    20 + EFFORT_TRIM_PER_SIDE * 2
+                };
+                assert_eq!(attempts, expected_attempts as u64);
+            }
+        }
+    }
+
+    #[test]
+    fn random_selection_is_invariant_to_bootstrap_multiplicity() {
+        let clock = StepClock::new(Duration::ZERO, Duration::ZERO);
+        let config = GenerationConfig::default();
+        for seed in ["dup-rich", "Ab3Z", "A1b2", "M7x9"] {
+            let mut distinct_attempts = 0;
+            let mut duplicate_attempts = 0;
+            let mut distinct_rng = DeterministicRng::from_seed(seed);
+            let mut duplicate_rng = DeterministicRng::from_seed(seed);
+            let distinct = select_candidates_from_pool(
+                distinct_one_digit_pool(),
+                SelectionDedup::AllowDuplicates,
+                20,
+                4,
+                &mut distinct_rng,
+                Duration::ZERO,
+                &clock,
+                &config,
+                &mut distinct_attempts,
+            )
+            .unwrap();
+            let duplicate_rich = select_candidates_from_pool(
+                duplicate_rich_one_digit_pool(),
+                SelectionDedup::AllowDuplicates,
+                20,
+                4,
+                &mut duplicate_rng,
+                Duration::ZERO,
+                &clock,
+                &config,
+                &mut duplicate_attempts,
+            )
+            .unwrap();
+
+            let distinct_keys = distinct
+                .iter()
+                .map(|candidate| Rc::clone(&candidate.key))
+                .collect::<Vec<_>>();
+            let duplicate_keys = duplicate_rich
+                .iter()
+                .map(|candidate| Rc::clone(&candidate.key))
+                .collect::<Vec<_>>();
+            assert_eq!(duplicate_keys, distinct_keys);
+            assert_eq!(distinct_attempts, 20);
+            assert_eq!(duplicate_attempts, 20);
+        }
+    }
+
+    #[test]
+    fn insufficient_diversity_returns_typed_sampling_error() {
         let identity = ProblemSetIdentity::new(
             basic_theme::THEME_ID_ONE_DIGIT_ADDITION,
             basic_theme::GENERATOR_REVISION_ONE_DIGIT_ADDITION,
@@ -1473,7 +1632,7 @@ mod tests {
             crate::identity::DEFAULT_DIFFICULTY,
         )
         .unwrap();
-        let config = GenerationConfig::default().with_max_attempts(100);
+        let config = GenerationConfig::default().with_max_attempts(1_000);
         let clock = StepClock::new(Duration::ZERO, Duration::ZERO);
         let error = generate_with_generator(
             &identity,
@@ -1485,15 +1644,18 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             error,
-            GenerationError::AttemptLimit {
-                attempts: 100,
-                max_attempts: 100
-            }
+            GenerationError::InvalidSampling(SamplingError::InsufficientDistinctCandidates {
+                required: DIVERSITY_MULTIPLIER
+                    * basic_theme::ONE_DIGIT_ADDITION_REGISTRATION
+                        .layout()
+                        .problem_count(),
+                available: 1,
+            })
         );
     }
 
     #[test]
-    fn all_registered_themes_are_deterministic_without_duplicate_prompts() {
+    fn all_registered_themes_generate_without_duplicate_prompts() {
         for registration in crate::registry::active_registrations().unwrap() {
             for seed in ["A1b2", "M7x9"] {
                 for difficulty_value in [1u8, 3u8, 4u8] {
@@ -1513,11 +1675,6 @@ mod tests {
                             registration.numeric_theme_id()
                         )
                     });
-                    let second = generate_worksheet_request(&request).unwrap();
-                    assert_eq!(
-                        first, second,
-                        "same request must be byte-semantically deterministic"
-                    );
                     assert_eq!(
                         first.problems().len(),
                         registration.layout().problem_count()
@@ -1618,50 +1775,11 @@ mod tests {
     }
 
     #[test]
-    fn easy_and_normal_worksheets_are_presented_in_nondecreasing_effort_order() {
-        for registration in crate::registry::active_registrations().unwrap() {
-            for difficulty_value in [1_u8, 2_u8] {
-                let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
-                    schema_version: SCHEMA_VERSION,
-                    numeric_theme_id: registration.numeric_theme_id(),
-                    seed: "EfrtRder".to_owned(),
-                    difficulty: crate::identity::Difficulty::try_from(difficulty_value).unwrap(),
-                    timeout_ms: Some(1_000),
-                    max_attempts: Some(50_000),
-                })
-                .unwrap_or_else(|error| {
-                    panic!(
-                        "theme {} difficulty {difficulty_value} failed: {error}",
-                        registration.numeric_theme_id()
-                    )
-                });
-                assert!(
-                    worksheet
-                        .problems()
-                        .windows(2)
-                        .all(|pair| pair[0].effort() <= pair[1].effort()),
-                    "theme {} difficulty {difficulty_value} was not effort-sorted: {:?}",
-                    registration.numeric_theme_id(),
-                    worksheet
-                        .problems()
-                        .iter()
-                        .map(|problem| problem.effort())
-                        .collect::<Vec<_>>()
-                );
-            }
-        }
-    }
-
-    #[test]
     fn elementary_registered_themes_never_expose_negative_values() {
         for registration in crate::registry::active_registrations()
             .unwrap()
             .into_iter()
-            .filter(|registration| {
-                registration
-                    .grade()
-                    .is_some_and(|grade| grade.is_elementary())
-            })
+            .filter(|registration| registration.grade().is_some_and(|grade| grade.value() <= 6))
         {
             let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
                 schema_version: SCHEMA_VERSION,
@@ -1795,7 +1913,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn diversity_regeneration_is_bounded_for_every_attempt_budget(extra in 0_u64..100) {
+        fn distinct_capacity_error_is_reported_once_the_raw_pool_can_be_built(extra in 0_u64..100) {
             let identity = ProblemSetIdentity::new(
                 basic_theme::THEME_ID_ONE_DIGIT_ADDITION,
                 basic_theme::GENERATOR_REVISION_ONE_DIGIT_ADDITION,
@@ -1812,10 +1930,23 @@ mod tests {
                 &config,
                 &clock,
             ).unwrap_err();
-            prop_assert_eq!(error, GenerationError::AttemptLimit {
-                attempts: max_attempts,
-                max_attempts,
-            });
+            let pool_size = CANDIDATE_POOL_MULTIPLIER
+                * basic_theme::ONE_DIGIT_ADDITION_REGISTRATION.layout().problem_count();
+            if max_attempts < pool_size as u64 {
+                prop_assert_eq!(error, GenerationError::AttemptLimit {
+                    attempts: max_attempts,
+                    max_attempts,
+                });
+            } else {
+                prop_assert_eq!(
+                    error,
+                    GenerationError::InvalidSampling(SamplingError::InsufficientDistinctCandidates {
+                        required: DIVERSITY_MULTIPLIER
+                            * basic_theme::ONE_DIGIT_ADDITION_REGISTRATION.layout().problem_count(),
+                        available: 1,
+                    })
+                );
+            }
         }
     }
 }

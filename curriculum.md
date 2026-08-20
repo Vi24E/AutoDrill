@@ -23,7 +23,7 @@
 
 ### AutoDrillの筆算ドリル
 
-筆算は、同じ計算内容を横式で答えるテーマとは教材体験が異なるため独立themeとして扱う。主用途は**A4へ印刷し、その紙面へ繰り上がり・繰り下がり・部分積・長除法の途中計算を書き込んで練習すること**である。問題文より下の書き込み領域全体を薄い共通方眼とし、各operand・演算記号・Web入力・完成解答も同じ方眼座標へ揃える。Webは同じ縦配置を表示し、最終答案だけを入力する。加減算・掛け算の筆算themeは16問・4列×4行、途中計算を完成形で示すと縦方向の作業量が大きい割り算筆算themeは12問・4列×3行とし、いずれも`print_recommended` taxonomy tagを持つ。
+筆算は、同じ計算内容を横式で答えるテーマとは教材体験が異なるため独立themeとして扱う。主用途は**A4へ印刷し、その紙面へ繰り上がり・繰り下がり・部分積・長除法の途中計算を書き込んで練習すること**である。問題文より下の書き込み領域全体を薄い共通方眼とし、各operand・演算記号・Web入力・完成解答も同じ方眼座標へ揃える。Webは同じ縦配置を表示し、最終答案だけを入力する。加減算・掛け算の筆算themeは16問・4列×4行、途中計算を完成形で示すと縦方向の作業量が大きい割り算筆算themeは12問・4列×3行とし、いずれもtyped `ThemePresentationPolicy`から`print_recommended` capabilityを導出する。`print_recommended`はtaxonomy tagとして二重登録しない。
 
 | 学年 | AutoDrill theme | generator domain |
 |---|---|---|
@@ -239,9 +239,7 @@ Base: (重み)
 - Compare: 標準解法中の大小・等値確認(1)。因数対の和が係数と一致するか等の判定を表す
 - Reciprocal: 分数除法で逆数を取る操作(1)
 - BaseFractionCancel: `k/n × n -> k`の構造消去(1)
-- BaseRootSquareCancel: `(sqrt(n))^2 -> n`の構造消去(1)
 - BigNum(n): 答えの大きさに伴う読み書き・保持のcost(log_10(n))。nは被演算子ではなく正解ASTの正確な整数成分から得る
-- Round: 四捨五入(1)
 - TimeTen(n): 10^n倍する、または10^nで割る。operation vectorでは`TimeTen × 1 + Count × n`へ分解し、既定weightで1+0.2nとする
 - OverheadPF: 素因数分解の追加overhead(2)
 - OverheadGCD: GCD探索の追加overhead(4)
@@ -252,7 +250,6 @@ Base: (重み)
 - OverheadCarryMult: 掛け算の繰り上がりの追加overhead(0.5)
 - Transposition: 移項(2)
 - OverheadLinear: 一次方程式の追加overhead(2)
-- OverheadDistribution(n): n項に対する分配法則の追加overhead(2n)
 - OverheadEqSystem: 連立方程式の追加overhead(4)
 - OverheadFactorPerfectSquare: 完全平方型の因数分解overhead(3)
 - OverheadFactorDifferenceOfSquares: 平方差型の因数分解overhead(2)
@@ -299,7 +296,7 @@ Base: (重み)
 - 二次方程式(1): `form`, `a`, `c`を見て標準手順を決める。`x^2=c`で`a=1`なら係数除算は不要、`ax^2=c`なら係数除算、`ax^2+c=0`ならまず移項を行う。平方根簡約が必要なら、`2^2,3^2,5^2,...`による共通平方因子探索を数える。
 - 二次方程式(2): `x^2+bx+c=0`の一般形は`c`を上記PFで分解し、そこから重複しない因数対を列挙する。各`p+q`を共通加算で計算して`b`と`Compare`し、一致した時点で探索を終了する。平方差・完全平方は別strategy。
 - 二次方程式(3): 必要なら分母を実際に払い、その後`b^2`, `a*c`, `4ac`, `b^2-4ac`, `sqrt(D)`, `2a`, 最終的な`1/(2a)`、根号・分数の簡約をそれぞれprimitiveへ分解する。最終的な代数的除算は除数`2a`の逆数取得を`Reciprocal`として表し、整数の長除法へ誤って置き換えない。
-- 平方根簡約: 一桁完全平方根は`BaseRoot`。それ以外は`OverheadFactorPerfectSquare`に加え、`2^2,3^2,5^2,7^2,...`で試し割りして平方因子を探し、複数の外出し因子は共通乗算でまとめる。`(sqrt(n))^2`は`BaseRootSquareCancel`一回。
+- 平方根簡約: 一桁完全平方根は`BaseRoot`。それ以外は`OverheadFactorPerfectSquare`に加え、`2^2,3^2,5^2,7^2,...`で試し割りして平方因子を探し、複数の外出し因子は共通乗算でまとめる。
 
 ### 負数の例外規則
 

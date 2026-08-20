@@ -18,8 +18,8 @@ function isStructuredRangeLatex(latex: string): boolean {
  * MathLive keeps an empty placeholder alive when deleteBackward is invoked
  * inside it. Select the smallest MathLive structural range containing the
  * active empty placeholder and delete that range. This module imports only the
- * MathLive type, so q1 can retain the compatibility helper without loading the
- * MathLive runtime bundle.
+ * MathLive type, so q1 can use this helper without loading the MathLive runtime
+ * bundle.
  */
 export function deleteEmptyMathLiveStructureBackward(mathfield: MathfieldElement): boolean {
   const position = mathfield.position;

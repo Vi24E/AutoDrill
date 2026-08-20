@@ -2,9 +2,9 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ProblemExpression } from '@/components/ProblemExpression';
-import { DRILL_OPERATION_KIND_COUNT, DRILL_SCHEMA_VERSION, type ProblemDto } from '@/domain/drill-engine';
+import { DRILL_SCHEMA_VERSION, type ProblemDto } from '@/domain/drill-engine';
 
-function columnProblem(prompt: ProblemDto['prompt'], canonical_answer: ProblemDto['canonical_answer'], worked_solution?: ProblemDto['worked_solution']): ProblemDto {
+function columnProblem(prompt: ProblemDto['prompt'], canonical_answer: ProblemDto['canonical_answer'], worked_solution: ProblemDto['worked_solution'] = null): ProblemDto {
   return {
     schema_version: DRILL_SCHEMA_VERSION,
     id: 1,
@@ -14,11 +14,7 @@ function columnProblem(prompt: ProblemDto['prompt'], canonical_answer: ProblemDt
     input_interface: { type: 'simple_numeric', allow_decimal: true, allow_negative: false },
     answer_schema: { kind: 'decimal', max_scale: 3 },
     canonical_answer,
-    ...(worked_solution ? { worked_solution } : {}),
-    operation_plan: { operations: [] },
-    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-    theme_specific_effort: null,
-    effort: 0,
+    worked_solution,
   };
 }
 

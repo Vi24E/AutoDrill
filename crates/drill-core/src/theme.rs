@@ -180,10 +180,6 @@ impl SchoolGrade {
             Self::JuniorHigh3 => 9,
         }
     }
-
-    pub const fn is_elementary(self) -> bool {
-        self.value() <= 6
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -335,13 +331,13 @@ impl Serialize for ThemeAnswerContract {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub struct WorksheetLayoutProfile {
-    problem_count: usize,
-    columns: usize,
-    rows: usize,
+    problem_count: u32,
+    columns: u32,
+    rows: u32,
 }
 
 impl WorksheetLayoutProfile {
-    const fn new(problem_count: usize, columns: usize, rows: usize) -> Self {
+    const fn new(problem_count: u32, columns: u32, rows: u32) -> Self {
         assert!(
             problem_count > 0,
             "worksheet must contain at least one problem"
@@ -360,14 +356,28 @@ impl WorksheetLayoutProfile {
     }
 
     pub const fn problem_count(self) -> usize {
+        self.problem_count as usize
+    }
+
+    #[cfg(test)]
+    pub const fn columns(self) -> usize {
+        self.columns as usize
+    }
+
+    #[cfg(test)]
+    pub const fn rows(self) -> usize {
+        self.rows as usize
+    }
+
+    pub const fn problem_count_wire(self) -> u32 {
         self.problem_count
     }
 
-    pub const fn columns(self) -> usize {
+    pub const fn columns_wire(self) -> u32 {
         self.columns
     }
 
-    pub const fn rows(self) -> usize {
+    pub const fn rows_wire(self) -> u32 {
         self.rows
     }
 }
@@ -468,14 +478,6 @@ impl ThemeRegistration {
 
     pub const fn generator_revision(self) -> u32 {
         self.revision.value()
-    }
-
-    pub const fn theme_id(self) -> ThemeId {
-        self.theme_id
-    }
-
-    pub const fn revision(self) -> GeneratorRevision {
-        self.revision
     }
 
     pub const fn skill_id(self) -> &'static str {

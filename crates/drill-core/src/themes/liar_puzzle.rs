@@ -2,7 +2,7 @@ use crate::answer::AnswerNode;
 use crate::effort::{EffortModel, OperationWeights};
 use crate::error::GenerationError;
 use crate::generator::{
-    BootstrapDedup, GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy,
+    GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy, SelectionDedup,
 };
 use crate::model::{
     AnswerSchema, LiarCount, LiarStatement, PeopleCount, PersonIndex, Problem, ProblemPrompt,
@@ -47,7 +47,7 @@ impl ProblemGenerator for Generator {
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
         Ok(SamplingStrategy::random(
             self,
-            BootstrapDedup::AllowDuplicates,
+            SelectionDedup::AllowDuplicates,
         ))
     }
 }

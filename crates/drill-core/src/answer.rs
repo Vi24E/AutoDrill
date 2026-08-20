@@ -1136,14 +1136,6 @@ impl AnswerNode {
     }
 }
 
-/// Keeps the user's display/input tree separate from the canonical tree used
-/// for grading and mathematical comparison.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AnswerRepresentation {
-    pub display: AnswerNode,
-    pub normalized: AnswerNode,
-}
-
 fn decimal_digit_count(mut value: u64) -> usize {
     if value == 0 {
         return 1;

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
-import { DRILL_OPERATION_KIND_COUNT, DRILL_SCHEMA_VERSION, type AnswerNode, type ProblemDto, type ProblemPrompt, type WorksheetDto } from '@/domain/drill-engine';
+import { DRILL_SCHEMA_VERSION, type AnswerNode, type ProblemDto, type ProblemPrompt, type WorksheetDto } from '@/domain/drill-engine';
 import { THEME_DEFINITIONS, type ThemeDefinition } from '@/domain/theme-registry';
 import {
   buildPdfPageModel,
@@ -110,8 +110,8 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
 
 function representativeWorkedSolution(
   prompt: ProblemPrompt,
-): ProblemDto['worked_solution'] | undefined {
-  if (prompt.kind !== 'column_arithmetic') return undefined;
+): ProblemDto['worked_solution'] {
+  if (prompt.kind !== 'column_arithmetic') return null;
   if (prompt.operator === 'multiply') {
     return {
       kind: 'column_multiplication',
@@ -128,7 +128,7 @@ function representativeWorkedSolution(
       steps: [{ product: 72, after: 0, product_offset: 0, after_offset: 0 }],
     };
   }
-  return undefined;
+  return null;
 }
 
 function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
@@ -153,20 +153,14 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
     input_interface: definition.inputInterface,
     answer_schema: answerSchema,
     canonical_answer: representative.answer,
-    ...(representativeWorkedSolution(representative.prompt)
-      ? { worked_solution: representativeWorkedSolution(representative.prompt) }
-      : {}),
-    operation_plan: { operations: [] },
-    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-    theme_specific_effort: null,
-    effort: 0,
+    worked_solution: representativeWorkedSolution(representative.prompt),
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
     problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-PdfTest1-3`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: 'PdfTest1', difficulty: 3 },
-    skill_id: definition.compatibility.skillId,
-    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    skill_id: definition.themeKey,
+    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     problems,
     seed: 'PdfTest1',

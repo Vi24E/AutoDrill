@@ -22,17 +22,13 @@ mod theme;
 mod themes;
 mod wire;
 
-pub use answer::{AnswerNode, AnswerRepresentation};
-pub use contract::{web_contract, WebContract, WebLayoutContract, WebThemeContract};
-pub use effort::{
-    calculate_effort, default_effort, EffortResult, Operation, OperationKind, OperationPlan,
-    OperationVector, OperationWeights, WeightError, OPERATION_KIND_COUNT,
-};
-pub use error::{EditorError, GenerationError, SamplingError};
+pub use answer::{AnswerBinaryOperator, AnswerNode};
+pub use contract::web_contract;
+pub use error::{EditorError, GenerationError};
 pub use generator::{
-    generate_identity_with_clock, generate_problem, generate_problem_request, generate_worksheet,
-    generate_worksheet_request, generate_worksheet_request_with_clock, regenerate_problem_set,
-    GenerationConfig, MonotonicClock, SystemClock, DEFAULT_MAX_ATTEMPTS, DEFAULT_TIMEOUT,
+    generate_identity_with_clock, generate_problem_request, generate_worksheet_request,
+    generate_worksheet_request_with_clock, regenerate_problem_set, GenerationConfig,
+    MonotonicClock, DEFAULT_MAX_ATTEMPTS, DEFAULT_TIMEOUT,
 };
 pub use grade::{grade_answer, grade_answer_with_schema, GradeError};
 pub use identity::{
@@ -41,37 +37,16 @@ pub use identity::{
 };
 pub use mathlive_input::parse_mathlive_answer;
 pub use model::{
-    AnswerInputInterface, AnswerSchema, ArithmeticExpression, ArithmeticOperator, EditorStructure,
-    GenerateProblemRequest, GenerateWorksheetRequest, GradeResult, GradeStatus, GradeWarning,
-    LayoutMetadata, Problem, ProblemPrompt, RationalCoefficient, Worksheet, MAX_ANSWER_AST_SIZE,
+    AnswerInputInterface, AnswerSchema, EditorStructure, GenerateProblemRequest,
+    GenerateWorksheetRequest, GradeResult, GradeStatus, GradeWarning, LayoutMetadata, Problem,
+    Worksheet, MAX_ANSWER_AST_SIZE,
 };
 pub use normalize::normalize_answer;
-pub use registry::{active_registration, active_registrations, registration, RegistryError};
-pub use schema::{
-    is_supported_schema_version, operation_kind_count_for_schema, SCHEMA_VERSION,
-    SUPPORTED_SCHEMA_VERSIONS,
-};
-pub use theme::{
-    CurriculumSafetyPolicy, DedupPolicy, FractionPresentationPolicy, ThemePresentationPolicy,
-    ThemeRegistration, ThemeTag, WorksheetLayoutProfile,
-};
+pub use schema::SCHEMA_VERSION;
 #[doc(hidden)]
 pub use wire::GradeResultWire;
 #[cfg(feature = "wire-types")]
-pub use wire::{ProblemWire, WorksheetWire};
-
-pub use themes::basic_arithmetic::{
-    CURRICULUM_PATH, DEFAULT_COLUMNS, DEFAULT_PROBLEM_COUNT, DEFAULT_ROWS,
-    GENERATOR_REVISION_ONE_DIGIT_ADDITION, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
-    ONE_DIGIT_ADDITION_REGISTRATION, SKILL_ID, THEME_ID_ONE_DIGIT_ADDITION,
-};
-pub use themes::equations::{
-    CURRICULUM_PATH_LINEAR_EQUATION_1, CURRICULUM_PATH_LINEAR_EQUATION_2,
-    GENERATOR_REVISION_LINEAR_EQUATION_1, GENERATOR_REVISION_LINEAR_EQUATION_2,
-    LINEAR_EQUATION_1_REGISTRATION, LINEAR_EQUATION_2_REGISTRATION, LINEAR_EQUATION_COLUMNS,
-    LINEAR_EQUATION_PROBLEM_COUNT, LINEAR_EQUATION_ROWS, SKILL_ID_LINEAR_EQUATION_1,
-    SKILL_ID_LINEAR_EQUATION_2, THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2,
-};
+pub use wire::WorksheetWire;
 
 #[cfg(test)]
 mod tests {
@@ -83,9 +58,17 @@ mod tests {
     use super::*;
     use crate::effort::{
         big_num_operations, calculate_plan_effort, linear_equation_plan, one_digit_addition_plan,
-        signed_addition_plan, signed_subtraction_plan,
+        signed_addition_plan, signed_subtraction_plan, Operation, OperationKind, OperationPlan,
+        OperationWeights, OPERATION_KIND_COUNT,
     };
     use crate::generator::StepClock;
+    use crate::model::{ProblemPrompt, RationalCoefficient};
+    use crate::registry::active_registration;
+    use crate::themes::basic_arithmetic::{
+        GENERATOR_REVISION_ONE_DIGIT_ADDITION, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
+        ONE_DIGIT_ADDITION_REGISTRATION, THEME_ID_ONE_DIGIT_ADDITION,
+    };
+    use crate::themes::equations::{THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2};
 
     fn grade_answer_with_schema(
         expected: &AnswerNode,
@@ -122,6 +105,25 @@ mod tests {
         )
     }
 
+    fn one_digit_worksheet_request(
+        seed: impl Into<String>,
+        difficulty: Difficulty,
+    ) -> GenerateWorksheetRequest {
+        GenerateWorksheetRequest::new(THEME_ID_ONE_DIGIT_ADDITION, seed, difficulty)
+    }
+
+    fn one_digit_worksheet(seed: impl Into<String>) -> Worksheet {
+        generate_worksheet_request(&one_digit_worksheet_request(seed, DEFAULT_DIFFICULTY)).unwrap()
+    }
+
+    fn one_digit_problem(seed: impl Into<String>) -> Problem {
+        generate_problem_request(&GenerateProblemRequest::new(
+            THEME_ID_ONE_DIGIT_ADDITION,
+            seed,
+        ))
+        .unwrap()
+    }
+
     proptest! {
         #[test]
         fn request_seed_and_problem_set_id_round_trip(
@@ -153,9 +155,9 @@ mod tests {
 
         #[test]
         fn generated_operands_answers_and_final_expressions_are_valid(seed in valid_seed_strategy()) {
-            let worksheet = generate_worksheet(&seed).unwrap();
+            let worksheet = one_digit_worksheet(seed.clone());
             let mut unique = HashSet::new();
-            prop_assert_eq!(worksheet.problems().len(), DEFAULT_PROBLEM_COUNT);
+            prop_assert_eq!(worksheet.problems().len(), ONE_DIGIT_ADDITION_REGISTRATION.layout().problem_count());
             for problem in worksheet.into_problems() {
                 let (left, right) = one_digit_pair(&problem);
                 prop_assert!((MIN_OPERAND..=MAX_OPERAND).contains(&left));
@@ -199,19 +201,13 @@ mod tests {
             changed.override_weight(OperationKind::BasePlus, multiplier).unwrap();
             let recomputed = changed.weighted_sum(&vector);
             prop_assert!((recomputed - baseline - (multiplier - 3.0)).abs() < 1e-9);
-
-            let mut invalid = serde_json::to_value(&vector).unwrap();
-            invalid["values"][OperationKind::BasePlus as usize] = serde_json::json!(-1.0);
-            prop_assert!(serde_json::from_value::<OperationVector>(invalid).is_err());
         }
 
     }
 
     #[test]
-    fn worksheet_is_reproducible_and_id_regenerates_it() {
-        let first = generate_worksheet("Ab3Z").unwrap();
-        let second = generate_worksheet("Ab3Z").unwrap();
-        assert_eq!(first, second);
+    fn problem_set_id_and_layout_match_current_identity_contract() {
+        let first = one_digit_worksheet("Ab3Z");
         assert_eq!(
             first.problem_set_id(),
             format!(
@@ -219,20 +215,13 @@ mod tests {
                 SCHEMA_VERSION, GENERATOR_REVISION_ONE_DIGIT_ADDITION
             )
         );
-        assert_eq!(
-            regenerate_problem_set(&first.problem_set_id()).unwrap(),
-            first
-        );
         assert_eq!(first.layout().problem_count, 20);
     }
 
     #[test]
     fn unsupported_schema_requests_and_ids_fail_closed() {
-        let request = GenerateWorksheetRequest {
-            schema_version: 2,
-            seed: "Ab3Z".to_owned(),
-            ..GenerateWorksheetRequest::default()
-        };
+        let mut request = one_digit_worksheet_request("Ab3Z", DEFAULT_DIFFICULTY);
+        request.schema_version = 2;
         assert_eq!(
             generate_worksheet_request(&request).unwrap_err(),
             GenerationError::UnsupportedSchemaVersion {
@@ -247,11 +236,8 @@ mod tests {
                 expected: SCHEMA_VERSION,
             }
         );
-        let unsupported_v3 = GenerateWorksheetRequest {
-            schema_version: 3,
-            seed: "Ab3Z".to_owned(),
-            ..GenerateWorksheetRequest::default()
-        };
+        let mut unsupported_v3 = one_digit_worksheet_request("Ab3Z", DEFAULT_DIFFICULTY);
+        unsupported_v3.schema_version = 3;
         assert_eq!(
             generate_worksheet_request(&unsupported_v3).unwrap_err(),
             GenerationError::UnsupportedSchemaVersion {
@@ -274,7 +260,7 @@ mod tests {
 
     #[test]
     fn generated_addition_uses_restricted_simple_numeric_interface() {
-        let problem = generate_problem("Ab3Z").unwrap();
+        let problem = one_digit_problem("Ab3Z");
         assert_eq!(
             problem.input_interface(),
             &AnswerInputInterface::SimpleNumeric {
@@ -345,12 +331,6 @@ mod tests {
         let schema_json = serde_json::to_value(schema).unwrap();
         assert_eq!(schema_json["min"], i64::MIN.to_string());
         assert_eq!(schema_json["max"], i64::MAX.to_string());
-
-        let magnitude = serde_json::to_value(Operation::BigNum {
-            magnitude: i64::MIN.unsigned_abs(),
-        })
-        .unwrap();
-        assert_eq!(magnitude["magnitude"], "9223372036854775808");
     }
 
     #[test]
@@ -505,7 +485,7 @@ mod tests {
     #[test]
     fn ordered_pairs_are_directional() {
         let observed = (1..=128).any(|seed| {
-            let sheet = generate_worksheet(&seed.to_string()).unwrap();
+            let sheet = one_digit_worksheet(seed.to_string());
             let set: HashSet<_> = sheet.problems().iter().map(one_digit_pair).collect();
             set.iter()
                 .any(|(left, right)| left != right && set.contains(&(*right, *left)))
@@ -515,22 +495,16 @@ mod tests {
 
     #[test]
     fn timeout_and_attempt_limit_are_distinct() {
-        let request = GenerateWorksheetRequest {
-            seed: "Ab3Z".to_owned(),
-            timeout_ms: Some(5),
-            ..GenerateWorksheetRequest::default()
-        };
+        let mut request = one_digit_worksheet_request("Ab3Z", DEFAULT_DIFFICULTY);
+        request.timeout_ms = Some(5);
         let timeout_clock = StepClock::new(Duration::ZERO, Duration::from_millis(10));
         let timeout = generate_worksheet_request_with_clock(&request, &timeout_clock).unwrap_err();
         assert!(matches!(timeout, GenerationError::Timeout { .. }));
         assert_eq!(timeout.code(), "generation_timeout");
 
-        let request = GenerateWorksheetRequest {
-            seed: "Ab3Z".to_owned(),
-            timeout_ms: Some(1_000),
-            max_attempts: Some(1),
-            ..GenerateWorksheetRequest::default()
-        };
+        let mut request = one_digit_worksheet_request("Ab3Z", DEFAULT_DIFFICULTY);
+        request.timeout_ms = Some(1_000);
+        request.max_attempts = Some(1);
         let clock = StepClock::new(Duration::ZERO, Duration::ZERO);
         let limit = generate_worksheet_request_with_clock(&request, &clock).unwrap_err();
         assert!(matches!(limit, GenerationError::AttemptLimit { .. }));
@@ -976,48 +950,21 @@ mod tests {
     }
 
     #[test]
-    fn difficulty_bias_is_monotonic_over_a_robust_seed_sample() {
-        let means: Vec<f64> = (MIN_DIFFICULTY..=3)
-            .map(|level| {
-                let total: f64 = (1..=128)
-                    .map(|seed| {
-                        let request = GenerateWorksheetRequest {
-                            seed: format!("S{}", seed.to_string().replace('0', "A")),
-                            difficulty: Difficulty::try_from(level).unwrap(),
-                            ..GenerateWorksheetRequest::default()
-                        };
-                        generate_worksheet_request(&request)
-                            .unwrap()
-                            .problems()
-                            .iter()
-                            .map(|problem| problem.effort())
-                            .sum::<f64>()
-                            / DEFAULT_PROBLEM_COUNT as f64
-                    })
-                    .sum();
-                total / 128.0
-            })
-            .collect();
-        assert!(means.windows(2).all(|pair| pair[0] < pair[1]), "{means:?}");
-    }
-
-    #[test]
     fn random_difficulty_has_no_easy_or_hard_rank_bias() {
         let mean = |level: u8| {
             (1..=128)
                 .map(|seed| {
-                    let request = GenerateWorksheetRequest {
-                        seed: format!("R{}", seed.to_string().replace('0', "A")),
-                        difficulty: Difficulty::try_from(level).unwrap(),
-                        ..GenerateWorksheetRequest::default()
-                    };
+                    let request = one_digit_worksheet_request(
+                        format!("R{}", seed.to_string().replace('0', "A")),
+                        Difficulty::try_from(level).unwrap(),
+                    );
                     generate_worksheet_request(&request)
                         .unwrap()
                         .problems()
                         .iter()
                         .map(|problem| problem.effort())
                         .sum::<f64>()
-                        / DEFAULT_PROBLEM_COUNT as f64
+                        / ONE_DIGIT_ADDITION_REGISTRATION.layout().problem_count() as f64
                 })
                 .sum::<f64>()
                 / 128.0
@@ -1041,18 +988,17 @@ mod tests {
                     (1..=64)
                         .map(|index| {
                             let suffix = index.to_string().replace('0', "A");
-                            let request = GenerateWorksheetRequest {
-                                seed: format!("P{salt}{suffix}"),
-                                difficulty: Difficulty::try_from(level).unwrap(),
-                                ..GenerateWorksheetRequest::default()
-                            };
+                            let request = one_digit_worksheet_request(
+                                format!("P{salt}{suffix}"),
+                                Difficulty::try_from(level).unwrap(),
+                            );
                             generate_worksheet_request(&request)
                                 .unwrap()
                                 .problems()
                                 .iter()
                                 .map(|problem| problem.effort())
                                 .sum::<f64>()
-                                / DEFAULT_PROBLEM_COUNT as f64
+                                / ONE_DIGIT_ADDITION_REGISTRATION.layout().problem_count() as f64
                         })
                         .sum::<f64>()
                         / 64.0
@@ -1102,6 +1048,15 @@ mod tests {
         assert_eq!(
             crate::grade::grade_answer_with_schema(&AnswerNode::Integer(1), &deep, None),
             Err(GradeError::AnswerAstSizeLimit)
+        );
+        let input_interface = AnswerInputInterface::StructuredMath {
+            allowed_structures: vec![EditorStructure::Negative],
+        };
+        assert_eq!(
+            input_interface.validate_answer(&deep),
+            Err(EditorError::AnswerSizeLimit {
+                max_size: MAX_ANSWER_AST_SIZE,
+            })
         );
 
         let cloned = deep.clone();

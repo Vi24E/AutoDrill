@@ -1,5 +1,3 @@
-import type { AnswerInputInterface } from './drill-engine';
-
 export { ALL_MATH_STRUCTURES, derivedGradeTag, hasThemeTag, taxonomyTags } from './themes/theme-definition';
 export type { ThemeDefinition, ThemePromptKind } from './themes/theme-definition';
 
@@ -87,21 +85,4 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
 
 export function findThemeDefinitionByNumericId(numericThemeId: number): ThemeDefinition | undefined {
   return THEME_DEFINITIONS.find((theme) => theme.numeric_theme_id === numericThemeId);
-}
-
-export function sameInputInterface(left: AnswerInputInterface, right: AnswerInputInterface): boolean {
-  if (left.type !== right.type) return false;
-  if (left.type === 'simple_numeric' && right.type === 'simple_numeric') {
-    return left.allow_decimal === right.allow_decimal && left.allow_negative === right.allow_negative;
-  }
-  if (left.type === 'structured_math' && right.type === 'structured_math') {
-    return left.allowed_structures.length === right.allowed_structures.length
-      && left.allowed_structures.every((structure, index) => structure === right.allowed_structures[index]);
-  }
-  if (left.type === 'digit_grid' && right.type === 'digit_grid') {
-    return left.min_digit === right.min_digit
-      && left.max_digit === right.max_digit
-      && left.cell_count === right.cell_count;
-  }
-  return false;
 }

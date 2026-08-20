@@ -2191,3 +2191,323 @@ repository-wide public-surface scanとRust clippy `-D warnings`を通過。独�
 **2026-08-18 独立再判定**
 
 独立再判定で、`StepClock` / `calculate_plan_effort` / `big_num_operations`がcrate外public surfaceから消え、current internal/test consumerだけになっていることを確認した。Close可判定。
+
+
+---
+
+## 2026-08-18 fresh Rust core / WASM audit follow-up
+
+既存IssueのClose表記や過去の監査結果を根拠にせず、commit `964df53 Refactor Rust core around validated domain boundaries` のcurrent codeを新規projectとして全面監査して追加したIssue。監査記録は [`audits/2026-08-18-fresh-rust-core-audit.md`](audits/2026-08-18-fresh-rust-core-audit.md) を参照する。
+
+今回の実装担当は監査担当と同一であるため、以下は **修正済み / 独立再監査待ち** とする。自分自身の修正説明だけを根拠にClosedへはしない。
+
+### AUDIT-H-001 public recursive `ArithmeticExpression` がsafe external consumerをstack overflowでabortできる
+
+**severity:** High
+**状態:** Closed (2026-08-18 independent re-audit)
+**該当:** `crates/drill-core/src/model.rs`, `lib.rs`, `wire.rs`
+
+#### 監査時の問題
+
+`ArithmeticExpression`は`Box<ArithmeticExpression>`を持つpublic recursive enumで、通常のrecursive derive `Drop` / `Clone` / `Debug` / `Eq` / `Ord` / Serdeを持ち、crate rootからpublic re-exportされていた。外部一時crateからsafe Rustだけで100,000階層のtreeを構築し、`drop(expr)`だけでstack overflow → process abortを実測した。
+
+current generatorが浅い式だけを生成することはpublic APIの安全性保証にはならない。
+
+#### 修正
+
+current external product consumerがraw prompt ASTを構築する必要はないため、`AnswerNode`と同等の巨大custom trait implementationをもう一組導入するのではなく、raw prompt syntaxをcrate内部実装へ戻した。
+
+- `ArithmeticExpression`, `ArithmeticOperator`, `ProblemPrompt`, `RationalCoefficient`のcrate-root public re-exportを削除。
+- `Problem::prompt()`を`pub(crate)`へ縮小。
+- `ProblemWire`等のnested wire DTOをcrate-private化。
+- `WorksheetWire`は`ts-rs` export rootとしてのみpublicに残し、fieldをprivate化してraw prompt construction surfaceにしない。
+- これによりexternal consumerはarbitrary-depth `ArithmeticExpression`をsafe public APIから構築できない。
+
+#### 検証
+
+repository外のtemporary crateで`use drill_core::ArithmeticExpression;`をcompileし、現在は
+
+`error[E0432]: unresolved import drill_core::ArithmeticExpression`
+
+となることを確認。temporary crateは検証後削除した。
+
+**独立再監査 (2026-08-18):** `wire-types`有効のrepository外consumer crateから`ArithmeticExpression` / `ProblemPrompt` / `RationalCoefficient` / `ProblemWire`へ到達できず、`Problem::prompt()`と`WorksheetWire::problems`もprivateであることを実compile probeで確認。別のpublic recursive typeである`AnswerNode`も100,000階層のsafe-Rust treeでsize/Clone/Eq/Debug/Serialize rejection/Dropを完走した。Closeする。
+
+---
+
+### AUDIT-M-001 Web runtime validatorがRust semantic policyを再実装し、current codeですでに判定driftしている
+
+**severity:** Medium
+**状態:** Closed (2026-08-19 autonomous QA re-audit)
+**該当:** `apps/web/src/domain/wasm-adapter.ts`, `drill-engine.ts`
+
+#### 監査時の問題
+
+current Rust/Webで少なくとも次の不一致が存在した。
+
+- Rustは`AnswerSchema::Decimal { max_scale: 0 }`をstructurally validとするがWebは拒否。
+- Rustは`Rational { max_abs_numerator: 0, max_denominator > 0, ... }`を合法とするがWebは拒否。
+- Webがgeneric digit-gridへRust domainにない`max_digit <= 9`条件を追加。
+- Rust/WASMの`unsupported_schema_version`, `unknown_theme`, `unknown_generator_revision`, identity/input-interface系errorがWebでgeneric `invalid_dto`へ潰れる経路がある。
+
+#### 修正
+
+- Webの`max_scale == 0`独自拒否を削除。
+- Webの`max_abs_numerator == 0`独自拒否を削除。
+- generic digit-gridのWeb独自`max_digit <= 9`制約を削除。
+- safe integer / u32 / JSON shape / discriminant等のwire integrity validationは維持。
+- `unsupported_schema_version`, `unknown_theme`, `unknown_generator_revision`, `invalid_problem_set_identity`, `input_structure_not_allowed`, `input_interface_violation`をWeb `DrillEngineErrorKind`まで保持する。
+- Rust-valid zero numerator boundをWebが拒否しないregressionと、semantic error-code preservation testを追加。
+
+**独立再監査 (2026-08-18):** 既知の3 driftとerror-code collapseは解消したが、`assertInputInterface` / input capability traversal / prompt-schema-identity-layout-grade-result等のsemantic policyがWebに残り、特にseed alphabet/rangeがRustとWebで二重SoTだったためClose不可。
+
+**追加修正 (2026-08-19):**
+
+- `wasm-adapter.ts`をSerde/wire shape validationへ縮小し、seed alphabet、difficulty domain、input capability、prompt↔theme、schema semantic bounds、worksheet registry/layout/curriculum/problem-count、effort-model exclusivity、grade status/warning canonicalityの再判定を削除。
+- enum/discriminant、primitive wire幅、current envelope schema、exact integer string、AnswerNode structural budget等、untrusted WASM DTOのwire integrity checkは維持。
+- grade requestへ`input_interface`を渡し、`AnswerInputInterface::validate_answer()`をRust coreに追加してexpected/actualのinput capability semanticsをWASM側で検証する。
+- grade/request schema semanticsはWebで先回りせずRustへ渡し、Rust/WASM error codeを保持する。
+- Web testsも「semantic mismatchをmock responseで再判定しない」「unknown wire variantは拒否する」を分離した。
+
+**2026-08-19 独立再監査:** semantic engine化はほぼ解消したが、`operation_plan.operations` が `kind: string` と `BigNum` だけしか検証せず、Rust `Operation` tagged unionの未知discriminant・variant固有payload・u32幅を通すためFAIL。これはdomain semanticsではなくSerde/wire integrityなのでClose不可。
+
+**2026-08-19 再修正:** `assertOperation()`を追加し、current Rust `Operation`のknown `kind`、`Count.amount: u32`、`TimeTen.exponent: u32`、`OverheadDistribution.terms: u32`、`BigNum.magnitude: canonical u64 decimal string`をfail-closedに検証する。operation→vector整合やeffort意味論はWebへ再実装しない。malformed variant 6ケースとSerde-valid上限値のWeb regressionを追加。
+
+**Close条件:** 独立再監査で、Web runtime validationがwire integrityに限定され、Rust-owned domain rule変更時に同じsemantic constant/ruleをTypeScriptへ手入力する必要がないことを確認する。
+
+**2026-08-19 独立Close再判定:** Rust `Operation`全variantとWeb `assertOperation()`を照合し、unknown discriminant、variant payload、u32幅、canonical u64 decimal stringをwire integrityとしてfail-closedに検証しつつ、operation/vector/effort等のsemantic整合はRustに残っていることを確認。targeted Web test 40件もPASS。Closeする。
+
+**2026-08-19 全面監査で再発:** `wasm-adapter.ts`の`assertAnswerNode()`がRust `AnswerNode::bounded_input_size()`とほぼ同じdisplay-size計算をTypeScriptへ再実装していた。structural node budgetはboundary wire防御として妥当だが、integer digit count、decimal scale、fraction/root/tuple parent cost等のdisplay semanticsはRust-owned ruleであり、Webへ複製しない。
+
+**再修正:** WebのAnswerNode validatorからdisplay-size計算を完全に削除し、known discriminant、required payload shape、canonical i64 string、u32 width、binary operator、structural node budgetだけをfail-closedに検証する。mock WASM responseについて、structural node超過は拒否する一方、Rust側display-size policy相当のsemantic mismatchをWebが再判定しないregressionを追加した。
+
+**2026-08-19 autonomous QA再判定:** current `wasm-adapter.ts`を改めて追跡し、AnswerNode / AnswerSchema / input interface / grade resultのWeb検証がknown wire tag、required property、canonical integer encoding、primitive width、structural node budget等のwire integrityへ限定されていることを確認した。display-size、normalization、capability validity、mathematical validity、grading semanticsはRust/WASM側に残る。`wasm-adapter.test.ts`のwire-vs-semantics regressionを含むfull VitestもPASS。Closeする。
+
+---
+
+### AUDIT-M-002 candidate selectorがdistinct-capacityを保証せずzero-bound RNG panicへ到達可能
+
+**severity:** Medium
+**状態:** Closed (2026-08-19 autonomous QA re-audit)
+**該当:** `crates/drill-core/src/generator.rs`, `error.rs`
+
+#### 監査時の問題
+
+bootstrap poolはgeneric framework上`AllowDuplicates`を選択可能だが、final worksheet selectionはunique `ProblemKey`を要求する。旧実装はraw pool lengthだけを見ていたため、要素数は十分でもdistinct keyが不足するpoolを受け入れられた。
+
+random difficultyではduplicateを捨てながら`swap_remove()`を続けるため、poolが空になっても必要件数へ到達しない場合に`rng.next_bounded(0)`へ到達しpanicし得た。
+
+#### 修正
+
+`SamplingError::InsufficientDistinctCandidates { required, available }`を追加。`select_candidates_from_pool()`はselection開始前にdistinct `ProblemKey`数を検証し、
+
+- random: `count`
+- ranked difficulty: `count + 2 * EFFORT_TRIM_PER_SIDE`
+
+を満たさなければtyped sampling errorを返す。raw `layer_pool.len()`による偽のcapacity checkは削除した。
+
+8 candidate / 1 distinct keyから2 unique問を要求する回帰testを追加し、panicではなく`InvalidSampling(InsufficientDistinctCandidates { required: 2, available: 1 })`になることを確認した。
+
+**独立再監査 (2026-08-18):** selector内部のzero-bound panicは解消したが、non-constructive Random / AnswerConditioned / Layeredではfull poolのdistinct数が不足するとpool全体を捨てて再生成し、selectorのtyped errorへ到達せず最終的に`AttemptLimit`になる経路が残るためClose不可。
+
+**追加修正 (2026-08-19):**
+
+- full poolを作った後にlow-diversity poolを捨てて再生成するouter retryを削除。
+- raw poolは有限target sizeまで構築し、その後global distinct capacityを一度検査し、不足なら即`InsufficientDistinctCandidates`を返す。
+- layered poolもlayerごとのdistinct quotaを`ensure_layered_pool_capacity()`で検証しtyped errorへ統一。
+- ConstructiveLayeredでもbootstrap段階でduplicateを延々排除せずraw poolを構築し、distinctnessは同じfinal selection/capacity contractへ集約。
+- constant-key sourceの回帰testを`AttemptLimit`期待から`InsufficientDistinctCandidates`期待へ変更。
+
+**2026-08-19 独立再監査:** distinct capacity自体はtyped errorへなったが、difficulty 1–3 selectorはselected keyのduplicateをpoolに残したまま`continue`していた。160 candidates / 40 distinct / 121 copies of one keyというcapacity十分なpoolで10,000 attemptsを使い切る反例がありFAIL。
+
+**2026-08-19 再修正:** selectorが1 semantic keyを採用した時点で、そのkeyの残duplicateをselection populationから全て除去する。これにより各successful selectionごとに未選択distinct key数が単調減少し、事前capacityが十分ならranked/randomとも有限回で完了する。監査反例と同じ160/40/121 poolをregression化し、difficulty 1–4・複数seedで20 unique selectionとattempt数20/24を確認。`BootstrapDedup`は現在の責務に合わせ`SelectionDedup`へ改名。
+
+**Close条件:** 独立再監査でRandom / AnswerConditioned / Layered / ConstructiveLayered、random/ranked difficulty、AllowDuplicates/Deduplicateの各経路でdistinct不足がAttemptLimitやzero-bound RNGへ化けずtyped sampling errorへ着地し、capacity十分なduplicate-rich poolではselection progressが保証されることを確認する。
+
+**2026-08-19 独立Close再判定:** selector実装を全strategy/difficulty/dedup policyから再追跡し、採用keyの残duplicateがselection populationから除去されることを確認。160 raw / 40 distinct / 121 duplicateのpathological poolをlow/median/high effortへ集中させた独自probeでもdifficulty 1–4が有限progressし、selection-only AttemptLimitや`next_bounded(0)`を再現できなかった。Closeする。
+
+**2026-08-19 全面監査で再発:** Random difficultyでは採用後に同じkeyの残duplicateを除去していたため最終worksheetはuniqueだったが、最初の抽選自体はraw bootstrap poolから行っていた。したがって同じsemantic candidateが偶然多く生成されるほど選択確率が高くなり、canonicalな「distinct candidate集合から一様非復元抽出」と不一致だった。
+
+**再修正:** difficulty=Randomでは`SelectionDedup`設定にかかわらずselection前に`ProblemKey`単位でpopulationをcollapseし、そのdistinct populationから一様な`swap_remove`非復元抽出を行う。ranked difficultyの既存sampling semanticsは変更しない。同じ40 distinct candidate集合について、1 candidateだけを121重複させたpoolと重複なしpoolが同一Seedで同一Random selectionを返すregressionを追加した。
+
+**2026-08-19 autonomous QA再判定:** Random pathは最初の抽選前に必ず`ProblemKey`でpopulationをcollapseし、そのdistinct集合から一様な`swap_remove`非復元抽出を行うcurrent codeを再確認した。40 distinct candidateに対し一候補だけ121重複させたpoolと重複なしpoolが同一Seedで同一selection sequenceを返すregressionもPASS。15,200 worksheet / 242,400 problemのlarge-sample probeでもduplicate key・generation failureは0。Closeする。
+
+---
+
+### AUDIT-L-001 `curriculum.md`が`print_recommended`をtaxonomy tagとして記述している
+
+**severity:** Low
+**状態:** Closed (2026-08-18 independent re-audit)
+**該当:** `curriculum.md`
+
+#### 監査時の問題
+
+current Rustではbehavioral capabilityである`print_recommended`を`ThemePresentationPolicy`がcanonicalに所有し、taxonomy tagとの二重登録は既に削除されている。一方`curriculum.md`だけが「`print_recommended` taxonomy tagを持つ」と旧architectureを記述していた。
+
+#### 修正
+
+`curriculum.md`をcurrent codeに同期し、typed `ThemePresentationPolicy`から`print_recommended` capabilityを導出しtaxonomy tagへ二重登録しないことを明記した。
+
+**独立再監査 (2026-08-18):** `ThemeTag`はclassification、`ThemePresentationPolicy::print_recommended()`はbehavior、Webはgenerated contractの`presentation.print_recommended`を使用するcurrent code/docs一致を確認。Closeする。
+
+---
+
+## 2026-08-18 independent re-auditで追加されたIssue
+
+独立再監査記録は [`audits/2026-08-18-independent-rust-core-reaudit.md`](audits/2026-08-18-independent-rust-core-reaudit.md) を参照する。既存の`NEW-M-001`等とIDが衝突するため、このfollow-upでは`REAUDIT-*`をcanonical IDとする。修正担当と再監査担当は別であるが、以下の追加修正はこの文書更新と同じ担当が実装したため独立再確認まではClosedにしない。
+
+### REAUDIT-M-001 crate root public API surfaceがcurrent product boundaryより広い
+
+**severity:** Medium
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/lib.rs`, `effort.rs`, `theme.rs`, theme modules
+
+独立監査ではeffort primitives、registry internals、`ThemeRegistration`/policy型、selective theme-specific constants/registrationsがcrate rootから大量にpublic re-exportされる一方、current external product consumerがないことを確認した。
+
+**修正:** crate rootをgeneration / grading / parser / identity / boundary model / generated exporterに必要なAPIへ縮小。effort・registry・theme registration/policyのpublic facadeとselective theme constantsを削除し、公開を外した結果deadになった`calculate_effort` / `default_effort` / registration facade methods / stale layout aliasesも削除またはtest-only化した。
+
+**2026-08-19 独立再監査:** root re-exportは縮小したが、`Problem::{effort_model, operation_plan, operation_vector, theme_specific_effort}`のpublic return surfaceからinternal effort型を型推論で操作でき、さらに`generate_problem(seed)` / `generate_worksheet(seed)`とrequest `Default`がtheme 1を暗黙選択するgeneric-looking facadeとして残っていたためFAIL。
+
+**2026-08-19 再修正:** internal effort/solution accessorを`pub(crate)`へ縮小し、外部にはscalar `Problem::effort()`だけを残す。coreの`generate_problem(seed)` / `generate_worksheet(seed)` shortcutと`Generate*Request::Default` / serde theme defaultを削除し、requestは明示的`numeric_theme_id`を必須化。`Generate*Request::new(...)`はthemeを明示するgeneric constructorとする。repository外temporary crateでshortcut/internal accessor/importがcompile不能、explicit request APIとscalar effortはcompile可能であることを確認。
+
+**Close条件:** repository外consumer視点でcurrent product boundaryに不要なinternal architectureがpublic semver surfaceへ漏れず、generic-looking APIが特定themeを暗黙選択しないこと。
+
+**2026-08-19 独立Close再判定:** repository外temporary crateでinternal effort/registry/generic shortcut importと`Problem` internal accessorがcompile不能、explicit request generation・scalar `Problem::effort()`・grading・MathLive・identity/schema boundaryがcompile可能であることを確認。request defaultによるtheme暗黙選択も存在しない。Closeする。
+
+### REAUDIT-L-001 `answer-ast.md`が削除済み`AnswerRepresentation`をcurrent architectureとして記述
+
+**severity:** Low
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `docs/architecture/answer-ast.md`
+
+**修正:** display/input `AnswerNode`はcallerが所有し、`normalize_answer(&AnswerNode)`が必要時に別canonical treeを返すcurrent ownershipへ記述を同期。削除済みaggregateをSoTとして説明しない。
+
+**2026-08-19 独立再監査:** current docsがdisplay/input `AnswerNode` ownership、別canonical treeを返す`normalize_answer(&AnswerNode)`、generated `Problem`内部のprivate canonical wrapperを正しく説明しておりPASS。Closeする。
+
+### REAUDIT-L-002 current-only implementationに`_v1` naming residueが残る
+
+**severity:** Low
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/themes/decimals.rs`, `fractions.rs`
+
+**修正:** `draw_problem_v1`→`draw_problem`、`operand_domain_v1`→`operand_domain`、`summary_operand_domain_v1`→`summary_operand_domain`へ改名。historic/current併存を示唆する不要なversion suffixを削除。
+
+**Close条件:** current-only production implementationに対応先のない`_v1` residueが残らないこと。
+
+**2026-08-19 独立再監査:** 指定3 symbolは消滅し、広い`_vN` / legacy / historic / compatibility / deprecated scanでもhistoric implementation residueは確認されずPASS。Closeする。
+
+---
+
+## 2026-08-19 second independent re-auditで追加されたLow
+
+監査記録は [`audits/2026-08-19-independent-rust-core-reaudit.md`](audits/2026-08-19-independent-rust-core-reaudit.md) を参照する。以下は今回の修正担当自身が対応したため、独立再確認まではClosedにしない。
+
+### REAUDIT2-L-001 `BootstrapDedup` namingがcurrent selection responsibilityと不一致
+
+**severity:** Low
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/generator.rs`, theme sampling declarations
+
+**修正:** 実際の責務がfinal selection populationの重複扱いであることに合わせ、`BootstrapDedup`を`SelectionDedup`へ改名し、strategy field/accessor/callerを同じ用語へ統一した。
+
+### REAUDIT2-L-002 public `AnswerNode::Binary` とoperator typeのvisibilityが非対称
+
+**severity:** Low
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/lib.rs`, `answer.rs`
+
+**修正:** `AnswerNode`をpublic ASTとして維持する方針に合わせ、variant構築・pattern matchに必要な`AnswerBinaryOperator`をcrate rootからpublic exportした。
+
+### REAUDIT2-L-003 cross-language layout DTOがtarget-sized `usize`
+
+**severity:** Low
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/model.rs`, `theme.rs`, `contract.rs`, Web adapter
+
+**修正:** worksheet/layout contractをfixed-width `u32`へ変更し、internal selectionで必要な`usize`はtheme layout accessor内部でのみ変換する。Web runtime validatorもlayoutを`u32` wire widthとして検証する。
+
+**検証 (2026-08-19):** Rust fmt/check/clippy/full tests、generated contract/wire freshness、Web tsc/eslint/full testsを通過。Rust 118 + WASM 8、Web 172 tests。
+
+**2026-08-19 独立Close再判定:** 3 Lowはいずれもcurrent codeで責務・visibility・wire widthが修正内容と一致することを確認しPASS。Closeする。
+
+
+---
+
+## 2026-08-19 third fresh Rust auditで追加されたIssue
+
+前段のClose再判定では`AUDIT-M-001` / `AUDIT-M-002` / `REAUDIT-M-001` / `REAUDIT2-L-*`をcurrent codeから独立にPASSとした。一方、fresh auditで以下2件を新規発見した。今回の修正担当自身が対応しているため、独立再確認まではClosedにしない。
+
+### REAUDIT3-H-001 public `AnswerInputInterface::validate_answer()`がdeep safe-Rust ASTでstack overflowする
+
+**severity:** High
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/model.rs`, `lib.rs`
+
+**問題:** public construction可能な100,000階層`AnswerNode`を`AnswerInputInterface::validate_answer()`へ渡すと、AST budget確認なしでrecursive `ensure_capability()`へ入りprocess stack overflowを再現できた。他のnormalize/grade/Serde等のpublic raw-answer boundaryにはbudget guardがあるため、このentrypointだけ防御が漏れていた。
+
+**修正:** `validate_answer()`自身が`answer.is_within_size_limit()`をsemantic recursionより前に検査し、超過時は`EditorError::AnswerSizeLimit { max_size: MAX_ANSWER_AST_SIZE }`を返す。既存100,000階層public-entrypoint regressionへ`validate_answer()`を追加。
+
+**2026-08-19 独立再監査:** repository外temporary crateからpublic APIだけで100,000階層の`Negative` treeを構築し、`validate_answer()`がpanic/abortせず`AnswerSizeLimit`を返すことを実行確認。recursive `ensure_capability()`より前にbudget guardがあるためPASS。Closeする。
+
+### REAUDIT3-M-001 MathLiveで負の帯分数`-1\frac{1}{2}`を`(-1)×(1/2)`と誤解釈する
+
+**severity:** Medium
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/mathlive_input.rs`, `docs/architecture/answer-ast.md`
+
+**問題:** unary signがmixed-number juxtapositionより先に結合するため、`-1\frac{1}{2}`が`-1/2`へ正規化され、一次方程式(2)等で正しい負の帯分数入力を受理できなかった。
+
+**修正:** mixed-number juxtapositionをleading `Negative` / `PlusMinus` prefixの内側へ結合し、`-1\frac{1}{2}`を`Negative(MixedFraction(1,1,2))`、`\pm1\frac{1}{2}`を`PlusMinus(MixedFraction(...))`としてparseする。実際の`LINEAR_EQUATION_2_REGISTRATION`からeditor/semantic input profileを取得するregressionを追加し、semantic capability受理と`-3/2`へのexact normalizationを検証する。architecture docsもeditor grammarとfinal semantic input contractの2層を明記した。
+
+**2026-08-19 独立再監査:** actual registration由来のeditor/semantic interfaceで正・負・Unicode minus・plus-minus・parenthesized mixed fractionをprobeし、`-1\frac{1}{2}`が`Negative(MixedFraction(...))`かつexact `-3/2`へnormalizeされることを確認。precedence regressionもPASS。Closeする。
+
+
+---
+
+## 2026-08-19 fourth independent Rust audit follow-up
+
+直前2件のClose再判定後のfresh auditで、wire/current-only facadeに以下を確認した。
+
+### REAUDIT4-M-001 ThemeSpecific effortがwireでdummy `OperationPlan`へ戻る
+
+**severity:** Medium
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/wire.rs`, generated Web wire types, `apps/web/src/domain/wasm-adapter.ts`
+
+**問題:** domainでは`EffortModel::Operations(OperationPlan)`と`EffortModel::ThemeSpecific`が排他的なのに、当初は`ProblemWire::from`がThemeSpecific problemへ空`OperationPlanWire`を合成していた。
+
+**第一修正:** `operation_plan`をoptional wire fieldへ変更し、ThemeSpecificを`null`にした。
+
+**2026-08-19 独立再監査:** fake empty plan自体は解消済みだったが、`worked_solution` / `theme_specific_effort`の`skip_serializing_if`により実Serde JSONではproperty omission、ts-rs generated typeでは必須`T | null`となる不一致を発見したためFAIL / Close NO。
+
+**再修正:** Webにproduction consumerのないeffort内部情報 (`operation_plan`, `operation_vector`, `theme_specific_effort`, `effort`) を`ProblemWire`から完全に削除し、`WebContract.operation_kind_count`とWebのOperation validator/type surfaceも削除した。`worked_solution`は省略せず常に`null | object`としてserializeし、generated `Problem.ts`と実Serde shapeを一致させた。ordinary / ThemeSpecific / worked-solution problemのproperty presenceをRust regressionで確認する。
+
+**2026-08-19 独立再監査:** repository外temporary crateからordinary problem、ThemeSpecific effortの九九、worked-solution付き筆算を実生成・実serializeした。3系統すべてのProblem property集合は`schema_version / id / numeric_theme_id / prompt / input_interface / answer_schema / canonical_answer / worked_solution`の8項目で一致し、effort内部4fieldはproperty自体が存在しない。九九の`Problem::effort()`はtheme-specific scalarを維持し、difficulty selectionの全Rust regressionもPASS。external compile probeで`EffortModel` / `OperationPlan` / `OperationVector`はcrate外surfaceへ漏れていないことも確認した。Closeする。
+
+### FULLAUDIT-M-001 generated TypeScript wire typeと実Serde shapeの不一致
+
+**severity:** Medium
+**状態:** Closed (2026-08-19 independent re-audit)
+**該当:** `crates/drill-core/src/wire.rs`, `apps/web/src/generated/wire/Problem.ts`, `apps/web/src/domain/drill-engine.ts`
+
+**問題:** `serde(skip_serializing_if = "Option::is_none")`で省略されるfieldをts-rsが必須`T | null`として生成し、generated typeが実wireより強い型になっていた。
+
+**修正:** current wireでは`worked_solution`を常に明示的`null | object`としてserializeする。未使用effort diagnosticsはwire自体から削除し、`ProblemDto`のmanual optional補正も削除した。これによりgenerated Rust wire typeをそのままWeb側で信頼できるshapeへ戻した。
+
+**2026-08-19 独立再監査:** generated freshnessだけに依存せず、ordinary / ThemeSpecific / worked-solution有りproblemを実Serializeしてgenerated `Problem.ts`とproperty presenceまで照合した。`worked_solution`は無しなら必ず`null`、有りならobjectで、omissionはない。generated `Problem.ts`も同じ8 required propertyと`WorkedSolution | null`を表し、manual optional補正は残っていない。generated contract/wire freshness、Rust fmt/check/clippy/test、TypeScript typecheck、ESLint、full VitestもPASSしたためCloseする。
+
+### REAUDIT4-L-001 current-only facade residue
+
+**severity:** Low
+**状態:** Closed (2026-08-19 independent full audit)
+**該当:** `apps/web/src/domain/drill-engine.ts`, `apps/web/src/domain/themes/theme-definition.ts`, `crates/drill-core/src/lib.rs`, `generator.rs`
+
+**問題:** current schemaしか扱わない`drillOperationKindCountForSchema()`、test fixture中心の`ThemeDefinition.compatibility` wrapper、外部consumerのない`SystemClock` public re-exportがcurrent-only architectureに残っていた。
+
+**修正:** `drillOperationKindCountForSchema()`と`ThemeDefinition.compatibility`を削除し、`SystemClock`をgenerator内部型へ縮小した。今回さらにWeb effort diagnostics自体を削除したため`DRILL_OPERATION_KIND_COUNT`もWeb surfaceから消えた。consumerのない`SystemClock::Default`も削除。
+
+**2026-08-19 独立再監査:** external temporary crateのpositive/negative compile probeで、explicit generation / grading / MathLive / scalar effort / `MonotonicClock`は利用可能、internal registry/effort/generator/SystemClock surfaceはcompile不能であることを確認。Closeする。
+
+### Follow-up simplification
+
+同監査の「変更を勧める: YES」について、WASM `parse_mathlive_answer()`の重複interface precheck、WASM `grade_answer()`の重複answer-size pass、`parse_additive`の不要な`Option`+`expect`を削除した。後続全面監査で指摘されたgenerate endpointの重複schema precheckも削除し、`GenerateProblemRequest` / `GenerateWorksheetRequest`のschema validationはcore generation APIへ一元化した。WASM regressionでunsupported schema error codeが維持されることを確認する。また、Web wire consumerを失った`OperationKind` / `OperationVector` / `Operation`の`ts-rs` derive/annotation residueも削除し、effort内部型がgenerated-wire責務を持つように見える状態を解消した。boundary/coreのerror precedenceはWASM regressionで固定する。

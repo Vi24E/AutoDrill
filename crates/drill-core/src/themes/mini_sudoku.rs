@@ -4,7 +4,7 @@ use crate::answer::AnswerNode;
 use crate::effort::{EffortModel, OperationWeights};
 use crate::error::GenerationError;
 use crate::generator::{
-    BootstrapDedup, GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy,
+    GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy, SelectionDedup,
 };
 use crate::model::{
     AnswerSchema, MiniSudokuGrid, Problem, ProblemPrompt, MINI_SUDOKU_CELL_COUNT,
@@ -52,7 +52,7 @@ impl ProblemGenerator for MiniSudokuGenerator {
     }
 
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
-        Ok(SamplingStrategy::random(self, BootstrapDedup::Deduplicate))
+        Ok(SamplingStrategy::random(self, SelectionDedup::Deduplicate))
     }
 }
 

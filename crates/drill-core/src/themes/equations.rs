@@ -6,8 +6,8 @@ use crate::effort::{
 use crate::error::GenerationError;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
 use crate::generator::{
-    AnswerConditionedCandidateSource, BootstrapDedup, GeneratorEntry, LayeredCandidateSource,
-    ProblemGenerator, RandomCandidateSource, SamplingStrategy,
+    AnswerConditionedCandidateSource, GeneratorEntry, LayeredCandidateSource, ProblemGenerator,
+    RandomCandidateSource, SamplingStrategy, SelectionDedup,
 };
 use crate::generator_support::{draw_signed_integer, rational_answer};
 use crate::model::{
@@ -22,9 +22,6 @@ use crate::theme::{
 };
 use std::sync::OnceLock;
 
-pub const LINEAR_EQUATION_PROBLEM_COUNT: usize = COMPACT_16_LAYOUT.problem_count();
-pub const LINEAR_EQUATION_COLUMNS: usize = COMPACT_16_LAYOUT.columns();
-pub const LINEAR_EQUATION_ROWS: usize = COMPACT_16_LAYOUT.rows();
 pub const THEME_ID_LINEAR_EQUATION_1: u32 = 2;
 pub const THEME_ID_LINEAR_EQUATION_2: u32 = 3;
 pub const THEME_ID_QUADRATIC_EQUATION_1: u32 = 14;
@@ -259,7 +256,7 @@ impl ProblemGenerator for SimultaneousEquationGenerator {
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
         Ok(SamplingStrategy::random(
             self,
-            BootstrapDedup::AllowDuplicates,
+            SelectionDedup::AllowDuplicates,
         ))
     }
 }
@@ -298,12 +295,12 @@ impl ProblemGenerator for QuadraticEquationGenerator {
             QuadraticEquationMode::SquareReduction => SamplingStrategy::answer_conditioned(self),
             QuadraticEquationMode::Factoring => SamplingStrategy::layered(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
                 self.registration.layout().problem_count(),
             ),
             QuadraticEquationMode::Formula => Ok(SamplingStrategy::random(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
             )),
         }
     }

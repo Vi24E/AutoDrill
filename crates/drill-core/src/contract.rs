@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::effort::OPERATION_KIND_COUNT;
 use crate::input::input_interface;
 use crate::model::{AnswerInputInterface, EditorStructure, GradeWarning, MAX_ANSWER_AST_SIZE};
 use crate::registry::{active_registrations, RegistryError};
@@ -14,7 +13,6 @@ use crate::theme::{
 #[derive(Debug, Serialize)]
 pub struct WebContract<'a> {
     pub schema_version: u16,
-    pub operation_kind_count: usize,
     pub max_answer_ast_size: usize,
     pub themes: BTreeMap<u32, WebThemeContract<'a>>,
     pub grade_warning_codes: Vec<String>,
@@ -40,12 +38,12 @@ pub struct WebThemeContract<'a> {
 
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct WebLayoutContract {
-    pub problem_count: usize,
-    pub columns: usize,
-    pub rows: usize,
+    pub problem_count: u32,
+    pub columns: u32,
+    pub rows: u32,
 }
 
-/// Build the compatibility contract consumed by the Web application.
+/// Build the generated contract consumed by the Web application.
 ///
 /// Values in this contract are intentionally limited to cross-language fields
 /// that must never be duplicated by hand in TypeScript. Presentation-only Web
@@ -72,9 +70,9 @@ pub fn web_contract() -> Result<WebContract<'static>, RegistryError> {
                     ),
                     editor_input_interface: input_interface(registration.editor_input_profile()),
                     layout: WebLayoutContract {
-                        problem_count: registration.layout().problem_count(),
-                        columns: registration.layout().columns(),
-                        rows: registration.layout().rows(),
+                        problem_count: registration.layout().problem_count_wire(),
+                        columns: registration.layout().columns_wire(),
+                        rows: registration.layout().rows_wire(),
                     },
                 },
             )
@@ -93,7 +91,6 @@ pub fn web_contract() -> Result<WebContract<'static>, RegistryError> {
 
     Ok(WebContract {
         schema_version: SCHEMA_VERSION,
-        operation_kind_count: OPERATION_KIND_COUNT,
         max_answer_ast_size: MAX_ANSWER_AST_SIZE,
         themes,
         grade_warning_codes,

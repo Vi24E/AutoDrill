@@ -10,12 +10,10 @@ import type {
   GenerateWorksheetRequest as RustGenerateWorksheetRequest,
   LiarStatement as RustLiarStatement,
   LongDivisionStep as RustLongDivisionStep,
-  OperationVector as RustOperationVector,
   Problem as RustProblem,
   ProblemPrompt as RustProblemPrompt,
   ProblemSetIdentity as RustProblemSetIdentity,
   RationalCoefficient as RustRationalCoefficient,
-  OperationPlan as RustOperationPlan,
   WorkedSolution as RustWorkedSolution,
   Worksheet as RustWorksheet,
 } from '@/generated/wire';
@@ -26,12 +24,6 @@ import type {
  * module only owns generic Web/WASM boundary types and behavior.
  */
 export const DRILL_SCHEMA_VERSION = DRILL_CORE_CONTRACT.schema_version;
-export const DRILL_OPERATION_KIND_COUNT = DRILL_CORE_CONTRACT.operation_kind_count;
-
-export function drillOperationKindCountForSchema(schemaVersion: number): number | undefined {
-  return schemaVersion === DRILL_SCHEMA_VERSION ? DRILL_OPERATION_KIND_COUNT : undefined;
-}
-
 
 export type DifficultyLevel = 1 | 2 | 3 | 4;
 
@@ -100,19 +92,16 @@ export type ArithmeticExpression = RustArithmeticExpression;
 export type LiarStatement = RustLiarStatement;
 export type ProblemPrompt = RustProblemPrompt;
 export type AnswerSchema = RustAnswerSchema;
-export type OperationVector = RustOperationVector;
-export type OperationPlan = RustOperationPlan;
 export type ColumnMultiplicationPartial = RustColumnMultiplicationPartial;
 export type LongDivisionStep = RustLongDivisionStep;
 export type WorkedSolution = RustWorkedSolution;
 
 /** Rust Problem plus the stable UI problem-id projection. */
-export type ProblemDto = Omit<RustProblem, 'schema_version' | 'worked_solution' | 'input_interface'> & {
+export type ProblemDto = Omit<RustProblem, 'schema_version' | 'input_interface'> & {
   schema_version: typeof DRILL_SCHEMA_VERSION;
   /** Stable UI key derived from the Rust numeric problem id. */
   problem_id: string;
   input_interface: AnswerInputInterface;
-  worked_solution?: WorkedSolution;
 };
 
 /** Rust Worksheet plus Web convenience projections. */
@@ -153,7 +142,13 @@ export type GradeResult = {
 export type DrillEngineErrorKind =
   | 'generation_timeout'
   | 'generation_attempt_limit'
+  | 'unsupported_schema_version'
+  | 'unknown_theme'
+  | 'unknown_generator_revision'
+  | 'invalid_problem_set_identity'
   | 'answer_ast_size_limit'
+  | 'input_structure_not_allowed'
+  | 'input_interface_violation'
   | 'invalid_sampling_strategy'
   | 'invalid_registry'
   | 'invalid_generated_problem'

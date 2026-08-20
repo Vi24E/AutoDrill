@@ -5,8 +5,8 @@ use crate::effort::{
 };
 use crate::error::GenerationError;
 use crate::generator::{
-    BootstrapDedup, ConstructiveLayeredCandidateSource, GeneratorEntry, ProblemGenerator,
-    RandomCandidateSource, SamplingStrategy,
+    ConstructiveLayeredCandidateSource, GeneratorEntry, ProblemGenerator, RandomCandidateSource,
+    SamplingStrategy, SelectionDedup,
 };
 use crate::generator_support::{
     binary_expression, mixed_number_answer, rational_answer, rational_expression,
@@ -241,12 +241,12 @@ impl ProblemGenerator for Generator {
         if self.mode == Mode::SummaryImproper {
             SamplingStrategy::constructive_layered(
                 self,
-                BootstrapDedup::Deduplicate,
+                SelectionDedup::Deduplicate,
                 1,
                 self.registration.layout().problem_count(),
             )
         } else {
-            Ok(SamplingStrategy::random(self, BootstrapDedup::Deduplicate))
+            Ok(SamplingStrategy::random(self, SelectionDedup::Deduplicate))
         }
     }
 }
@@ -375,7 +375,7 @@ fn draw_standard_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Optio
         operator,
         ArithmeticOperator::Add | ArithmeticOperator::Multiply
     );
-    let (left, right) = draw_pair_from_domain(rng, operand_domain_v1(), unordered)?;
+    let (left, right) = draw_pair_from_domain(rng, operand_domain(), unordered)?;
     let result = match operator {
         ArithmeticOperator::Add => left.checked_add(right),
         ArithmeticOperator::Subtract => left.subtract(right),
@@ -389,8 +389,8 @@ fn draw_standard_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Optio
         Mode::Addition => {
             result.denominator() > 1 && result.numerator() <= 65 && result.denominator() <= 72
         }
-        Mode::Subtraction | Mode::Multiplication => operand_domain_v1().contains(&result),
-        Mode::Division => operand_domain_v1().contains(&result) || small_positive_integer(result),
+        Mode::Subtraction | Mode::Multiplication => operand_domain().contains(&result),
+        Mode::Division => operand_domain().contains(&result) || small_positive_integer(result),
         _ => return None,
     };
     allowed.then_some(FractionEntry {
@@ -402,7 +402,7 @@ fn draw_standard_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Optio
 }
 
 fn draw_integer_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Option<FractionEntry> {
-    let fraction = operand_domain_v1()[rng.next_bounded(operand_domain_v1().len() as u64) as usize];
+    let fraction = operand_domain()[rng.next_bounded(operand_domain().len() as u64) as usize];
     let integer = RationalCoefficient::new(1 + rng.next_bounded(9) as i64, 1)?;
     let operator = operator_for_mode(mode)?;
     let (left, right) = match operator {
@@ -417,7 +417,7 @@ fn draw_integer_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Option
         _ => return None,
     }?;
     let allowed = result.numerator() > 0
-        && (operand_domain_v1().contains(&result) || small_positive_integer(result));
+        && (operand_domain().contains(&result) || small_positive_integer(result));
     allowed.then_some(FractionEntry {
         operator,
         left,
@@ -426,10 +426,10 @@ fn draw_integer_fraction_entry(mode: Mode, rng: &mut DeterministicRng) -> Option
     })
 }
 
-fn summary_operand_domain_v1() -> &'static [RationalCoefficient] {
+fn summary_operand_domain() -> &'static [RationalCoefficient] {
     static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     VALUES.get_or_init(|| {
-        let mut values = operand_domain_v1().to_vec();
+        let mut values = operand_domain().to_vec();
         values.extend((1_i64..=9).map(|value| RationalCoefficient::new(value, 1).unwrap()));
         values.sort_unstable();
         values.dedup();
@@ -447,7 +447,7 @@ fn draw_summary_entry_for_layer(layer: usize, rng: &mut DeterministicRng) -> Opt
             } else {
                 ArithmeticOperator::Divide
             };
-            let operands = summary_operand_domain_v1();
+            let operands = summary_operand_domain();
             let (left, right) =
                 draw_pair_from_domain(rng, operands, operator == ArithmeticOperator::Multiply)?;
             if left.is_integer() && right.is_integer() {
@@ -487,7 +487,7 @@ fn draw_constructive_entry(mode: Mode, rng: &mut DeterministicRng) -> Option<Fra
 }
 
 // Canonical operand domain for the current fraction curriculum.
-pub(crate) fn operand_domain_v1() -> &'static [RationalCoefficient] {
+pub(crate) fn operand_domain() -> &'static [RationalCoefficient] {
     static VALUES: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     VALUES.get_or_init(|| {
         let mut values = Vec::new();
@@ -646,8 +646,8 @@ mod curriculum_tests {
         ] {
             for _ in 0..512 {
                 let entry = draw_entry(mode, &mut rng);
-                assert!(operand_domain_v1().contains(&entry.left));
-                assert!(operand_domain_v1().contains(&entry.right));
+                assert!(operand_domain().contains(&entry.left));
+                assert!(operand_domain().contains(&entry.right));
                 assert!(entry.left.numerator() > 0 && entry.right.numerator() > 0);
                 assert!(entry.result.numerator() > 0);
                 match mode {
@@ -659,16 +659,16 @@ mod curriculum_tests {
                     }
                     Mode::Subtraction => {
                         assert_eq!(entry.operator, ArithmeticOperator::Subtract);
-                        assert!(operand_domain_v1().contains(&entry.result));
+                        assert!(operand_domain().contains(&entry.result));
                     }
                     Mode::Multiplication => {
                         assert_eq!(entry.operator, ArithmeticOperator::Multiply);
-                        assert!(operand_domain_v1().contains(&entry.result));
+                        assert!(operand_domain().contains(&entry.result));
                     }
                     Mode::Division => {
                         assert_eq!(entry.operator, ArithmeticOperator::Divide);
                         assert!(
-                            operand_domain_v1().contains(&entry.result)
+                            operand_domain().contains(&entry.result)
                                 || small_positive_integer(entry.result)
                         );
                     }

@@ -1,20 +1,12 @@
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 use crate::answer::AnswerNode;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
 use crate::model::{
-    ArithmeticExpression, ArithmeticOperator, Problem, QuadraticEquationForm, RationalCoefficient,
+    ArithmeticExpression, ArithmeticOperator, QuadraticEquationForm, RationalCoefficient,
 };
-#[cfg(feature = "wire-types")]
-use ts_rs::TS;
+pub const OPERATION_KIND_COUNT: usize = 29;
 
-pub const OPERATION_KIND_COUNT: usize = crate::schema::OPERATION_KIND_COUNT;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[cfg_attr(feature = "wire-types", derive(TS))]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
-#[serde(rename_all = "snake_case")]
 pub enum OperationKind {
     Identity,
     Count,
@@ -25,7 +17,6 @@ pub enum OperationKind {
     BaseTimes,
     BaseDivide,
     BigNum,
-    Round,
     TimeTen,
     OverheadPf,
     OverheadGcd,
@@ -36,7 +27,6 @@ pub enum OperationKind {
     OverheadCarryMult,
     Transposition,
     OverheadLinear,
-    OverheadDistribution,
     OverheadEqSystem,
     OverheadFactorPerfectSquare,
     OverheadFactorDifferenceOfSquares,
@@ -46,11 +36,11 @@ pub enum OperationKind {
     Compare,
     Reciprocal,
     BaseFractionCancel,
-    BaseRootSquareCancel,
     FractionSelfDivision,
 }
 
 impl OperationKind {
+    #[cfg(test)]
     pub const ALL: [Self; OPERATION_KIND_COUNT] = [
         Self::Identity,
         Self::Count,
@@ -61,7 +51,6 @@ impl OperationKind {
         Self::BaseTimes,
         Self::BaseDivide,
         Self::BigNum,
-        Self::Round,
         Self::TimeTen,
         Self::OverheadPf,
         Self::OverheadGcd,
@@ -72,7 +61,6 @@ impl OperationKind {
         Self::OverheadCarryMult,
         Self::Transposition,
         Self::OverheadLinear,
-        Self::OverheadDistribution,
         Self::OverheadEqSystem,
         Self::OverheadFactorPerfectSquare,
         Self::OverheadFactorDifferenceOfSquares,
@@ -82,7 +70,6 @@ impl OperationKind {
         Self::Compare,
         Self::Reciprocal,
         Self::BaseFractionCancel,
-        Self::BaseRootSquareCancel,
         Self::FractionSelfDivision,
     ];
 
@@ -91,57 +78,12 @@ impl OperationKind {
     }
 }
 
-/// Dense operation-count vector for the current schema.
+/// Dense operation-count vector for the current internal effort basis.
 ///
-/// AutoDrill is pre-release and does not retain historic wire dimensions. A
-/// schema change replaces the previous shape; all serialized vectors therefore
-/// have exactly `OPERATION_KIND_COUNT` coordinates.
+/// This is generator-internal diagnostic state, not a Web/WASM wire contract.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct OperationVector {
-    #[cfg_attr(feature = "wire-types", ts(type = "number[]"))]
     values: [f64; OPERATION_KIND_COUNT],
-}
-
-impl Serialize for OperationVector {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("OperationVector", 1)?;
-        state.serialize_field("values", &self.values)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for OperationVector {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct Repr {
-            values: Vec<f64>,
-        }
-
-        let values = Repr::deserialize(deserializer)?.values;
-        if values.len() != OPERATION_KIND_COUNT {
-            return Err(serde::de::Error::custom(
-                "operation vector has an unsupported dimension",
-            ));
-        }
-        if !values
-            .iter()
-            .all(|value| value.is_finite() && *value >= 0.0)
-        {
-            return Err(serde::de::Error::custom(
-                "operation vector values must be finite and nonnegative",
-            ));
-        }
-        let mut dense = [0.0; OPERATION_KIND_COUNT];
-        dense.copy_from_slice(&values);
-        Ok(Self { values: dense })
-    }
 }
 
 impl Default for OperationVector {
@@ -157,10 +99,12 @@ impl OperationVector {
         }
     }
 
+    #[cfg(test)]
     pub fn get(&self, kind: OperationKind) -> f64 {
         self.values[kind.index()]
     }
 
+    #[cfg(test)]
     pub fn as_array(&self) -> &[f64; OPERATION_KIND_COUNT] {
         &self.values
     }
@@ -170,6 +114,7 @@ impl OperationVector {
         self.values[kind.index()] += amount;
     }
 
+    #[cfg(test)]
     pub fn is_nonnegative_finite(&self) -> bool {
         self.values
             .iter()
@@ -177,33 +122,9 @@ impl OperationVector {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OperationWeights {
     values: [f64; OPERATION_KIND_COUNT],
-}
-
-impl<'de> Deserialize<'de> for OperationWeights {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct Repr {
-            values: [f64; OPERATION_KIND_COUNT],
-        }
-
-        let values = Repr::deserialize(deserializer)?.values;
-        if values
-            .iter()
-            .all(|value| value.is_finite() && *value >= 0.0)
-        {
-            Ok(Self { values })
-        } else {
-            Err(serde::de::Error::custom(
-                "operation weights must be finite and nonnegative",
-            ))
-        }
-    }
 }
 
 impl Default for OperationWeights {
@@ -224,7 +145,6 @@ impl Default for OperationWeights {
         values[OperationKind::OverheadCarryMult.index()] = 0.5;
         values[OperationKind::Transposition.index()] = 2.0;
         values[OperationKind::OverheadLinear.index()] = 2.0;
-        values[OperationKind::OverheadDistribution.index()] = 2.0;
         values[OperationKind::OverheadEqSystem.index()] = 4.0;
         values[OperationKind::OverheadFactorPerfectSquare.index()] = 3.0;
         values[OperationKind::OverheadFactorDifferenceOfSquares.index()] = 2.0;
@@ -234,16 +154,17 @@ impl Default for OperationWeights {
         values[OperationKind::Compare.index()] = 1.0;
         values[OperationKind::Reciprocal.index()] = 1.0;
         values[OperationKind::BaseFractionCancel.index()] = 1.0;
-        values[OperationKind::BaseRootSquareCancel.index()] = 1.0;
         Self { values }
     }
 }
 
 impl OperationWeights {
+    #[cfg(test)]
     pub fn get(&self, kind: OperationKind) -> f64 {
         self.values[kind.index()]
     }
 
+    #[cfg(test)]
     pub fn override_weight(&mut self, kind: OperationKind, weight: f64) -> Result<(), WeightError> {
         validate_nonnegative_finite(weight)?;
         self.values[kind.index()] = weight;
@@ -259,29 +180,18 @@ impl OperationWeights {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "wire-types", derive(TS))]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Operation {
     Identity,
-    Count {
-        amount: u32,
-    },
+    Count { amount: u32 },
     Increment,
     Decrement,
     BasePlus,
     BaseMinus,
     BaseTimes,
     BaseDivide,
-    BigNum {
-        #[serde(with = "crate::exact::u64_decimal_string")]
-        #[cfg_attr(feature = "wire-types", ts(type = "string"))]
-        magnitude: u64,
-    },
-    Round,
-    TimeTen {
-        exponent: u32,
-    },
+    BigNum { magnitude: u64 },
+    TimeTen { exponent: u32 },
     OverheadPf,
     OverheadGcd,
     OverheadLcm,
@@ -291,9 +201,6 @@ pub enum Operation {
     OverheadCarryMult,
     Transposition,
     OverheadLinear,
-    OverheadDistribution {
-        terms: u32,
-    },
     OverheadEqSystem,
     OverheadFactorPerfectSquare,
     OverheadFactorDifferenceOfSquares,
@@ -303,7 +210,6 @@ pub enum Operation {
     Compare,
     Reciprocal,
     BaseFractionCancel,
-    BaseRootSquareCancel,
     FractionSelfDivision,
 }
 
@@ -319,7 +225,6 @@ impl Operation {
             Self::BaseTimes => (OperationKind::BaseTimes, 1.0),
             Self::BaseDivide => (OperationKind::BaseDivide, 1.0),
             Self::BigNum { magnitude } => (OperationKind::BigNum, exact_log10_cost(*magnitude)),
-            Self::Round => (OperationKind::Round, 1.0),
             Self::TimeTen { .. } => (OperationKind::TimeTen, 1.0),
             Self::OverheadPf => (OperationKind::OverheadPf, 1.0),
             Self::OverheadGcd => (OperationKind::OverheadGcd, 1.0),
@@ -330,9 +235,6 @@ impl Operation {
             Self::OverheadCarryMult => (OperationKind::OverheadCarryMult, 1.0),
             Self::Transposition => (OperationKind::Transposition, 1.0),
             Self::OverheadLinear => (OperationKind::OverheadLinear, 1.0),
-            Self::OverheadDistribution { terms } => {
-                (OperationKind::OverheadDistribution, f64::from(*terms))
-            }
             Self::OverheadEqSystem => (OperationKind::OverheadEqSystem, 1.0),
             Self::OverheadFactorPerfectSquare => (OperationKind::OverheadFactorPerfectSquare, 1.0),
             Self::OverheadFactorDifferenceOfSquares => {
@@ -344,7 +246,6 @@ impl Operation {
             Self::Compare => (OperationKind::Compare, 1.0),
             Self::Reciprocal => (OperationKind::Reciprocal, 1.0),
             Self::BaseFractionCancel => (OperationKind::BaseFractionCancel, 1.0),
-            Self::BaseRootSquareCancel => (OperationKind::BaseRootSquareCancel, 1.0),
             Self::FractionSelfDivision => (OperationKind::FractionSelfDivision, 1.0),
         }
     }
@@ -369,6 +270,7 @@ impl OperationPlan {
         Self::new(operations.into_iter().collect())
     }
 
+    #[cfg(test)]
     pub fn operations(&self) -> &[Operation] {
         &self.operations
     }
@@ -423,6 +325,7 @@ impl EffortModel {
         }
     }
 
+    #[cfg(test)]
     pub fn operation_vector(&self) -> OperationVector {
         match self {
             Self::Operations(plan) => plan.operation_vector(),
@@ -430,6 +333,7 @@ impl EffortModel {
         }
     }
 
+    #[cfg(test)]
     pub fn operation_plan(&self) -> Option<&OperationPlan> {
         match self {
             Self::Operations(plan) => Some(plan),
@@ -437,34 +341,20 @@ impl EffortModel {
         }
     }
 
+    #[cfg(test)]
     pub fn theme_specific_value(&self) -> Option<f64> {
         match self {
             Self::Operations(_) => None,
             Self::ThemeSpecific(effort) => Some(effort.value()),
         }
     }
-
-    pub fn recalculate(&self, weights: &OperationWeights) -> EffortResult {
-        let operation_vector = self.operation_vector();
-        let value = match self {
-            Self::Operations(_) => weights.weighted_sum(&operation_vector),
-            Self::ThemeSpecific(effort) => effort.value(),
-        };
-        EffortResult {
-            value,
-            operation_vector,
-        }
-    }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct EffortResult {
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EffortResult {
     pub value: f64,
     pub operation_vector: OperationVector,
-}
-
-pub fn calculate_effort(problem: &Problem, weights: &OperationWeights) -> EffortResult {
-    problem.effort_model().recalculate(weights)
 }
 
 #[cfg(test)]
@@ -477,10 +367,6 @@ pub(crate) fn calculate_plan_effort(
         value: weights.weighted_sum(&operation_vector),
         operation_vector,
     }
-}
-
-pub fn default_effort(problem: &Problem) -> EffortResult {
-    calculate_effort(problem, &OperationWeights::default())
 }
 
 pub(crate) fn big_num_operations(answer: &AnswerNode) -> Vec<Operation> {
@@ -2038,6 +1924,7 @@ fn exact_log10_cost(magnitude: u64) -> f64 {
     }
 }
 
+#[cfg(test)]
 fn validate_nonnegative_finite(value: f64) -> Result<(), WeightError> {
     if value.is_finite() && value >= 0.0 {
         Ok(())
@@ -2046,9 +1933,10 @@ fn validate_nonnegative_finite(value: f64) -> Result<(), WeightError> {
     }
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("operation weight or multiplier must be finite and nonnegative")]
-pub struct WeightError;
+pub(crate) struct WeightError;
 
 #[cfg(test)]
 mod effort_model_tests {
@@ -2074,26 +1962,14 @@ mod effort_model_tests {
     }
 
     #[test]
-    fn operation_vector_wire_dimension_matches_current_schema() {
+    fn operation_vector_dimension_matches_current_internal_basis() {
         let current = OperationVector::zero();
-        assert_eq!(
-            serde_json::to_value(&current).unwrap()["values"]
-                .as_array()
-                .unwrap()
-                .len(),
-            OPERATION_KIND_COUNT
-        );
+        assert_eq!(current.as_array().len(), OPERATION_KIND_COUNT);
 
         let plan = OperationPlan::new(vec![Operation::FractionSelfDivision]);
         let vector = calculate_plan_effort(&plan, &OperationWeights::default()).operation_vector;
         assert_eq!(vector.get(OperationKind::FractionSelfDivision), 1.0);
-        assert_eq!(
-            serde_json::to_value(&vector).unwrap()["values"]
-                .as_array()
-                .unwrap()
-                .len(),
-            OPERATION_KIND_COUNT
-        );
+        assert_eq!(vector.as_array().len(), OPERATION_KIND_COUNT);
     }
 
     #[test]
@@ -2177,18 +2053,12 @@ mod effort_model_tests {
     }
 
     #[test]
-    fn structural_cancellation_primitives_are_distinct_features() {
+    fn fraction_cancellation_uses_its_structural_primitive() {
         let fraction_cancel =
             operation_plan(vec![Operation::BaseFractionCancel]).operation_vector();
         assert_only(
             &fraction_cancel,
             &[(OperationKind::BaseFractionCancel, 1.0)],
-        );
-        let root_square_cancel =
-            operation_plan(vec![Operation::BaseRootSquareCancel]).operation_vector();
-        assert_only(
-            &root_square_cancel,
-            &[(OperationKind::BaseRootSquareCancel, 1.0)],
         );
 
         let expression = ArithmeticExpression::Binary {

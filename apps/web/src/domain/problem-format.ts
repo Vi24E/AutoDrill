@@ -23,8 +23,6 @@ export type MathToken =
   | { kind: 'minus' }
   | { kind: 'fraction'; numerator: number; denominator: number };
 
-/** Backward-compatible name retained for existing callers. */
-
 function appendText(tokens: MathToken[], text: string): void {
   if (text === '') return;
   const last = tokens[tokens.length - 1];

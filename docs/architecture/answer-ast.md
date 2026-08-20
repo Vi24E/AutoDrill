@@ -20,27 +20,30 @@
 
 小数はbinary floating-pointへ変換しない。例えば`0.3`は`coefficient = 3, scale = 1`、`0.57`は`57, 2`である。JSON/WASM境界ではi64 payloadを`"3"`のようなcanonical decimal stringにし、18桁整数もJavaScriptの`number`へ変換しない。BigNumもこのcoefficientや整数nodeから直接導出し、表示floatから桁列を復元しない。分数`41/57`は整数child 41と57を別々のBigNum sourceにする。
 
-`AnswerRepresentation`はユーザーが入力・表示したtreeと採点用のnormalized treeを別fieldで保持する。`normalize_answer`は新しいcanonical treeを返し、呼び出し側のdisplay treeを書き換えない。整数、有限小数、分数、帯分数、negativeから構成できる正確な数値は、Floatを使わず符号を分子へ集約した既約分数（分母1ならinteger）へ統一する。従って`2/4`、`0.5`、`1/2`は同じnormalized treeになり、`4.0`はinteger `4`になる。
+入力・表示中の`AnswerNode`は呼び出し側がそのまま所有し、採点用の正規形を別の永続fieldとして二重保持しない。`normalize_answer(&AnswerNode)`は必要な時に新しいcanonical treeを返し、元のdisplay/input treeを書き換えない。整数、有限小数、分数、帯分数、negativeから構成できる正確な数値は、Floatを使わず符号を分子へ集約した既約分数（分母1ならinteger）へ統一する。従って`2/4`、`0.5`、`1/2`は同じnormalized treeになり、`4.0`はinteger `4`になる。
 
 `AnswerNode`自体はediting/draft syntaxも表せるため、生成済み`Problem`の内部では生の`AnswerNode`をcanonical answerの型として保持しない。`Problem::generated`がdraft-only nodeを拒否し、具体的`AnswerSchema`のrange/shapeとtheme contractを満たすことを確認した後、private `CanonicalAnswer` wrapperとして格納する。同様にschemaもprivate `ValidatedAnswerSchema`として保持する。native Rust / WASM grading boundaryでexternal schemaを受け取る場合も、expected canonical answerとの整合性を検証してから採点へ渡す。`grade_answer_with_schema`はfallible APIであり、不正なboundary schemaを採点結果へ偽装しない。
 
 ## Structured editor
 
-入力許可は`Problem.input_interface`が所有し、`answer_schema`とは直交する。`simple_numeric`は桁入力を
-基本にし、`allow_decimal`と`allow_negative`だけを追加許可する。`structured_math`は
-`allowed_structures`に列挙された構造だけを画面下部パレットへ投影する。一桁の足し算はdigits-only
-keypadで、構造template、小数点、負数キーを表示しない。
+入力capabilityには役割の異なる2層がある。生成済み`Problem.input_interface`は、その問題の回答として
+意味的に許される構造を表すsemantic contractであり、`answer_schema`とは直交する。一方、Rustのtheme
+registrationが持つ`editor_input_profile`は、MathLive上で編集途中に必要な構造を含むeditor grammarである。
+`web_contract()`は両者を`input_interface` / `editor_input_interface`としてWebへ投影する。Webは後者で
+MathLive入力をparseし、採点時には前者で最終回答capabilityを検証する。例えば一次方程式では編集途中の
+Arithmeticを許しても、最終回答contractではArithmeticを要求しない。`simple_numeric`は桁入力を基本にし、
+`allow_decimal`と`allow_negative`だけを追加許可する。
 
 Webの編集・caret・placeholder移動・fraction/root layoutはMathLiveが担当する。MathLiveの各`input`
 で得たLaTeXは`parse_mathlive_answer`という明示adapterを通り、Rustの`AnswerNode`へ変換されて初めて
 回答stateとなる。従ってMathLiveのmodelやLaTeX自体を採点authorityにはしない。adapterはMathLiveが
-正規化して返す`\frac72`や`\sqrt2`のような1-token TeX引数も受理し、許可されない構造は
-`input_interface`検証で拒否する。
+正規化して返す`\frac72`や`\sqrt2`のような1-token TeX引数も受理する。また、`-1\frac{1}{2}`は
+`(-1)×(1/2)`ではなく`-(1+1/2)`という負の帯分数として解釈する。
 
 MathLive worksheetの回答stateはRustが受理した`AnswerNode`そのものとし、採点にも`AnswerNode`を直接渡す。
 selection/caretはMathLiveだけが所有し、旧`EditorState` / `EditorAction` / `apply_editor_action` state machineは
-pre-releaseの不要な互換層として削除した。Rust側にはMathLive parse結果が`input_interface`を満たすかを
-検証する現行capability validatorだけを残す。空placeholderでのBackspaceはMathLiveの公開
+pre-releaseの不要な互換層として削除した。Rust側にはMathLive parse結果をeditor grammarで検証し、
+最終回答を`Problem.input_interface`で検証するcapability validatorだけを残す。空placeholderでのBackspaceはMathLiveの公開
 range/selection/command APIから最小の空構造を削除し、その直後のfield値を明示的に再parseして
 `AnswerNode`へ同期する。自前caret overlayやfraction/rootのpixel geometryは持たない。
 
@@ -48,7 +51,7 @@ range/selection/command APIから最小の空構造を削除し、その直後�
 
 ## Structural size
 
-emptyは0、integerは符号を除いた十進桁数である。ExactDecimalはcoefficientの桁数と、小数点以下桁を表すために必要な`scale + 1`の大きい方を使う。Composite nodeは親1に全childのsizeを加える。従って`frac(num(12), num(42))`は`1 + 2 + 2 = 5`。この表示サイズとは別に、入力検証では構造node数も最大18とする。検証は19個目のnodeを見つけた時点で短絡して拒否するため、empty childだけのtupleもnode予算を消費する。MathLive parse adapterとWASMのnormalize/grade境界は、両方の上限を適用前に検証する。
+emptyは0、integerは符号を除いた十進桁数である。ExactDecimalはcoefficientの桁数と、小数点以下桁を表すために必要な`scale + 1`の大きい方を使う。Composite nodeは親1に全childのsizeを加える。従って`frac(num(12), num(42))`は`1 + 2 + 2 = 5`。この表示サイズとは別に、入力検証では構造node数も最大18とする。検証は19個目のnodeを見つけた時点で短絡して拒否するため、empty childだけのtupleもnode予算を消費する。MathLive parse adapter、public `AnswerInputInterface::validate_answer`、WASMのnormalize/grade境界はsemantic recursionへ入る前にこのbudgetを検証する。
 
 Serde表現は`type` discriminatorと`value` payloadを使用する。
 

@@ -36,7 +36,6 @@ export type UnimplementedCurriculumTheme = {
   layout: null;
   route: null;
   search: null;
-  compatibility: null;
 };
 
 export type CurriculumTheme = ImplementedCurriculumTheme | UnimplementedCurriculumTheme;

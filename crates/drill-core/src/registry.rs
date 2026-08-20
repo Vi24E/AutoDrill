@@ -94,4 +94,30 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn registry_exposes_only_each_theme_current_revision() {
+        for current in active_registrations().unwrap() {
+            let theme_id = current.numeric_theme_id();
+            let revision = current.generator_revision();
+            assert_eq!(
+                super::registration(theme_id, revision).unwrap(),
+                Some(current)
+            );
+            assert!(generator_for_revision(theme_id, revision)
+                .unwrap()
+                .is_some());
+
+            if let Some(previous) = revision.checked_sub(1).filter(|value| *value > 0) {
+                assert!(super::registration(theme_id, previous).unwrap().is_none());
+                assert!(generator_for_revision(theme_id, previous)
+                    .unwrap()
+                    .is_none());
+            }
+            if let Some(next) = revision.checked_add(1) {
+                assert!(super::registration(theme_id, next).unwrap().is_none());
+                assert!(generator_for_revision(theme_id, next).unwrap().is_none());
+            }
+        }
+    }
 }

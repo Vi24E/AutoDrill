@@ -14,36 +14,36 @@ const structuredInputInterface = {
 } as const;
 
 describe('versioned WASM adapter', () => {
-  it('rejects schema-v2 envelopes and malformed input interfaces', async () => {
+  it('rejects old envelopes but does not duplicate Rust input-interface semantics', async () => {
     const oldEnvelope = createWasmDrillEngine({
       generate_worksheet: vi.fn().mockResolvedValue({ schema_version: 2, ok: true, data: fixtureWorksheet(), error: null }),
     });
     await expect(oldEnvelope.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
 
-    const malformed = fixtureWorksheet();
-    malformed.problems = [{
-      ...malformed.problems[0]!,
+    const semanticMismatch = fixtureWorksheet();
+    semanticMismatch.problems = [{
+      ...semanticMismatch.problems[0]!,
       input_interface: { type: 'structured_math', allowed_structures: ['fraction', 'fraction'] } as never,
-    }, ...malformed.problems.slice(1)];
-    const malformedEngine = createWasmDrillEngine({
-      generate_worksheet: vi.fn().mockResolvedValue(envelope(malformed)),
+    }, ...semanticMismatch.problems.slice(1)];
+    const engine = createWasmDrillEngine({
+      generate_worksheet: vi.fn().mockResolvedValue(envelope(semanticMismatch)),
     });
-    await expect(malformedEngine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
+    await expect(engine.generateWorksheet(fixtureSettings())).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
-  it('rejects a non-digits-only interface for the current one-digit theme', async () => {
-    const malformed = fixtureWorksheet();
-    malformed.problems = [{
-      ...malformed.problems[0]!,
+  it('does not re-check a theme input profile against the Rust registry in Web', async () => {
+    const semanticMismatch = fixtureWorksheet();
+    semanticMismatch.problems = [{
+      ...semanticMismatch.problems[0]!,
       input_interface: {
         type: 'structured_math',
         allowed_structures: ['fraction'],
       },
-    }, ...malformed.problems.slice(1)];
+    }, ...semanticMismatch.problems.slice(1)];
     const engine = createWasmDrillEngine({
-      generate_worksheet: vi.fn().mockResolvedValue(envelope(malformed)),
+      generate_worksheet: vi.fn().mockResolvedValue(envelope(semanticMismatch)),
     });
-    await expect(engine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
+    await expect(engine.generateWorksheet(fixtureSettings())).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
   it('rejects a response AST that exceeds the structural node budget even when display size is small', async () => {
@@ -59,6 +59,21 @@ describe('versioned WASM adapter', () => {
       generate_worksheet: vi.fn().mockResolvedValue(envelope(malformed)),
     });
     await expect(engine.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'invalid_dto' });
+  });
+
+  it('does not duplicate Rust AnswerNode display-size semantics in Web', async () => {
+    const semanticMismatch = fixtureWorksheet();
+    semanticMismatch.problems = [{
+      ...semanticMismatch.problems[0]!,
+      canonical_answer: {
+        type: 'nan_error',
+        value: 'x'.repeat(DRILL_CORE_CONTRACT.max_answer_ast_size + 1),
+      },
+    }, ...semanticMismatch.problems.slice(1)];
+    const engine = createWasmDrillEngine({
+      generate_worksheet: vi.fn().mockResolvedValue(envelope(semanticMismatch)),
+    });
+    await expect(engine.generateWorksheet(fixtureSettings())).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
   it('sends the exact current-schema request and preserves identity/problem-set metadata', async () => {
@@ -79,6 +94,28 @@ describe('versioned WASM adapter', () => {
       identity: { numeric_theme_id: 1, generator_revision: ONE_DIGIT_ADDITION_DEFINITION.generator_revision, seed: 'fixtureSeed', difficulty: 3 },
     });
     expect(new Set(result.problems.map((problem) => problem.id)).size).toBe(20);
+  });
+
+  it('does not add stricter rational-schema semantics than drill-core', async () => {
+    const worksheet = linearFixtureWorksheet(3);
+    worksheet.problems = [{
+      ...worksheet.problems[0]!,
+      answer_schema: {
+        kind: 'rational',
+        max_abs_numerator: 0,
+        max_denominator: 12,
+        require_reduced_fraction_form: true,
+      },
+      canonical_answer: { type: 'integer', value: '0' },
+    }, ...worksheet.problems.slice(1)];
+    const engine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(worksheet)) });
+
+    await expect(engine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: 3,
+      seed: 'fixtureSeed',
+      difficulty: 3,
+    })).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
   it('accepts registered linear-equation DTOs without addition-specific boundary branches', async () => {
@@ -119,7 +156,7 @@ describe('versioned WASM adapter', () => {
     ]);
   });
 
-  it('accepts fixed digit-grid DTOs and rejects malformed grid contracts', async () => {
+  it('accepts digit-grid wire shapes without reimplementing grid semantics', async () => {
     const worksheet = miniSudokuFixtureWorksheet();
     const engine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(worksheet)) });
     const result = await engine.generateWorksheet({
@@ -132,34 +169,21 @@ describe('versioned WASM adapter', () => {
     expect(result.problems.every((problem) => problem.input_interface.type === 'digit_grid')).toBe(true);
     expect(result.problems.every((problem) => problem.answer_schema.kind === 'ordered_tuple')).toBe(true);
 
-    const malformed = miniSudokuFixtureWorksheet();
-    malformed.problems = [{
-      ...malformed.problems[0]!,
+    const semanticMismatch = miniSudokuFixtureWorksheet();
+    semanticMismatch.problems = [{
+      ...semanticMismatch.problems[0]!,
       prompt: { kind: 'mini_sudoku', givens: [1, null] },
-    }, ...malformed.problems.slice(1)];
-    const malformedEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(malformed)) });
-    await expect(malformedEngine.generateWorksheet({
+    }, ...semanticMismatch.problems.slice(1)];
+    const semanticMismatchEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(semanticMismatch)) });
+    await expect(semanticMismatchEngine.generateWorksheet({
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: 38,
       seed: 'fixtureSeed',
       difficulty: 3,
-    })).rejects.toMatchObject({ kind: 'invalid_dto' });
-
-    const mixedEffort = miniSudokuFixtureWorksheet();
-    mixedEffort.problems = [{
-      ...mixedEffort.problems[0]!,
-      effort: 7,
-    }, ...mixedEffort.problems.slice(1)];
-    const mixedEffortEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(mixedEffort)) });
-    await expect(mixedEffortEngine.generateWorksheet({
-      schema_version: DRILL_SCHEMA_VERSION,
-      numeric_theme_id: 38,
-      seed: 'fixtureSeed',
-      difficulty: 3,
-    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+    })).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
-  it('rejects a prompt kind that disagrees with the registered linear theme', async () => {
+  it('does not duplicate registered prompt-kind semantics in Web', async () => {
     const worksheet = linearFixtureWorksheet(2);
     worksheet.problems = [{
       ...worksheet.problems[0]!,
@@ -171,7 +195,7 @@ describe('versioned WASM adapter', () => {
       numeric_theme_id: 2,
       seed: 'fixtureSeed',
       difficulty: 3,
-    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+    })).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
   it('preserves distinct timeout and attempt-limit errors', async () => {
@@ -195,8 +219,14 @@ describe('versioned WASM adapter', () => {
     });
     await expect(attempts.generateWorksheet(fixtureSettings())).rejects.toMatchObject({ kind: 'generation_attempt_limit' });
   });
-  it('preserves generator configuration and aggregate contract errors across the WASM boundary', async () => {
+  it('preserves generator, identity, input, and aggregate error codes across the WASM boundary', async () => {
     for (const kind of [
+      'unsupported_schema_version',
+      'unknown_theme',
+      'unknown_generator_revision',
+      'invalid_problem_set_identity',
+      'input_structure_not_allowed',
+      'input_interface_violation',
       'invalid_sampling_strategy',
       'invalid_registry',
       'invalid_generated_problem',
@@ -259,25 +289,32 @@ describe('versioned WASM adapter', () => {
       answers: [{ problem_id: worksheet.problems[0]!.problem_id, answer: submitted }],
     });
 
-    expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string).actual).toEqual(submitted);
+    const firstGradeRequest = JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string);
+    expect(firstGradeRequest.actual).toEqual(submitted);
+    expect(firstGradeRequest.input_interface).toEqual(worksheet.problems[0]!.input_interface);
     expect(result.items[0]).toMatchObject({ answer: '11/1', correct: false });
   });
- it('rejects runtime grade requests that do not use the current schema', async () => {
-    const gradeAnswer = vi.fn();
+  it('delegates grade-request schema semantics to Rust and preserves its error', async () => {
+    const gradeAnswer = vi.fn().mockResolvedValue({
+      schema_version: DRILL_SCHEMA_VERSION,
+      ok: false,
+      data: null,
+      error: { code: 'unsupported_schema_version', message: 'unsupported schema' },
+    });
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
     await expect(engine.gradeAnswer({
       schema_version: 2,
       worksheet: fixtureWorksheet(),
       answers: [],
-    } as never)).rejects.toMatchObject({ kind: 'invalid_dto' });
-    expect(gradeAnswer).not.toHaveBeenCalled();
+    } as never)).rejects.toMatchObject({ kind: 'unsupported_schema_version' });
+    expect(gradeAnswer).toHaveBeenCalled();
+    expect(JSON.parse(gradeAnswer.mock.calls[0]?.[0] as string).schema_version).toBe(2);
   });
 
   it.each([
     ['duplicates', ['fraction_not_reduced', 'fraction_not_reduced']],
     ['non-canonical order', ['redundant_decimal', 'fraction_not_reduced']],
-    ['unknown identifiers', ['future_warning']],
-  ])('rejects %s in grade warning arrays', async (_caseName, warnings) => {
+  ])('accepts known warning identifiers without re-checking Rust ordering semantics: %s', async (_caseName, warnings) => {
     const worksheet = fixtureWorksheet();
     const gradeAnswer = vi.fn().mockResolvedValue(envelope({
       status: 'correct',
@@ -295,7 +332,21 @@ describe('versioned WASM adapter', () => {
         problem_id: problem.problem_id,
         answer: { type: 'empty' },
       })),
-    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+    })).resolves.toMatchObject({ items: expect.any(Array) });
+  });
+
+  it('rejects unknown grade-warning identifiers as an unknown wire enum variant', async () => {
+    const worksheet = fixtureWorksheet();
+    const gradeAnswer = vi.fn().mockResolvedValue(envelope({
+      status: 'correct',
+      is_correct: true,
+      expected: { type: 'integer', value: '2' },
+      actual: { type: 'integer', value: '2' },
+      warnings: ['future_warning'],
+    }));
+    const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
+    await expect(engine.gradeAnswer({ schema_version: DRILL_SCHEMA_VERSION, worksheet, answers: [] }))
+      .rejects.toMatchObject({ kind: 'invalid_dto' });
   });
 
   it.each([
@@ -389,15 +440,28 @@ describe('versioned WASM adapter', () => {
     expect(result.items[0]).toEqual({ problem_id: '1', answer: null, correct: false, warnings: [] });
   });
 
+  it('rejects unknown grade-status wire variants', async () => {
+    const worksheet = fixtureWorksheet();
+    const gradeAnswer = vi.fn().mockResolvedValue(envelope({
+      status: 'partial',
+      is_correct: false,
+      expected: { type: 'integer', value: '2' },
+      actual: { type: 'integer', value: '3' },
+      warnings: [],
+    }));
+    const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
+    await expect(engine.gradeAnswer({ schema_version: DRILL_SCHEMA_VERSION, worksheet, answers: [] }))
+      .rejects.toMatchObject({ kind: 'invalid_dto' });
+  });
+
   it.each([
-    ['unknown status', { status: 'partial', is_correct: false, actual: { type: 'integer', value: '3' } }],
     ['correct with false flag', { status: 'correct', is_correct: false, actual: { type: 'integer', value: '2' } }],
     ['correct with empty answer', { status: 'correct', is_correct: true, actual: { type: 'empty' } }],
     ['incorrect with true flag', { status: 'incorrect', is_correct: true, actual: { type: 'integer', value: '3' } }],
     ['incorrect with empty answer', { status: 'incorrect', is_correct: false, actual: { type: 'empty' } }],
     ['unanswered with true flag', { status: 'unanswered', is_correct: true, actual: { type: 'empty' } }],
     ['unanswered with non-empty answer', { status: 'unanswered', is_correct: false, actual: { type: 'integer', value: '3' } }],
-  ])('rejects %s grade status payloads', async (_caseName, payload) => {
+  ])('does not duplicate Rust grade-result semantics: %s', async (_caseName, payload) => {
     const worksheet = fixtureWorksheet();
     const gradeAnswer = vi.fn().mockResolvedValue(envelope({
       ...payload,
@@ -405,16 +469,10 @@ describe('versioned WASM adapter', () => {
       warnings: [],
     }));
     const engine = createWasmDrillEngine({ grade_answer: gradeAnswer });
-
-    await expect(engine.gradeAnswer({
-      schema_version: DRILL_SCHEMA_VERSION,
-      worksheet,
-      answers: worksheet.problems.map((problem) => ({
-        problem_id: problem.problem_id,
-        answer: { type: 'empty' },
-      })),
-    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+    await expect(engine.gradeAnswer({ schema_version: DRILL_SCHEMA_VERSION, worksheet, answers: [] }))
+      .resolves.toMatchObject({ items: expect.any(Array) });
   });
+
 
   it('rejects unknown prompt and AnswerNode variants at the boundary', async () => {
     const unknownPrompt = fixtureWorksheet();

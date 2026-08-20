@@ -131,6 +131,7 @@ struct GradeAnswerRequest {
     actual: AnswerNode,
     #[serde(default)]
     answer_schema: Option<AnswerSchema>,
+    input_interface: AnswerInputInterface,
 }
 
 #[derive(Debug, Serialize)]
@@ -152,7 +153,6 @@ struct ApiError {
 #[wasm_bindgen]
 pub fn generate_problem(input_json: &str) -> String {
     respond_with(input_json, |request: GenerateProblemRequest| {
-        validate_schema(request.schema_version)?;
         core_generate_problem_request(&request).map_err(generation_error)
     })
 }
@@ -160,7 +160,6 @@ pub fn generate_problem(input_json: &str) -> String {
 #[wasm_bindgen]
 pub fn generate_worksheet(input_json: &str) -> String {
     respond_with(input_json, |request: GenerateWorksheetRequest| {
-        validate_schema(request.schema_version)?;
         generate_worksheet_for_platform(&request).map_err(generation_error)
     })
 }
@@ -211,9 +210,6 @@ fn regenerate_for_platform(
 pub fn parse_mathlive_answer(input_json: &str) -> String {
     respond_with(input_json, |request: ParseMathLiveAnswerRequest| {
         validate_schema(request.schema_version)?;
-        if !request.input_interface.is_structurally_valid() {
-            return Err(invalid_request("input_interface is structurally invalid"));
-        }
         core_parse_mathlive_answer(&request.latex, &request.input_interface).map_err(editor_error)
     })
 }
@@ -231,8 +227,14 @@ pub fn normalize_answer(input_json: &str) -> String {
 pub fn grade_answer(input_json: &str) -> String {
     respond_with(input_json, |request: GradeAnswerRequest| {
         validate_schema(request.schema_version)?;
-        validate_answer_size(&request.expected)?;
-        validate_answer_size(&request.actual)?;
+        request
+            .input_interface
+            .validate_answer(&request.expected)
+            .map_err(editor_error)?;
+        request
+            .input_interface
+            .validate_answer(&request.actual)
+            .map_err(editor_error)?;
         core_grade_answer_with_schema(
             &request.expected,
             &request.actual,
@@ -398,6 +400,14 @@ mod tests {
         })
     }
 
+    fn nested_negative(depth: usize) -> Value {
+        let mut value = json!({"type": "integer", "value": "1"});
+        for _ in 0..depth {
+            value = json!({"type": "negative", "value": value});
+        }
+        value
+    }
+
     #[test]
     fn worksheet_boundary_matches_current_schema_and_identity() {
         let output = generate_worksheet(
@@ -412,19 +422,14 @@ mod tests {
         let value = parse(&output);
         assert_eq!(value["schema_version"], SCHEMA_VERSION);
         assert_eq!(value["ok"], true);
+        let generator_revision = value["data"]["identity"]["generator_revision"]
+            .as_u64()
+            .expect("generator revision must be a wire integer");
         assert_eq!(
             value["data"]["problem_set_id"],
-            format!(
-                "{}-1-{}-Ab3Z-3",
-                SCHEMA_VERSION,
-                drill_core::GENERATOR_REVISION_ONE_DIGIT_ADDITION
-            )
+            format!("{SCHEMA_VERSION}-1-{generator_revision}-Ab3Z-3")
         );
         assert_eq!(value["data"]["identity"]["numeric_theme_id"], 1);
-        assert_eq!(
-            value["data"]["identity"]["generator_revision"],
-            drill_core::GENERATOR_REVISION_ONE_DIGIT_ADDITION
-        );
         assert_eq!(value["data"]["layout"]["problem_count"], 20);
         assert_eq!(value["data"]["problems"][0]["prompt"]["kind"], "addition");
         assert_eq!(value["data"]["problems"][0]["answer_schema"]["min"], "1");
@@ -434,19 +439,18 @@ mod tests {
             simple_input_interface()
         );
         assert!(value["data"]["problems"][0]["canonical_answer"]["value"].is_string());
-        let big_num_operation = value["data"]["problems"][0]["operation_plan"]["operations"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|operation| operation["kind"] == "big_num")
-            .unwrap();
-        assert!(big_num_operation["magnitude"].is_string());
+        let problem = &value["data"]["problems"][0];
+        assert!(problem["worked_solution"].is_null());
+        for internal_effort_field in [
+            "operation_plan",
+            "operation_vector",
+            "theme_specific_effort",
+            "effort",
+        ] {
+            assert!(problem.get(internal_effort_field).is_none());
+        }
 
-        let regenerated_id = format!(
-            "\"{}-1-{}-Ab3Z-3\"",
-            SCHEMA_VERSION,
-            drill_core::GENERATOR_REVISION_ONE_DIGIT_ADDITION
-        );
+        let regenerated_id = format!("\"{SCHEMA_VERSION}-1-{generator_revision}-Ab3Z-3\"");
         let regenerated = parse(&regenerate_problem_set(&regenerated_id));
         assert_eq!(regenerated["data"], value["data"]);
     }
@@ -457,6 +461,10 @@ mod tests {
             r#"{"schema_version":2,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
         ));
         assert_eq!(request["error"]["code"], "unsupported_schema_version");
+        let problem = parse(&generate_problem(
+            r#"{"schema_version":2,"numeric_theme_id":1,"seed":"Ab3Z"}"#,
+        ));
+        assert_eq!(problem["error"]["code"], "unsupported_schema_version");
         let id = parse(&regenerate_problem_set(r#""2-1-2-Ab3Z-3""#));
         assert_eq!(id["error"]["code"], "unsupported_schema_version");
 
@@ -528,6 +536,10 @@ mod tests {
             let graded = parse(&grade_answer(
                 &json!({
                     "schema_version": SCHEMA_VERSION,
+                    "input_interface": {
+                        "type": "structured_math",
+                        "allowed_structures": ["fraction", "mixed_fraction", "root"]
+                    },
                     "expected": answer.clone(),
                     "actual": answer
                 })
@@ -539,10 +551,86 @@ mod tests {
     }
 
     #[test]
+    fn parse_mathlive_delegates_interface_validation_to_core() {
+        let rejected = parse(&parse_mathlive_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "latex": "1",
+                "input_interface": {
+                    "type": "structured_math",
+                    "allowed_structures": []
+                }
+            })
+            .to_string(),
+        ));
+        assert_eq!(rejected["ok"], false);
+        assert_eq!(rejected["error"]["code"], "input_interface_violation");
+    }
+
+    #[test]
+    fn grade_answer_preserves_boundary_then_core_validation_precedence() {
+        let invalid_interface = parse(&grade_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "input_interface": {
+                    "type": "structured_math",
+                    "allowed_structures": []
+                },
+                "expected": {"type": "integer", "value": "1"},
+                "actual": {"type": "integer", "value": "1"}
+            })
+            .to_string(),
+        ));
+        assert_eq!(
+            invalid_interface["error"]["code"],
+            "input_interface_violation"
+        );
+
+        // AnswerNode deserialization already bounds external JSON before the
+        // grade handler runs, so a second explicit size traversal is redundant.
+        let oversized = nested_negative(MAX_ANSWER_AST_SIZE + 1);
+        let oversized_answer = parse(&grade_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "input_interface": {
+                    "type": "structured_math",
+                    "allowed_structures": ["negative"]
+                },
+                "expected": oversized.clone(),
+                "actual": oversized
+            })
+            .to_string(),
+        ));
+        assert_eq!(oversized_answer["error"]["code"], "invalid_request");
+    }
+
+    #[test]
+    fn grade_answer_delegates_input_capability_validation_to_core() {
+        let rejected = parse(&grade_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "input_interface": simple_input_interface(),
+                "expected": {"type": "integer", "value": "1"},
+                "actual": {
+                    "type": "fraction",
+                    "value": {
+                        "numerator": {"type": "integer", "value": "1"},
+                        "denominator": {"type": "integer", "value": "2"}
+                    }
+                }
+            })
+            .to_string(),
+        ));
+        assert_eq!(rejected["ok"], false);
+        assert_eq!(rejected["error"]["code"], "input_structure_not_allowed");
+    }
+
+    #[test]
     fn grade_error_codes_survive_the_wasm_boundary() {
         let invalid_schema = parse(&grade_answer(
             &json!({
                 "schema_version": SCHEMA_VERSION,
+                "input_interface": simple_input_interface(),
                 "expected": {"type": "integer", "value": "1"},
                 "actual": {"type": "integer", "value": "1"},
                 "answer_schema": {
@@ -560,6 +648,7 @@ mod tests {
         let expected_outside = parse(&grade_answer(
             &json!({
                 "schema_version": SCHEMA_VERSION,
+                "input_interface": simple_input_interface(),
                 "expected": {"type": "integer", "value": "1"},
                 "actual": {"type": "integer", "value": "1"},
                 "answer_schema": {"kind": "integer", "min": "0", "max": "0"}
@@ -579,6 +668,7 @@ mod tests {
         let graded = parse(&grade_answer(
             &json!({
                 "schema_version": SCHEMA_VERSION,
+                "input_interface": simple_input_interface(),
                 "expected": {"type": "integer", "value": exact},
                 "actual": {"type": "integer", "value": exact}
             })
@@ -589,12 +679,111 @@ mod tests {
     }
 
     #[test]
+    fn mathlive_public_boundary_round_trip_covers_structured_surface() {
+        let interface = json!({
+            "type": "structured_math",
+            "allowed_structures": [
+                "fraction",
+                "mixed_fraction",
+                "decimal",
+                "root",
+                "negative",
+                "plus_minus",
+                "tuple",
+                "arithmetic"
+            ]
+        });
+        for latex in [
+            "12",
+            "-12",
+            "1.25",
+            r"\frac{3}{4}",
+            r"1\frac{1}{2}",
+            r"−1\frac{1}{2}",
+            r"\sqrt{16}",
+            r"\pm2",
+            "2,-2",
+            "2+3*4",
+        ] {
+            let parsed = parse(&parse_mathlive_answer(
+                &json!({
+                    "schema_version": SCHEMA_VERSION,
+                    "input_interface": interface.clone(),
+                    "latex": latex
+                })
+                .to_string(),
+            ));
+            assert_eq!(parsed["ok"], true, "parse failed for {latex}: {parsed}");
+            let actual = parsed["data"].clone();
+
+            let normalized = parse(&normalize_answer(
+                &json!({
+                    "schema_version": SCHEMA_VERSION,
+                    "answer": actual.clone()
+                })
+                .to_string(),
+            ));
+            assert_eq!(
+                normalized["ok"], true,
+                "normalize failed for {latex}: {normalized}"
+            );
+
+            let graded = parse(&grade_answer(
+                &json!({
+                    "schema_version": SCHEMA_VERSION,
+                    "input_interface": interface.clone(),
+                    "expected": normalized["data"].clone(),
+                    "actual": actual
+                })
+                .to_string(),
+            ));
+            assert_eq!(graded["ok"], true, "grade failed for {latex}: {graded}");
+            assert_eq!(
+                graded["data"]["is_correct"], true,
+                "round-trip mismatch for {latex}: {graded}"
+            );
+        }
+
+        let malformed = r"\frac{1}";
+        let parsed = parse(&parse_mathlive_answer(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "input_interface": interface.clone(),
+                "latex": malformed
+            })
+            .to_string(),
+        ));
+        assert_eq!(parsed["ok"], true);
+        assert_eq!(parsed["data"]["type"], "nan_error");
+        assert_eq!(parsed["data"]["value"], malformed);
+
+        let too_deep = format!(
+            "{}1{}",
+            r"\sqrt{".repeat(MAX_ANSWER_AST_SIZE + 20),
+            "}".repeat(MAX_ANSWER_AST_SIZE + 20)
+        );
+        let too_large = "1".repeat(5_000);
+        for latex in [too_deep, too_large] {
+            let rejected = parse(&parse_mathlive_answer(
+                &json!({
+                    "schema_version": SCHEMA_VERSION,
+                    "input_interface": interface.clone(),
+                    "latex": latex
+                })
+                .to_string(),
+            ));
+            assert_eq!(rejected["ok"], false);
+            assert_eq!(rejected["error"]["code"], "answer_ast_size_limit");
+        }
+    }
+
+    #[test]
     fn browser_clock_failures_latch_to_timeout() {
         let state = BrowserClockState::try_new(100.0).unwrap();
         let started = state.read(Some(101.0));
         let failed = state.read(None);
         assert_eq!(failed, Duration::MAX);
-        assert!(failed.saturating_sub(started) >= drill_core::DEFAULT_TIMEOUT);
+        assert!(failed.saturating_sub(started) >= drill_core::GenerationConfig::default().timeout);
         assert_eq!(state.read(Some(102.0)), Duration::MAX);
     }
 }

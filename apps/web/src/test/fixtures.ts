@@ -1,5 +1,4 @@
 import {
-  DRILL_OPERATION_KIND_COUNT,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
   type AnswerNode,
@@ -45,10 +44,7 @@ export function fixtureWorksheet(): WorksheetDto {
       input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
       answer_schema: { kind: 'integer', min: '1', max: '18' },
       canonical_answer: answer,
-      operation_plan: { operations: [] },
-      operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-      theme_specific_effort: null,
-      effort: 0,
+      worked_solution: null,
     };
   });
   return {
@@ -61,8 +57,8 @@ export function fixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: ONE_DIGIT_ADDITION_DEFINITION.compatibility.skillId,
-    curriculum_path: ONE_DIGIT_ADDITION_DEFINITION.compatibility.curriculumPath.map((segment) => segment.label),
+    skill_id: ONE_DIGIT_ADDITION_DEFINITION.themeKey,
+    curriculum_path: ONE_DIGIT_ADDITION_DEFINITION.curriculumPath.map((segment) => segment.label),
     layout: ONE_DIGIT_ADDITION_DEFINITION.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -101,10 +97,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
         ? { kind: 'integer', min: '-15', max: '15' }
         : { kind: 'rational', max_abs_numerator: 20, max_denominator: 12, require_reduced_fraction_form: true },
       canonical_answer: canonicalAnswer,
-      operation_plan: { operations: [] },
-      operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-      theme_specific_effort: null,
-      effort: 0,
+      worked_solution: null,
     };
   });
   return {
@@ -117,8 +110,8 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.compatibility.skillId,
-    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    skill_id: definition.themeKey,
+    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -143,10 +136,7 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       input_interface: definition.inputInterface,
       answer_schema: { kind: 'ordered_pair', min: '-15', max: '15' },
       canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: String(x) }, { type: 'integer', value: String(y) }] },
-      operation_plan: { operations: [] },
-      operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-      theme_specific_effort: null,
-      effort: 0,
+      worked_solution: null,
     };
   });
   return {
@@ -159,8 +149,8 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.compatibility.skillId,
-    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    skill_id: definition.themeKey,
+    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -184,17 +174,14 @@ export function liarFixtureWorksheet(): WorksheetDto {
     input_interface: definition.inputInterface,
     answer_schema: { kind: 'algebraic' },
     canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] },
-    operation_plan: { operations: [] },
-    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-    theme_specific_effort: null,
-    effort: 0,
+    worked_solution: null,
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
     problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-2`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: FIXTURE_SEED, difficulty: 2 },
-    skill_id: definition.compatibility.skillId,
-    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    skill_id: definition.themeKey,
+    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -217,10 +204,7 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
       type: 'tuple',
       value: solution.map((value) => ({ type: 'integer' as const, value: String(value) })),
     },
-    operation_plan: { operations: [] },
-    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-    theme_specific_effort: 4.2,
-    effort: 4.2,
+    worked_solution: null,
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
@@ -232,8 +216,8 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.compatibility.skillId,
-    curriculum_path: definition.compatibility.curriculumPath.map((segment) => segment.label),
+    skill_id: definition.themeKey,
+    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,

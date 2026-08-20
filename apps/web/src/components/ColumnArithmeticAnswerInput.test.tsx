@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ColumnArithmeticAnswerInput } from '@/components/ColumnArithmeticAnswerInput';
-import { DRILL_OPERATION_KIND_COUNT, DRILL_SCHEMA_VERSION, type ProblemDto } from '@/domain/drill-engine';
+import { DRILL_SCHEMA_VERSION, type ProblemDto } from '@/domain/drill-engine';
 
 function additionProblem(): ProblemDto {
   return {
@@ -19,10 +19,7 @@ function additionProblem(): ProblemDto {
     input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
     answer_schema: { kind: 'integer', min: '0', max: '99999' },
     canonical_answer: { type: 'integer', value: '5506' },
-    operation_plan: { operations: [] },
-    operation_vector: { values: Array.from({ length: DRILL_OPERATION_KIND_COUNT }, () => 0) },
-    theme_specific_effort: null,
-    effort: 0,
+    worked_solution: null,
   };
 }
 

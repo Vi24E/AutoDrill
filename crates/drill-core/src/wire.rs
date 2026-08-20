@@ -3,7 +3,6 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::answer::AnswerNode;
-use crate::effort::{Operation, OperationPlan, OperationVector};
 use crate::identity::ProblemSetIdentity;
 use crate::model::{
     AnswerInputInterface, AnswerSchema, GradeResult, GradeStatus, GradeWarning, LayoutMetadata,
@@ -35,23 +34,8 @@ impl From<&GradeResult> for GradeResultWire {
 
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
-#[cfg_attr(feature = "wire-types", ts(rename = "OperationPlan"))]
-pub struct OperationPlanWire {
-    pub operations: Vec<Operation>,
-}
-
-impl From<&OperationPlan> for OperationPlanWire {
-    fn from(plan: &OperationPlan) -> Self {
-        Self {
-            operations: plan.operations().to_vec(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[cfg_attr(feature = "wire-types", derive(TS))]
 #[cfg_attr(feature = "wire-types", ts(rename = "ColumnMultiplicationPartial"))]
-pub struct ColumnMultiplicationPartialWire {
+pub(crate) struct ColumnMultiplicationPartialWire {
     #[cfg_attr(feature = "wire-types", ts(type = "number"))]
     pub value: i64,
     pub place: u32,
@@ -60,7 +44,7 @@ pub struct ColumnMultiplicationPartialWire {
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
 #[cfg_attr(feature = "wire-types", ts(rename = "LongDivisionStep"))]
-pub struct LongDivisionStepWire {
+pub(crate) struct LongDivisionStepWire {
     #[cfg_attr(feature = "wire-types", ts(type = "number"))]
     pub product: i64,
     #[cfg_attr(feature = "wire-types", ts(type = "number"))]
@@ -73,7 +57,7 @@ pub struct LongDivisionStepWire {
 #[cfg_attr(feature = "wire-types", derive(TS))]
 #[cfg_attr(feature = "wire-types", ts(rename = "WorkedSolution"))]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum WorkedSolutionWire {
+pub(crate) enum WorkedSolutionWire {
     ColumnMultiplication {
         partial_products: Vec<ColumnMultiplicationPartialWire>,
     },
@@ -90,13 +74,13 @@ pub enum WorkedSolutionWire {
 
 /// Serialized representation of a generated problem.
 ///
-/// `Problem` is the validated domain aggregate. This DTO owns the compatibility
-/// shape consumed by WASM/Web, including effort fields that are derived from the
-/// single internal `EffortModel` source of truth.
+/// `Problem` is the validated domain aggregate. This DTO owns the wire shape
+/// consumed by WASM/Web. Internal effort diagnostics stay inside Rust until a
+/// concrete cross-language consumer exists.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
 #[cfg_attr(feature = "wire-types", ts(rename = "Problem"))]
-pub struct ProblemWire {
+pub(crate) struct ProblemWire {
     pub schema_version: u16,
     pub id: u32,
     pub numeric_theme_id: u32,
@@ -104,13 +88,7 @@ pub struct ProblemWire {
     pub input_interface: AnswerInputInterface,
     pub answer_schema: AnswerSchema,
     pub canonical_answer: AnswerNode,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub worked_solution: Option<WorkedSolutionWire>,
-    pub operation_plan: OperationPlanWire,
-    pub operation_vector: OperationVector,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub theme_specific_effort: Option<f64>,
-    pub effort: f64,
 }
 
 impl From<&Problem> for ProblemWire {
@@ -124,15 +102,6 @@ impl From<&Problem> for ProblemWire {
             answer_schema: problem.answer_schema().clone(),
             canonical_answer: problem.canonical_answer().clone(),
             worked_solution: problem.worked_solution().map(|solution| solution.to_wire()),
-            operation_plan: problem
-                .operation_plan()
-                .map(OperationPlanWire::from)
-                .unwrap_or_else(|| OperationPlanWire {
-                    operations: Vec::new(),
-                }),
-            operation_vector: problem.operation_vector(),
-            theme_specific_effort: problem.theme_specific_effort(),
-            effort: problem.effort(),
         }
     }
 }
@@ -143,13 +112,13 @@ impl From<&Problem> for ProblemWire {
 #[cfg_attr(feature = "wire-types", derive(TS))]
 #[cfg_attr(feature = "wire-types", ts(rename = "Worksheet"))]
 pub struct WorksheetWire {
-    pub schema_version: u16,
-    pub problem_set_id: String,
-    pub identity: ProblemSetIdentity,
-    pub skill_id: String,
-    pub curriculum_path: Vec<String>,
-    pub layout: LayoutMetadata,
-    pub problems: Vec<ProblemWire>,
+    schema_version: u16,
+    problem_set_id: String,
+    identity: ProblemSetIdentity,
+    skill_id: String,
+    curriculum_path: Vec<String>,
+    layout: LayoutMetadata,
+    problems: Vec<ProblemWire>,
 }
 
 impl From<&Worksheet> for WorksheetWire {
@@ -162,6 +131,46 @@ impl From<&Worksheet> for WorksheetWire {
             curriculum_path: worksheet.curriculum_path().to_vec(),
             layout: worksheet.layout().clone(),
             problems: worksheet.problems().iter().map(ProblemWire::from).collect(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::generate_problem_request;
+    use crate::model::GenerateProblemRequest;
+    use crate::themes::basic_arithmetic::{
+        THEME_ID_MULTIPLICATION_TABLE, THEME_ID_ONE_DIGIT_ADDITION,
+    };
+    use crate::themes::column_arithmetic::THEME_ID_COLUMN_MULTIPLY_1DIGIT;
+
+    fn problem_wire(theme_id: u32) -> serde_json::Value {
+        let problem =
+            generate_problem_request(&GenerateProblemRequest::new(theme_id, "Ab3Z")).unwrap();
+        serde_json::to_value(ProblemWire::from(&problem)).unwrap()
+    }
+
+    #[test]
+    fn problem_wire_matches_current_cross_language_surface() {
+        let ordinary = problem_wire(THEME_ID_ONE_DIGIT_ADDITION);
+        assert!(ordinary["worked_solution"].is_null());
+
+        let theme_specific = problem_wire(THEME_ID_MULTIPLICATION_TABLE);
+        assert!(theme_specific["worked_solution"].is_null());
+
+        let worked = problem_wire(THEME_ID_COLUMN_MULTIPLY_1DIGIT);
+        assert!(worked["worked_solution"].is_object());
+
+        for wire in [&ordinary, &theme_specific, &worked] {
+            for internal_effort_field in [
+                "operation_plan",
+                "operation_vector",
+                "theme_specific_effort",
+                "effort",
+            ] {
+                assert!(wire.get(internal_effort_field).is_none());
+            }
         }
     }
 }

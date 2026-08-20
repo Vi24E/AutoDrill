@@ -3,7 +3,6 @@
 
 export const DRILL_CORE_CONTRACT = {
   "schema_version": 7,
-  "operation_kind_count": 32,
   "max_answer_ast_size": 18,
   "themes": {
     "1": {

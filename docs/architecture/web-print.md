@@ -27,7 +27,7 @@ Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイ�
 
 Webはnormalization、正誤判定、effort、generator条件を再実装しません。
 
-AnswerNode、AnswerSchema、BigNum等で64-bit exactnessが必要なpayloadはcanonical decimal stringでJSON越境します。ProblemPrompt / worked solutionで`number`として越境する整数は`Problem::generated`がJavaScript safe-integer範囲をinvariantとして検証し、Web adapterも`Number.isSafeInteger`で境界検査します。effort/vectorの評価値のみ有限の非整数`number`を許可します。
+AnswerNodeのinteger/coefficientとAnswerSchemaの`i64` boundsなど、64-bit exactnessが必要なwire payloadはcanonical decimal stringでJSON越境します。ProblemPrompt / worked solutionで`number`として越境する整数は`Problem::generated`がJavaScript safe-integer範囲をinvariantとして検証し、Web adapterも`Number.isSafeInteger`で境界検査します。`EffortModel` / `OperationPlan` / `OperationVector` / `BigNum`はRust内部実装であり、現行Problem wireへ公開しません。Web側にeffort semanticsやそのvalidatorを持たせません。
 
 ## MathLive
 

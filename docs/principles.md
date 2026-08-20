@@ -85,6 +85,10 @@ Webが所有するものの例:
 
 WASMは薄い境界とし、Rust/Webのどちらにも同じ数学ロジックを重複実装しない。
 
+AnswerNodeについて、Web boundaryがknown tag / primitive width / structural node budgetを確認するのはwire integrityである。一方、display-size cost、normalization、capability、数学的validity等の意味論はRustが所有し、TypeScriptへ同じ再帰計算を写さない。
+
+Rustのdomain型をそのまま「全部Webへ見せる」必要はない。wire contractは具体的なcross-language consumerに必要な最小projectionとし、generator内部diagnostic、effort evidence、sampling内部状態等をconsumer不在のまま公開しない。Web boundary validatorはgenerated Serde shapeのfail-closed検証を担当し、domain semantic consistencyはRustへ残す。
+
 ## 6. Explicit metadata, not feature inference
 
 Themeやworksheetの性質は、可能な限りtyped metadata / capability / policyとして明示する。
@@ -132,6 +136,7 @@ Effortを含む数学処理は、標準解法を再利用可能なprimitiveへ�
 - 互換性維持のためにactive generator / registry / schemaを複雑化しない。過去revisionをGit履歴以外のproduction implementationとして保存しない。
 - 実ユーザー、保存済みworksheet、外部に公開されたproblem-set ID等が存在し、後方互換性がproduct requirementになった時点で、version compatibility policyを改めて設計する。
 - performance改善を理由に**現行revision内の**determinismを壊さない。
+- `ランダム`がsemantic candidate集合から一様抽選する仕様なら、bootstrap生成時の偶発的なduplicate multiplicityを確率weightとして使わない。dedupがsampling semanticsの一部なら抽選前にsemantic key単位へcollapseする。
 - Seed / worksheet identityの将来拡張は `roadmap.md` と `issues.md` の現行方針に従う。
 
 ## 9. Web / print parity
@@ -166,3 +171,27 @@ AIエージェントの一時作業物をrepositoryやDesktopへ蓄積しない�
 - theme metadata / tagging / ownershipの境界が曖昧である。
 - 数学的標準解法や日本の教材表記について仕様が一意でない。
 - UI上の挙動に複数の妥当な解釈があり、その差が継続的なUXへ影響する。
+
+## 12. Keep contracts and public surfaces minimal
+
+内部表現、crate public API、WASM/Web wireは「将来使うかもしれない」ではなく、**現在の具体的consumer**を基準に設計する。
+
+- Rust内部の型・field・helperは原則private / `pub(crate)`とし、実際のcrate外consumerがあるものだけを`pub`にする。
+- generator診断、`EffortModel`、`OperationPlan`、`OperationVector`等の内部evidenceは、Web/PDF/UIが実際に必要とするまでwireへ公開しない。test introspectionだけが必要なら`#[cfg(test)]`やcrate-private accessorで足りるかを先に検討する。
+- wire DTOはdomain aggregateの完全な鏡ではなく、boundary consumerに必要な最小projectionとする。不要なfieldを「debugに便利」「後で使うかも」という理由で恒久contractへしない。
+- Serde runtime shapeとgenerated TypeScript typeは、property presence、`null`、tag、integer encodingまで意味論的に一致させる。generated typeへ手修正を加えたり、Web側のmanual typeで不一致を補正したりしない。
+- `Option<T>`をwireに出す場合、property omissionと`null`のどちらをcontractにするかを意図的に決める。ts-rs等のtype generatorが正確に表現できないshapeなら、manual patchではなくRust wire DTO / Serde policy側を直す。
+- wire fieldを削除したら、generated type、export、validator、fixture、test、consumerも同じ変更で削除する。current-only architectureに不要なcompatibility facadeを残さない。
+- Webのruntime validationは未知tag、型、range、required property等の**wire integrity**をfail-closedに確認する。一方、operation同士の整合、answer semantics、input capability semantics等のdomain ruleをWebへ二重実装しない。
+
+## 13. Architectural changes must finish end-to-end
+
+AIエージェントを含む実装者は、局所的にcodeが通った時点ではなく、source of truth・contract・docs・generated artifact・testsが同じ現行architectureを指した時点で変更完了とする。
+
+- source of truth、module ownership、public API、wire schema、generator architectureを変更した場合、**同じtask内でcanonical architecture docsも更新する**。docs driftは単なる文章上の問題ではなく、次の実装者へ誤った設計を伝える保守性欠陥として扱う。
+- 削除・rename・責務移動の後はrepository-wide検索を行い、旧symbol、旧field、旧validator、旧compatibility path、旧説明が現行code/docsへ残っていないか確認する。`docs/audits/`や`docs/issues.md`の過去経緯はhistoryなので、現行仕様記述と区別して扱う。
+- Serde / ts-rs / generated contractを変更した場合、freshness scriptだけで十分としない。代表的variantを実serializeし、property presence、`null`/omission、tagged union、exact integer encodingをgenerated typeと照合する。
+- 変更対象に応じてformat、check、clippy、test、generated freshness、TypeScript typecheck、lint等のquality gateを実行する。失敗したgateを別の成功したgateで代用したことにしない。
+- abstractionやcompatibility layerから最後のconsumerが消えた場合、pre-releaseでは原則として一緒に削除する。利用者のないfacade・adapter・legacy aliasを「安全のため」に残すことは安全ではなく、将来の誤用点を増やす。
+- 一次検証用file、temporary crate、debug export、手動生成copy等を正式architectureの一部へ昇格させない。価値のあるregression testだけを残し、一時物はcleanupする。
+- 変更を完了させるために新しい例外・二重SoT・manual synchronizationが必要になった場合は、その場で継ぎ足さず設計を見直す。長期ownershipが変わる判断ならユーザーへ相談する。

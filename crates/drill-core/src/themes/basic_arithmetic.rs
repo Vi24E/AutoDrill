@@ -1,11 +1,11 @@
 use crate::answer::AnswerNode;
 use crate::effort::{
     arithmetic_expression_plan, one_digit_addition_plan, one_digit_subtraction_plan,
-    two_digit_addition_plan, EffortModel, OperationPlan, OperationWeights,
+    two_digit_addition_plan, EffortModel, OperationWeights,
 };
 use crate::error::GenerationError;
 use crate::generator::{
-    BootstrapDedup, GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy,
+    GeneratorEntry, ProblemGenerator, RandomCandidateSource, SamplingStrategy, SelectionDedup,
 };
 use crate::generator_support::{
     binary_expression, draw_bounded_rational_arithmetic_ast, draw_signed_integer,
@@ -21,9 +21,6 @@ use crate::theme::{
 };
 use crate::themes::{division_table, multiplication_table};
 
-pub const DEFAULT_PROBLEM_COUNT: usize = STANDARD_20_LAYOUT.problem_count();
-pub const DEFAULT_COLUMNS: usize = STANDARD_20_LAYOUT.columns();
-pub const DEFAULT_ROWS: usize = STANDARD_20_LAYOUT.rows();
 pub const MIN_OPERAND: u8 = 1;
 pub const MAX_OPERAND: u8 = 9;
 pub const MIN_ANSWER: u8 = 1;
@@ -207,7 +204,7 @@ impl ProblemGenerator for Generator {
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
         Ok(SamplingStrategy::random(
             self,
-            BootstrapDedup::AllowDuplicates,
+            SelectionDedup::AllowDuplicates,
         ))
     }
 }
@@ -276,7 +273,7 @@ fn draw_problem(
         return Some(one_digit_addition_problem(id, left, right, weights));
     }
 
-    let (expression, answer, operation_plan, answer_schema, theme_specific_effort) = match mode {
+    let (expression, answer, effort_model, answer_schema) = match mode {
         Mode::OneDigitAddition => unreachable!(),
         Mode::OneDigitSubtraction => {
             let b = 1_i64 + rng.next_bounded(9) as i64;
@@ -290,9 +287,8 @@ fn draw_problem(
             (
                 expression,
                 AnswerNode::Integer(c),
-                one_digit_subtraction_plan(a as u8, b as u8)?,
+                EffortModel::operations(one_digit_subtraction_plan(a as u8, b as u8)?),
                 AnswerSchema::Integer { min: 1, max: 9 },
-                None,
             )
         }
         Mode::TwoDigitAddition => {
@@ -307,9 +303,8 @@ fn draw_problem(
             (
                 expression,
                 AnswerNode::Integer(c),
-                two_digit_addition_plan(a as u8, b as u8)?,
+                EffortModel::operations(two_digit_addition_plan(a as u8, b as u8)?),
                 AnswerSchema::Integer { min: 20, max: 198 },
-                None,
             )
         }
         Mode::MultiplicationTable => {
@@ -324,9 +319,8 @@ fn draw_problem(
             (
                 expression,
                 AnswerNode::Integer(c),
-                OperationPlan::default(),
+                EffortModel::theme_specific(multiplication_table::effort(c as u8))?,
                 AnswerSchema::Integer { min: 1, max: 81 },
-                Some(multiplication_table::effort(c as u8)),
             )
         }
         Mode::DivisionTable => {
@@ -341,9 +335,8 @@ fn draw_problem(
             (
                 expression,
                 AnswerNode::Integer(quotient),
-                division_table::operation_plan(dividend as u8),
+                EffortModel::operations(division_table::operation_plan(dividend as u8)),
                 AnswerSchema::Integer { min: 1, max: 9 },
-                None,
             )
         }
         Mode::SignedArithmetic1 => {
@@ -370,9 +363,8 @@ fn draw_problem(
             (
                 expression,
                 answer,
-                plan,
+                EffortModel::operations(plan),
                 AnswerSchema::Integer { min: -60, max: 60 },
-                None,
             )
         }
         Mode::SignedArithmetic2 => {
@@ -391,19 +383,14 @@ fn draw_problem(
             (
                 expression,
                 answer,
-                plan,
+                EffortModel::operations(plan),
                 AnswerSchema::Rational {
                     max_abs_numerator: 200,
                     max_denominator: 36,
                     require_reduced_fraction_form: true,
                 },
-                None,
             )
         }
-    };
-    let effort_model = match theme_specific_effort {
-        Some(value) => EffortModel::theme_specific(value)?,
-        None => EffortModel::operations(operation_plan),
     };
     Some(
         Problem::generated(

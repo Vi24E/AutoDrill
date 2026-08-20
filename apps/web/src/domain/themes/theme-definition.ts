@@ -1,4 +1,4 @@
-import type { AnswerInputInterface, AnswerInputStructure, CurriculumPathSegment, ProblemPrompt, WorksheetLayout } from '../drill-engine';
+import type { AnswerInputInterface, CurriculumPathSegment, ProblemPrompt, WorksheetLayout } from '../drill-engine';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 export type ThemePromptKind = ProblemPrompt['kind'];
@@ -7,21 +7,8 @@ export type GradeNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type GradeSlug = `grade-${GradeNumber}`;
 export type RouteGroupSlug = GradeSlug | 'bonus';
 
-export const THEME_TAG_VALUES = [
-  'addition',
-  'subtraction',
-  'multiplication',
-  'division',
-  'fractions',
-  'decimals',
-  'negative_numbers',
-  'equations',
-  'linear_equation',
-  'simultaneous_equation',
-  'quadratic_equation',
-  'bonus',
-] as const;
-export type ThemeTag = typeof THEME_TAG_VALUES[number];
+type CoreThemeContract = typeof DRILL_CORE_CONTRACT.themes[keyof typeof DRILL_CORE_CONTRACT.themes];
+export type ThemeTag = CoreThemeContract['tags'][number];
 export type DerivedGradeTag =
   | 'grade_1' | 'grade_2' | 'grade_3' | 'grade_4' | 'grade_5' | 'grade_6'
   | 'junior_high_1' | 'junior_high_2' | 'junior_high_3';
@@ -48,7 +35,7 @@ export type ThemeDefinition = {
   layout: WorksheetLayout;
   route: { gradeSlug: RouteGroupSlug; themeSlug: string; pathname: `/drills/${RouteGroupSlug}/${string}` };
   search: { title: string; description: string };
-  compatibility: { skillId: string; curriculumPath: readonly CurriculumPathSegment[] };
+  curriculumPath: readonly CurriculumPathSegment[];
   safety: 'non_negative_only' | 'unrestricted';
   presentation: {
     worksheet_grid: boolean;
@@ -72,7 +59,7 @@ export type ThemeDefinition = {
  */
 export type ThemeDefinitionInput = Omit<
   ThemeDefinition,
-  'numeric_theme_id' | 'generator_revision' | 'themeKey' | 'grade' | 'tags' | 'gradeGenre' | 'recommendedGenre' | 'problemCount' | 'layout' | 'route' | 'compatibility' | 'safety' | 'presentation' | 'dedup' | 'promptKind' | 'answerSchemaKind' | 'inputInterface' | 'editorInputInterface'
+  'numeric_theme_id' | 'generator_revision' | 'themeKey' | 'grade' | 'tags' | 'gradeGenre' | 'recommendedGenre' | 'problemCount' | 'layout' | 'route' | 'curriculumPath' | 'safety' | 'presentation' | 'dedup' | 'promptKind' | 'answerSchemaKind' | 'inputInterface' | 'editorInputInterface'
 > & {
   numeric_theme_id: NumericThemeId;
   route: { themeSlug: string };
@@ -154,7 +141,7 @@ export function defineTheme(input: ThemeDefinitionInput): ThemeDefinition {
     recommendedGenre,
     problemCount: core.layout.problem_count,
     layout: core.layout,
-    compatibility: { skillId: core.skill_id, curriculumPath },
+    curriculumPath,
     safety: core.safety,
     presentation: core.presentation,
     dedup: core.dedup,
@@ -165,7 +152,7 @@ export function defineTheme(input: ThemeDefinitionInput): ThemeDefinition {
   };
 }
 
-export const ALL_MATH_STRUCTURES = ['fraction', 'mixed_fraction', 'decimal', 'root', 'negative', 'plus_minus', 'tuple', 'arithmetic'] as const satisfies readonly AnswerInputStructure[];
+export const ALL_MATH_STRUCTURES = DRILL_CORE_CONTRACT.editor_structures;
 export const LINEAR_INSTRUCTION = '次の一次方程式を解きなさい。ただし、答えが整数でない場合は約分によって最も簡単な形の仮分数で答えなさい。';
 export const FRACTION_INSTRUCTION = '次の計算をしなさい。答えが仮分数になる場合は帯分数に直し、約分して最も簡単な形で答えなさい。';
 export const IMPROPER_FRACTION_INSTRUCTION = '次の計算をしなさい。答えは仮分数のまま、約分して最も簡単な形で答えなさい。';

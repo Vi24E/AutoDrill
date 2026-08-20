@@ -1,8 +1,8 @@
 use crate::effort::{arithmetic_expression_plan, EffortModel, OperationWeights};
 use crate::error::GenerationError;
 use crate::generator::{
-    BootstrapDedup, GeneratorEntry, LayeredCandidateSource, ProblemGenerator,
-    RandomCandidateSource, SamplingStrategy,
+    GeneratorEntry, LayeredCandidateSource, ProblemGenerator, RandomCandidateSource,
+    SamplingStrategy, SelectionDedup,
 };
 use crate::generator_support::{
     arithmetic_leaf_significant_digits, binary_expression, draw_decimal_operand,
@@ -21,18 +21,17 @@ use crate::theme::{
 };
 
 pub const THEME_ID_DECIMAL_ADD_SUBTRACT: u32 = 17;
-pub const THEME_ID_DECIMAL_MULTIPLY_DIVIDE: u32 = 18;
+pub const THEME_ID_DECIMAL_MULTIPLICATION: u32 = 18;
 pub const THEME_ID_DECIMAL_DIVISION: u32 = 24;
 pub const GENERATOR_REVISION_DECIMAL_ADD_SUBTRACT: u32 = 5;
-pub const GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE: u32 = 6;
+pub const GENERATOR_REVISION_DECIMAL_MULTIPLICATION: u32 = 6;
 pub const GENERATOR_REVISION_DECIMAL_DIVISION: u32 = 1;
 pub const SKILL_ID_DECIMAL_ADD_SUBTRACT: &str = "jp.grade4.decimal.add_subtract";
-pub const SKILL_ID_DECIMAL_MULTIPLY_DIVIDE: &str = "jp.grade5.decimal.multiplication";
+pub const SKILL_ID_DECIMAL_MULTIPLICATION: &str = "jp.grade5.decimal.multiplication";
 pub const SKILL_ID_DECIMAL_DIVISION: &str = "jp.grade5.decimal.division";
 pub const CURRICULUM_PATH_DECIMAL_ADD_SUBTRACT: [&str; 3] =
     ["root", "小学4年生", "小数の足し算と引き算"];
-pub const CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE: [&str; 3] =
-    ["root", "小学5年生", "小数の掛け算"];
+pub const CURRICULUM_PATH_DECIMAL_MULTIPLICATION: [&str; 3] = ["root", "小学5年生", "小数の掛け算"];
 pub const CURRICULUM_PATH_DECIMAL_DIVISION: [&str; 3] = ["root", "小学5年生", "小数の割り算"];
 
 const ADD_SUBTRACT: &[ThemeTag] = &[
@@ -70,14 +69,14 @@ pub const DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::ArithmeticDecimal,
         layout: STANDARD_20_LAYOUT,
     });
-pub const DECIMAL_MULTIPLY_DIVIDE_REGISTRATION: ThemeRegistration =
+pub const DECIMAL_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_DECIMAL_MULTIPLY_DIVIDE),
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_DECIMAL_MULTIPLICATION),
         generator_revision: crate::theme::GeneratorRevision::new(
-            GENERATOR_REVISION_DECIMAL_MULTIPLY_DIVIDE,
+            GENERATOR_REVISION_DECIMAL_MULTIPLICATION,
         ),
-        skill_id: SKILL_ID_DECIMAL_MULTIPLY_DIVIDE,
-        curriculum_path: &CURRICULUM_PATH_DECIMAL_MULTIPLY_DIVIDE,
+        skill_id: SKILL_ID_DECIMAL_MULTIPLICATION,
+        curriculum_path: &CURRICULUM_PATH_DECIMAL_MULTIPLICATION,
         grade: Some(SchoolGrade::Elementary5),
         tags: MULTIPLICATION,
         safety: Safety::NonNegativeOnly,
@@ -125,13 +124,13 @@ impl ProblemGenerator for Generator {
         if self.mode == Mode::AddSubtract {
             SamplingStrategy::layered(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
                 self.registration.layout().problem_count(),
             )
         } else {
             Ok(SamplingStrategy::random(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
             ))
         }
     }
@@ -144,7 +143,7 @@ impl RandomCandidateSource for Generator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        draw_problem_v1(self.registration, self.mode, rng, ordinal, weights).transpose()
+        draw_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
     }
 }
 
@@ -159,7 +158,7 @@ impl LayeredCandidateSource for Generator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        draw_problem_v1(self.registration, self.mode, rng, ordinal, weights).transpose()
+        draw_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
     }
 
     fn layer_of(&self, problem: &Problem) -> usize {
@@ -184,7 +183,7 @@ pub(crate) static ADD_SUBTRACT_GENERATOR: Generator = Generator {
     mode: Mode::AddSubtract,
 };
 pub(crate) static MULTIPLICATION_GENERATOR: Generator = Generator {
-    registration: &DECIMAL_MULTIPLY_DIVIDE_REGISTRATION,
+    registration: &DECIMAL_MULTIPLICATION_REGISTRATION,
     mode: Mode::Multiplication,
 };
 pub(crate) static DIVISION_GENERATOR: Generator = Generator {
@@ -193,7 +192,7 @@ pub(crate) static DIVISION_GENERATOR: Generator = Generator {
 };
 
 // Current decimal generation rules.
-fn draw_problem_v1(
+fn draw_problem(
     registration: &ThemeRegistration,
     mode: Mode,
     rng: &mut DeterministicRng,
@@ -409,7 +408,7 @@ mod curriculum_tests {
     fn multiplication_and_division_are_independent_family_units() {
         for (theme_id, expected_operator) in [
             (
-                THEME_ID_DECIMAL_MULTIPLY_DIVIDE,
+                THEME_ID_DECIMAL_MULTIPLICATION,
                 ArithmeticOperator::Multiply,
             ),
             (THEME_ID_DECIMAL_DIVISION, ArithmeticOperator::Divide),

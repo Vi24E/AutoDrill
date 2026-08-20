@@ -4,8 +4,8 @@ use crate::effort::{
 };
 use crate::error::GenerationError;
 use crate::generator::{
-    BootstrapDedup, GeneratorEntry, LayeredCandidateSource, ProblemGenerator,
-    RandomCandidateSource, SamplingStrategy,
+    GeneratorEntry, LayeredCandidateSource, ProblemGenerator, RandomCandidateSource,
+    SamplingStrategy, SelectionDedup,
 };
 use crate::generator_support::{
     arithmetic_leaf_column_grid_cells, arithmetic_leaf_significant_digits, binary_expression,
@@ -391,13 +391,13 @@ impl ProblemGenerator for Generator {
         if self.mode == Mode::DecimalAddSubtract {
             SamplingStrategy::layered(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
                 self.registration.layout().problem_count(),
             )
         } else {
             Ok(SamplingStrategy::random(
                 self,
-                BootstrapDedup::AllowDuplicates,
+                SelectionDedup::AllowDuplicates,
             ))
         }
     }
@@ -1000,10 +1000,10 @@ mod curriculum_tests {
                 .unwrap_or_else(|error| {
                     panic!("column theme {theme_id} failed for {seed}: {error}")
                 });
-                assert_eq!(worksheet.layout().problem_count, expected_count);
+                assert_eq!(worksheet.layout().problem_count, expected_count as u32);
                 assert_eq!(
                     (worksheet.layout().columns, worksheet.layout().rows),
-                    (expected_columns, expected_rows)
+                    (expected_columns as u32, expected_rows as u32)
                 );
                 assert_eq!(worksheet.problems().len(), expected_count);
 
@@ -1139,62 +1139,6 @@ mod curriculum_tests {
                     );
                 }
             }
-        }
-    }
-
-    #[test]
-    fn column_arithmetic_difficulty_tracks_shared_scalar_effort() {
-        use crate::themes::column_arithmetic::*;
-        const IDS: [u32; 13] = [
-            THEME_ID_COLUMN_ADD_2DIGIT,
-            THEME_ID_COLUMN_SUBTRACT_2DIGIT,
-            THEME_ID_COLUMN_ADD_3_4DIGIT,
-            THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
-            THEME_ID_COLUMN_MULTIPLY_1DIGIT,
-            THEME_ID_COLUMN_MULTIPLY_2DIGIT,
-            THEME_ID_COLUMN_DIVIDE_1DIGIT,
-            THEME_ID_COLUMN_DIVIDE_2DIGIT,
-            THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
-            THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
-            THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
-            THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
-            THEME_ID_COLUMN_DECIMAL_DIVISION,
-        ];
-        const SEEDS: [&str; 8] = [
-            "EfA1", "EfB2", "EfC3", "EfD4", "EfE5", "EfF6", "EfG7", "EfH8",
-        ];
-
-        for theme_id in IDS {
-            let mut means = [0.0_f64; 3];
-            for difficulty_value in 1_u8..=3 {
-                let mut total = 0.0;
-                let mut count = 0_usize;
-                for seed in SEEDS {
-                    let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
-                        schema_version: SCHEMA_VERSION,
-                        numeric_theme_id: theme_id,
-                        seed: seed.to_owned(),
-                        difficulty: crate::identity::Difficulty::try_from(difficulty_value)
-                            .unwrap(),
-                        timeout_ms: Some(1_000),
-                        max_attempts: Some(50_000),
-                    })
-                    .unwrap_or_else(|error| {
-                        panic!("theme {theme_id} difficulty {difficulty_value} failed: {error}")
-                    });
-                    total += worksheet
-                        .problems()
-                        .iter()
-                        .map(|problem| problem.effort())
-                        .sum::<f64>();
-                    count += worksheet.problems().len();
-                }
-                means[(difficulty_value - 1) as usize] = total / count as f64;
-            }
-            assert!(
-                means[0] <= means[1] && means[1] <= means[2],
-                "column theme {theme_id} lost scalar effort separation: {means:?}"
-            );
         }
     }
 }

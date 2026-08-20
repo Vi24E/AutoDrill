@@ -28,7 +28,6 @@ Effortは、標準解法を人間が定数時間で実行できるprimitiveへ�
 | BaseTimes | 3.5 | 乗算表の正方向lookup |
 | BaseDivide | 4 | 乗算表の逆方向lookup。例 `56÷7=8` |
 | BaseFractionCancel | 1 | `k/n × n -> k` 型の構造消去 |
-| BaseRootSquareCancel | 1 | `(sqrt(n))^2 -> n` 型の構造消去 |
 | FractionSelfDivision | 1 | `x/x -> 1` の既知同一量による除算 |
 | BaseRoot | 3 | 一桁の完全平方根lookup |
 | Compare | 1 | 大小・等値判定 |
@@ -36,9 +35,9 @@ Effortは、標準解法を人間が定数時間で実行できるprimitiveへ�
 | BigNum(n) | log10(n) | 正解整数成分の読み書き・保持 |
 | TimeTen(n) | 1+0.2n | 小数点を10^nだけ移動 |
 
-その他の既存primitiveは`Round`, `Transposition`, `OverheadPF/GCD/LCM/Negative/Carry*`, `OverheadLinear/Distribution/EqSystem/Factor*/Quadratic`である。既定weightは`OperationWeights::default()`を正とする。
+その他の既存primitiveは`Transposition`, `OverheadPF/GCD/LCM/Negative/Carry*`, `OverheadLinear/EqSystem/Factor*/Quadratic`である。既定weightは`OperationWeights::default()`を正とする。
 
-OperationVectorの現行schema v7は32次元で、31=`FractionSelfDivision`である。pre-releaseでは旧schemaのwire次元を保持せず、現行32次元だけをproduction contractとする。 `TimeTen(n)`はvector上で`TimeTen × 1 + Count × n`へ分解し、固定作業と移動桁数を別weightで表す。既定weightでは`1 + 0.2n`となり、特定weight値を逆算したmagic offsetをoperation countへ埋め込まない。
+OperationVectorの現行Rust内部basisは29次元で、28=`FractionSelfDivision`である。これはgenerator / difficulty計算のcurrent-only internal contractであり、Web wire schemaではない。pre-releaseでは旧basis用compatibility表現を保持しない。 `TimeTen(n)`はvector上で`TimeTen × 1 + Count × n`へ分解し、固定作業と移動桁数を別weightで表す。既定weightでは`1 + 0.2n`となり、特定weight値を逆算したmagic offsetをoperation countへ埋め込まない。
 
 ## 共通整数builder
 
@@ -100,7 +99,6 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 一桁完全平方なら`BaseRoot`。それ以外は`OverheadFactorPerfectSquare`を加え、`2^2, 3^2, 5^2, 7^2, ...`でradicandを試し割りして平方因子を探す。外へ出した因子が複数なら共通乗算builderで掛け合わせる。一般PFへ置き換えない。
 
-`(sqrt(n))^2`そのものは探索不要で`BaseRootSquareCancel`一回。
 
 ## Difficulty samplingとlayer
 
@@ -149,7 +147,7 @@ coreではeffort evidenceを`EffortModel`というsum typeで一元化する。
 
 現行productには解法primitive間のprerequisite edgeを消費する機能がないため、coreにDAG/`depends_on` metadataを持たせない。将来、解説表示等で依存関係そのものがproduct requirementになった時点で、そのconsumerとinvariantを伴う型として再導入する。
 
-従って通常modelと特殊modelを同時に格納する状態、planとvectorだけが食い違う状態、stored scoreだけが古い状態はcore型として作らない。Web wire上の`operation_plan` / `operation_vector` / `theme_specific_effort` / `effort`は1つの`EffortModel`からのprojectionであり、独立したsource of truthではない。
+従って通常modelと特殊modelを同時に格納する状態、planとvectorだけが食い違う状態、stored scoreだけが古い状態はcore型として作らない。`EffortModel`、`OperationPlan`、`OperationVector`、theme固有effort値はgenerator / difficulty selection / Rust内部testのための内部表現であり、**現行のProblem Web wireには公開しない**。具体的なcross-language consumerが存在しないdiagnostic stateを「将来使うかもしれない」という理由だけでwire contractへ追加しない。
 
 現行のtheme固有経路:
 
@@ -161,4 +159,4 @@ coreではeffort evidenceを`EffortModel`というsum typeで一元化する。
 
 ## Versioning
 
-operation basisの追加・削除はwire schema変更として扱う。pre-releaseでは`schema.rs`が現行schemaと現行vector dimensionだけを一元管理し、`OperationVector`も現行basisだけをserializeする。WebはRust `WebContract.operation_kind_count`から次元を生成同期する。effort semanticsが変わる場合は必要に応じてschema / generator revisionを破壊的に更新し、旧revisionはproduction codeへ保持しない。
+operation basisと`OperationVector`の次元はRust effort実装内部のcurrent-only contractとして一元管理する。**basisの追加・削除それ自体は現行Web wire schema変更ではない**。現行Problem wireはeffort diagnosticsをserializeせず、`WebContract`にもvector dimensionを投影しない。effort semanticsの変更によって生成結果やdifficulty selectionが変わる場合はgenerator revisionを必要に応じて破壊的に更新する。将来、解説・診断表示など具体的なcross-language consumerが生じた場合だけ、そのconsumerに必要な最小DTOを新しいwire contractとして設計し、generated typeとruntime Serde shapeを同期する。旧revisionや未使用compatibility projectionはproduction codeへ保持しない。

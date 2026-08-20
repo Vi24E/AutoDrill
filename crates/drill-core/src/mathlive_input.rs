@@ -74,6 +74,47 @@ fn compact_mathlive_latex(input: &str) -> String {
         .collect()
 }
 
+fn can_form_mixed_number(value: &AnswerNode) -> bool {
+    let mut current = value;
+    loop {
+        match current {
+            AnswerNode::Integer(_) | AnswerNode::Empty => return true,
+            AnswerNode::Negative(inner) | AnswerNode::PlusMinus(inner) => current = inner,
+            _ => return false,
+        }
+    }
+}
+
+fn form_mixed_number(
+    value: &AnswerNode,
+    numerator: &AnswerNode,
+    denominator: &AnswerNode,
+) -> Option<AnswerNode> {
+    match value {
+        AnswerNode::Integer(whole) => Some(AnswerNode::MixedFraction {
+            whole: Box::new(AnswerNode::Integer(*whole)),
+            numerator: Box::new(numerator.clone()),
+            denominator: Box::new(denominator.clone()),
+        }),
+        AnswerNode::Empty => Some(AnswerNode::MixedFraction {
+            whole: Box::new(AnswerNode::Empty),
+            numerator: Box::new(numerator.clone()),
+            denominator: Box::new(denominator.clone()),
+        }),
+        AnswerNode::Negative(inner) => Some(AnswerNode::Negative(Box::new(form_mixed_number(
+            inner,
+            numerator,
+            denominator,
+        )?))),
+        AnswerNode::PlusMinus(inner) => Some(AnswerNode::PlusMinus(Box::new(form_mixed_number(
+            inner,
+            numerator,
+            denominator,
+        )?))),
+        _ => None,
+    }
+}
+
 struct Parser<'a> {
     input: &'a str,
     pos: usize,
@@ -134,9 +175,9 @@ impl<'a> Parser<'a> {
                 return Ok(left);
             }
             let operator = if self.consume_char('+') {
-                Some(AnswerBinaryOperator::Add)
+                AnswerBinaryOperator::Add
             } else if self.consume_char('-') || self.consume_char('−') {
-                Some(AnswerBinaryOperator::Subtract)
+                AnswerBinaryOperator::Subtract
             } else if self.consume_str("\\pm") || self.consume_char('±') {
                 let right = self.parse_multiplicative(stop)?;
                 left = AnswerNode::Binary {
@@ -150,7 +191,7 @@ impl<'a> Parser<'a> {
             };
             let right = self.parse_multiplicative(stop)?;
             left = AnswerNode::Binary {
-                operator: operator.expect("additive operator"),
+                operator,
                 left: Box::new(left),
                 right: Box::new(right),
             };
@@ -171,23 +212,18 @@ impl<'a> Parser<'a> {
                 return Ok(left);
             }
 
-            // Preserve the established mixed-number spelling 1\frac{1}{2}.
-            if matches!(left, AnswerNode::Integer(_) | AnswerNode::Empty)
-                && self.starts_with("\\frac")
-            {
+            // Mixed-number juxtaposition binds more tightly than a leading sign:
+            // `-1\\frac{1}{2}` means `-(1 + 1/2)`, not `(-1) * (1/2)`.
+            if can_form_mixed_number(&left) && self.starts_with("\\frac") {
                 let fraction = self.parse_fraction()?;
                 let AnswerNode::Fraction {
                     numerator,
                     denominator,
                 } = &fraction
                 else {
-                    unreachable!();
+                    return Err(());
                 };
-                left = AnswerNode::MixedFraction {
-                    whole: Box::new(left),
-                    numerator: Box::new(numerator.as_ref().clone()),
-                    denominator: Box::new(denominator.as_ref().clone()),
-                };
+                left = form_mixed_number(&left, numerator, denominator).ok_or(())?;
                 continue;
             }
 
@@ -513,6 +549,59 @@ mod tests {
     }
 
     #[test]
+    fn leading_sign_binds_outside_mixed_number_juxtaposition() {
+        let registration = crate::themes::equations::LINEAR_EQUATION_2_REGISTRATION;
+        let editor_interface = crate::input::input_interface(registration.editor_input_profile());
+        let semantic_interface =
+            crate::input::input_interface(registration.answer_contract().input_profile());
+        let cases = [
+            (
+                "-1\\frac{1}{2}",
+                AnswerNode::Negative(Box::new(AnswerNode::MixedFraction {
+                    whole: Box::new(AnswerNode::Integer(1)),
+                    numerator: Box::new(AnswerNode::Integer(1)),
+                    denominator: Box::new(AnswerNode::Integer(2)),
+                })),
+            ),
+            (
+                "−1\\frac{1}{2}",
+                AnswerNode::Negative(Box::new(AnswerNode::MixedFraction {
+                    whole: Box::new(AnswerNode::Integer(1)),
+                    numerator: Box::new(AnswerNode::Integer(1)),
+                    denominator: Box::new(AnswerNode::Integer(2)),
+                })),
+            ),
+            (
+                "\\pm1\\frac{1}{2}",
+                AnswerNode::PlusMinus(Box::new(AnswerNode::MixedFraction {
+                    whole: Box::new(AnswerNode::Integer(1)),
+                    numerator: Box::new(AnswerNode::Integer(1)),
+                    denominator: Box::new(AnswerNode::Integer(2)),
+                })),
+            ),
+        ];
+
+        for (latex, expected) in cases {
+            let parsed = parse_mathlive_answer(latex, &editor_interface).unwrap();
+            assert_eq!(parsed, expected, "{latex}");
+            assert_eq!(
+                semantic_interface.validate_answer(&parsed),
+                Ok(()),
+                "{latex}"
+            );
+        }
+
+        let parsed = parse_mathlive_answer("-1\\frac{1}{2}", &editor_interface).unwrap();
+        assert_eq!(
+            crate::normalize::normalize_answer(&parsed),
+            AnswerNode::Fraction {
+                numerator: Box::new(AnswerNode::Integer(-3)),
+                denominator: Box::new(AnswerNode::Integer(2)),
+            }
+        );
+    }
+
+    #[test]
     fn distinguishes_prefix_negative_from_infix_subtraction_unambiguously() {
         let interface = structured();
         let cases = [
@@ -689,6 +778,35 @@ mod tests {
                 numerator: Box::new(AnswerNode::Empty),
                 denominator: Box::new(AnswerNode::Empty),
             }
+        );
+    }
+
+    #[test]
+    fn operator_precedence_and_malformed_latex_round_trip_stably() {
+        let interface = structured();
+        let parsed = parse_mathlive_answer("2+3*4", &interface).unwrap();
+        assert_eq!(
+            parsed,
+            AnswerNode::Binary {
+                operator: AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Integer(2)),
+                right: Box::new(AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Multiply,
+                    left: Box::new(AnswerNode::Integer(3)),
+                    right: Box::new(AnswerNode::Integer(4)),
+                }),
+            }
+        );
+        assert_eq!(
+            crate::normalize::normalize_answer(&parsed),
+            AnswerNode::Integer(14)
+        );
+        assert!(crate::grade::grade_answer(&AnswerNode::Integer(14), &parsed).is_correct());
+
+        let malformed = r"\\frac{1}";
+        assert_eq!(
+            parse_mathlive_answer(malformed, &interface).unwrap(),
+            AnswerNode::NanError(malformed.to_owned())
         );
     }
 

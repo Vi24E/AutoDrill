@@ -2,16 +2,14 @@
 import type { AnswerInputInterface } from "./AnswerInputInterface";
 import type { AnswerNode } from "./AnswerNode";
 import type { AnswerSchema } from "./AnswerSchema";
-import type { OperationPlan } from "./OperationPlan";
-import type { OperationVector } from "./OperationVector";
 import type { ProblemPrompt } from "./ProblemPrompt";
 import type { WorkedSolution } from "./WorkedSolution";
 
 /**
  * Serialized representation of a generated problem.
  *
- * `Problem` is the validated domain aggregate. This DTO owns the compatibility
- * shape consumed by WASM/Web, including effort fields that are derived from the
- * single internal `EffortModel` source of truth.
+ * `Problem` is the validated domain aggregate. This DTO owns the wire shape
+ * consumed by WASM/Web. Internal effort diagnostics stay inside Rust until a
+ * concrete cross-language consumer exists.
  */
-export type Problem = { schema_version: number, id: number, numeric_theme_id: number, prompt: ProblemPrompt, input_interface: AnswerInputInterface, answer_schema: AnswerSchema, canonical_answer: AnswerNode, worked_solution: WorkedSolution | null, operation_plan: OperationPlan, operation_vector: OperationVector, theme_specific_effort: number | null, effort: number, };
+export type Problem = { schema_version: number, id: number, numeric_theme_id: number, prompt: ProblemPrompt, input_interface: AnswerInputInterface, answer_schema: AnswerSchema, canonical_answer: AnswerNode, worked_solution: WorkedSolution | null, };

@@ -19,6 +19,8 @@ pub enum SamplingError {
     },
     #[error("sampling layer index {index} is outside 0..{layer_count}")]
     LayerOutOfRange { index: usize, layer_count: usize },
+    #[error("candidate pool has only {available} distinct problems but {required} are required")]
+    InsufficientDistinctCandidates { required: usize, available: usize },
     #[error("constructive layered bootstrap multiplier must be nonzero")]
     ZeroBootstrapMultiplier,
     #[error("answer-conditioned generator returned a problem for a different canonical answer")]

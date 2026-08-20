@@ -138,8 +138,8 @@ function numericThemeFixtureEngine(definition: typeof DECIMAL_ADD_SUBTRACT_DEFIN
   worksheet.identity.numeric_theme_id = definition.numeric_theme_id;
   worksheet.identity.generator_revision = definition.generator_revision;
   worksheet.problem_set_id = `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`;
-  worksheet.skill_id = definition.compatibility.skillId;
-  worksheet.curriculum_path = definition.compatibility.curriculumPath.map((segment) => segment.label);
+  worksheet.skill_id = definition.themeKey;
+  worksheet.curriculum_path = definition.curriculumPath.map((segment) => segment.label);
   worksheet.layout = definition.layout;
   worksheet.problems = worksheet.problems.slice(0, definition.problemCount).map((problem) => ({
     ...problem,
@@ -360,7 +360,7 @@ describe('AutoDrillApp', () => {
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
   });
 
-  it('shows the print recommendation only for themes carrying the print_recommended tag', () => {
+  it('shows the print recommendation only for themes with the print_recommended presentation capability', () => {
     const { container } = render(<AutoDrillApp engine={fixtureEngine()} />);
     const note = 'この問題は紙に印刷して解くことをおすすめします。';
     expect(screen.queryByRole('note', { name: note })).not.toBeInTheDocument();

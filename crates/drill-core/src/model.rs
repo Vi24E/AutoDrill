@@ -7,13 +7,14 @@ use serde::{Deserialize, Serialize, Serializer};
 use ts_rs::TS;
 
 use crate::answer::AnswerNode;
-use crate::effort::{EffortModel, OperationPlan, OperationVector};
+use crate::effort::EffortModel;
+#[cfg(test)]
+use crate::effort::{OperationPlan, OperationVector};
 use crate::exact::ExactRational;
 use crate::identity::{Difficulty, ProblemSetIdentity};
 use crate::theme::{DigitGridSpec, ThemeAnswerSchemaKind, ThemePromptKind, ThemeRegistration};
 
 use crate::schema::SCHEMA_VERSION;
-use crate::themes::basic_arithmetic::THEME_ID_ONE_DIGIT_ADDITION;
 
 /// Maximum accepted answer AST size for interactive input.
 pub const MAX_ANSWER_AST_SIZE: usize = 18;
@@ -279,14 +280,6 @@ impl MiniSudokuGrid {
             })
             .then_some(Self(cells))
     }
-
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Option<u8>> {
-        self.0.iter()
-    }
-
-    pub const fn as_array(&self) -> &[Option<u8>; MINI_SUDOKU_CELL_COUNT] {
-        &self.0
-    }
 }
 
 impl std::ops::Index<usize> for MiniSudokuGrid {
@@ -454,6 +447,20 @@ impl AnswerInputInterface {
             Self::StructuredMath { allowed_structures } => allowed_structures.contains(&structure),
             Self::DigitGrid { .. } => false,
         }
+    }
+
+    /// Validate one parsed answer against this input capability contract.
+    /// Rust owns these semantics; Web only validates the Serde wire shape.
+    pub fn validate_answer(&self, answer: &AnswerNode) -> Result<(), crate::error::EditorError> {
+        if !self.is_structurally_valid() {
+            return Err(crate::error::EditorError::InputInterfaceViolation);
+        }
+        if !answer.is_within_size_limit() {
+            return Err(crate::error::EditorError::AnswerSizeLimit {
+                max_size: MAX_ANSWER_AST_SIZE,
+            });
+        }
+        crate::input::ensure_capability(answer, self)
     }
 }
 
@@ -1080,7 +1087,7 @@ impl Problem {
         self.numeric_theme_id
     }
 
-    pub const fn prompt(&self) -> &ProblemPrompt {
+    pub(crate) const fn prompt(&self) -> &ProblemPrompt {
         &self.prompt
     }
 
@@ -1096,27 +1103,26 @@ impl Problem {
         self.canonical_answer.as_node()
     }
 
-    pub const fn worked_solution(&self) -> Option<&WorkedSolution> {
+    pub(crate) const fn worked_solution(&self) -> Option<&WorkedSolution> {
         self.worked_solution.as_ref()
-    }
-
-    pub const fn effort_model(&self) -> &EffortModel {
-        &self.effort_model
     }
 
     pub fn effort(&self) -> f64 {
         self.effort_model.value()
     }
 
-    pub fn operation_plan(&self) -> Option<&OperationPlan> {
+    #[cfg(test)]
+    pub(crate) fn operation_plan(&self) -> Option<&OperationPlan> {
         self.effort_model.operation_plan()
     }
 
-    pub fn operation_vector(&self) -> OperationVector {
+    #[cfg(test)]
+    pub(crate) fn operation_vector(&self) -> OperationVector {
         self.effort_model.operation_vector()
     }
 
-    pub fn theme_specific_effort(&self) -> Option<f64> {
+    #[cfg(test)]
+    pub(crate) fn theme_specific_effort(&self) -> Option<f64> {
         self.effort_model.theme_specific_value()
     }
 
@@ -1138,9 +1144,9 @@ impl Serialize for Problem {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct LayoutMetadata {
-    pub problem_count: usize,
-    pub columns: usize,
-    pub rows: usize,
+    pub problem_count: u32,
+    pub columns: u32,
+    pub rows: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1201,9 +1207,9 @@ impl Worksheet {
                 .map(|segment| (*segment).to_owned())
                 .collect(),
             layout: LayoutMetadata {
-                problem_count: registration.layout().problem_count(),
-                columns: registration.layout().columns(),
-                rows: registration.layout().rows(),
+                problem_count: registration.layout().problem_count_wire(),
+                columns: registration.layout().columns_wire(),
+                rows: registration.layout().rows_wire(),
             },
             problems,
         })
@@ -1230,7 +1236,8 @@ impl Worksheet {
     pub fn problems(&self) -> &[Problem] {
         &self.problems
     }
-    pub fn into_problems(self) -> Vec<Problem> {
+    #[cfg(test)]
+    pub(crate) fn into_problems(self) -> Vec<Problem> {
         self.problems
     }
 }
@@ -1364,18 +1371,16 @@ impl Serialize for GradeResult {
 #[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct GenerateProblemRequest {
     pub schema_version: u16,
-    #[serde(default = "default_theme_id")]
     pub numeric_theme_id: u32,
-    #[serde(default)]
     pub seed: String,
 }
 
-impl Default for GenerateProblemRequest {
-    fn default() -> Self {
+impl GenerateProblemRequest {
+    pub fn new(numeric_theme_id: u32, seed: impl Into<String>) -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            numeric_theme_id: THEME_ID_ONE_DIGIT_ADDITION,
-            seed: String::new(),
+            numeric_theme_id,
+            seed: seed.into(),
         }
     }
 }
@@ -1384,11 +1389,8 @@ impl Default for GenerateProblemRequest {
 #[cfg_attr(feature = "wire-types", derive(TS))]
 pub struct GenerateWorksheetRequest {
     pub schema_version: u16,
-    #[serde(default = "default_theme_id")]
     pub numeric_theme_id: u32,
-    #[serde(default)]
     pub seed: String,
-    #[serde(default)]
     pub difficulty: Difficulty,
     #[serde(default)]
     #[cfg_attr(feature = "wire-types", ts(type = "number | null"))]
@@ -1398,21 +1400,17 @@ pub struct GenerateWorksheetRequest {
     pub max_attempts: Option<u64>,
 }
 
-impl Default for GenerateWorksheetRequest {
-    fn default() -> Self {
+impl GenerateWorksheetRequest {
+    pub fn new(numeric_theme_id: u32, seed: impl Into<String>, difficulty: Difficulty) -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            numeric_theme_id: THEME_ID_ONE_DIGIT_ADDITION,
-            seed: String::new(),
-            difficulty: Difficulty::default(),
+            numeric_theme_id,
+            seed: seed.into(),
+            difficulty,
             timeout_ms: None,
             max_attempts: None,
         }
     }
-}
-
-const fn default_theme_id() -> u32 {
-    THEME_ID_ONE_DIGIT_ADDITION
 }
 
 #[cfg(test)]
