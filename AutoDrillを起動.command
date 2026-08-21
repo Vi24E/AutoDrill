@@ -5,13 +5,17 @@ ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 NEXT_BIN="$ROOT/apps/web/node_modules/.bin/next"
 CONTRACT_CHECK="$ROOT/scripts/sync-web-contract.mjs"
 
-# Finder からの .command 起動では asdf の初期化状態が Terminal と異なることがある。
-# shims より先に、インストール済み Node.js の bin を直接 PATH に入れる。
-ASDF_NODE_BIN=""
-if [[ -d "$HOME/.asdf/installs/nodejs" ]]; then
-  ASDF_NODE_BIN="$(/bin/ls -td "$HOME"/.asdf/installs/nodejs/*/bin 2>/dev/null | /usr/bin/head -n 1 || true)"
+# Finder からの .command 起動でも repository が固定した Node.js を使う。
+# 「インストール済みの最新版」を選ぶと、別プロジェクト用 Node の追加だけで
+# AutoDrill の実行環境が変わるため、.nvmrc を唯一のバージョン源にする。
+NODE_VERSION="$(/usr/bin/tr -d '[:space:]' < "$ROOT/.nvmrc")"
+ASDF_NODE_BIN="$HOME/.asdf/installs/nodejs/$NODE_VERSION/bin"
+if [[ ! -x "$ASDF_NODE_BIN/node" ]]; then
+  echo "AutoDrill が必要とする Node.js $NODE_VERSION が見つかりません。"
+  echo "asdf install nodejs $NODE_VERSION を実行してください。"
+  exit 1
 fi
-export PATH="${ASDF_NODE_BIN:+$ASDF_NODE_BIN:}$HOME/.asdf/shims:$HOME/.asdf/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+export PATH="$ASDF_NODE_BIN:$HOME/.asdf/shims:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 pause_on_error() {
   local code=$?
@@ -93,9 +97,9 @@ if command -v pnpm >/dev/null 2>&1; then
   echo "依存関係が見つからないため pnpm で復元します。"
   pnpm install --frozen-lockfile
 elif command -v npm >/dev/null 2>&1; then
-  echo "依存関係が見つからないため npm 経由で pnpm 10.20.0 を一時実行して復元します。"
-  echo "Corepack は使用しません。"
-  npm exec --yes --package=pnpm@10.20.0 -- pnpm install --frozen-lockfile
+  PNPM_SPEC="$(node -p "require('$ROOT/package.json').packageManager")"
+  echo "依存関係が見つからないため npm 経由で $PNPM_SPEC を一時実行して復元します。"
+  npm exec --yes --package="$PNPM_SPEC" -- pnpm install --frozen-lockfile
 else
   echo "Node.js/npm が見つかりません。"
   echo "asdf の Node.js 環境を確認してください。"

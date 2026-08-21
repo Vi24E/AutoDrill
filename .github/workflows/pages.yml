@@ -21,32 +21,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - name: Setup JavaScript toolchain
+        uses: pnpm/setup@v2
         with:
-          version: 10.20.0
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22.14.0
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          install: false
+          cache: true
 
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup Rust WASM toolchain
+      - name: Setup Rust WASM tools
         run: |
-          rustup toolchain install 1.97.1 --profile minimal --target wasm32-unknown-unknown
-          rustup default 1.97.1
-          cargo install wasm-pack --version 0.13.1 --locked
-          cargo install wasm-bindgen-cli --version 0.2.126 --locked
+          rustup show active-toolchain
+          ./scripts/install-wasm-tools.sh
 
       - name: Verify
         run: |
-          cargo test --workspace --all-targets
+          cargo fmt --all -- --check
+          cargo check --workspace --all-targets --all-features
+          cargo clippy --workspace --all-targets --all-features -- -D warnings
+          cargo test --workspace --all-features
+          pnpm toolchain:check
+          pnpm peers check
           pnpm lint
           pnpm typecheck
           pnpm test

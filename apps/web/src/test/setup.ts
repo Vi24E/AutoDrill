@@ -152,5 +152,8 @@ if (typeof window !== 'undefined' && typeof window.localStorage?.clear !== 'func
 
 afterEach(() => {
   cleanup();
+  // Module-level vi.fn() mocks survive restoreAllMocks(); clear call history
+  // explicitly so tests never depend on execution order.
+  vi.clearAllMocks();
   vi.restoreAllMocks();
 });

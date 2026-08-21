@@ -14,10 +14,12 @@ alpha 1.2系の現行実装では、通常計算、分数、小数、正負の�
 
 ## セットアップと開発
 
-Node.js **20.9以上**（`.nvmrc`は22.14.0）、pnpm 10.20.0、Rust stableを用意し、repository直下で実行します。
+Node.js は `.nvmrc`、pnpm は root `package.json` の `packageManager`、Rust は `rust-toolchain.toml` の各canonical pinに従って用意し、repository直下で実行します。
 
 ```bash
+./scripts/install-wasm-tools.sh
 pnpm install --frozen-lockfile
+pnpm toolchain:check
 pnpm dev              # http://localhost:3000
 ```
 
@@ -36,14 +38,16 @@ pnpm pages:verify
 主要な検証コマンド:
 
 ```bash
+pnpm toolchain:check
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 pnpm contract:check
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --all-targets
+cargo fmt --all -- --check
+cargo check --workspace --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
 git diff --check
 ```
 

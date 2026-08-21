@@ -26,6 +26,7 @@ AIエージェントはproduction codeを変更する前に、最低でも`princ
 - [`architecture/effort-model.md`](architecture/effort-model.md) — effort primitiveと標準解法graph
 - [`architecture/web-print.md`](architecture/web-print.md) — Web / MathLive / 印刷境界
 - [`architecture/deployment-security.md`](architecture/deployment-security.md) — static deploymentとsecurity方針
+- [`architecture/toolchain.md`](architecture/toolchain.md) — Node/pnpm/CI、dependency update policy、compatibility override
 
 ## Historical records
 

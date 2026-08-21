@@ -2,11 +2,15 @@ packages:
   - apps/*
 
 overrides:
-  nanoid@<3.3.17: 3.3.17
+  nanoid@<3.3.18: 3.3.18
+  # unrs-resolver 1.12.2 pins emnapi 1.x, while wasm-runtime 1.2.0 requires
+  # emnapi 2 alpha. Stay on the newest compatible 1.1.x runtime until the
+  # upstream binding updates its dependency set.
+  '@napi-rs/wasm-runtime@^1.1.4': 1.1.6
 
 # These native helpers are part of the local build/test toolchain. They do not
 # run in the browser and are explicitly allowed so pnpm run commands remain
 # reproducible on a fresh checkout without a global approval prompt.
-onlyBuiltDependencies:
-  - esbuild
-  - unrs-resolver
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true

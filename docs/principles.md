@@ -14,6 +14,7 @@ AutoDrillは使い捨てのprototypeではない。小1〜中3の多数のtheme�
 - 共通化する価値がある新しい処理は、再利用可能性を考えて実装する。
 - ただし将来の可能性だけを理由に過剰な抽象化を先行しない。
 - 同じ意味・規則・metadataを複数箇所へ手入力しない。
+- Node/pnpm等のtoolchain versionも同様にcanonical sourceを決め、CI・launcher・docsへversion文字列を重複hard-codeしない。tool自身が別manifestへの宣言を要求する場合だけprojectionを許可し、canonicalとの一致を自動検証する。互換性が成立しないlatest majorをpeer警告の握りつぶしで導入しない。
 - theme固有の処理はtheme側へ置き、共通frameworkへnumeric theme ID等の特例を蓄積しない。
 - 共通primitive、共通renderer、共通validation、共通sampling mechanism等は中央に置き、themeから再利用する。
 - magic number、表示名、slug、numeric ID、生成済みproblemの特徴から、本来metadataとして明示すべき性質を逆算しない。

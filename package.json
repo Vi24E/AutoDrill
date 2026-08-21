@@ -1,9 +1,9 @@
 {
   "name": "autodrill",
   "private": true,
-  "packageManager": "pnpm@10.20.0",
+  "packageManager": "pnpm@11.22.0",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.19.0 <25"
   },
   "scripts": {
     "dev": "pnpm --filter @autodrill/web dev",
@@ -11,6 +11,7 @@
     "lint": "pnpm --filter @autodrill/web lint",
     "typecheck": "pnpm --filter @autodrill/web typecheck",
     "test": "pnpm --filter @autodrill/web test",
+    "toolchain:check": "./scripts/verify-toolchain.sh",
     "verify:next-output": "./scripts/verify-next-output-isolation.sh",
     "contract:check": "node scripts/sync-web-contract.mjs && node scripts/sync-web-wire-types.mjs",
     "contract:generate": "node scripts/sync-web-contract.mjs --write && node scripts/sync-web-wire-types.mjs --write",
@@ -18,5 +19,12 @@
     "dev:cache": "./scripts/ensure-next-dev-cache.sh",
     "pages:verify": "node scripts/verify-pages-export.mjs",
     "layout:verify": "node scripts/verify-browser-layout.mjs"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.19.0",
+      "onFail": "error"
+    }
   }
 }

@@ -3,6 +3,7 @@ name = "drill-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Thin JSON/WASM adapter for drill-core"
 
 [lib]
