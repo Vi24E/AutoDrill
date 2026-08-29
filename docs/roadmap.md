@@ -53,7 +53,7 @@ alphaからbetaへ進める段階で、少なくとも次を改めて扱う。
 - 320 / 375 / 390 / 430px等の代表viewport
 - 実機または実機相当browserでのUX
 
-alpha中に発見したmobile-only overflow等は、原則としてbeta移行作業のinputとして保持し、alpha blockerにはしない。
+alpha中に発見したmobile-only overflow等は、原則としてGitHub Issuesで **`priority:deferred`** として保持する。これはLow severity / 低優先度を意味せず、beta移行まで実装を意図的に凍結するpriority classである。beta移行時にこのclassのmobile Issueを再開し、beta transition requirementとして扱う。
 
 ### Public-quality review
 

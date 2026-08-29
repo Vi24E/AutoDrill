@@ -41,7 +41,7 @@
 - 設計思想が不明な場合、または場当たり的な例外が必要な場合は、実装前にユーザーへ質問する。
 - theme固有generatorを共通巨大fileへ追加しない。共通資源は再利用し、theme固有処理はtheme moduleへ置く。
 - 本来metadataである性質をnumeric theme ID、slug、表示文言、生成結果等から推測しない。
-- alphaはPC対象。mobile対応はbeta移行時に行う。
+- alphaはPC対象。mobile対応Issueは`priority:deferred`としてbeta移行まで凍結し、beta移行時に再開する。
 - 一次テスト・debug用に作成した一時script、fixture、screenshot、browser profile等は、正式な資産として残す理由がなければ作業終了時に削除する。
 - backup目的でrepository/file copyを作らない。backup / rollback pointはGit commitで保存する。commitできない事情がある場合は、copyを作る前にユーザーへ相談する。
 - 既存の未コミット差分を勝手に破棄しない。

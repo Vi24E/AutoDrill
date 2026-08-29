@@ -35,7 +35,8 @@ alphaの間はPCを対象とし、基本的に静的Webアプリとして設計�
 
 - alphaではmobileをsupport対象にしない。
 - mobile responsive問題はalphaのrelease blockerにしない。
-- **betaへ移行する段階でmobile対応を解決し、mobile UXを改めて監査する。**
+- alpha中に発見したmobile対応Issueは、重要度をLowとみなすのではなく **`priority:deferred`** とする。これは「低優先度」ではなく、beta移行というactivation conditionまで実装を意図的に凍結する分類である。
+- **betaへ移行する段階で`priority:deferred`のmobile Issueを再開し、mobile対応を解決してmobile UXを改めて監査する。**
 
 ## 3. UX quality is a functional requirement
 
