@@ -11,7 +11,7 @@
 3. `../../scripts/init-project.sh --check AutoDrill`でbridgeを検証する
 4. Git rootとbranchを確認し、material taskだけ中央`../../board/`へproject名付きで記録する
 5. **`docs/principles.md` と `docs/README.md` を読む**
-6. 変更対象に対応する `docs/architecture/` 文書と `docs/issues.md` を必要範囲で読む
+6. 変更対象に対応する `docs/architecture/` 文書と、`docs/issues.md` から参照するGitHub Issuesを必要範囲で読む
 
 共通の行動・権限・委譲・gate・Git・通知規則は`../../AGENTS.md`が正典である。本ファイルは
 このproduct固有の目的、command、architecture、禁止範囲だけを追加する。
@@ -30,7 +30,7 @@
 | `docs/principles.md` | 最上位の設計思想。実装前に必読 |
 | `docs/README.md` | canonical docsへの入口 |
 | `docs/architecture/` | 現行architecture / implementation policy |
-| `docs/issues.md` | 未解決Issueのcanonical backlog |
+| `docs/issues.md` | canonical GitHub Issuesへのrepository内入口 |
 | `docs/roadmap.md` | support scope / 将来計画 |
 | `scripts/build-wasm.sh` | Rust/WASM targetを変更せずに行うローカル生成パイプライン |
 | `README.md` | project概要、インストール、開発、検証コマンド |

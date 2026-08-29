@@ -4,7 +4,7 @@
 
 **現行仕様や未解決Issueのsource of truthではない。**
 
-- 現在のIssue: [`../issues.md`](../issues.md)
+- 現在のIssue: canonical GitHub Issues（[`../issues.md`](../issues.md)から参照）
 - 現在の設計思想: [`../principles.md`](../principles.md)
 - 現在のarchitecture: [`../architecture/`](../architecture/)
 

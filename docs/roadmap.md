@@ -2,7 +2,7 @@
 
 この文書は、現時点で確定しているsupport scopeと将来方向を管理する。
 
-具体的な未解決bugは[`issues.md`](issues.md)、実装判断の上位原則は[`principles.md`](principles.md)を参照する。
+具体的な未解決bugはcanonical GitHub Issues（[`issues.md`](issues.md)から参照）、実装判断の上位原則は[`principles.md`](principles.md)を参照する。
 
 ## Current alpha
 

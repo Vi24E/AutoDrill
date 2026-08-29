@@ -138,7 +138,7 @@ Effortを含む数学処理は、標準解法を再利用可能なprimitiveへ�
 - 実ユーザー、保存済みworksheet、外部に公開されたproblem-set ID等が存在し、後方互換性がproduct requirementになった時点で、version compatibility policyを改めて設計する。
 - performance改善を理由に**現行revision内の**determinismを壊さない。
 - `ランダム`がsemantic candidate集合から一様抽選する仕様なら、bootstrap生成時の偶発的なduplicate multiplicityを確率weightとして使わない。dedupがsampling semanticsの一部なら抽選前にsemantic key単位へcollapseする。
-- Seed / worksheet identityの将来拡張は `roadmap.md` と `issues.md` の現行方針に従う。
+- Seed / worksheet identityの将来拡張は `roadmap.md` と canonical GitHub Issues（`issues.md`から参照）の現行方針に従う。
 
 ## 9. Web / print parity
 
@@ -190,7 +190,7 @@ AIエージェントの一時作業物をrepositoryやDesktopへ蓄積しない�
 AIエージェントを含む実装者は、局所的にcodeが通った時点ではなく、source of truth・contract・docs・generated artifact・testsが同じ現行architectureを指した時点で変更完了とする。
 
 - source of truth、module ownership、public API、wire schema、generator architectureを変更した場合、**同じtask内でcanonical architecture docsも更新する**。docs driftは単なる文章上の問題ではなく、次の実装者へ誤った設計を伝える保守性欠陥として扱う。
-- 削除・rename・責務移動の後はrepository-wide検索を行い、旧symbol、旧field、旧validator、旧compatibility path、旧説明が現行code/docsへ残っていないか確認する。`docs/audits/`や`docs/issues.md`の過去経緯はhistoryなので、現行仕様記述と区別して扱う。
+- 削除・rename・責務移動の後はrepository-wide検索を行い、旧symbol、旧field、旧validator、旧compatibility path、旧説明が現行code/docsへ残っていないか確認する。`docs/audits/`やGitHub IssuesのClosed issueに残る過去経緯はhistoryなので、現行仕様記述と区別して扱う。
 - Serde / ts-rs / generated contractを変更した場合、freshness scriptだけで十分としない。代表的variantを実serializeし、property presence、`null`/omission、tagged union、exact integer encodingをgenerated typeと照合する。
 - 変更対象に応じてformat、check、clippy、test、generated freshness、TypeScript typecheck、lint等のquality gateを実行する。失敗したgateを別の成功したgateで代用したことにしない。
 - user-visible UIは有限の**状態グラフ**として扱う。各canonical stateで現在有効な1-step操作をcensusし、すべてをbrowser acceptanceか明示的なtransient-state testで実行する。新しいbutton / toggle / select / input actionを追加したのにcoverageへ登録・実行されない状態を許さない。

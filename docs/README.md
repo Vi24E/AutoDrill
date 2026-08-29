@@ -7,7 +7,7 @@
 実装判断では次の順に確認する。
 
 1. [`principles.md`](principles.md) — 最上位の設計思想・判断原則
-2. [`issues.md`](issues.md) — 現在の未解決Issueの唯一のbacklog
+2. [`issues.md`](issues.md) — canonical GitHub Issuesへのrepository内入口
 3. [`roadmap.md`](roadmap.md) — support scopeと将来計画
 4. [`architecture/`](architecture/) — 現行architecture / data model / implementation policy
 5. [`../curriculum.md`](../curriculum.md) — 日本のカリキュラムと数学的教材基準
@@ -36,4 +36,4 @@ AIエージェントはproduction codeを変更する前に、最低でも`princ
 - `archive/` — 旧plan、旧goal、旧implementation status、旧taxonomy文書
 - `design/` — logo等のdesign asset / concept
 
-古いauditに未解決Issueが書かれていても、現在の対応要否は必ず`issues.md`で確認する。
+古いauditに未解決Issueが書かれていても、現在の対応要否は必ずcanonical GitHub Issues（`issues.md`から参照）で確認する。
