@@ -38,6 +38,20 @@
 - 2026-08-30にMarkdown backlogからGitHubへ移行したIssue、および同日に作成したaudit Issueは、ユーザー指示により過去記録を含めて `**報告者:** Alpha-1` とする。
 - Issueを読むLLMは、GitHub accountの投稿者だけでなくこの報告者/更新者表記を見て、自分・他agent・Userの記録を区別する。
 
+### `status:user-confirmation` の運用
+
+- `status:user-confirmation` は、実装と客観的なtechnical verificationが完了し、残る受入条件が見栄え、読みやすさ、操作感、教材としての自然さ等の**人間による主観的確認**だけであるIssueに使う。product/architectureの仕様決定、technical failure、未完了testの代用には使わない。
+- labelを付与する**前**に、Issue本文または最新commentへ `**更新者:** <identity>` とともに `### User confirmation procedure` を記載する。単に「ユーザー確認待ち」「見栄えを確認」だけでは不十分で、少なくとも次を再現可能に明記する。
+  1. **確認場所**: stableなroute/theme/画面。必要なら公開URLまたはlocal起動commandも記す。
+  2. **再現条件**: seed、difficulty、viewport、設定値、事前状態など、結果へ影響する条件。決定的に固定できる値は固定する。
+  3. **操作手順**: どのcontrolをどの順序で操作するか。問題番号や入力対象を固定できる場合は固定する。
+  4. **確認項目と期待結果**: どこを見て、何なら合格かを具体的に書く。複数観点がある場合は分ける。
+  5. **不合格時に残す情報**: 再現step、problem番号/表示内容、期待との差。見た目の問題ではscreenshotが有用なら依頼してよい。
+- User confirmation手順はagent固有のtemporary file、消えるbrowser state、未共有のlocal dataへ依存させない。可能な限りcanonical route、deterministic seed、repositoryに残る設定/手順を使い、別sessionのLLMやUserが同じ状態を再現できるようにする。
+- ChatでUserへ確認を依頼するときも、**どこで何を確認するか**を具体的に再掲する。Issue番号だけを示して「確認してください」と依頼してはならない。Issueに記録したroute/seed/操作/期待結果とChatの依頼内容を一致させる。
+- 再現可能な確認手順を定義できない場合は `status:user-confirmation` を付けない。要求自体が未確定ならproduct/architecture decisionとして、客観条件が未達ならtechnical failureとして扱う。
+- Userが確認結果を返したら、その結果と確認条件をIssueへ記録する。Userの回答をそのままIssueへ転記する場合は `**更新者:** User` とし、不合格ならlabelを外して新しいtechnical/product workへ戻す。
+
 ## このprojectについて
 
 日本の計算ドリルを決定的に生成・回答・採点・印刷する静的Webアプリ。
