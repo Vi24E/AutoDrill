@@ -16,6 +16,26 @@
 共通の行動・権限・委譲・gate・Git・通知規則は`../../AGENTS.md`が正典である。本ファイルは
 このproduct固有の目的、command、architecture、禁止範囲だけを追加する。
 
+## LLM identity / generation management
+
+- **最終管理者:** `Alpha-1`
+- **generation max:** `1`
+- LLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
+- 一般名の頭文字は、新しいprompt/agent identityを発行するたびに `A -> B -> ... -> Z -> A ...` の順で循環させる。
+- generationはrepository全体で単調増加させる。次のidentityは必ず、このsectionの`generation max + 1`を使う。
+- 現在のidentityは`Alpha-1`。次に新しいLLMへ継続promptを作成するときは、**Bで始まる一般名**とgeneration `2`を割り当てる。具体的な一般名はprompt作成者がその時点で決める。
+- 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ渡すpromptを作成するとき**に新identityを発行する。
+- 新identityを発行する際は、promptを渡すのと同じ変更で本sectionの`最終管理者`と`generation max`を更新する。発行済みgenerationは再利用しない。
+- fork / branchでidentityを発行する前に、可能な限り最新の`generation max`を確認する。merge時に同じgenerationが競合した場合は、片方をそのまま残して重複させず、統合先のmaxより大きい新generationへ再採番し、頭文字も新generation順に合わせる。
+
+### GitHub Issue authorship
+
+- Issue / backlogのSoTはGitHub Issuesである。LLMがIssueを新規作成する場合、本文の作成部分に `**Agent:** <identity>` を明記する。
+- LLMが既存Issueの本文を更新する場合、**追加・変更したsectionだけ**に `**Agent:** <identity>` を残し、既存文章のauthorを上書きしない。
+- LLMがIssueへcomment / follow-up / verification結果を追加する場合も、そのcommentまたは更新sectionに `**Agent:** <identity>` を明記する。
+- 人間が書いた内容、またはauthorが確定できない過去の内容を、後から特定LLM名へ帰属させない。
+- Issueを読むLLMは、GitHub accountの投稿者だけでなくこのAgent表記を見て、自分・他agent・人間の更新を区別する。
+
 ## このprojectについて
 
 日本の計算ドリルを決定的に生成・回答・採点・印刷する静的Webアプリ。

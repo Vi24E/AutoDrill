@@ -21,6 +21,8 @@ AIエージェントはproduction codeを変更する前に、最低でも`princ
 AutoDrillの **Issue / backlog は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で管理し、GitHub Issuesを唯一のsource of truthとする。**
 
 - 新規Issueの作成、本文・label・priority・stateの更新、Close / reopenはGitHub Issues上で行う。
+- LLMがIssueを作成・更新・commentする場合、**そのLLMが書いた更新部分に `Agent: <identity>` を残す**。identityの命名・generation管理は[`../AGENTS.md`](../AGENTS.md)を正とする。
+- 既存本文のauthorを上書きせず、追加・変更したsection単位でattributionを残す。人間またはauthor不明の過去内容を特定LLMへ遡及帰属させない。
 - repository内にcurrent backlogのMarkdown mirrorを作らない。`docs/issues.md`もcurrent trackerとして復活させない。
 - 2026-08-30の移行前Markdown backlogは[`archive/issues.md`](archive/issues.md)に履歴として保存するが、現行Issueの状態判断には使わない。
 
