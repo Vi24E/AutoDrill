@@ -28,13 +28,15 @@
 - 新identityを発行する際は、promptを渡すのと同じ変更で本sectionの`最終管理者`と`generation max`を更新する。発行済みgenerationは再利用しない。
 - fork / branchでidentityを発行する前に、可能な限り最新の`generation max`を確認する。merge時に同じgenerationが競合した場合は、片方をそのまま残して重複させず、統合先のmaxより大きい新generationへ再採番し、頭文字も新generation順に合わせる。
 
-### GitHub Issue authorship
+### GitHub Issue reporter / updater attribution
 
-- Issue / backlogのSoTはGitHub Issuesである。LLMがIssueを新規作成する場合、本文の作成部分に `**Agent:** <identity>` を明記する。
-- LLMが既存Issueの本文を更新する場合、**追加・変更したsectionだけ**に `**Agent:** <identity>` を残し、既存文章のauthorを上書きしない。
-- LLMがIssueへcomment / follow-up / verification結果を追加する場合も、そのcommentまたは更新sectionに `**Agent:** <identity>` を明記する。
-- 人間が書いた内容、またはauthorが確定できない過去の内容を、後から特定LLM名へ帰属させない。
-- Issueを読むLLMは、GitHub accountの投稿者だけでなくこのAgent表記を見て、自分・他agent・人間の更新を区別する。
+- Issue / backlogのSoTはGitHub Issuesである。Issue本文の先頭に `**報告者:** <name>` を明記する。
+- LLMが報告する場合の`<name>`はそのLLM identity（例: `Alpha-1`）とする。ユーザー自身が報告した内容をIssue化する場合は `**報告者:** User` とする。
+- Issueの`報告者`はIssueを起票した情報源を表し、後続の更新で書き換えない。
+- LLMが既存Issueへ本文追記・修正・comment・follow-up・verification結果を追加する場合、**その更新部分**に `**更新者:** <identity>` を残す。ユーザーの指示内容をユーザー自身の更新として記録する場合は `**更新者:** User` とする。
+- 既存文章のattributionを後続更新者へ上書きしない。誰が書いたかを区別できる単位で報告者/更新者を残す。
+- 2026-08-30にMarkdown backlogからGitHubへ移行したIssue、および同日に作成したaudit Issueは、ユーザー指示により過去記録を含めて `**報告者:** Alpha-1` とする。
+- Issueを読むLLMは、GitHub accountの投稿者だけでなくこの報告者/更新者表記を見て、自分・他agent・Userの記録を区別する。
 
 ## このprojectについて
 
