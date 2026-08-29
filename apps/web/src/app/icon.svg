@@ -1,5 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="white"/>
-  <rect x="3" y="3" width="58" height="58" rx="9" fill="none" stroke="black" stroke-width="6"/>
-  <path d="M18 48 30 16h4l12 32h-7l-3-9H28l-3 9h-7Zm12-15h4l-2-7-2 7Z" fill="black"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+    width="1024" height="1024" viewBox="0 0 1024 1024"
+    preserveAspectRatio="xMidYMid meet">
+  <title>Maindrill affine-transformed equilateral triangle logo</title>
+  <desc>
+    The original three-piece drill motif transformed by one exact affine map.
+    The original virtual triangle is mapped to an upright equilateral triangle.
+    No slit geometry or piece proportions are redesigned independently.
+  </desc>
+
+  <polygon id="triangle-orange"
+           points="512.000,78.987 280.848,479.355 662.418,339.520"
+           fill="#FE7911"/>
+
+  <polygon id="triangle-gray-upper"
+           points="232.984,562.257 693.565,393.468 782.921,548.236 95.668,800.095"
+           fill="#3D434C"/>
+
+  <polygon id="triangle-gray-lower"
+           points="50.943,877.562 812.025,598.647 1012.000,945.013 12.000,945.013"
+           fill="#3D434C"/>
 </svg>

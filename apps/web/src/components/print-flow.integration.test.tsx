@@ -46,9 +46,23 @@ describe('print flow integration paths', () => {
     renderApp();
     fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
     await expectPreviewOpen(printSpy);
-    expect(screen.getByRole('heading', { name: '計算ドリルをつくる' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'まいんドリル' })).toBeInTheDocument();
     await closePreview();
-    expect(screen.getByRole('heading', { name: '計算ドリルをつくる' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'まいんドリル' })).toBeInTheDocument();
+  });
+
+  it('lets the user choose whether the answer page is upside down', async () => {
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
+    const preview = await expectPreviewOpen(printSpy);
+    const rotate = screen.getByRole('checkbox', { name: '解答を逆さにする' });
+    expect(rotate).toBeChecked();
+    expect(preview.querySelector('[data-print-page="answers"] .worksheet-print-page-inner')).toHaveClass('worksheet-print-page-inner-rotated');
+
+    fireEvent.click(rotate);
+    expect(rotate).not.toBeChecked();
+    expect(preview.querySelector('[data-print-page="answers"] .worksheet-print-page-inner')).not.toHaveClass('worksheet-print-page-inner-rotated');
+    await closePreview();
   });
 
   it('settings preview -> print invokes native printing only from the preview action', async () => {

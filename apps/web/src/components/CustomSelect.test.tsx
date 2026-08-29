@@ -39,7 +39,7 @@ describe('CustomSelect popup geometry', () => {
     expect(onChange).toHaveBeenCalledWith('9');
   });
 
-  it('keyboard End reaches the final option in a scrollable menu', () => {
+  it('covers every supported keyboard navigation and selection edge', () => {
     const onChange = vi.fn();
     render(
       <CustomSelect
@@ -54,10 +54,31 @@ describe('CustomSelect popup geometry', () => {
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(rect({
       left: 20, right: 320, top: 100, bottom: 152, width: 300, height: 52,
     }));
-    fireEvent.click(trigger);
+
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringContaining('option-3'));
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringContaining('option-4'));
+    fireEvent.keyDown(trigger, { key: 'ArrowUp' });
+    expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringContaining('option-3'));
+    fireEvent.keyDown(trigger, { key: 'Home' });
+    expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringContaining('option-0'));
     fireEvent.keyDown(trigger, { key: 'End' });
     expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringContaining('option-4'));
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.keyDown(trigger, { key: 'ArrowUp' });
+    expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringContaining('option-1'));
+    fireEvent.keyDown(trigger, { key: ' ' });
+    expect(onChange).toHaveBeenLastCalledWith('2');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    expect(onChange).toHaveBeenCalledWith('5');
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith('3');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 });

@@ -193,6 +193,9 @@ AIエージェントを含む実装者は、局所的にcodeが通った時点�
 - 削除・rename・責務移動の後はrepository-wide検索を行い、旧symbol、旧field、旧validator、旧compatibility path、旧説明が現行code/docsへ残っていないか確認する。`docs/audits/`や`docs/issues.md`の過去経緯はhistoryなので、現行仕様記述と区別して扱う。
 - Serde / ts-rs / generated contractを変更した場合、freshness scriptだけで十分としない。代表的variantを実serializeし、property presence、`null`/omission、tagged union、exact integer encodingをgenerated typeと照合する。
 - 変更対象に応じてformat、check、clippy、test、generated freshness、TypeScript typecheck、lint等のquality gateを実行する。失敗したgateを別の成功したgateで代用したことにしない。
+- user-visible UIは有限の**状態グラフ**として扱う。各canonical stateで現在有効な1-step操作をcensusし、すべてをbrowser acceptanceか明示的なtransient-state testで実行する。新しいbutton / toggle / select / input actionを追加したのにcoverageへ登録・実行されない状態を許さない。
+- worksheetは全active themeについて、少なくとも1 Seedで**全editable affordance**を実際に操作する。MathLiveの連続入力は1文字だけで終えず複数文字状態からの次の1-stepも通し、各problem位置・coordinate・digit slot・grid cell等の位置依存回帰を拾う。input panelは出現する各distinct action surfaceについて、enabledな全buttonを実行する。
+- 設定→worksheet、editing→graded、graded→editing、TOP、print preview、modal等の画面/state遷移は全edgeを固定する。非同期`grading`のようにuser操作を禁止するtransient stateは、deferred dependencyを使って全操作がlockされることとfailure時の復帰先をtestする。
 - abstractionやcompatibility layerから最後のconsumerが消えた場合、pre-releaseでは原則として一緒に削除する。利用者のないfacade・adapter・legacy aliasを「安全のため」に残すことは安全ではなく、将来の誤用点を増やす。
 - 一次検証用file、temporary crate、debug export、手動生成copy等を正式architectureの一部へ昇格させない。価値のあるregression testだけを残し、一時物はcleanupする。
 - 変更を完了させるために新しい例外・二重SoT・manual synchronizationが必要になった場合は、その場で継ぎ足さず設計を見直す。長期ownershipが変わる判断ならユーザーへ相談する。

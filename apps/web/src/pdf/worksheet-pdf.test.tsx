@@ -186,6 +186,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     expect(pages).toHaveLength(2);
     expect(pages[0]).toMatchObject({ kind: 'problems', rotated: false, title: '1けたのたしざん(1)' });
     expect(pages[1]).toMatchObject({ kind: 'answers', rotated: true, title: '1けたのたしざん(1) 解答' });
+    expect(buildPdfPageModel(worksheet, metadata, false)[1]).toMatchObject({ kind: 'answers', rotated: false });
     expect(pages[0]?.footer).toEqual({ text: 'date: 2026-07-30 / seed: repeatMe', physical_corner: 'bottom-right' });
   });
 
@@ -289,7 +290,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     const firstProblem = container.querySelector('[data-print-page="problems"] [data-print-problem-index="0"]');
     expect(firstProblem).toHaveClass('problem-cell-answer-below');
     expect(firstProblem?.querySelector('math-span.problem-math-expression')?.textContent).not.toContain('=');
-    expect(container.querySelector('[data-print-page="problems"] .worksheet-instruction')).toHaveTextContent('次の式を計算しなさい。');
+    expect(container.querySelector('[data-print-page="problems"] .worksheet-instruction')).toHaveTextContent('次の式の計算結果を書きなさい。');
   });
 
   it('keeps the standard unlike-denominator fraction as MathLive LaTeX instead of flattening it to slash text', () => {

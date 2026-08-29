@@ -40,7 +40,7 @@ function themeForWorksheet(worksheet: WorksheetDto): ThemeDefinition {
   return theme;
 }
 
-export function buildPdfPageModel(worksheet: WorksheetDto, metadata?: WorksheetMetadata): readonly PdfPageModel[] {
+export function buildPdfPageModel(worksheet: WorksheetDto, metadata?: WorksheetMetadata, rotateAnswers = true): readonly PdfPageModel[] {
   const layout = buildSharedWorksheetLayout(worksheet);
   const theme = themeForWorksheet(worksheet);
   const cells = layout.cells.map(({ problem }, index) => ({
@@ -63,7 +63,7 @@ export function buildPdfPageModel(worksheet: WorksheetDto, metadata?: WorksheetM
     },
     {
       kind: 'answers',
-      rotated: true,
+      rotated: rotateAnswers,
       ...shared,
       title: `${theme.worksheet.title} 解答`,
       cells,
@@ -176,10 +176,12 @@ function WorksheetPrintPage({
   worksheet,
   metadata,
   answers,
+  rotateAnswers,
 }: {
   worksheet: WorksheetDto;
   metadata?: WorksheetMetadata;
   answers: boolean;
+  rotateAnswers: boolean;
 }) {
   const layout = buildSharedWorksheetLayout(worksheet);
   const theme = themeForWorksheet(worksheet);
@@ -207,7 +209,7 @@ function WorksheetPrintPage({
       aria-label={`${theme.worksheet.title}${answers ? ' 解答' : ''}`}
       style={usesWorksheetGrid ? worksheetPageGridVariables() : undefined}
     >
-      <div className={`worksheet-print-page-inner ${answers ? 'worksheet-print-page-inner-rotated' : ''}`}>
+      <div className={`worksheet-print-page-inner ${answers && rotateAnswers ? 'worksheet-print-page-inner-rotated' : ''}`}>
         <div className="worksheet-print-heading">
           <span>{categoryLabel}</span>
           <strong>{theme.worksheet.title}{answers ? ' 解答' : ''}</strong>
@@ -280,14 +282,16 @@ function WorksheetPrintPage({
 export function WorksheetPrintDocument({
   worksheet,
   metadata,
+  rotateAnswers = true,
 }: {
   worksheet: WorksheetDto;
   metadata?: WorksheetMetadata;
+  rotateAnswers?: boolean;
 }) {
   return (
     <div className="worksheet-print-document">
-      <WorksheetPrintPage worksheet={worksheet} metadata={metadata} answers={false} />
-      <WorksheetPrintPage worksheet={worksheet} metadata={metadata} answers />
+      <WorksheetPrintPage worksheet={worksheet} metadata={metadata} answers={false} rotateAnswers={false} />
+      <WorksheetPrintPage worksheet={worksheet} metadata={metadata} answers rotateAnswers={rotateAnswers} />
     </div>
   );
 }
@@ -305,6 +309,7 @@ function WorksheetPrintPreview({
 }) {
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [rotateAnswers, setRotateAnswers] = useState(true);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -350,19 +355,29 @@ function WorksheetPrintPreview({
           <h2 id="worksheet-print-preview-title">印刷プレビュー</h2>
           <p>{printError ?? '問題・解答の2ページ'}</p>
         </div>
-        <button
-          type="button"
-          className="worksheet-print-preview-print"
-          onClick={() => { void printNow(); }}
-          disabled={printing}
-          autoFocus
-        >
-          {printing ? '準備中…' : '印刷する'}
-        </button>
+        <div className="worksheet-print-preview-actions">
+          <label className="worksheet-print-preview-rotate">
+            <input
+              type="checkbox"
+              checked={rotateAnswers}
+              onChange={(event) => setRotateAnswers(event.target.checked)}
+            />
+            <span>解答を逆さにする</span>
+          </label>
+          <button
+            type="button"
+            className="worksheet-print-preview-print"
+            onClick={() => { void printNow(); }}
+            disabled={printing}
+            autoFocus
+          >
+            {printing ? '準備中…' : '印刷する'}
+          </button>
+        </div>
       </header>
       <div className="worksheet-print-preview-scroll">
         <div className="worksheet-print-preview-document">
-          <WorksheetPrintDocument worksheet={worksheet} metadata={metadata} />
+          <WorksheetPrintDocument worksheet={worksheet} metadata={metadata} rotateAnswers={rotateAnswers} />
         </div>
       </div>
     </div>

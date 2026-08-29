@@ -147,6 +147,14 @@ async function mouseClick(cdp, x, y) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
 }
 
+async function typeKeyboardText(cdp, text) {
+  for (const character of text) {
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', text: character, key: character, code: `Digit${character}` });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: character, code: `Digit${character}` });
+    await new Promise((resolveWait) => setTimeout(resolveWait, 80));
+  }
+}
+
 async function verifySelectHitbox(cdp, ariaLabel) {
   const geometry = await cdp.evaluate(`(async () => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -216,9 +224,684 @@ const dropdownProbe = `(async () => {
   return { difficulty, grade };
 })()`;
 
-function worksheetProbe(seed) {
+function settingsOptionCoverageProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    await waitFor(() => document.querySelector('button[aria-label="難易度"]'), 'settings hydration');
+    const choose = async (ariaLabel, optionLabel) => {
+      const trigger = await waitFor(() => document.querySelector('button[aria-label="' + ariaLabel + '"]'), ariaLabel);
+      if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+      const listbox = await waitFor(() => document.querySelector('[role="listbox"][aria-label="' + ariaLabel + 'の選択肢"]'), ariaLabel + ' listbox');
+      const option = [...listbox.querySelectorAll('[role="option"]')].find((item) => item.getAttribute('aria-label') === optionLabel);
+      if (!option) throw new Error('Missing ' + ariaLabel + ' option ' + optionLabel);
+      option.click();
+      await waitFor(() => document.querySelector('button[aria-label="' + ariaLabel + '"]')?.getAttribute('data-selected-label') === optionLabel, ariaLabel + '=' + optionLabel);
+    };
+    const labels = async (ariaLabel) => {
+      const trigger = await waitFor(() => document.querySelector('button[aria-label="' + ariaLabel + '"]'), ariaLabel);
+      if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+      const listbox = await waitFor(() => document.querySelector('[role="listbox"][aria-label="' + ariaLabel + 'の選択肢"]'), ariaLabel + ' listbox');
+      const result = [...listbox.querySelectorAll('[role="option"]')].map((item) => item.getAttribute('aria-label')).filter(Boolean);
+      trigger.click();
+      await sleep(10);
+      return result;
+    };
+
+    const visitedThemes = new Set();
+    const difficultyLabels = await labels('難易度');
+    for (const label of difficultyLabels) await choose('難易度', label);
+
+    const recommendedButton = [...document.querySelectorAll('.selection-mode-tabs button')].find((button) => button.textContent?.trim() === 'おすすめ');
+    recommendedButton?.click();
+    await sleep(20);
+    const recommendedGenres = await labels('ジャンル');
+    for (const genre of recommendedGenres) {
+      await choose('ジャンル', genre);
+      for (const theme of await labels('テーマ')) {
+        await choose('テーマ', theme);
+        visitedThemes.add(theme);
+      }
+    }
+
+    document.querySelector('button[aria-label="学年から選ぶ"]')?.click();
+    await waitFor(() => document.querySelector('button[aria-label="学年"]'), 'grade select');
+    const gradeLabels = await labels('学年');
+    for (const grade of gradeLabels) {
+      await choose('学年', grade);
+      for (const genre of await labels('ジャンル')) {
+        await choose('ジャンル', genre);
+        for (const theme of await labels('テーマ')) {
+          await choose('テーマ', theme);
+          visitedThemes.add(theme);
+        }
+      }
+    }
+    return {
+      difficulties: difficultyLabels.length,
+      grades: gradeLabels.length,
+      recommendedGenres: recommendedGenres.length,
+      themes: visitedThemes.size,
+      alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null,
+    };
+  })()`;
+}
+
+function uiStateGraphProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 500; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const visible = (element) => {
+      const details = element.closest('details');
+      if (details && !details.open && !element.matches('summary')) return false;
+      if (element.matches('math-field.answer-mathfield') && element.getAttribute('aria-readonly') === 'true') return false;
+      const style = getComputedStyle(element);
+      const rect = element.matches('math-field.answer-mathfield')
+        ? (element.closest('.answer-box')?.getBoundingClientRect() ?? element.getBoundingClientRect())
+        : element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0 && !element.disabled;
+    };
+    const text = (element) => element.getAttribute('aria-label') || element.textContent?.trim() || '';
+    const signature = (element) => {
+      if (element.closest('.worksheet-print-preview')) {
+        if (element.matches('input[type="checkbox"]')) return 'preview:解答を逆さにする';
+        return 'preview:' + text(element);
+      }
+      if (element.closest('.grading-settings-modal')) return 'modal:' + text(element);
+      if (element.closest('.input-panel')) return 'input:' + text(element);
+      if (element.matches('math-field.answer-mathfield')) return 'problem:math-field';
+      if (element.matches('button[data-column-digit-index]')) return 'problem:column-digit';
+      if (element.matches('button[data-digit-grid-cell]')) return 'problem:digit-grid-cell';
+      if (element.matches('button.liar-person-choice')) return 'problem:liar-choice';
+      if (element.closest('.grade-actions')) return 'graded:' + text(element);
+      if (element.closest('.worksheet-screen') && ['採点', '印刷', 'TOPに戻る'].includes(text(element))) return 'worksheet:' + text(element);
+      if (element.matches('.furigana-toggle input')) return 'settings:furigana';
+      if (element.matches('button[role="combobox"]')) return 'settings:select:' + text(element);
+      if (element.matches('.selection-mode-tabs button')) return 'settings:mode:' + text(element);
+      if (element.matches('.advanced-settings > summary')) return 'settings:advanced';
+      if (element.matches('input[aria-label="Seed"]')) return 'settings:seed';
+      if (element.matches('.grading-settings-open-button')) return 'settings:grading-settings';
+      if (element.matches('.primary-button')) return 'settings:generate';
+      if (element.matches('.secondary-button')) return 'settings:print';
+      return 'unknown:' + element.tagName.toLowerCase() + ':' + text(element);
+    };
+    const census = (root) => [...new Set([...root.querySelectorAll('button, input, summary, math-field.answer-mathfield')]
+      .filter(visible).map(signature))].sort();
+    const states = {};
+    const edges = [];
+    const edge = (name, ok, detail = null) => edges.push({ name, ok: Boolean(ok), detail });
+    const settings = await waitFor(() => document.querySelector('.settings-screen'), 'settings');
+    await waitFor(() => document.querySelector('button[aria-label="難易度"]'), 'settings hydration');
+    states.settings = census(settings);
+
+    const furigana = settings.querySelector('.furigana-toggle input');
+    const furiganaBefore = furigana.checked;
+    furigana.click(); await sleep(20);
+    edge('settings.furigana.toggle', furigana.checked !== furiganaBefore);
+    furigana.click(); await sleep(20);
+
+    document.querySelector('button[aria-label="学年から選ぶ"]')?.click(); await sleep(20);
+    states.settingsGrade = census(settings);
+    edge('settings.mode.grade', Boolean(document.querySelector('button[aria-label="学年"]')));
+    [...document.querySelectorAll('.selection-mode-tabs button')].find((button) => button.textContent?.trim() === 'おすすめ')?.click(); await sleep(20);
+    edge('settings.mode.recommended', !document.querySelector('button[aria-label="学年"]'));
+
+    const advanced = settings.querySelector('.advanced-settings');
+    const summary = advanced?.querySelector('summary');
+    summary?.click(); await sleep(20);
+    states.settingsAdvanced = census(settings);
+    edge('settings.advanced.open', advanced?.open === true);
+    const seed = document.querySelector('input[aria-label="Seed"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(seed, 'UiGraph');
+    seed.dispatchEvent(new Event('input', { bubbles: true }));
+    seed.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(20);
+    edge('settings.seed.edit', seed.value === 'UiGraph');
+    summary?.click(); await sleep(20);
+    edge('settings.advanced.close', advanced?.open === false);
+    summary?.click(); await sleep(20);
+
+    const openModal = async () => {
+      [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('採点設定'))?.click();
+      return waitFor(() => document.querySelector('.grading-settings-modal'), 'grading settings modal');
+    };
+    let modal = await openModal();
+    states.gradingModal = census(modal);
+    for (const button of [...modal.querySelectorAll('.grading-setting-toggle button')]) {
+      button.click(); await sleep(10);
+      edge('grading-modal.toggle.' + text(button), button.getAttribute('aria-pressed') === 'true');
+    }
+    modal.querySelector('button[aria-label="採点設定を閉じる"]')?.click();
+    await waitFor(() => !document.querySelector('.grading-settings-modal') && true, 'modal close button');
+    edge('grading-modal.close-button', true);
+    modal = await openModal();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await waitFor(() => !document.querySelector('.grading-settings-modal') && true, 'modal Escape close');
+    edge('grading-modal.escape', true);
+    modal = await openModal();
+    const backdrop = modal.closest('.grading-settings-modal-backdrop');
+    backdrop?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await waitFor(() => !document.querySelector('.grading-settings-modal') && true, 'modal backdrop close');
+    edge('grading-modal.backdrop', true);
+
+    window.__AUTODRILL_STATE_GRAPH_PRINTS__ = 0;
+    window.print = () => { window.__AUTODRILL_STATE_GRAPH_PRINTS__ += 1; };
+    const previewFromSettings = async (closeWithEscape = false) => {
+      document.querySelector('button[aria-label="印刷 (pdfで出力)"]')?.click();
+      const preview = await waitFor(() => document.querySelector('.worksheet-print-preview'), 'settings print preview');
+      states.printPreview = states.printPreview ?? census(preview);
+      if (!closeWithEscape) {
+        const rotate = preview.querySelector('input[type="checkbox"]');
+        const before = rotate.checked; rotate.click(); await sleep(20);
+        edge('print-preview.rotate', rotate.checked !== before);
+        preview.querySelector('.worksheet-print-preview-print')?.click();
+        await waitFor(() => window.__AUTODRILL_STATE_GRAPH_PRINTS__ > 0, 'native print call');
+        edge('print-preview.print', window.__AUTODRILL_STATE_GRAPH_PRINTS__ > 0);
+        preview.querySelector('.worksheet-print-preview-back')?.click();
+      } else {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      }
+      await waitFor(() => !document.querySelector('.worksheet-print-preview') && true, 'preview close');
+      return Boolean(document.querySelector('.settings-screen'));
+    };
+    edge('settings.print.preview.back', await previewFromSettings(false));
+    edge('settings.print.preview.escape', await previewFromSettings(true));
+
+    const generate = async () => {
+      document.querySelector('button[aria-label="問題生成"]')?.click();
+      return waitFor(() => document.querySelector('.worksheet-screen'), 'worksheet');
+    };
+    let worksheet = await generate();
+    edge('settings.generate.worksheet', Boolean(worksheet));
+    let firstField = await waitFor(() => worksheet.querySelector('math-field.answer-mathfield[aria-readonly="false"]'), 'first answer field');
+    states.worksheetEditing = census(worksheet);
+    firstField.click();
+    let panel = await waitFor(() => document.querySelector('.input-panel'), 'input panel');
+    states.inputPanel = census(worksheet);
+    edge('worksheet.answer.select', Boolean(panel));
+    panel.querySelector('button[aria-label="入力パネルを閉じる"]')?.click();
+    await waitFor(() => !document.querySelector('.input-panel') && true, 'input panel close');
+    edge('input-panel.close-button', true);
+
+    firstField.click();
+    await waitFor(() => document.querySelector('.input-panel'), 'input panel before Escape');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await waitFor(() => !document.querySelector('.input-panel') && true, 'input panel Escape close');
+    edge('input-panel.escape', true);
+
+    firstField.click();
+    await waitFor(() => document.querySelector('.input-panel'), 'input panel before print');
+    document.querySelector('button[aria-label="印刷"]')?.click();
+    let inputPreview = await waitFor(() => document.querySelector('.worksheet-print-preview'), 'input-state print preview');
+    inputPreview.querySelector('.worksheet-print-preview-back')?.click();
+    await waitFor(() => !document.querySelector('.worksheet-print-preview') && true, 'input-state preview close');
+    edge('input-panel.print.back', Boolean(document.querySelector('.input-panel')) && firstField.closest('.answer-box')?.classList.contains('answer-box-selected'));
+
+    document.querySelector('button[aria-label="採点"]')?.click();
+    await waitFor(() => document.querySelector('.grade-result-panel'), 'graded from input panel');
+    edge('input-panel.grade', !document.querySelector('.input-panel'));
+    document.querySelector('button[aria-label="問題に戻る"]')?.click();
+    await waitFor(() => document.querySelector('button[aria-label="採点"]')?.getAttribute('aria-pressed') === 'false', 'editing after input-panel grade');
+
+    firstField = await waitFor(() => document.querySelector('math-field.answer-mathfield[aria-readonly="false"]'), 'field before input-panel TOP');
+    firstField.click();
+    await waitFor(() => document.querySelector('.input-panel'), 'input panel before TOP');
+    document.querySelector('button[aria-label="TOPに戻る"]')?.click();
+    await waitFor(() => document.querySelector('.settings-screen'), 'TOP from input panel');
+    edge('input-panel.top', !document.querySelector('.input-panel'));
+
+    worksheet = await generate();
+    firstField = await waitFor(() => worksheet.querySelector('math-field.answer-mathfield[aria-readonly="false"]'), 'field after input-panel transitions');
+
+    const worksheetPreview = async (closeWithEscape = false) => {
+      document.querySelector('button[aria-label="印刷"]')?.click();
+      const preview = await waitFor(() => document.querySelector('.worksheet-print-preview'), 'worksheet print preview');
+      if (closeWithEscape) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      else preview.querySelector('.worksheet-print-preview-back')?.click();
+      await waitFor(() => !document.querySelector('.worksheet-print-preview') && true, 'worksheet preview close');
+      return Boolean(document.querySelector('.worksheet-screen'));
+    };
+    edge('worksheet.editing.print.back', await worksheetPreview(false));
+    edge('worksheet.editing.print.escape', await worksheetPreview(true));
+    document.querySelector('button[aria-label="TOPに戻る"]')?.click();
+    await waitFor(() => document.querySelector('.settings-screen'), 'TOP after editing');
+    edge('worksheet.editing.top', true);
+
+    worksheet = await generate();
+    const answer = await waitFor(() => worksheet.querySelector('math-field.answer-mathfield[aria-readonly="false"]'), 'answer for preserve edge');
+    answer.click();
+    const answerPanel = await waitFor(() => document.querySelector('.input-panel'), 'answer panel');
+    [...answerPanel.querySelectorAll('.keypad-numbers button')].find((button) => button.textContent?.trim() === '7')?.click();
+    await waitFor(() => answer.value === '7', 'MathLive value 7');
+    await waitFor(() => [...document.querySelectorAll('math-field.answer-mathfield')].some((field) => field.getAttribute('aria-label')?.endsWith('答え 7')), 'accepted answer 7');
+    document.querySelector('button[aria-label="採点"]')?.click();
+    await waitFor(() => document.querySelector('.grade-result-panel'), 'graded worksheet');
+    await waitFor(() => {
+      const fields = [...document.querySelectorAll('math-field.answer-mathfield')];
+      return fields.length > 0 && fields.every((field) => field.getAttribute('aria-readonly') === 'true');
+    }, 'graded read-only answer fields');
+    states.worksheetGraded = census(document.querySelector('.worksheet-screen'));
+    edge('worksheet.editing.grade', true);
+    edge('worksheet.graded.print.back', await worksheetPreview(false));
+    edge('worksheet.graded.print.escape', await worksheetPreview(true));
+    document.querySelector('button[aria-label="問題に戻る"]')?.click();
+    await waitFor(() => document.querySelector('button[aria-label="採点"]')?.getAttribute('aria-pressed') === 'false', 'return to editing');
+    const returnedValues = [...document.querySelectorAll('math-field.answer-mathfield')].map((field) => field.value);
+    edge('worksheet.graded.return', returnedValues.includes('7'), returnedValues.slice(0, 4));
+
+    document.querySelector('button[aria-label="採点"]')?.click();
+    await waitFor(() => document.querySelector('.grade-result-panel'), 'graded before retry');
+    document.querySelector('button[aria-label="もう一回問題を解く"]')?.click();
+    await waitFor(() => document.querySelector('button[aria-label="採点"]')?.getAttribute('aria-pressed') === 'false', 'retry editing');
+    const retryValues = [...document.querySelectorAll('math-field.answer-mathfield')].map((field) => field.value);
+    edge('worksheet.graded.retry', retryValues.length > 0 && retryValues.every((value) => value === ''), retryValues.slice(0, 4));
+
+    document.querySelector('button[aria-label="採点"]')?.click();
+    await waitFor(() => document.querySelector('.grade-result-panel'), 'graded before TOP');
+    document.querySelector('button[aria-label="TOPに戻る"]')?.click();
+    await waitFor(() => document.querySelector('.settings-screen'), 'TOP after graded');
+    edge('worksheet.graded.top', true);
+
+    return {
+      states,
+      edges,
+      obsoleteDifferentWorksheetPresent: Boolean([...document.querySelectorAll('button')].find((button) => text(button) === '別の問題を解く')),
+      alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null,
+    };
+  })()`;
+}
+
+function worksheetAffordanceCoverageProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 300; i += 1) { const value = fn(); if (value) return value; await sleep(20); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const failures = [];
+    const cells = [...document.querySelectorAll('.worksheet-screen .problem-cell')];
+    let attempted = 0;
+    const noFatal = (label) => {
+      const alert = document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null;
+      const notice = document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null;
+      if (alert || notice === '式が大きすぎます！') failures.push({ label, alert, notice });
+    };
+    for (const [problemIndex, cell] of cells.entries()) {
+      const controls = [
+        ...cell.querySelectorAll('button[data-column-digit-index]:not(:disabled)'),
+        ...cell.querySelectorAll('button[data-digit-grid-cell]:not(:disabled)'),
+        ...cell.querySelectorAll('button.liar-person-choice:not(:disabled)'),
+        ...cell.querySelectorAll('math-field.answer-mathfield[aria-readonly="false"]'),
+      ];
+      for (const control of controls) {
+        attempted += 1;
+        const label = control.getAttribute('aria-label') ?? ('problem ' + (problemIndex + 1));
+        if (control.matches('button.liar-person-choice')) {
+          const before = control.getAttribute('aria-pressed');
+          control.click(); await sleep(20);
+          if (control.getAttribute('aria-pressed') === before) failures.push({ label, reason: 'liar choice did not toggle' });
+          noFatal(label);
+          continue;
+        }
+        control.click();
+        const panel = await waitFor(() => document.querySelector('.input-panel'), label + ' input panel');
+        const numberButtons = [...panel.querySelectorAll('.keypad-numbers button:not(:disabled)')];
+        const digit = control.matches('button[data-digit-grid-cell]') ? (numberButtons[0]?.textContent?.trim() ?? '1') : '1';
+        const digitButton = numberButtons.find((button) => button.textContent?.trim() === digit) ?? numberButtons[0];
+        if (!digitButton) { failures.push({ label, reason: 'no enabled number key' }); continue; }
+        if (control.matches('math-field.answer-mathfield')) {
+          const two = numberButtons.find((button) => button.textContent?.trim() === '2') ?? digitButton;
+          two.click();
+          await waitFor(() => String(control.value ?? '').endsWith(two.textContent?.trim() ?? ''), label + ' first digit');
+          digitButton.click();
+          const expected = (two.textContent?.trim() ?? '') + (digitButton.textContent?.trim() ?? '');
+          await waitFor(() => String(control.value ?? '') === expected, label + ' multi-digit input');
+        } else {
+          digitButton.click(); await sleep(20);
+          const rendered = control.textContent?.trim() ?? '';
+          if (!rendered.includes(digitButton.textContent?.trim() ?? '')) failures.push({ label, reason: 'digit did not render', rendered });
+        }
+        noFatal(label);
+      }
+    }
+    return { attempted, cells: cells.length, failures };
+  })()`;
+}
+
+function openInputPanelCoverageProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 200; i += 1) { const value = fn(); if (value) return value; await sleep(20); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const target = document.querySelector('math-field.answer-mathfield[aria-readonly="false"], button[data-column-digit-index]:not(:disabled), button[data-digit-grid-cell]:not(:disabled)');
+    if (!target) return { applicable: false };
+    const kind = target.matches('math-field.answer-mathfield') ? 'math-field' : target.matches('button[data-column-digit-index]') ? 'column-digit' : 'digit-grid';
+    target.click();
+    const panel = await waitFor(() => document.querySelector('.input-panel'), 'input panel');
+    const actions = [...panel.querySelectorAll('button:not(:disabled)')].map((button) => button.getAttribute('aria-label') || button.textContent?.trim() || '').filter(Boolean);
+    return { applicable: true, kind, actions, signature: kind + '::' + actions.join('|') };
+  })()`;
+}
+
+function exerciseInputPanelActionsProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 240; i += 1) { const value = fn(); if (value) return value; await sleep(20); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const targetSelector = 'math-field.answer-mathfield[aria-readonly="false"], button[data-column-digit-index]:not(:disabled), button[data-digit-grid-cell]:not(:disabled)';
+    const targets = () => [...document.querySelectorAll(targetSelector)];
+    const open = async (targetIndex) => {
+      const candidates = targets();
+      const target = candidates[targetIndex % candidates.length];
+      if (!target) throw new Error('No editable target for input-panel action coverage');
+      target.click();
+      const selectedTarget = await waitFor(() => {
+        if (target.matches('math-field.answer-mathfield')) {
+          return target.closest('.answer-box')?.classList.contains('answer-box-selected') ? target : null;
+        }
+        if (target.matches('button[data-column-digit-index]')) {
+          return target.classList.contains('column-digit-slot-selected') ? target : null;
+        }
+        if (target.matches('button[data-digit-grid-cell]')) {
+          return target.classList.contains('digit-grid-cell-selected') ? target : null;
+        }
+        return null;
+      }, 'clicked editable target selection');
+      const panel = await waitFor(() => document.querySelector('.input-panel'), 'input panel');
+      await sleep(50);
+      return { target: selectedTarget, panel };
+    };
+    const actionName = (button) => button.getAttribute('aria-label') || button.textContent?.trim() || '';
+    const initial = await open(0);
+    const descriptors = [...initial.panel.querySelectorAll('button:not(:disabled)')].map(actionName).filter(Boolean);
+    const targetCount = targets().length;
+    initial.panel.querySelector('button[aria-label="入力パネルを閉じる"]')?.click();
+    await sleep(30);
+    const failures = [];
+    let executed = 0;
+    const seededActions = new Set(['カーソルを左へ', 'カーソルを右へ', '一文字戻す', 'クリア', '確定']);
+    const isTargetSelected = (target) => {
+      if (target.matches('math-field.answer-mathfield')) return target.closest('.answer-box')?.classList.contains('answer-box-selected') === true;
+      if (target.matches('button[data-column-digit-index]')) return target.classList.contains('column-digit-slot-selected');
+      if (target.matches('button[data-digit-grid-cell]')) return target.classList.contains('digit-grid-cell-selected');
+      return false;
+    };
+
+    const resetReusedTarget = async (targetIndex) => {
+      const { target, panel } = await open(targetIndex);
+      if (target.matches('math-field.answer-mathfield')) {
+        target.setValue('', { silenceNotifications: false });
+        target.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'deleteContentBackward' }));
+        await waitFor(() => String(target.value ?? '') === '', 'MathLive harness reset');
+        await sleep(120);
+      } else {
+        panel.querySelector('.keypad-clear')?.click();
+        await sleep(120);
+      }
+      await waitFor(() => document.querySelector('.worksheet-toast')?.getAttribute('aria-label') !== '式が大きすぎます！', 'notice harness reset');
+      return open(targetIndex);
+    };
+
+    for (const [actionIndex, descriptor] of descriptors.entries()) {
+      const targetIndex = descriptor === '確定' ? 0 : actionIndex;
+      const reusedTarget = targetIndex < actionIndex || targetIndex >= targetCount;
+      let current = reusedTarget
+        ? await resetReusedTarget(targetIndex)
+        : await open(targetIndex);
+      let { target, panel } = current;
+      if (seededActions.has(descriptor)) {
+        const seedButton = [...panel.querySelectorAll('.keypad-numbers button:not(:disabled)')].find((button) => button.textContent?.trim() === '8')
+          ?? panel.querySelector('.keypad-numbers button:not(:disabled)');
+        if (seedButton) {
+          seedButton.click();
+          await sleep(120);
+          if (target.matches('math-field.answer-mathfield')) {
+            await waitFor(() => String(target.value ?? '').includes(seedButton.textContent?.trim() ?? ''), 'MathLive seeded baseline');
+          }
+          current = await open(targetIndex);
+          target = current.target;
+          panel = current.panel;
+        }
+      }
+      const buttons = [...panel.querySelectorAll('button:not(:disabled)')];
+      const button = buttons.find((candidate) => actionName(candidate) === descriptor);
+      if (!button) { failures.push({ descriptor, reason: 'action disappeared before execution' }); continue; }
+      if (target.matches('math-field.answer-mathfield')) {
+        if (descriptor === 'カーソルを右へ') target.position = 0;
+        if (descriptor === 'カーソルを左へ') target.position = Math.max(1, String(target.value ?? '').length);
+      }
+      const before = target.matches('math-field.answer-mathfield') ? String(target.value ?? '') : target.textContent?.trim() ?? '';
+      const beforePosition = target.matches('math-field.answer-mathfield') ? Number(target.position) : null;
+      button.click();
+      executed += 1;
+      await sleep(180);
+      const alert = document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null;
+      const notice = document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null;
+      if (alert || notice === '式が大きすぎます！') failures.push({ descriptor, alert, notice });
+      const after = target.matches('math-field.answer-mathfield') ? String(target.value ?? '') : target.textContent?.trim() ?? '';
+      if (descriptor === '入力パネルを閉じる' && document.querySelector('.input-panel')) failures.push({ descriptor, reason: 'panel stayed open' });
+      if (/^[0-9]$/.test(descriptor) && after === before) failures.push({ descriptor, reason: 'digit action did not change selected input', before, after });
+      if (descriptor === '小数点' && target.matches('math-field.answer-mathfield') && !after.includes('.')) failures.push({ descriptor, reason: 'decimal point was not inserted', before, after });
+      if (['分数', '帯分数', '平方根', '複数解', 'x, y', 'プラスを挿入', 'マイナスを挿入', 'プラスマイナスを挿入'].includes(descriptor)
+        && target.matches('math-field.answer-mathfield') && after === before) {
+        failures.push({ descriptor, reason: 'structure/operator action did not change MathLive value', before, after });
+      }
+      if (['カーソルを左へ', 'カーソルを右へ'].includes(descriptor) && target.matches('math-field.answer-mathfield')) {
+        const afterPosition = Number(target.position);
+        if (after !== before) failures.push({ descriptor, reason: 'cursor action changed the mathematical value', before, after });
+        if (descriptor === 'カーソルを左へ' && !(afterPosition < beforePosition)) failures.push({ descriptor, reason: 'cursor-left did not move the caret', beforePosition, afterPosition });
+        if (descriptor === 'カーソルを右へ' && !(afterPosition > beforePosition)) failures.push({ descriptor, reason: 'cursor-right did not move the caret', beforePosition, afterPosition });
+      }
+      if (['カーソルを左へ', 'カーソルを右へ'].includes(descriptor) && !target.matches('math-field.answer-mathfield') && isTargetSelected(target)) {
+        failures.push({ descriptor, reason: 'grid cursor action did not move selection' });
+      }
+      if (descriptor === '一文字戻す' && target.matches('math-field.answer-mathfield') && after === before) failures.push({ descriptor, reason: 'backspace did not change MathLive value', before, after });
+      if (descriptor === 'クリア') {
+        if (target.matches('math-field.answer-mathfield') && after !== '') failures.push({ descriptor, reason: 'clear did not empty MathLive value', before, after });
+        if (!target.matches('math-field.answer-mathfield') && after === before) failures.push({ descriptor, reason: 'clear did not change selected grid input', before, after });
+      }
+      if (descriptor === '確定' && document.querySelector('.input-panel') && isTargetSelected(target)) {
+        failures.push({ descriptor, reason: 'commit did not advance or close the selected input' });
+      }
+    }
+    return { descriptors, targetCount, executed, failures };
+  })()`;
+}
+
+function browserColumnGridAlignment(root) {
+  if (!root) return { applicable: false, reason: 'missing root', maxError: 0, sampleCount: 0, worst: null };
+  const grid = root.matches?.('.problem-grid-worksheet-grid') ? root : root.querySelector?.('.problem-grid-worksheet-grid');
+  if (!grid) return { applicable: false, reason: 'missing worksheet grid', maxError: 0, sampleCount: 0, worst: null };
+  const cells = [...root.querySelectorAll('.problem-cell-column-arithmetic')];
+  if (cells.length === 0) return { applicable: false, reason: 'no column arithmetic cells', maxError: 0, sampleCount: 0, worst: null };
+
+  const gridRect = grid.getBoundingClientRect();
+  const gridStyle = getComputedStyle(grid);
+  const gridPaint = getComputedStyle(grid, '::before');
+  const paintedSizes = gridPaint.backgroundSize.split(',')[0]?.trim().split(/\s+/) ?? [];
+  const cssPitchX = Number.parseFloat(paintedSizes[0] ?? '');
+  const cssPitchY = Number.parseFloat(paintedSizes[1] ?? paintedSizes[0] ?? '');
+  const cssWidth = Number.parseFloat(gridStyle.width);
+  const cssHeight = Number.parseFloat(gridStyle.height);
+  const scaleX = Number.isFinite(cssWidth) && cssWidth > 0 ? gridRect.width / cssWidth : 1;
+  const scaleY = Number.isFinite(cssHeight) && cssHeight > 0 ? gridRect.height / cssHeight : scaleX;
+  const pitchX = cssPitchX * scaleX;
+  const pitchY = cssPitchY * scaleY;
+  const top = Number.parseFloat(gridPaint.top);
+  const left = Number.parseFloat(gridPaint.left);
+  if (![pitchX, pitchY, top, left].every(Number.isFinite) || pitchX <= 0 || pitchY <= 0) {
+    return { applicable: true, reason: `invalid grid geometry: size=${gridPaint.backgroundSize} top=${gridPaint.top} left=${gridPaint.left}`, maxError: Number.POSITIVE_INFINITY, sampleCount: 0, worst: null };
+  }
+  const originX = gridRect.left + left * scaleX;
+  const originY = gridRect.top + top * scaleY;
+  const lineError = (value, origin, pitch) => {
+    const units = (value - origin) / pitch;
+    return Math.abs(units - Math.round(units)) * pitch;
+  };
+
+  let maxError = 0;
+  let sampleCount = 0;
+  let worst = null;
+  const record = (problem, feature, axis, value, origin, pitch) => {
+    const error = lineError(value, origin, pitch);
+    sampleCount += 1;
+    if (error > maxError) {
+      maxError = error;
+      worst = { problem, feature, axis, error, value };
+    }
+  };
+  const recordRect = (problem, feature, rect, axes = 'xy') => {
+    if (axes.includes('x')) {
+      record(problem, feature, 'left', rect.left, originX, pitchX);
+      record(problem, feature, 'right', rect.right, originX, pitchX);
+    }
+    if (axes.includes('y')) {
+      record(problem, feature, 'top', rect.top, originY, pitchY);
+      record(problem, feature, 'bottom', rect.bottom, originY, pitchY);
+    }
+  };
+
+  for (const cell of cells) {
+    const problem = Number(cell.dataset.problemIndex ?? cell.dataset.printProblemIndex ?? -1) + 1;
+    const lane = cell.querySelector('.column-arithmetic');
+    if (lane) recordRect(problem, 'lane', lane.getBoundingClientRect(), 'x');
+    for (const digit of cell.querySelectorAll('.column-arithmetic-digit-cell')) {
+      recordRect(problem, 'digit-cell', digit.getBoundingClientRect());
+    }
+    for (const slot of cell.querySelectorAll('.column-digit-slot')) {
+      recordRect(problem, 'answer-slot', slot.getBoundingClientRect());
+    }
+    for (const blank of cell.querySelectorAll('.worksheet-print-empty-answer')) {
+      recordRect(problem, 'print-answer-box', blank.getBoundingClientRect());
+    }
+    for (const answerBox of cell.querySelectorAll('.column-division-answer-coordinate-remainder .answer-box')) {
+      recordRect(problem, 'remainder-box', answerBox.getBoundingClientRect());
+    }
+    for (const rule of cell.querySelectorAll('.column-arithmetic-rule, .column-arithmetic-final-rule, .column-division-solution-rule')) {
+      const rect = rule.getBoundingClientRect();
+      record(problem, 'rule', 'y', rect.top, originY, pitchY);
+      record(problem, 'rule', 'left', rect.left, originX, pitchX);
+      record(problem, 'rule', 'right', rect.right, originX, pitchX);
+    }
+    for (const bracket of cell.querySelectorAll('.column-division-bracket-mark')) {
+      const rect = bracket.getBoundingClientRect();
+      record(problem, 'division-bracket', 'top', rect.top, originY, pitchY);
+      record(problem, 'division-bracket', 'bottom', rect.bottom, originY, pitchY);
+    }
+  }
+
+  const roundedWorst = worst ? { ...worst, error: Math.round(worst.error * 1000) / 1000, value: Math.round(worst.value * 1000) / 1000 } : null;
+  return {
+    applicable: true,
+    cellPx: Math.round(Math.max(pitchX, pitchY) * 1000) / 1000,
+    maxError: Math.round(maxError * 1000) / 1000,
+    sampleCount,
+    worst: roundedWorst,
+  };
+}
+
+function browserColumnLaneSafety(root) {
+  if (!root) return [];
+  const page = root.matches?.('.paper, .worksheet-print-page') ? root : root.closest?.('.paper, .worksheet-print-page') ?? root.querySelector?.('.paper, .worksheet-print-page') ?? root;
+  const pageRect = page.getBoundingClientRect();
+  const items = [...root.querySelectorAll('.problem-cell-column-arithmetic')].flatMap((cell) => {
+    const rects = [...cell.querySelectorAll('.column-arithmetic, .column-answer-user, .column-answer-correction, .column-division-answer-coordinate, .column-division-correction')]
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0);
+    if (rects.length === 0) return [];
+    const cellRect = cell.getBoundingClientRect();
+    return [{
+      problem: Number(cell.dataset.problemIndex ?? cell.dataset.printProblemIndex ?? -1) + 1,
+      column: Number(cell.dataset.layoutColumn ?? -1),
+      rowTop: cellRect.top,
+      cellLeft: cellRect.left,
+      left: Math.min(...rects.map((rect) => rect.left)),
+      right: Math.max(...rects.map((rect) => rect.right)),
+    }];
+  });
+  const issues = [];
+  for (const item of items) {
+    const overflow = Math.max(pageRect.left - item.left, item.right - pageRect.right, 0);
+    if (overflow > 1) {
+      issues.push({ ...item, kind: 'page-overflow', overflow: Math.round(overflow * 10) / 10 });
+    }
+  }
+  const rows = [];
+  for (const item of items.sort((a, b) => a.rowTop - b.rowTop || a.cellLeft - b.cellLeft)) {
+    let row = rows.find((candidate) => Math.abs(candidate.top - item.rowTop) <= 1);
+    if (!row) { row = { top: item.rowTop, items: [] }; rows.push(row); }
+    row.items.push(item);
+  }
+  for (const row of rows) {
+    row.items.sort((a, b) => a.left - b.left);
+    for (let index = 1; index < row.items.length; index += 1) {
+      const previous = row.items[index - 1];
+      const current = row.items[index];
+      const overlap = previous.right - current.left;
+      if (overlap > 1) {
+        issues.push({
+          problem: current.problem,
+          column: current.column,
+          kind: 'lane-overlap',
+          overflow: Math.round(overlap * 10) / 10,
+          previousProblem: previous.problem,
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+function columnPrintAlignmentProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
+    const print = document.querySelector('button[aria-label="印刷"]');
+    if (!print) throw new Error('Missing print button for column alignment probe');
+    print.click();
+    const preview = await waitFor(() => document.querySelector('.worksheet-print-preview'), 'print preview');
+    await document.fonts.ready;
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const rotateAnswer = preview.querySelector('.worksheet-print-preview-rotate input[type="checkbox"]');
+    if (rotateAnswer?.checked) {
+      rotateAnswer.click();
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    }
+    const problemPage = preview.querySelector('[data-print-page="problems"]');
+    const answerPage = preview.querySelector('[data-print-page="answers"]');
+    const problems = measureColumnGridAlignment(problemPage);
+    const answers = measureColumnGridAlignment(answerPage);
+    const back = preview.querySelector('.worksheet-print-preview-back')
+      ?? [...preview.querySelectorAll('button')].find((button) => button.textContent?.trim() === '戻る');
+    back?.click();
+    await waitFor(() => document.querySelector('.worksheet-screen .paper'), 'worksheet after print preview');
+    return { problems, answers };
+  })()`;
+}
+
+function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
   return `(async () => {
     const seed = ${JSON.stringify(seed)};
+    const difficultyLabel = ${JSON.stringify(difficultyLabel)};
+    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
+    const measureColumnLaneSafety = ${browserColumnLaneSafety.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -227,10 +910,17 @@ function worksheetProbe(seed) {
     await waitFor(() => window.__AUTODRILL_WASM__, 'WASM');
     const difficulty = await waitFor(() => document.querySelector('button[aria-label=\"難易度\"]'), 'difficulty');
     difficulty.click();
-    const hard = await waitFor(() => [...document.querySelectorAll('[role=\"option\"]')].find((option) => option.getAttribute('aria-label') === 'むずかしい'), 'hard difficulty');
-    hard.click();
+    const difficultyOption = await waitFor(() => [...document.querySelectorAll('[role=\"option\"]')].find((option) => option.getAttribute('aria-label') === difficultyLabel), difficultyLabel + ' difficulty');
+    difficultyOption.click();
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
+    const advanced = await waitFor(() => document.querySelector('.advanced-settings'), 'advanced settings');
+    if (!advanced.open) {
+      advanced.querySelector('summary')?.click();
+      await waitFor(() => advanced.open, 'advanced settings open');
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    }
     const seedInput = document.querySelector('input[aria-label="Seed"]');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(seedInput, seed);
@@ -242,6 +932,8 @@ function worksheetProbe(seed) {
     const outcome = await waitFor(() => document.querySelector('.worksheet-screen .paper') || document.querySelector('[role="alert"]'), 'worksheet or generation error');
     if (outcome.getAttribute('role') === 'alert') throw new Error('Generation failed: ' + (outcome.getAttribute('aria-label') || outcome.textContent || 'unknown error'));
     const paper = outcome;
+    const footerText = document.querySelector('[data-testid="worksheet-footer"]')?.textContent ?? '';
+    if (!footerText.includes(seed)) throw new Error('Generated worksheet does not use requested Seed ' + seed + ': ' + footerText);
     await document.fonts.ready;
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
@@ -252,7 +944,10 @@ function worksheetProbe(seed) {
       const column = Number(cell.dataset.layoutColumn);
       // Check every cell boundary rather than a single center divider so 4-column
       // printable themes get the same clipping guarantees as legacy 2-column themes.
-      const rects = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .liar-statements, .mini-sudoku-grid, .problem-answer-area')]
+      const boundarySelector = cell.classList.contains('problem-cell-column-arithmetic')
+        ? '.problem-number'
+        : '.problem-number, math-span.problem-math-expression, .liar-statements, .mini-sudoku-grid, .problem-answer-area';
+      const rects = [...cell.querySelectorAll(boundarySelector)]
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
       if (rects.length === 0) continue;
@@ -307,10 +1002,14 @@ function worksheetProbe(seed) {
         }
       }
     }
+    for (const issue of measureColumnLaneSafety(paper)) {
+      crossings.push({ ...issue, expression: 'column lane ' + issue.kind });
+    }
     const gradeClass = [...paper.classList].find((name) => name.startsWith('worksheet-grade-')) ?? null;
     const expression = paper.querySelector('.expression');
     const fontSize = expression ? getComputedStyle(expression).fontSize : null;
-    return { crossings, columnGridMismatches, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
+    const columnGridAlignment = measureColumnGridAlignment(paper);
+    return { crossings, columnGridMismatches, columnGridAlignment, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
   })()`;
 }
 
@@ -333,7 +1032,14 @@ function gradingSettingsProbe() {
       label: group.getAttribute('aria-label'),
       pressed: [...group.querySelectorAll('button')].filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent?.trim()),
     }));
-    const descriptions = [...dialog.querySelectorAll('.grading-setting-copy > span')].map((element) => element.textContent?.trim());
+    await waitFor(() => dialog.querySelectorAll('.grading-setting-example math-span').length === 6, 'grading math examples');
+    const descriptions = [...dialog.querySelectorAll('.grading-setting-copy > span')].map((element) => ({
+      label: element.getAttribute('aria-label') ?? element.textContent?.trim() ?? '',
+      math: [...element.querySelectorAll('math-span')].map((math) => ({
+        ariaLabel: math.getAttribute('aria-label'),
+        mode: math.getAttribute('mode'),
+      })),
+    }));
     const dialogRubyCount = dialog.querySelectorAll('ruby, rt').length;
     const fractionCorrect = [...dialog.querySelectorAll('.grading-setting-toggle button')].find((button) => button.getAttribute('aria-label') === '約分しましょうを丸にする');
     fractionCorrect?.click();
@@ -454,10 +1160,13 @@ function miniSudokuInputProbe() {
     const maxSquareDelta = Math.max(...cellRects.map((rect) => Math.abs(rect.width - rect.height)));
     const gridRect = first.getBoundingClientRect();
     const cellSize = cellRects[0]?.width ?? 0;
-    const blockRight = first.querySelector('.digit-grid-cell-block-right');
-    const blockBottom = first.querySelector('.digit-grid-cell-block-bottom');
-    const blockRightWidth = blockRight ? parseFloat(getComputedStyle(blockRight).borderRightWidth) : 0;
-    const blockBottomWidth = blockBottom ? parseFloat(getComputedStyle(blockBottom).borderBottomWidth) : 0;
+    const overlayStyle = getComputedStyle(first, '::after');
+    const overlay = {
+      content: overlayStyle.content,
+      pointerEvents: overlayStyle.pointerEvents,
+      boxShadow: overlayStyle.boxShadow,
+      backgroundImage: overlayStyle.backgroundImage,
+    };
     return {
       gridCount: grids.length,
       counts,
@@ -466,8 +1175,7 @@ function miniSudokuInputProbe() {
       written,
       maxSquareDelta,
       gridWidthDelta: Math.abs(gridRect.width - 4 * cellSize),
-      blockRightWidth,
-      blockBottomWidth,
+      overlay,
       panelDigitGrid: panel.classList.contains('input-panel-digit-grid'),
     };
   })()`;
@@ -475,6 +1183,7 @@ function miniSudokuInputProbe() {
 
 function columnAdditionInputProbe() {
   return `(async () => {
+    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -511,6 +1220,7 @@ function columnAdditionInputProbe() {
     const firstSlot = slots[0];
     const expressionFont = getComputedStyle(expression).fontFamily;
     const slotFont = getComputedStyle(firstSlot).fontFamily;
+    const selectedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
 
     document.querySelector('button[aria-label="採点"]')?.click();
     const feedback = await waitFor(() => {
@@ -527,6 +1237,7 @@ function columnAdditionInputProbe() {
     const separateCorrectAnswerCount = document.querySelectorAll('.column-grade-correct-answer').length;
     const correctionGlyph = correctionEditor?.querySelector('.column-digit-glyph');
     const correctionColor = correctionGlyph ? getComputedStyle(correctionGlyph).color : null;
+    const gradedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
     return {
       fieldCount: editors.length,
       value,
@@ -548,6 +1259,8 @@ function columnAdditionInputProbe() {
       correctionValue,
       separateCorrectAnswerCount,
       correctionColor,
+      selectedGridAlignment,
+      gradedGridAlignment,
     };
   })()`;
 }
@@ -590,8 +1303,62 @@ function columnDecimalInputProbe() {
   })()`;
 }
 
+function columnDivisionKeyboardTargetProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    const remainders = await waitFor(() => {
+      const values = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder math-field.answer-mathfield')];
+      return values.length === 12 ? values : null;
+    }, '12 remainder fields for physical keyboard probe');
+    const field = remainders[7];
+    const frame = field?.closest('.answer-box');
+    const cell = field?.closest('.problem-cell-column-arithmetic-divide');
+    if (!field || !frame || !cell) throw new Error('Missing right-edge remainder field for physical keyboard probe');
+    const rect = field.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    return {
+      x: (rect.left + rect.right) / 2,
+      y: (rect.top + rect.bottom) / 2,
+      crossesLogicalCell: frameRect.right > cellRect.right + 1,
+      ariaLabel: field.getAttribute('aria-label'),
+    };
+  })()`;
+}
+
+function columnDivisionKeyboardResultProbe() {
+  return `(() => {
+    const fields = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder math-field.answer-mathfield')];
+    const field = fields[7];
+    return {
+      value: field?.value ?? null,
+      selected: field?.classList.contains('answer-mathfield-selected') || field?.closest('.answer-box')?.classList.contains('answer-box-selected') === true,
+      notice: document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null,
+    };
+  })()`;
+}
+
+function columnDivisionKeyboardFocusProbe() {
+  return `(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    for (let i = 0; i < 80; i += 1) {
+      const fields = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder math-field.answer-mathfield')];
+      const field = fields[7];
+      const selected = field?.classList.contains('answer-mathfield-selected') || field?.closest('.answer-box')?.classList.contains('answer-box-selected') === true;
+      if (field && selected && document.activeElement === field) return true;
+      await sleep(25);
+    }
+    return false;
+  })()`;
+}
+
 function columnDivisionInputProbe() {
   return `(async () => {
+    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -605,9 +1372,9 @@ function columnDivisionInputProbe() {
       const values = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder math-field.answer-mathfield')];
       return values.length === 12 ? values : null;
     }, '12 ordinary remainder fields');
-    const firstCell = document.querySelector('.problem-cell-column-arithmetic-divide');
-    const quotient = quotients[0];
-    const remainder = remainders[0];
+    const quotient = quotients[3];
+    const remainder = remainders[3];
+    const firstCell = remainder.closest('.problem-cell-column-arithmetic-divide');
     const quotientLabel = quotient.closest('.column-division-answer-coordinate')?.querySelector('.column-division-answer-label')?.textContent?.trim() ?? null;
     const remainderLabel = remainder.closest('.column-division-answer-coordinate')?.querySelector('.column-division-answer-label')?.textContent?.trim() ?? null;
     const quotientButtons = [...quotient.querySelectorAll('button.column-digit-slot-active')];
@@ -628,13 +1395,38 @@ function columnDivisionInputProbe() {
     }
     const quotientValue = [...quotient.querySelectorAll('.column-digit-slot-active')].map((slot) => slot.textContent?.trim() ?? '').join('').replace(/^0+(?=[0-9])/, '');
     const remainderValue = remainder.value;
+    const noticeAfterAutoRemainder = document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null;
+    const autoCellRect = remainder.closest('.problem-cell-column-arithmetic-divide')?.getBoundingClientRect();
+    const autoFrameRect = remainder.closest('.answer-box')?.getBoundingClientRect();
+    const autoRemainderCrossesLogicalCell = Boolean(autoCellRect && autoFrameRect && autoFrameRect.right > autoCellRect.right + 1);
+
+    // M-039 regression: use an answer field in the rightmost worksheet column,
+    // where shared page-grid alignment intentionally places the fixed remainder
+    // frame beyond the logical problem-cell edge. Direct click must still accept
+    // ordinary big-endian integer input without invoking the formula overflow guard.
+    const directRemainder = remainders.at(-1);
+    directRemainder?.click();
+    await sleep(80);
+    const directPanel = await waitFor(() => document.querySelector('.input-panel'), 'direct remainder input panel');
+    for (const digit of ['2', '1']) {
+      [...directPanel.querySelectorAll('.keypad-numbers button')].find((button) => button.textContent?.trim() === digit)?.click();
+      await sleep(80);
+    }
+    const directRemainderValue = directRemainder?.value ?? null;
+    const noticeAfterDirectRemainder = document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null;
+    const directCellRect = directRemainder?.closest('.problem-cell-column-arithmetic-divide')?.getBoundingClientRect();
+    const directFrameRect = directRemainder?.closest('.answer-box')?.getBoundingClientRect();
+    const directRemainderCrossesLogicalCell = Boolean(directCellRect && directFrameRect && directFrameRect.right > directCellRect.right + 1);
+
     const bracket = firstCell.querySelector('.column-division-bracket');
     const bracketPath = bracket?.querySelector('.column-division-bracket-mark path')?.getAttribute('d') ?? null;
+    const selectedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
     document.querySelector('button[aria-label="採点"]')?.click();
     await waitFor(() => document.querySelectorAll('.column-grade-feedback').length === 12, 'division grading feedback');
-    const gradedFirstCell = document.querySelector('.problem-cell-column-arithmetic-divide');
+    const gradedFirstCell = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide')][3];
     const gradedQuotient = gradedFirstCell.querySelector('.column-division-answer-coordinate-quotient .column-digit-answer-quotient');
     const gradedRemainder = gradedFirstCell.querySelector('.column-division-answer-coordinate-remainder math-field.answer-mathfield');
+    const gradedDirectRemainder = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide .column-division-answer-coordinate-remainder math-field.answer-mathfield')].at(-1);
     const quotientCorrection = gradedFirstCell.querySelector('.column-division-correction-quotient .column-digit-answer-correction');
     const remainderCorrection = gradedFirstCell.querySelector('.column-division-correction-remainder .column-remainder-correction-value');
     const gradedQuotientValue = gradedQuotient
@@ -642,6 +1434,22 @@ function columnDivisionInputProbe() {
       : null;
     const quotientCorrectionValue = quotientCorrection
       ? [...quotientCorrection.querySelectorAll('.column-digit-slot-active')].map((slot) => slot.textContent?.trim() ?? '').join('').replace(/^0+(?=[0-9])/, '')
+      : null;
+    const quotientCorrectionGlyph = quotientCorrection?.querySelector('.column-digit-glyph');
+    const quotientCorrectionColor = quotientCorrectionGlyph ? getComputedStyle(quotientCorrectionGlyph).color : null;
+    const remainderCorrectionValue = remainderCorrection?.textContent?.trim() ?? null;
+    const remainderCorrectionColor = remainderCorrection ? getComputedStyle(remainderCorrection).color : null;
+    const gradedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
+    const returnButton = document.querySelector('button[aria-label="問題に戻る"]');
+    returnButton?.click();
+    await waitFor(() => document.querySelector('button[aria-label="採点"]')?.getAttribute('aria-pressed') === 'false', 'editing after grading');
+    const returnedCells = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide')];
+    const returnedFirstCell = returnedCells[3];
+    const returnedQuotient = returnedFirstCell?.querySelector('.column-division-answer-coordinate-quotient .column-digit-answer-quotient');
+    const returnedRemainder = returnedFirstCell?.querySelector('.column-division-answer-coordinate-remainder math-field.answer-mathfield');
+    const returnedDirectRemainder = returnedCells.at(-1)?.querySelector('.column-division-answer-coordinate-remainder math-field.answer-mathfield');
+    const returnedQuotientValue = returnedQuotient
+      ? [...returnedQuotient.querySelectorAll('.column-digit-slot-active')].map((slot) => slot.textContent?.trim() ?? '').join('').replace(/^0+(?=[0-9])/, '')
       : null;
     return {
       quotientCount: quotients.length,
@@ -651,6 +1459,11 @@ function columnDivisionInputProbe() {
       formulaLabels,
       quotientValue,
       remainderValue,
+      noticeAfterAutoRemainder,
+      autoRemainderCrossesLogicalCell,
+      directRemainderValue,
+      noticeAfterDirectRemainder,
+      directRemainderCrossesLogicalCell,
       autoMovedToRemainder,
       quotientDirection: quotient.getAttribute('data-column-direction'),
       remainderUsesDigitSlots: Boolean(firstCell.querySelector('.column-digit-answer-remainder')),
@@ -658,14 +1471,21 @@ function columnDivisionInputProbe() {
       bracketPath,
       gradedQuotientValue,
       gradedRemainderValue: gradedRemainder?.value ?? null,
+      gradedDirectRemainderValue: gradedDirectRemainder?.value ?? null,
+      returnedQuotientValue,
+      returnedRemainderValue: returnedRemainder?.value ?? null,
+      returnedDirectRemainderValue: returnedDirectRemainder?.value ?? null,
+      returnedEditable: returnedRemainder?.getAttribute('aria-readonly') === 'false',
       quotientCorrectionInGrid: Boolean(quotientCorrection),
       quotientCorrectionValue,
-      quotientCorrectionColor: quotientCorrection?.querySelector('.column-digit-glyph') ? getComputedStyle(quotientCorrection.querySelector('.column-digit-glyph')).color : null,
+      quotientCorrectionColor,
       remainderCorrectionInGrid: Boolean(remainderCorrection),
-      remainderCorrectionValue: remainderCorrection?.textContent?.trim() ?? null,
-      remainderCorrectionColor: remainderCorrection ? getComputedStyle(remainderCorrection).color : null,
+      remainderCorrectionValue,
+      remainderCorrectionColor,
       separateCorrectAnswerCount: document.querySelectorAll('.column-grade-correct-answer').length,
       notice: document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null,
+      selectedGridAlignment,
+      gradedGridAlignment,
     };
   })()`;
 }
@@ -917,6 +1737,7 @@ function directGenerationProbe(themeId, seed) {
 function printPreviewProbe(seed) {
   return `(async () => {
     const seed = ${JSON.stringify(seed)};
+    const measureColumnLaneSafety = ${browserColumnLaneSafety.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label, attempts = 800) => {
       for (let i = 0; i < attempts; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -926,6 +1747,13 @@ function printPreviewProbe(seed) {
     await waitFor(() => document.querySelector('button[aria-label="難易度"]'), 'difficulty');
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
+    const advanced = await waitFor(() => document.querySelector('.advanced-settings'), 'advanced settings');
+    if (!advanced.open) {
+      advanced.querySelector('summary')?.click();
+      await waitFor(() => advanced.open, 'advanced settings open');
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    }
     const seedInput = document.querySelector('input[aria-label="Seed"]');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     setter.call(seedInput, seed);
@@ -951,6 +1779,8 @@ function printPreviewProbe(seed) {
         bodyBusy: document.querySelector('[aria-busy="true"]')?.className ?? null,
       };
     }
+    const worksheetFooter = document.querySelector('[data-testid="worksheet-footer"]')?.textContent ?? '';
+    if (!worksheetFooter.includes(seed)) throw new Error('Print worksheet does not use requested Seed ' + seed + ': ' + worksheetFooter);
 
     window.__AUTODRILL_PRINT_PROBE__ = null;
     window.print = () => {
@@ -980,7 +1810,10 @@ function printPreviewProbe(seed) {
     const cells = [...problemPage.querySelectorAll('.problem-cell')];
     const crossingDetails = cells.flatMap((cell) => {
       const cellRect = cell.getBoundingClientRect();
-      const entries = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .column-arithmetic, .mini-sudoku-grid, .problem-answer-area')]
+      const boundarySelector = cell.classList.contains('problem-cell-column-arithmetic')
+        ? '.problem-number'
+        : '.problem-number, math-span.problem-math-expression, .mini-sudoku-grid, .problem-answer-area';
+      const entries = [...cell.querySelectorAll(boundarySelector)]
         .map((element) => ({ element, rect: element.getBoundingClientRect() }))
         .filter(({ rect }) => rect.width > 0 && rect.height > 0);
       if (entries.length === 0) return [];
@@ -1003,6 +1836,13 @@ function printPreviewProbe(seed) {
         laneRightOffset: getComputedStyle(cell).getPropertyValue('--column-lane-right-offset').trim(),
       }];
     });
+    crossingDetails.push(...measureColumnLaneSafety(problemPage).map((issue) => ({
+      problem: issue.problem,
+      leftOverflow: issue.kind === 'page-overflow' ? issue.overflow : 0,
+      rightOverflow: issue.kind === 'page-overflow' ? issue.overflow : 0,
+      kind: issue.kind,
+      overlap: issue.kind === 'lane-overlap' ? issue.overflow : 0,
+    })));
     const crossings = crossingDetails.length;
     const dividerCount = problemPage.querySelectorAll('.problem-divider').length;
     const columnCells = problemPage.querySelectorAll('.problem-cell-column-arithmetic').length;
@@ -1024,24 +1864,15 @@ function printPreviewProbe(seed) {
     const miniSudokuProblemCells = problemPage.querySelectorAll('.mini-sudoku-grid [data-digit-grid-cell]').length;
     const miniSudokuAnswerCells = answerPage?.querySelectorAll('.mini-sudoku-grid [data-digit-grid-cell]').length ?? 0;
     const miniSudokuPrintButtons = preview.querySelectorAll('.mini-sudoku-grid button').length;
-    const answerCrossingDetails = [...(answerPage?.querySelectorAll('.problem-cell-column-arithmetic') ?? [])].flatMap((cell) => {
-      const cellRect = cell.getBoundingClientRect();
-      const solution = cell.querySelector('[data-column-solution=\"true\"]');
-      if (!solution) return [];
-      const rect = solution.getBoundingClientRect();
-      const leftOverflow = Math.max(0, cellRect.left - rect.left);
-      const rightOverflow = Math.max(0, rect.right - cellRect.right);
-      const topOverflow = Math.max(0, cellRect.top - rect.top);
-      const bottomOverflow = Math.max(0, rect.bottom - cellRect.bottom);
-      if (Math.max(leftOverflow, rightOverflow, topOverflow, bottomOverflow) <= 1) return [];
-      return [{
-        problem: Number(cell.dataset.printProblemIndex ?? 0) + 1,
-        leftOverflow: Math.round(leftOverflow * 10) / 10,
-        rightOverflow: Math.round(rightOverflow * 10) / 10,
-        topOverflow: Math.round(topOverflow * 10) / 10,
-        bottomOverflow: Math.round(bottomOverflow * 10) / 10,
-      }];
-    });
+    const answerCrossingDetails = measureColumnLaneSafety(answerPage).map((issue) => ({
+      problem: issue.problem,
+      leftOverflow: issue.kind === 'page-overflow' ? issue.overflow : 0,
+      rightOverflow: issue.kind === 'page-overflow' ? issue.overflow : 0,
+      topOverflow: 0,
+      bottomOverflow: 0,
+      kind: issue.kind,
+      overlap: issue.kind === 'lane-overlap' ? issue.overflow : 0,
+    }));
     const answerCrossings = answerCrossingDetails.length;
     const divisionProblemFontSizes = [...new Set([...problemPage.querySelectorAll('.problem-cell-column-arithmetic-divide .expression')].map((expression) => getComputedStyle(expression).fontSize))];
     const divisionAnswerFontSizes = [...new Set([...(answerPage?.querySelectorAll('.column-division-solution') ?? [])].map((solution) => getComputedStyle(solution).fontSize))];
@@ -1105,10 +1936,10 @@ try {
       { label: '最後まで計算しましょうの採点', pressed: ['×'] },
     ];
     const expectedGradingDescriptions = [
-      '例: 2/4 と 1/2 の表記を区別します。',
-      '例: √16 と 4 の表記を区別します。',
-      '例: 0.5 と 1/2 の表記を区別します。',
-      '上の3項目以外の、数学的に同値だが未整理・冗長な表記の違いを区別します。',
+      { label: '例: 2/4 と 1/2 の表記を区別します。', math: [{ ariaLabel: '2/4', mode: 'displaystyle' }, { ariaLabel: '1/2', mode: 'displaystyle' }] },
+      { label: '例: √16 と 4 の表記を区別します。', math: [{ ariaLabel: '√16', mode: 'displaystyle' }, { ariaLabel: '4', mode: 'displaystyle' }] },
+      { label: '例: 0.5 と 1/2 の表記を区別します。', math: [{ ariaLabel: '0.5', mode: 'displaystyle' }, { ariaLabel: '1/2', mode: 'displaystyle' }] },
+      { label: '上の3項目以外の、数学的に同値だが未整理・冗長な表記の違いを区別します。', math: [] },
     ];
     if (
       JSON.stringify(gradingSettings.groups) !== JSON.stringify(expectedGradingSettings)
@@ -1136,6 +1967,51 @@ try {
     if (!dropdown.grade.visible || dropdown.grade.selected !== 'grade-9') {
       throw new Error(`Grade dropdown final option is clipped or not selectable: ${JSON.stringify(dropdown.grade)}`);
     }
+
+
+    await navigate(cdp, `${origin}${BASE_PATH}/`);
+    const optionCoverage = await cdp.evaluate(settingsOptionCoverageProbe());
+    const sitemapThemeCount = [...readFileSync(join(OUT, 'sitemap.xml'), 'utf8').matchAll(/<loc>([^<]+)<\/loc>/g)]
+      .map((match) => new URL(match[1]).pathname)
+      .filter((pathname) => pathname.includes('/drills/')).length;
+    if (optionCoverage.alert || optionCoverage.difficulties === 0 || optionCoverage.grades === 0 || optionCoverage.recommendedGenres === 0 || optionCoverage.themes !== sitemapThemeCount) {
+      throw new Error(`Settings option coverage did not exercise the complete current option surface: ${JSON.stringify({ ...optionCoverage, sitemapThemeCount })}`);
+    }
+    console.log(`[interaction] settings options: difficulties=${optionCoverage.difficulties}, grades=${optionCoverage.grades}, themes=${optionCoverage.themes}`);
+
+    await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-1/one-digit-addition/`);
+    const stateGraph = await cdp.evaluate(uiStateGraphProbe());
+    const stateManifest = {
+      settings: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:select:ジャンル', 'settings:select:テーマ', 'settings:select:難易度'],
+      settingsGrade: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:select:ジャンル', 'settings:select:テーマ', 'settings:select:学年', 'settings:select:難易度'],
+      settingsAdvanced: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:grading-settings', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:seed', 'settings:select:ジャンル', 'settings:select:テーマ', 'settings:select:難易度'],
+      gradingModal: [
+        'modal:採点設定を閉じる',
+        'modal:約分しましょうを丸にする', 'modal:約分しましょうをバツにする',
+        'modal:整数でこたえましょうを丸にする', 'modal:整数でこたえましょうをバツにする',
+        'modal:分数でこたえましょうを丸にする', 'modal:分数でこたえましょうをバツにする',
+        'modal:最後まで計算しましょうを丸にする', 'modal:最後まで計算しましょうをバツにする',
+      ],
+      printPreview: ['preview:戻る', 'preview:解答を逆さにする', 'preview:印刷する'],
+      worksheetEditing: ['problem:math-field', 'worksheet:TOPに戻る', 'worksheet:印刷', 'worksheet:採点'],
+      inputPanel: [
+        'problem:math-field',
+        'worksheet:TOPに戻る', 'worksheet:印刷', 'worksheet:採点',
+        'input:入力パネルを閉じる',
+        'input:7', 'input:8', 'input:9', 'input:4', 'input:5', 'input:6', 'input:1', 'input:2', 'input:3', 'input:0',
+        'input:カーソルを左へ', 'input:カーソルを右へ', 'input:一文字戻す', 'input:クリア', 'input:確定',
+      ],
+      worksheetGraded: ['graded:もう一回問題を解く', 'graded:問題に戻る', 'worksheet:TOPに戻る', 'worksheet:印刷'],
+    };
+    const stateCensusFailures = Object.entries(stateManifest).flatMap(([state, expected]) => {
+      const actual = stateGraph.states[state] ?? [];
+      return JSON.stringify([...actual].sort()) === JSON.stringify([...expected].sort()) ? [] : [{ state, expected: [...expected].sort(), actual }];
+    });
+    const failedEdges = stateGraph.edges.filter((edge) => !edge.ok);
+    if (stateGraph.alert || stateGraph.obsoleteDifferentWorksheetPresent || stateCensusFailures.length > 0 || failedEdges.length > 0) {
+      throw new Error(`UI state graph coverage failed: ${JSON.stringify({ alert: stateGraph.alert, obsoleteDifferentWorksheetPresent: stateGraph.obsoleteDifferentWorksheetPresent, stateCensusFailures, failedEdges })}`);
+    }
+    console.log(`[interaction] UI state graph: ${stateGraph.edges.length} one-step edges verified across ${Object.keys(stateManifest).length} user-visible states`);
   }
 
   if (!PRINT_ONLY && GENERATION_PROBE) {
@@ -1151,12 +2027,17 @@ try {
   }
 
   const sitemap = readFileSync(join(OUT, 'sitemap.xml'), 'utf8');
-  const routes = [...sitemap.matchAll(/<loc>[^<]+\/AutoDrill([^<]*)<\/loc>/g)]
-    .map((match) => match[1] || '/')
+  const routes = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)]
+    .map((match) => new URL(match[1]).pathname)
+    .map((pathname) => pathname.startsWith(BASE_PATH) ? (pathname.slice(BASE_PATH.length) || '/') : pathname)
     .filter((pathname) => pathname !== '/')
     .filter((pathname) => !ROUTE_FILTER || pathname.includes(ROUTE_FILTER));
+  console.log(`[layout] selected ${routes.length} worksheet route(s)${ROUTE_FILTER ? ` for filter ${ROUTE_FILTER}` : ''}`);
   const failures = [];
   let worksheetSampleCount = 0;
+  let answerAffordanceActionCount = 0;
+  let inputPanelActionCount = 0;
+  const inputPanelSignatures = new Set();
   if (!PRINT_ONLY) {
     for (const route of routes) {
       const routeSeeds = route.includes('/signed-arithmetic-') ? [...SEEDS, ...EXTRA_SIGNED_SEEDS] : SEEDS;
@@ -1166,8 +2047,9 @@ try {
         console.log(`[layout] checking ${route} seed=${seed}`);
         await navigate(cdp, `${origin}${BASE_PATH}${localRoute}`);
         let result;
+        const inputDifficulty = route.endsWith('/column-division-one-digit') || route.endsWith('/column-division-two-digit') ? 'ふつう' : 'むずかしい';
         try {
-          result = await cdp.evaluate(worksheetProbe(seed));
+          result = await cdp.evaluate(worksheetProbe(seed, inputDifficulty));
         } catch (error) {
           throw new Error(`Worksheet probe failed for ${route} seed=${seed}; console=${cdp.consoleErrors.join(' | ') || 'none'}`, { cause: error });
         }
@@ -1179,6 +2061,17 @@ try {
         for (const mismatch of result.columnGridMismatches ?? []) {
           console.warn(`[layout] column grid mismatch: ${route} seed=${seed} problem=${mismatch.problem} horizontal=${mismatch.horizontalDelta}px vertical=${mismatch.verticalDelta}px`);
           failures.push({ route, seed, reason: `column arithmetic answer is not on the shared digit grid`, ...mismatch });
+        }
+        if (result.columnGridAlignment?.applicable && result.columnGridAlignment.maxError > 0.25) {
+          failures.push({ route, seed, reason: `column arithmetic paint is not aligned to the worksheet background grid`, alignment: result.columnGridAlignment });
+        }
+        if (result.columnGridAlignment?.applicable && seed === SEEDS[0]) {
+          const printAlignment = await cdp.evaluate(columnPrintAlignmentProbe());
+          if (!printAlignment.problems?.applicable || !printAlignment.answers?.applicable
+            || printAlignment.problems.maxError > 0.5 || printAlignment.answers.maxError > 0.5) {
+            failures.push({ route, seed, reason: `column print problem/answer paint is not aligned to the worksheet background grid`, printAlignment });
+          }
+          console.log(`[grid] ${route} seed=${seed}: web=${result.columnGridAlignment.maxError}px print=${printAlignment.problems.maxError}px answer=${printAlignment.answers.maxError}px`);
         }
         if (cdp.consoleErrors.length > 0) failures.push({ route, seed, reason: `console errors: ${cdp.consoleErrors.join(' | ')}` });
         console.log(`[layout] ${route} seed=${seed}: ${result.count} problems, ${result.gradeClass}, expression ${result.fontSize}, crossings=${result.crossings.length}, gridMismatches=${result.columnGridMismatches?.length ?? 0}`);
@@ -1234,8 +2127,10 @@ try {
             || input.written !== input.numberKeys[0]
             || input.maxSquareDelta > 1
             || input.gridWidthDelta > 1
-            || input.blockRightWidth < 1.5
-            || input.blockBottomWidth < 1.5
+            || input.overlay.content === 'none'
+            || input.overlay.pointerEvents !== 'none'
+            || input.overlay.boxShadow === 'none'
+            || (input.overlay.backgroundImage.match(/linear-gradient/g) ?? []).length < 4
             || !input.panelDigitGrid
           ) {
             failures.push({ route, seed, reason: `mini sudoku grid/input mismatch: ${JSON.stringify(input)}` });
@@ -1261,6 +2156,8 @@ try {
             || input.gradedValue !== input.value
             || input.separateCorrectAnswerCount !== 0
             || (input.firstMark === '×' && (!input.correctionInGrid || !input.correctionValue || input.correctionColor !== 'rgb(210, 11, 11)'))
+            || !input.selectedGridAlignment?.applicable || input.selectedGridAlignment.maxError > 0.25
+            || !input.gradedGridAlignment?.applicable || input.gradedGridAlignment.maxError > 0.25
           ) {
             failures.push({ route, seed, reason: `column addition digit-grid/grading mismatch: ${JSON.stringify(input)}` });
           }
@@ -1283,7 +2180,25 @@ try {
             failures.push({ route, seed, reason: `decimal column fixed-point digit input mismatch: ${JSON.stringify(decimalInput)}` });
           }
         }
-        if (route.endsWith('/column-division-one-digit') && seed === SEEDS[0]) {
+        if ((route.endsWith('/column-division-one-digit') || route.endsWith('/column-division-two-digit')) && seed === SEEDS[0]) {
+          const keyboardTarget = await cdp.evaluate(columnDivisionKeyboardTargetProbe());
+          await mouseClick(cdp, keyboardTarget.x, keyboardTarget.y);
+          const keyboardFocused = await cdp.evaluate(columnDivisionKeyboardFocusProbe());
+          await typeKeyboardText(cdp, '2');
+          const keyboardAfterFirstDigit = await cdp.evaluate(columnDivisionKeyboardResultProbe());
+          await typeKeyboardText(cdp, '1');
+          const keyboardInput = await cdp.evaluate(columnDivisionKeyboardResultProbe());
+          if (
+            !keyboardTarget.crossesLogicalCell
+            || !keyboardFocused
+            || keyboardAfterFirstDigit.value !== '2'
+            || !keyboardInput.selected
+            || keyboardInput.value !== '21'
+            || keyboardInput.notice === '式が大きすぎます！'
+          ) {
+            failures.push({ route, seed, reason: `column division physical-keyboard remainder input mismatch: ${JSON.stringify({ keyboardTarget, keyboardFocused, keyboardAfterFirstDigit, keyboardInput })}` });
+          }
+
           const input = await cdp.evaluate(columnDivisionInputProbe());
           if (process.env.AUTODRILL_CAPTURE_DIVISION_INPUT_SCREENSHOT) {
             const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
@@ -1295,6 +2210,16 @@ try {
             || input.quotientLabel !== '商'
             || input.remainderLabel !== 'あまり'
             || input.remainderValue !== '21'
+            || input.noticeAfterAutoRemainder === '式が大きすぎます！'
+            || !input.autoRemainderCrossesLogicalCell
+            || input.directRemainderValue !== '21'
+            || input.noticeAfterDirectRemainder === '式が大きすぎます！'
+            || !input.directRemainderCrossesLogicalCell
+            || input.gradedDirectRemainderValue !== input.directRemainderValue
+            || input.returnedQuotientValue !== input.quotientValue
+            || input.returnedRemainderValue !== input.remainderValue
+            || input.returnedDirectRemainderValue !== input.directRemainderValue
+            || !input.returnedEditable
             || !input.autoMovedToRemainder
             || input.quotientDirection !== 'left-to-right'
             || input.remainderUsesDigitSlots
@@ -1310,6 +2235,8 @@ try {
             || !input.remainderCorrectionValue
             || input.remainderCorrectionColor !== 'rgb(210, 11, 11)'
             || input.separateCorrectAnswerCount !== 0
+            || !input.selectedGridAlignment?.applicable || input.selectedGridAlignment.maxError > 0.25
+            || !input.gradedGridAlignment?.applicable || input.gradedGridAlignment.maxError > 0.25
           ) {
             failures.push({ route, seed, reason: `column division final-answer input mismatch: ${JSON.stringify(input)}` });
           }
@@ -1367,9 +2294,35 @@ try {
             failures.push({ route, seed, reason: `visual overflow did not parse-successfully roll back to the last accepted MathLive value: ${JSON.stringify(keypad.overflowResult)}` });
           }
         }
+        if (seed === SEEDS[0]) {
+          await navigate(cdp, `${origin}${BASE_PATH}${localRoute}`);
+          await cdp.evaluate(worksheetProbe(seed, inputDifficulty));
+          const affordanceCoverage = await cdp.evaluate(worksheetAffordanceCoverageProbe());
+          answerAffordanceActionCount += affordanceCoverage.attempted;
+          if (affordanceCoverage.attempted === 0 || affordanceCoverage.failures.length > 0) {
+            failures.push({ route, seed, reason: `worksheet editable-affordance coverage failed: ${JSON.stringify(affordanceCoverage)}` });
+          }
+          // Input-panel actions are one-step edges from a canonical fresh worksheet,
+          // not a continuation of the preceding all-affordances mutation sweep.
+          await navigate(cdp, `${origin}${BASE_PATH}${localRoute}`);
+          await cdp.evaluate(worksheetProbe(seed, inputDifficulty));
+          const panelCoverage = await cdp.evaluate(openInputPanelCoverageProbe());
+          if (panelCoverage.applicable && !inputPanelSignatures.has(panelCoverage.signature)) {
+            inputPanelSignatures.add(panelCoverage.signature);
+            const actions = await cdp.evaluate(exerciseInputPanelActionsProbe());
+            inputPanelActionCount += actions.executed;
+            if (actions.executed !== actions.descriptors.length || actions.failures.length > 0) {
+              failures.push({ route, seed, reason: `input-panel one-step action coverage failed: ${JSON.stringify(actions)}` });
+            }
+          }
+        }
       }
     }
   }
+  if (!PRINT_ONLY && (worksheetSampleCount === 0 || answerAffordanceActionCount === 0)) {
+    throw new Error(`Browser interaction verification selected zero required samples: worksheets=${worksheetSampleCount}, answerAffordances=${answerAffordanceActionCount}${ROUTE_FILTER ? ` for filter ${ROUTE_FILTER}` : ''}.`);
+  }
+
   if (!SKIP_PRINT_PROBES) {
     await navigate(cdp, `${origin}${BASE_PATH}/drills/bonus/mini-sudoku/`);
     const miniSudokuPrint = await cdp.evaluate(printPreviewProbe('A1b2'));
@@ -1462,7 +2415,7 @@ try {
   }
 
   if (failures.length > 0) { console.error(JSON.stringify(failures, null, 2)); throw new Error(`Browser worksheet layout verification failed with ${failures.length} issue(s).`); }
-  console.log(`Browser layout verified: dropdowns selectable, ${worksheetSampleCount} worksheet samples stay within their cell boundaries, and native print waits for stable MathLive rendering.`);
+  console.log(`Browser layout/interaction verified: ${worksheetSampleCount} worksheet samples, ${answerAffordanceActionCount} editable affordance actions, ${inputPanelActionCount} unique input-panel actions, and native print readiness all passed.`);
 } finally {
   try { cdp?.ws.close(); } catch {}
   if (chrome.exitCode === null) {

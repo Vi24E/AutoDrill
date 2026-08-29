@@ -3,7 +3,7 @@
 この文書を、現時点の未解決 Issue の canonical backlog とする。
 
 - dated audit 文書は発見時点の証拠・調査記録であり、現在の backlog の source of truth にはしない。
-- mobile はalphaではsupport対象外。mobile対応は`roadmap.md`のbeta移行条件として管理し、alphaのopen Issueには含めない。
+- mobile はalphaではsupport対象外。mobile対応は`roadmap.md`のbeta移行条件とし、発見したmobile UX問題は **Low / alpha非blocking** としてbacklogへ記録する。
 - 症状だけでなく、共通原因・設計上の問題がある場合はそちらを Issue の単位とする。
 
 ## Pre-release compatibility policy
@@ -545,9 +545,16 @@ C-001と同じ実Chrome visual-overflow regressionで、parse成功ケースのp
 
 ### M-002 入力キーボードの主要key群が視覚的に中央からずれている
 
-**状態:** User confirmation pending (technical verification passed 2026-08-17)
+**状態:** Closed (2026-08-27 user-directed UX fix + browser verification)
 
 `.input-panel-inner` 自体は中央寄せだが、3 column 幅が非対称であるため数字keypad/主要操作の視覚重心がworksheet中心からずれる。
+
+**再現条件**
+
+1. Chromeをdesktop幅1440×1000（1024×768でも再現）にし、難易度`ふつう`・Seed `A1b2`で`1けたのたしざん(1)`を生成する。
+2. 任意の解答欄を選択してinput panelを開く。数字のみのsimple keypadでは左側trackが空のまま、右側に移動/delete/clear/確定が残り、panel全体の視覚質量が右へ偏る。
+3. 同じ難易度`ふつう`・Seed `A1b2`で`すうじはひとりぼっち`を生成し、問題1の任意の空cellを選択すると、数字keyが`1 2 3 / 4`の3+1配置となり、2段目右側に大きな空白が生じる。
+4. 同じ難易度`ふつう`・Seed `A1b2`で`分数の足し算`を生成し、問題1の解答欄を選択すると、左側の`分数`/`帯分数`2buttonがtrack高さいっぱいまで縦長にstretchする。
 
 magic-number offsetではなくgrid構造を整理し、主要入力部を中央へ合わせる。
 
@@ -564,6 +571,16 @@ magic-number offsetではなくgrid構造を整理し、主要入力部を中央
 **技術的修正完了・ユーザー再確認待ち (2026-08-16)**
 
 分数・平方根・複数解のstructure keyは64pxを維持する一方、`+ / − / ±`は42pxのcompact operator rowへ分離した。numeric keypadの幾何学中心は維持し、browser regressionではstructure row / operator rowそれぞれの高さ一致と、operator rowがstructure rowより十分小さいことを検証している。最終的な視覚バランスのみユーザー再確認待ち。
+
+**2026-08-26 visual UX audit追補**
+
+中学生full keypadは、structure / numeric / operator / controlの4群が画面上で概ね釣り合って見える。一方、数字のみ・筆算等のsimple keypadではnumeric track自体はworksheet中心へ来ているが、左側trackが空で右側controlだけが残るため、**panel全体の視覚質量は右寄り**に見える。幾何学的なnumeric centerだけではM-002の「視覚的中央」のClose条件として不十分であり、simple shellを含めたユーザー視覚確認までOpenを維持する。
+
+**2026-08-26 frontend visual UX audit再確認**
+
+1440pxだけでなく1024px幅でも、数字のみ・筆算・Mini Sudokuのsimple input panelは左trackが空いたまま右側control群だけを保持するため、入力UI全体が明確に右へ偏って見える。Mini Sudokuではさらに数字key `1 2 3 / 4` が3+1配置となり、2段目左端に4だけが残って大きな空白を作る。1〜4の有限keypadは2×2等の対称配置にし、simple shell自体もpanel中心に対して視覚質量が左右で釣り合う構造へ整理する。magic-number offsetで補正しない。
+
+また小学生の分数入力では、structure keyが「分数」「帯分数」の2個だけになると各buttonが左trackの高さいっぱいまで縦長にstretchし、glyph/labelに対して過剰な空白を持つ。中学生の2×2 structure shellと同じcontrol familyとして寸法規則が連続していない。利用可能key数が少ない場合もbutton自体を不必要に巨大化させず、共通のkey size / grid rhythmを維持する。
 
 **ユーザー再確認による再修正 (2026-08-17)**
 
@@ -588,6 +605,13 @@ Desmos型の安定した操作配置を参考にし、中学生範囲はthemeご
 - 構造keyは **2×2**（分数 / 帯分数 / 平方根 / 複数解）で固定する。帯分数だけをテーマ都合で灰色化しない。
 - `+ / − / ±`は数字とcontrolの間のcompact縦列を維持する。
 - 最終Closeは、中1負の数・一次方程式、中2連立方程式、中3二次方程式で同じ2×2 shellと列順が維持されることを実画面確認後とする。
+
+
+**2026-08-27 解決確認**
+
+ユーザー方針に従い、simple keypadは空の左trackを廃止して「数字群 + 編集control群」の2列自体をpanel中央へ配置した。Mini Sudokuは1〜4を2×2配置とした。小学生分数の`分数`/`帯分数`は縦長自体を許容し、unusedな3列目をなくして2列で幅を使い切る。1440×1000実Chromeで通常計算・分数・Mini Sudokuを再確認し、視覚重心と不要空白の問題が解消した。
+
+小学生分数keyについて過去に記載した「button自体を巨大化させない」という要求はsupersedeする。縦方向の伸びは許容し、問題だったunused空白だけを削減する。
 
 ---
 
@@ -820,10 +844,17 @@ root `README.md` と `docs/architecture/web-print.md` のcurrent boundaryをsche
 
 ### M-011 印刷時の解答ページ反転を選択できない
 
-**状態:** Open
+**状態:** Closed (2026-08-27 user-directed UX fix + browser/integration verification)
 **対象:** Print/PDF UX
 
 現在の印刷プレビューでは解答ページを上下反転して表示する方式が固定されている。利用者・印刷用途によっては通常向きの解答ページが望ましいため、反転有無を選択可能にする。
+
+**再現条件**
+
+1. desktop Chrome（1440×1000程度）で、難易度`ふつう`・Seed `A1b2`の`負の数の計算(1)`を生成する。
+2. `印刷`からin-appの印刷プレビューを開く。
+3. 2ページ目の解答ページまでscrollする。
+4. 解答ページ全体が180°反転しているが、preview内に「両面印刷向けの意図的な反転」である説明も、通常向きへ切り替えるcontrolもない。画面だけでは意図的仕様か描画不具合か判断できない。
 
 **方針**
 
@@ -837,6 +868,15 @@ root `README.md` と `docs/architecture/web-print.md` のcurrent boundaryをsche
 - 生成PDFの解答ページorientationが選択と一致する。
 - 問題ページには影響しない。
 - browser/PDF regressionを追加する。
+
+**2026-08-26 visual UX audit追補**
+
+解答pageの180°反転自体は既存の両面印刷仕様だが、print preview画面にはその意図を説明する表示がない。監査者が画面だけでは「意図的な反転」か「描画不具合」か判定できず、docsを読んで初めて仕様と確認できた。したがってM-011はorientation選択だけでなく、**preview単体で反転の意味が理解できること**もClose条件へ含める。
+
+
+**2026-08-27 解決確認**
+
+印刷プレビューの`印刷する`横に、初期ONの`解答を逆さにする`checkboxを追加した。OFFにするとpreviewとnative print対象DOMの解答ページから180°回転classが外れる。実Chromeでtoolbar配置を目視確認し、integration testでもON/OFFに応じたanswer page class切替を固定した。
 
 ---
 
@@ -1041,35 +1081,356 @@ Web `ThemeDefinition`には`themeKey`, Rust `skill_id`, `gradeSlug`, `themeSlug`
 
 ---
 
-## Low
+### M-032 Mini Sudokuの2×2境界と外周が均一な罫線階層になっていない
 
+**状態:** Closed (2026-08-27 topology-owned grid rules + browser verification)
+**発見契機:** 2026-08-26 frontend visual UX audit / user confirmation
+**対象:** Mini Sudoku Web / print grid presentation
 
-### L-004 小規模なdead/stale residueを整理する
+「すうじはひとりぼっち」では、4×4外周と2×2 block境界を強い罫線、通常cell境界を細い罫線として読む必要がある。しかし現画面では同じ意味の境界でも黒い太線と薄い灰色線がsegmentごとに混在し、外周も一続きの同一太さに見えない。Web問題面・入力中・採点後・print問題面・print解答面で再現する。ユーザー確認により既知の実Issueであり、answer cellの作成方法が不適切なことに由来すると判定された。
 
-**状態:** Closed (2026-08-17 post-fix verification)
-**対象:** Repository hygiene / comments / dead exports
+**再現条件**
 
-保守性監査で次の小規模residueを確認した。
-
-- `theme-definition.ts`の未使用input-interface constants。
-- `column-arithmetic-presentation.ts`の未使用`COLUMN_ARITHMETIC_GRID_CQW`。
-- `model.rs`の`MAX_ANSWER_AST_SIZE`直上に、long division layoutについての無関係なstale comment。
-- `wasm-adapter.ts`のerror textに現schema v5と不一致な`schema-v3`表記。
-- `model.rs`の大量legacy re-export facadeは移行互換の可能性があるため、参照確認なしに削除しない。H-006でhistoric compatibility削除を行う際に必要性を再判定する。
+1. desktop Chrome（1440×1000程度）で、難易度`ふつう`・Seed `A1b2`の`すうじはひとりぼっち`を生成する。この固定条件で再現確認済み。
+2. 4つの4×4盤面について、外周・中央の縦境界・中央の横境界を目視比較する。
+3. 同じ2×2 block境界であるにもかかわらず、segmentごとに黒い太線と薄い灰色線が混在し、外周も同一strokeとして連続して見えない。
+4. 空cellを選択した入力中状態、未回答または誤答で採点した状態でも同じ不均一が残る。
+5. `印刷`→print previewの問題ページ/解答ページでも同じ罫線階層の不均一を確認できる。
 
 **方針**
 
-- 実参照を確認してdead export/commentだけを削除する。
-- 単に古そうという理由でcompatibility facadeを削除しない。H-006の現行-only方針と合わせて判定する。
+- given / editable / correctionの状態からborderを個別生成せず、4×4 grid topologyから外周・2×2境界・通常cell境界を一意に導出する。
+- 同じsemantic boundaryは全segmentで同一のstroke width / colorにする。
+- Web / grading / printで同じgrid presentation primitiveを共有する。
 
-**修正規模:** Small
-**優先度:** cleanup時。
+**Close条件**
 
-**解決確認 (2026-08-17)**
+- 4×4外周が全周で同じ太さ・濃さに見える。
+- 2×2境界が縦横とも途切れず同じ太さに見える。
+- 通常cell境界はそれより明確に細い。
+- given / empty / selected / gradedの状態変更でborder hierarchyが変わらない。
 
-未使用input-interface constants、未使用grid CQW export、stale `MAX_ANSWER_AST_SIZE` comment、schema-v3文言、historic compatibility re-export residueを削除した。pre-release方針により未参照の旧`decimal-multiply-divide.ts` source-compatibility aliasも削除した。legacy/stale symbol scanで対象残骸がないことを確認した。
+
+**2026-08-27 解決確認**
+
+罫線を各cellの`button`/`span`から完全に分離し、`.mini-sudoku-grid`自身のoverlayが4×4 topologyを一括描画する構造へ変更した。外周と2×2境界は2px、通常cell境界は1pxで、given / empty / selected / gradedの要素種別に依存しない。実Chromeの通常表示・入力中・採点後で全segmentが連続・均一であることを画像で確認した。printも同じ`MiniSudokuGrid` primitiveを使用する。
 
 ---
+
+### M-033 可変長の通常計算で解答欄の横位置が行ごとに揃わない
+
+**状態:** Closed (2026-08-27 accepted by user; no code change)
+**発見契機:** 2026-08-26 frontend visual UX audit
+**対象:** Fraction / decimal inline-expression worksheet layout
+
+分数・小数の通常計算では、answer boxを式の直後へinline配置しているため、operandや分母の長さに応じて同一column内の解答欄が左右へ蛇行する。特に小数の割り算では短い`2 ÷ 4`と長い小数式でanswer box位置が大きく異なり、二列worksheetの垂直な視覚軸が崩れる。整数の基本計算・方程式では固定answer laneがあり、この不均一は同系列UI間でも目立つ。
+
+**再現条件**
+
+1. desktop Chrome（1440×1000程度）で、難易度`ふつう`・Seed `A1b2`の`小数の割り算`を生成する。
+2. 左column先頭4問を見る。このSeedでは順に`0.008 ÷ 0.08`、`0.025 ÷ 0.5`、`0.09 ÷ 0.1`、`0.0021 ÷ 0.07`が生成される。
+3. 4つの解答boxの左端が同じ垂直laneへ揃わず、実Chrome計測では約`274.3 / 263.8 / 253.3 / 284.8px`となり、最大約31.5px蛇行する。
+4. 左右columnを比較してもanswer boxの対応位置が鏡像的な一貫した軸にならない。
+
+**最終判断**
+
+式幅に追従するinline answer boxは現行worksheetでは許容範囲とする。固定answer laneへの変更は行わない。監査時に記載した方針/Close条件はこの判断でsupersedeする。
+
+**2026-08-27 ユーザー判断**
+
+式長に応じてinline解答欄の位置が変わる現状は許容範囲と判断された。固定answer laneへの変更は行わずCloseする。
+
+---
+
+### M-034 Mini Sudoku採点後の訂正数字と×印が盤面へ自然に対応しない
+
+**状態:** Closed (2026-08-27 user-directed graded presentation + browser verification)
+**発見契機:** 2026-08-26 frontend visual UX audit
+**対象:** Mini Sudoku graded presentation
+
+不正解採点後、canonical correctionの赤数字が通常数字より大幅に小さく、空cellの右下隅へ寄って表示される。また問題全体の`×`が盤面から離れた左下へ置かれ、どの盤面に対するmarkか視覚的な結び付きが弱い。corrected gridを一目で読み取る用途として不自然である。
+
+**再現条件**
+
+1. desktop Chrome（1440×1000程度）で、難易度`ふつう`・Seed `A1b2`の`すうじはひとりぼっち`を生成する。
+2. 1問以上を未回答のまま、または誤った数字を入力して`採点`する。
+3. 空/誤答cellに表示される赤い正答数字をgiven数字と比較すると、かなり小さく、cell中央ではなく右下隅へ寄っている。
+4. 各problemの`×`が盤面に隣接せず左下側へ離れて表示され、どの盤面への評価markか視線だけでは対応づけにくい。
+5. 4問を見比べるとcorrectionとmarkのrelative placementが教材gridの中心軸と整合していない。
+
+**最終方針 / Close条件**
+
+- 不正解problem全体の`×`は表示しない。赤いcanonical correctionがあれば誤りは判別できる。
+- canonical correctionは従来より十分大きくし、cell内で読み取れること。user/given digitとの差は赤色で表現する。
+- 正解problemの`○`は維持してよい。
+- graded stateでもMini Sudokuのgrid geometry / border hierarchyを変えない。
+
+**2026-08-27 解決確認**
+
+ユーザー判断により、不正解problem全体へ付けていた`×`は削除した。誤りはcell内の赤いcanonical correctionだけで示し、その文字サイズを従来より大きくした。実Chromeで、赤字だけで訂正箇所を識別でき、離れた`×`が消えていることを確認した。
+
+---
+
+### M-035 `うそつきだれだ`の選択UIと採点後correctionの対応関係が画面だけでは分かりにくい
+
+**状態:** Closed (2026-08-27 user-directed UX fix + browser verification)
+**発見契機:** 2026-08-26 frontend visual UX audit
+**対象:** Liar puzzle answer / graded presentation
+
+通常画面ではA/B/C/Dがstatement群から大きく右下へ離れたplain textとして置かれ、clickable controlとしてのaffordanceと「この問題の選択肢」という結び付きが弱い。採点後はuser側A/B/C/Dの直後に、赤字・黒丸を含むもう一組のA/B/C/Dが無labelで並び、画面だけではどちらが自分の回答でどちらが正答か確定できない。実装やsourceを読まないと意味を確定できない状態自体をUI defectとみなす。
+
+**再現条件**
+
+1. desktop Chrome（1440×1000程度）で、難易度`ふつう`・Seed `A1b2`の`うそつきだれだ`を生成する。
+2. 採点前の各problemを見ると、A/B/C/Dがstatement blockから大きく右側・下側へ離れ、通常時はplain textに見えるためclickable controlであることが弱い。
+3. 任意の人物を1人以上選択して`採点`する（未回答のまま採点してもcorrection表示は確認可能）。
+4. 採点後、元のA/B/C/D列の直後に赤字/黒丸を含む別のA/B/C/D列が無labelで追加される。
+5. `自分の回答`/`正答`等のlegendがないため、画面だけでは二組の役割を一意に決められず、sourceを読まないと意味を確定できない。
+
+**最終方針 / Close条件**
+
+- A/B/C/Dの回答rowを従来より若干左上へ寄せ、statementとの視覚距離を縮める。
+- 採点前のuser selectionは従来どおり黒いovalを使う。
+- 採点後のcanonical selectionは赤いovalで示し、user selection（黒）と一目で区別できるようにする。
+- 色分けで役割が明確になるため、`自分の回答`/`正答`labelの追加は必須としない。
+
+**2026-08-27 解決確認**
+
+回答rowを従来より若干左上へ移動した。採点後はユーザー自身の選択を黒、canonical answerの選択ovalを赤で表示することで、無labelでも二つの役割を色で識別できるようにした。実Chromeで誤答状態を確認し、黒いuser selectionと赤いcanonical selectionが明確に分離して見えることを確認した。
+
+---
+
+---
+
+### M-036 ふりがなONでもworksheet本文の主要テキストにふりがなが付かない
+
+**状態:** Closed (2026-08-27 worksheet ruby integration + browser/test verification)
+**発見契機:** 2026-08-26 frontend visual UX audit
+**対象:** Worksheet title / instruction / problem text furigana presentation
+
+設定画面で「ふりがな」をONにした状態でも、worksheet headerの学年や採点・印刷等にはふりがなが付く一方、worksheetの主題であるタイトル（例: `分数の足し算`）やinstruction（例: `次の計算をしなさい。...`）、文章系problem本文にはふりがなが付かない。画面上で同じON状態の中にruby付き/なしが混在し、ふりがなtoggleの適用範囲をユーザーが予測できない。詳細設定内ではふりがななし、という既存仕様は維持する。
+
+**再現条件**
+
+1. desktop Chrome（1440×1000程度）の設定画面で`ふりがな`をONにする。
+2. 難易度`ふつう`・Seed `A1b2`で`分数の足し算`を生成し、worksheet header・title・instructionを見比べる。学年や`採点`/`印刷`等にはふりがながある一方、`分数の足し算`やinstruction本文には付かない。
+3. `うそつきだれだ`を生成すると、statement等の教材本文にもふりがなが付かない。方程式themeでもtitle/instructionの扱いは同じ。
+4. TOPへ戻り`ふりがな`をOFFにして同じfamilyを再生成すると、もともとrubyが付いていたheader/controlからは消えるため、toggle自体は動いているがworksheet主要本文だけ適用対象から抜けていることを確認できる。
+
+**最終方針 / Close条件**
+
+- worksheet titleとinstructionを共通`RubyMessage`経路へ通し、ふりがなONなら教材上必要な漢字へrubyを付ける。
+- 分数・方程式・Mini Sudoku等のinstructionを代表確認する。
+- `うそつきだれだ`は小学1年生で理解できる漢字しか使っていないというユーザー判断により、instruction / statementへの追加rubyは不要とする。
+- 数式・変数・grade tag等には不要なrubyを付けない。
+- OFFではruby/rtを描画せず、詳細設定内は従来どおりふりがななし。
+- ON/OFFでpaperの問題配置やanswer laneを動かさない。
+
+**2026-08-27 解決確認**
+
+worksheet titleとinstructionを設定画面と同じ`RubyMessage`経路へ通し、分数・方程式・Mini Sudoku等の教材文へふりがなを適用した。`うそつきだれだ`は小学1年生で読める漢字のみというユーザー判断によりinstruction/statementを例外として現状維持する。詳細設定内は引き続きふりがななし。分数worksheetを実Chromeで確認し、長いinstructionにもrubyが表示されることを確認した。
+
+---
+
+### M-037 詳細設定に隠れたSeedがTOP復帰後も再生成を固定してしまう
+
+**状態:** Closed (2026-08-27 user-directed state semantics + tests)
+**発見契機:** 2026-08-27 user report
+**対象:** Settings / Seed generation semantics
+
+手入力Seedでworksheetを生成して`TOPに戻る`と、Seed文字列自体はsettings stateに残る一方、詳細設定は閉じた初期状態へ戻る。そのまま`問題生成`すると見えないSeedを再利用して同じ問題が生成されるため、ユーザーからは「再生成されない原因」が分からない。
+
+**再現条件**
+
+1. TOPで`詳細設定`を開き、Seedに`repeatMe`を入力して問題を生成する。
+2. worksheetから`TOPに戻る`。詳細設定は閉じているが内部のSeed値は`repeatMe`のまま残る。
+3. 詳細設定を一度も開かずに`問題生成`すると、修正前は`repeatMe`が再利用され同一worksheetになる。
+
+**確定仕様**
+
+- 現在のTOP画面に入ってから詳細設定を一度も開いていなければ、保存されているSeed文字列があっても自動Seedを使用する。
+- 現在のTOP画面で詳細設定を一度でも開けば、その後詳細設定を閉じてもSeed欄を設定値として扱う。Seedが空欄なら従来どおり自動Seed。
+- worksheetから再び`TOPに戻る`と「このTOP滞在で詳細設定を開いた」という状態はリセットする。
+- 同じ規則を`問題生成`とQ1の`印刷`の両方へ適用する。
+
+**解決確認**
+
+SettingsScreen mountごとに`advancedSettingsOpened=false`から開始し、summaryを一度でも操作するとtrueへ単調に遷移する。生成/印刷時は`advancedSettingsOpened && seed !== ''`の場合だけ手入力Seedを採用する。testで「開く→Seed入力→閉じる→生成/印刷」は手入力Seed、「TOP復帰→詳細設定を開かず生成」は自動Seedになることを固定した。
+
+
+---
+
+### M-038 筆算の描画座標がworksheet方眼と完全には一致していない
+
+**状態:** Closed (2026-08-29 current Chrome / full regression verified)
+**発見契機:** 2026-08-27 user report / column-arithmetic visual audit
+**対象:** 全筆算themeのWeb通常表示・入力・採点・print問題面/解答面
+
+筆算worksheetは背景方眼を教材上の座標系として使っているが、筆算本体・横線・解答cell・割り算記号の一部がその方眼と異なる位置へ描画されている。数pxのずれでも方眼教材では強い違和感になるため、単なるcosmetic差として扱わない。
+
+**再現条件**
+
+共通条件はdesktop Chrome 1440×1000、難易度`ふつう`、Seed `A1b2`とする。ずれは問題値に依存しないため他Seedでも再現する。
+
+1. `二桁の足し算の筆算`を生成する。背景方眼に対し、各数字cellの中心・筆算本体・横線が約`6.4px`下へずれる。解答cell上端は横線がnormal flowで消費する約1pxを加えて約`7.4px`下へずれる。
+2. `二桁の引き算の筆算`、`三・四桁の足し算の筆算`、`三・四桁の引き算の筆算`でも同じ縦ずれを確認できる。
+3. `一桁をかける掛け算の筆算`、`二桁をかける掛け算の筆算`でも筆算本体/横線は約`6.4px`下、解答cellは約`7.4px`下となる。二桁乗算で途中計算用の空白rowを持っても、このoffsetは保持されたまま下へ伝播する。
+4. `小数の足し算と引き算の筆算`、`小数と整数の掛け算の筆算`、`小数の掛け算の筆算`でも同じ縦ずれを確認できる。decimal markerだけの問題ではなく、lane全体の座標ずれである。
+5. `一桁で割る割り算の筆算`、`小数と整数の割り算の筆算`、`小数の割り算の筆算`では、商cellと数字cellは方眼へほぼ一致する一方、割り算記号のSVGだけずれる。修正前は上横線がCSSの`top: -1.6px`により方眼線より約`1.6px`上へ描かれ、曲線下端も同じだけ持ち上がって次の方眼線まで届かない。また曲線の左への張り出しが約`5.2px`あり、2026-08-27のユーザー拡大確認では約`3px`右へ寄せる必要があると判定された。
+6. 幅の広いlaneでは「problem cell内へ収める」制約がgrid snapより優先されるため、lane全体が縦方眼から横へずれる。全問題走査では`三・四桁の足し算の筆算`・`二桁をかける掛け算の筆算`・`小数の掛け算の筆算`・`小数の割り算の筆算`で最大約`3.7px`、`二桁で割る割り算の筆算`では最大約`6.3px`を確認した。
+7. `印刷`からpreviewを開き、問題ページと解答ページを見る。加減乗算ではWeb通常画面と同じ縦ずれが残り、完成筆算の解答ページにも伝播する。さらに完成筆算では横線要素がnormal flow上で約1pxずつ高さを消費するため、加減算の答えrowは横線後に約1px追加で下へずれ、二桁乗算では最初の横線後のpartial rowsと最終横線後のanswer rowでずれが累積する。割り算の完成手順でも各`.column-division-solution-rule`が約1pxのflow heightを持ち、後続の途中計算rowを段階的に押し下げる。
+
+**監査で確認した13 theme**
+
+- `二桁の足し算の筆算`
+- `二桁の引き算の筆算`
+- `三・四桁の足し算の筆算`
+- `三・四桁の引き算の筆算`
+- `一桁をかける掛け算の筆算`
+- `二桁をかける掛け算の筆算`
+- `一桁で割る割り算の筆算`
+- `二桁で割る割り算の筆算`
+- `小数の足し算と引き算の筆算`
+- `小数と整数の掛け算の筆算`
+- `小数と整数の割り算の筆算`
+- `小数の掛け算の筆算`
+- `小数の割り算の筆算`
+
+**根本原因**
+
+- 非divisionの`.expression` wrapper自体は方眼線へ正しくsnapしている。しかし子の`.column-arithmetic`が`inline-flex`のためinline formatting contextのbaseline/line box leadingが入り、実際の筆算本体だけ約`6.4px`下へ配置される。
+- `.column-arithmetic-rule` / `.column-arithmetic-final-rule`をnormal flow上の`border-top`として描いているため、線幅約1pxがlayout heightを消費し、後続の解答rowをさらに約1px押し下げる。完成二桁乗算では2本のruleにより最終answer rowまで累積する。division solutionの`.column-division-solution-rule`も同じくflex column内で1pxのmain-sizeを持ち、途中計算の後続rowへ累積する。
+- divisionは`.column-arithmetic-division { display: block; }`なので上記baselineずれを受けないが、修正前の`.column-division-bracket-mark`は`top: -1.6px`でSVG全体を上へ持ち上げ、上横線と曲線下端の双方を方眼から約1.6pxずらしていた。さらに`left: calc(-.22 * var(--worksheet-grid-cell))`が標準表示で約5.2pxの過剰な左overhangを作り、曲線が約3px左へ寄って見えていた。
+- lane右端snapは、laneがproblem cell内へ収まらない場合`minimumRight`を優先するため、4〜5桁の加算・二桁乗算・小数乗除算・二桁除算などの幅広laneで方眼snapを破棄する経路がある。
+
+**2026-08-27 割り算記号の追加確認**
+
+ユーザー提供の拡大画像で、上横線だけでなくcurve自体のgeometryも不適切と確認した。標準1440px表示では修正前の左overhangは約5.2pxで、curveを約3px右へ寄せるのが自然だった。また`top:-1.6px`によりcurve下端も約1.6px上へ浮いていた。個別pixel translateは追加せず、SVG boxを方眼1cell高へ正しく合わせた上でoverhang比率を縮小する修正を適用した。M-038全体はnon-divisionの6.4px baselineずれ等が残るためOpenを維持する。
+
+**監査結果の数値**
+
+1440×1000実Chromeで方眼1マスは約`23.58px`。全問題走査では、通常幅laneの水平位置誤差は概ね`0.2px`未満だが、幅広laneでは最大約`6.3px`まで外れる。非division 16問worksheetでは筆算本体の縦ずれが行により約`6.4〜6.6px`、解答cellは約`7.4〜7.6px`で一貫して再現した。division系の商/数字cellは縦誤差最大約`0.16px`で、bracket上横線だけ約`1.4〜1.6px`上へ外れる。 入力中と未回答採点後も代表的な加算/除算で確認し、selection borderやcanonical correctionによる別のgeometry driftはなく、通常表示の座標系をそのまま引き継いでいる。
+
+**方針**
+
+- 方眼を唯一のcanonical coordinate systemとし、筆算側に第二のbaseline/margin座標系を作らない。
+- non-division筆算をinline baselineに依存しないblock/grid primitiveへする。
+- 横線はgrid line上へoverlayとして描画し、線幅をlayout heightへ加算しない。
+- division bracketはSVG boxの上端/下端を隣接する方眼線へ一致させ、上横線のstroke centerと曲線下端をそれぞれ方眼線上へ置く。左overhangもcurveの必要幅だけに限定し、過剰な張り出しを作らない。
+- 幅広laneでもcell境界優先でgrid snapを捨てない。必要ならworksheet cell geometry側から4-column配置とgrid pitchの整合を解く。
+- theme個別の`margin-top`/`translate`補正は禁止し、Web/graded/printで同じpresentation primitiveを共有する。
+
+**Close条件**
+
+- 全13筆算themeで、各digit cellの中心が方眼cell中心へ一致する。
+- 筆算の横線・最終横線・割り算記号の上横線が方眼線上へ一致する。割り算記号の曲線は被除数境界から不自然に左へ離れず、下端が次の方眼線まで届く。
+- 解答cellの全辺が方眼線へ一致し、横線の線幅によって次rowがずれない。
+- 二桁除算を含む全laneの縦辺が方眼線へ一致する。
+- Web通常表示、入力中、採点後、print問題ページ、print解答ページの全状態で同じgeometryを維持する。
+- 実Chromeで代表geometry誤差をsubpixel rounding程度（目安`0.25px`未満）まで確認し、画像でも1px級の線/中心ずれが見えないことを目視確認する。
+- 重複するtheme別CSS補正を増やさず、browser geometry regressionは共通primitiveに対して最小限追加する。
+
+**解決確認 (2026-08-29)**
+
+current worktreeを前担当者の報告から独立に再検証した。`ROUTE_FILTER=column-` の実Chrome verifierは **13 worksheet route(s)** を実際に選択し、Seed `A1b2` で全13筆算themeを走査した。全themeで `crossings=0`, `gridMismatches=0`。方眼geometryの最大誤差は Web `0.045px`、print問題面 `0.069px`、print解答面 `0.124px`で、Close目安の`0.25px`未満を満たした。加減乗除のdigit center / operator / rule / answer slot / completed solution / division quotient / remainder / bracketを同じpage-grid基準で測定している。
+
+割り算記号は単一SVG path `M 0 28 C 7 21 7 7 0 0 L 100 0`を使用し、旧CSS `border-top`は存在しない。実Chrome screenshotでもcurveが過度に左へ離れる・下端が次方眼線へ届かない再発は確認されなかった。Webとprintはいずれも`columnArithmeticGridVariables(problem, position)`を使用し、theme別pixel補正ではなく共通presentation geometryから座標を供給する。full `pnpm layout:verify`でも **38 routes / 80 worksheet samples** を実走査して成功したためCloseする。
+
+---
+
+### M-039 割り算の筆算で正常な「あまり」入力がvisual overflowとしてrollbackされる
+
+**状態:** Closed (2026-08-29 current Chrome / regression verified)
+**発見契機:** 2026-08-29 user report
+**対象:** `一桁で割る割り算の筆算`, `二桁で割る割り算の筆算` のWeb入力
+
+**再現条件**
+
+Seed `A1b2`、難易度`ふつう`で次を行う。
+
+1. 割り算の筆算を生成する。
+2. 商を入力し、最終商digitから「あまり」へ自動focus移動する。別経路として「あまり」欄を直接clickしても再現する。
+3. あまりへ通常の整数、特に複数桁の`21`を入力する。
+4. 修正前は入力がrollbackされ、`式が大きすぎます！`が表示される。右端列のremainder fieldで特に確実に再現する。
+
+**期待値**
+
+- あまりは普通のscalar整数入力として保持され、`2`→`1`は`21`になる。
+- 商とあまりは別answer coordinateとして保持する。
+- 正常入力でsize-limit noticeを出さず、そのまま採点できる。
+- 採点後、および`問題に戻る`後もuser inputを保持する。
+- 一方、通常の構造化MathLive式に対する本当のvisual/AST size guardは維持する。
+
+**根本原因**
+
+M-038で筆算laneを背景方眼へ正しくsnapした結果、右端列のremainder fieldはlogical `problem-cell`境界を意図的に跨ぎ得る。共通MathLive visual overflow guardは入力内容の意味ではなくpaintの絶対座標をlogical `problem-cell`へcontainment比較していたため、正常なremainder paintをoverflowと誤認してaccepted valueへrollbackしていた。さらに前修正で導入されたpresentation policyは`WorksheetAnswerField`から渡されていたものの、`AutoDrillApp → WorksheetScreen`の手書きcallback wrapperが第5引数を転送せず、productionではdefault policyへ戻っていた。
+
+MathLive shadow DOMを実Chromeで計測すると、正常な`21`でもfocus/caret用内部layout boxはfieldの`clientWidth`を超え、paint widthも2方眼cellと一致するため、固定scalar fieldを構造化数式と同じpaint-containment規則で判定すること自体が不安定だった。
+
+**修正**
+
+- MathLive入力のvisual-size責務をtyped presentation policy `intrinsic-expression | fixed-scalar`で分離した。
+- 通常の可変長・構造化数式は従来どおり`intrinsic-expression`としてvisual overflow guardを通す。
+- remainderのように固定方眼slotへ置くscalar整数は`fixed-scalar`としてparser/AST validationを通しつつ、構造化数式向けpaint-containment guardを適用しない。slot名やtheme IDをgeneric validator内で分岐するbypassは追加しない。
+- callbackを`onMathInput={updateMathLiveAnswer}`として直接forwardし、presentation policyが中間wrapperで欠落する経路を除去した。
+- browser verifierも「logical problem-cellを跨ぐこと」自体を失敗条件にせず、page overflow / 隣接lane overlap / grid alignmentという実際のlayout invariantを検証する。
+
+**対応テスト / Close条件**
+
+- `AutoDrillApp.test.tsx`: 問題生成 → 商入力 → remainderへfocus移動 → `21`入力 → noticeなし → grade requestで商/あまりが別tuple coordinate → 採点後も値保持、をbehavior testで固定。
+- 実Chrome: 一桁・二桁除算の双方で、自動focus・直接click・物理keyboard `2`→`1`を確認し、`21`順序保持・noticeなし・採点成功を確認。
+- 実Chrome: 採点後に`問題に戻る`を押しても商・remainder・直接入力したremainderが保持され、再編集可能であることを確認。
+- 既存AST size-limit regressionも維持し、`pnpm test`で20 files / 167 testsが成功。
+- structured MathLiveのbrowser regressionでは、parserが受理する値を一度acceptedにした後にfieldを`400px`へ拡大して純粋なpaint overflowを発生させ、直前値へのrollback・`式が大きすぎます！`表示・rollback後containmentを確認する。固定scalar policy追加後もこの真のvisual size guardは成功している。
+- `ROUTE_FILTER=column-division`およびfull browser verifierが成功し、入力修正でM-038の方眼geometryを壊していないことを確認。
+
+以上を満たしたためCloseする。
+
+---
+
+### M-040 user-visible state / 1-step interaction のbrowser coverageが網羅的でない
+
+**状態:** Closed (2026-08-29 exhaustive interaction sweep verified)
+**発見契機:** M-039 retrospective / user request
+**対象:** Settings / grading settings / worksheet editing・graded / input panel / print preview / 全active theme
+
+**問題**
+
+M-039は「あまり欄へ普通の整数を入力する」という自明な1-step操作だけで再現したにもかかわらず、従来のbrowser verifierは代表routeごとの手書きprobe中心であり、UIに存在する全操作や全answer位置を機械的に列挙していなかった。このため、特定theme・特定位置・新規button等が既存probeに選ばれなければ、ユーザが1回操作するだけで発生する回帰でもCIを通過できた。
+
+**修正方針**
+
+- user-visible UIを有限状態グラフとして扱い、canonical stateごとに現在enabledな `button / input / summary / MathLive` actionをcensusする。未知のenabled actionがmanifestへ追加されただけで未検証のまま通らないようfailureにする。
+- Settingsのoptionは代表値だけでなく、難易度4件・学年9件・active theme 38件を実際に選択して到達可能性を確認する。
+- worksheetは全38 active themeについて先頭Seedで**全editable affordance**を実操作する。通常MathLive、連立方程式の各x/y coordinate、筆算digit slot、長除法remainder、Mini Sudokuのeditable cell、liar choice等をproblem位置ごとに網羅する。MathLiveは1文字だけでなく`2`→`1`の複数文字保持も確認する。
+- input panelは出現するdistinct action surfaceをsignature化し、各surfaceでenabledな全buttonをcanonical baselineから1-stepずつ実行する。action間でstateを持ち越さず、必要ならfresh worksheet / 別answer coordinateへ分離する。
+- `worksheetSampleCount`だけでなくeditable affordance/action countも0ならfailureにし、filter誤りによるsilent successを禁止する。
+- transientな`grading` lock/failure復帰はdeferred-engine unit testで補完し、browserで人工的raceを作る代わりに状態機械の同期lockを直接検証する。
+
+**状態グラフ簡素化**
+
+採点後の`別の問題を解く`shortcutは削除した。対応する`generateDifferentWorksheet` callback、`replacing` phase、専用testsも最後のconsumerとともに削除し、別worksheetへ進む場合は`TOPに戻る`を経由する。graded stateのaction censusは`問題に戻る`・`もう一回問題を解く`・`印刷`・`TOPに戻る`だけを許可し、shortcutが意図せず復活してもCIで検出する。
+
+**包括化によって実際に検出した既存欠陥**
+
+1. `.advanced-settings-body { display: grid }` がnative `<details>` の閉状態非表示を上書きし、詳細設定を閉じてもSeed/採点設定がlayout上は残る状態をcensusが検出した。`.advanced-settings:not([open]) > .advanced-settings-body { display: none; }`で閉状態を明示した。
+2. 連立方程式ではfull keypadの分数・平方根・小数・`±`等がenabledなのに、Web側`isCoordinateAnswer`がinteger/negative以外をrollbackしていた。Rustの`OrderedPair` gradingは外側2要素tupleのshapeを所有しており、各coordinate内容の数学的評価はRustへ委譲できるため、このWeb独自filterを削除した。UI/editor contractが許可したAnswerNodeを保持し、正誤判定はRustをSoTとする。
+
+**Close条件 / regression**
+
+- 実Chrome state graph: **8 canonical user-visible states / 37 one-step edges** を成功。`input-panel-open`も独立stateとしてcensusし、そこからの閉じる/Escape/印刷/採点/TOPを含む。
+- Settings option sweep: **4 difficulties / 9 grades / 38 active themes** を成功。
+- 全active-theme deterministic Seed `A1b2` interaction sweep: **42 worksheet samples / 1,139 editable-affordance actions / 126 distinct input-panel actions** を成功（signed arithmeticの追加Seed regressionを含む）。Seedは詳細設定を実UIで開いて入力し、生成後footerが要求Seedと一致することまでassertする。
+- 連立方程式単独では **24 coordinate affordances / 24 enabled keypad actions** をすべて成功。
+- CI必須の`pnpm layout:verify`へ同じ検証を統合し、手動専用scriptにはしない。
+- 最新full `pnpm layout:verify`（Seed `A1b2,M7x9` + signed arithmetic追加Seed + native print probes）で **38 routes / 80 worksheet samples / 1,139 editable-affordance actions / 126 distinct input-panel actions** を実走査し、actual Chrome PDF生成を含めて成功。
+- keypadのcursorはcaret/selected slotの移動、`確定`は次coordinate/problemへのselection遷移までeffect assertionし、単なる「clickしてexceptionなし」では成功扱いしない。CustomSelectのArrowDown/ArrowUp/Home/End/Escape/Space/Enterとdigit-gridの数字/左右/Backspace/Delete/Enterもunit behavior testで全明示keyboard branchを固定。
+
+以上を満たし、full複数Seed・print runでも同じcontractが成功したためCloseする。
+
+---
+
+## Low
 
 ### L-005 小規模なexact arithmetic utility重複
 
@@ -1135,6 +1496,58 @@ Warning semanticsそのものではなく、ユーザーへの提示方法を再
 
 ---
 
+
+---
+
+### L-008 mobile worksheet / input panel layoutが狭幅viewportへ適応していない
+
+**状態:** Open (alpha non-blocking)
+**発見契機:** 2026-08-26 frontend visual UX audit
+**対象:** Mobile / responsive worksheet UX
+
+mobileはalpha support対象外のためLow。390px幅の実画面で、共通input panelがviewportより横長となり、数字key・矢印・clear・commit等の主要操作が画面外へ出る。通常計算、分数、中学数式、筆算、Mini Sudokuで同系統を確認した。また長い二次方程式ではexpressionと`x =` answer boxが衝突し、`うそつきだれだ`ではstatementとA/B/C/D choicesが重なる。個別themeのpatchではなく、worksheet / keypad / answer placementのresponsive layout全体としてbeta移行時に解決する。
+
+**再現条件**
+
+1. Chromeを390×844のmobile viewportにする。
+2. 難易度`ふつう`・Seed `A1b2`で`1けたのたしざん(1)`を生成し、問題1の解答欄を選択する。input panelがviewportより横長で、数字key/移動/delete/clear/確定の一部が画面外へ出る。
+3. `分数の足し算`、筆算、Mini Sudoku、中学数式でも解答欄を開くと同系統の横overflowを確認できる。
+4. `二次方程式(3)`では長い式の右端と`x =`/answer boxが衝突する問題が複数出る。
+5. `うそつきだれだ`ではstatement本文とA/B/C/D choiceが同じ領域へ入り込み、文字が重なる。
+
+alphaではsupport対象外のため、上記はすべてLow / alpha非blockingとして扱う。
+
+**Close条件**
+
+- 主要input controlが横scrollなしで狭幅viewport内へ収まる。
+- 長い数式とanswer fieldが重ならない。
+- liar choicesがstatementへ重ならず、対応問題との関係を維持する。
+- 代表familyを実mobile browserで目視確認する。
+
+---
+
+### L-009 分数系instructionが日本語の語中で不自然に改行される
+
+**状態:** Closed (2026-08-27 accepted by user; no code change)
+**発見契機:** 2026-08-26 frontend visual UX audit
+**対象:** Worksheet instruction typography
+
+分数の足し算・引き算・掛け算・割り算等で、instruction末尾の「答えなさい。」が行端にかかると`答` / `えなさい。`の間で改行される。機能上の実害は小さいが、教材画面として日本語組版の違和感が強い。themeごとの手動改行ではなく、instruction copy / inline grouping / available widthの共通規則で解消する。
+
+**再現条件**
+
+1. desktop Chrome（1440×1000程度）で、難易度`ふつう`・Seed `A1b2`の`分数の足し算`を生成する。instructionはSeed非依存なので同themeなら他Seedでも再現する。
+2. paper上部のinstructionが2行へwrapしたケースを見る。
+3. 行末付近の`答えなさい。`が日本語の語単位で保持されず、`答`だけが前行に残り`えなさい。`が次行へ送られる等の不自然な語中分割が発生する。
+4. viewport全体では十分な余白があり、theme固有のmanual改行ではなくinstructionの共通組版規則で再現する。
+
+**最終判断**
+
+この語中改行は現状許容とし、修正対象から外す。従来のClose条件はsupersedeする。
+
+**2026-08-27 ユーザー判断**
+
+この改行差は修正不要と判断されたため、現状を許容してCloseする。
 
 ---
 

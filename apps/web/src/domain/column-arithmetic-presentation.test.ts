@@ -64,4 +64,10 @@ describe('column arithmetic presentation grid', () => {
     expect(variables['--column-lane-right-offset']).toMatch(/cqw$/);
     expect(variables['--column-expression-top-offset']).toMatch(/cqw$/);
   });
+
+  it('allows a signed lane offset when the visible page grid lies beyond a logical four-column cell', () => {
+    const problem = columnProblem('multiply', { kind: 'integer', value: 504 }, { kind: 'integer', value: 81 });
+    const variables = columnArithmeticGridVariables(problem, { x: 297.64, y: 90, width: 127.82 });
+    expect(Number.parseFloat(variables['--column-lane-right-offset']!)).toBeLessThan(0);
+  });
 });

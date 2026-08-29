@@ -97,7 +97,7 @@ function preloadWorksheetUi(): Promise<WorksheetUiComponents> {
 }
 
 type Screen = 'settings' | 'worksheet';
-type WorksheetPhase = 'editing' | 'grading' | 'graded' | 'replacing';
+type WorksheetPhase = 'editing' | 'grading' | 'graded';
 type SettingsBusyAction = 'generate' | 'print' | null;
 const FURIGANA_STORAGE_KEY = 'autodrill:furigana-enabled';
 
@@ -109,7 +109,8 @@ async function openWorksheetPdfLazy(worksheet: WorksheetDto, metadata?: Workshee
 const FuriganaContext = createContext(true);
 
 const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
-  '計算ドリルをつくる': [["計算", "けいさん"], 'ドリルをつくる'],
+  'まいんドリル': ['まいんドリル'],
+  '自分だけの計算ドリルを作る': [["自分", "じぶん"], 'だけの', ["計算", "けいさん"], 'ドリルを', ["作", "つく"], 'る'],
   '出題範囲': [["出題", "しゅつだい"], ["範囲", "はんい"]],
   '閉じる': [["閉", "と"], 'じる'],
   '学年から選ぶ': [["学年", "がくねん"], 'から', ["選", "えら"], 'ぶ'],
@@ -182,6 +183,17 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '連立方程式': [["連立方程式", "れんりつほうていしき"]],
   '連立方程式(1)': [["連立方程式", "れんりつほうていしき"], '(1)'],
   '次の連立方程式を解きなさい。': ['次の', ["連立方程式", "れんりつほうていしき"], 'を', ["解", "と"], 'きなさい。'],
+  '次の計算をしなさい。': ['次の', ['計算', 'けいさん'], 'をしなさい。'],
+  '次の計算を筆算でしなさい。': ['次の', ['計算', 'けいさん'], 'を', ['筆算', 'ひっさん'], 'でしなさい。'],
+  '次の一次方程式を解きなさい。ただし、答えが整数でない場合は約分によって最も簡単な形の仮分数で答えなさい。': ['次の', ['一次方程式', 'いちじほうていしき'], 'を', ['解', 'と'], 'きなさい。ただし、', ['答', 'こた'], 'えが', ['整数', 'せいすう'], 'でない', ['場合', 'ばあい'], 'は', ['約分', 'やくぶん'], 'によって', ['最', 'もっと'], 'も', ['簡単', 'かんたん'], 'な', ['形', 'かたち'], 'の', ['仮分数', 'かぶんすう'], 'で', ['答', 'こた'], 'えなさい。'],
+  '次の計算をしなさい。答えが仮分数になる場合は帯分数に直し、約分して最も簡単な形で答えなさい。': ['次の', ['計算', 'けいさん'], 'をしなさい。', ['答', 'こた'], 'えが', ['仮分数', 'かぶんすう'], 'になる', ['場合', 'ばあい'], 'は', ['帯分数', 'たいぶんすう'], 'に', ['直', 'なお'], 'し、', ['約分', 'やくぶん'], 'して', ['最', 'もっと'], 'も', ['簡単', 'かんたん'], 'な', ['形', 'かたち'], 'で', ['答', 'こた'], 'えなさい。'],
+  '次の計算をしなさい。答えは仮分数のまま、約分して最も簡単な形で答えなさい。': ['次の', ['計算', 'けいさん'], 'をしなさい。', ['答', 'こた'], 'えは', ['仮分数', 'かぶんすう'], 'のまま、', ['約分', 'やくぶん'], 'して', ['最', 'もっと'], 'も', ['簡単', 'かんたん'], 'な', ['形', 'かたち'], 'で', ['答', 'こた'], 'えなさい。'],
+  '次の割り算をしなさい。': ['次の', ['割', 'わ'], 'り', ['算', 'ざん'], 'をしなさい。'],
+  '次の式の計算結果を書きなさい。': ['次の', ['式', 'しき'], 'の', ['計算結果', 'けいさんけっか'], 'を', ['書', 'か'], 'きなさい。'],
+  '次の二次方程式を解きなさい。': ['次の', ['二次方程式', 'にじほうていしき'], 'を', ['解', 'と'], 'きなさい。'],
+  '次の二次方程式を解きなさい。必要なら解の公式を使いなさい。': ['次の', ['二次方程式', 'にじほうていしき'], 'を', ['解', 'と'], 'きなさい。', ['必要', 'ひつよう'], 'なら', ['解', 'かい'], 'の', ['公式', 'こうしき'], 'を', ['使', 'つか'], 'いなさい。'],
+  '次の割り算を筆算でし、商とあまりを求めなさい。': ['次の', ['割', 'わ'], 'り', ['算', 'ざん'], 'を', ['筆算', 'ひっさん'], 'でし、', ['商', 'しょう'], 'とあまりを', ['求', 'もと'], 'めなさい。'],
+  '1〜4の数字を、たて・よこ・太い線で囲まれた2×2の中に1回ずつ入れなさい。': ['1〜4の', ['数字', 'すうじ'], 'を、たて・よこ・', ['太', 'ふと'], 'い', ['線', 'せん'], 'で', ['囲', 'かこ'], 'まれた2×2の', ['中', 'なか'], 'に1', ['回', 'かい'], 'ずつ', ['入', 'い'], 'れなさい。'],
   '難易度': [["難易度", "なんいど"]],
   'このテーマはまだ利用できません': ['このテーマはまだ', ["利用", "りよう"], 'できません'],
   '問題数': [["問題数", "もんだいすう"]],
@@ -220,7 +232,6 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '採点後の操作': [["採点後", "さいてんご"], 'の', ["操作", "そうさ"]],
   '問題に戻る': [["問題", "もんだい"], 'に', ["戻", "もど"], 'る'],
   'もう一回問題を解く': ['もう', ["一回", "いっかい"], ["問題", "もんだい"], 'を', ["解", "と"], 'く'],
-  '別の問題を解く': [["別", "べつ"], 'の', ["問題", "もんだい"], 'を', ["解", "と"], 'く'],
   '確定': [["確定", "かくてい"]],
   '式が大きすぎます！': [["式", "しき"], 'が', ["大", "おお"], 'きすぎます！'],
   '問題生成がタイムアウトしました。': [["問題生成", "もんだいせいせい"], 'がタイムアウトしました。'],
@@ -253,11 +264,51 @@ const DEFAULT_GRADING_SETTINGS: GradingSettings = {
   fraction_form: 'correct',
 };
 
-const GRADING_SETTING_ROWS: readonly { category: GradingWarningCategory; label: string; description: string }[] = [
-  { category: 'fraction_reduction', label: '約分しましょう', description: '例: 2/4 と 1/2 の表記を区別します。' },
-  { category: 'integer_form', label: '整数でこたえましょう', description: '例: √16 と 4 の表記を区別します。' },
-  { category: 'fraction_form', label: '分数でこたえましょう', description: '例: 0.5 と 1/2 の表記を区別します。' },
-  { category: 'finish_calculation', label: '最後まで計算しましょう', description: '上の3項目以外の、数学的に同値だが未整理・冗長な表記の違いを区別します。' },
+type GradingMathExample = {
+  left: { latex: string; ariaLabel: string };
+  right: { latex: string; ariaLabel: string };
+};
+
+type GradingSettingRow = {
+  category: GradingWarningCategory;
+  label: string;
+  description: string;
+  example?: GradingMathExample;
+};
+
+const GRADING_SETTING_ROWS: readonly GradingSettingRow[] = [
+  {
+    category: 'fraction_reduction',
+    label: '約分しましょう',
+    description: '例: 2/4 と 1/2 の表記を区別します。',
+    example: {
+      left: { latex: '\\frac{2}{4}', ariaLabel: '2/4' },
+      right: { latex: '\\frac{1}{2}', ariaLabel: '1/2' },
+    },
+  },
+  {
+    category: 'integer_form',
+    label: '整数でこたえましょう',
+    description: '例: √16 と 4 の表記を区別します。',
+    example: {
+      left: { latex: '\\sqrt{16}', ariaLabel: '√16' },
+      right: { latex: '4', ariaLabel: '4' },
+    },
+  },
+  {
+    category: 'fraction_form',
+    label: '分数でこたえましょう',
+    description: '例: 0.5 と 1/2 の表記を区別します。',
+    example: {
+      left: { latex: '0.5', ariaLabel: '0.5' },
+      right: { latex: '\\frac{1}{2}', ariaLabel: '1/2' },
+    },
+  },
+  {
+    category: 'finish_calculation',
+    label: '最後まで計算しましょう',
+    description: '上の3項目以外の、数学的に同値だが未整理・冗長な表記の違いを区別します。',
+  },
 ];
 
 function warningCategory(warning: GradeWarningCode): GradingWarningCategory {
@@ -316,7 +367,7 @@ if (process.env.NODE_ENV !== 'production') {
 function RubyMessage({ text }: { text: string }) {
   const parts = RUBY_TEXT[text];
   const furiganaEnabled = useContext(FuriganaContext);
-  return parts && furiganaEnabled ? <RubyText parts={parts} /> : text;
+  return parts && furiganaEnabled ? <RubyText parts={parts} /> : <span className="ruby-text">{text}</span>;
 }
 
 export type AutoDrillAppProps = {
@@ -352,23 +403,20 @@ function mathfieldPaintedBounds(mathfield: AutoDrillMathfield): PaintedBounds | 
   return { left, right, top, bottom, width: right - left, height: bottom - top };
 }
 
+type MathfieldVisualOverflowPolicy = 'intrinsic-expression' | 'fixed-scalar';
+
 function mathfieldPaintFitsCell(mathfield: AutoDrillMathfield, problemIndex: number): boolean {
   const frame = mathfield.closest<HTMLElement>('.answer-box');
   if (!frame) return true;
 
-  // The visible frame is intrinsically sized by CSS. Input validity is checked
-  // against MathLive's painted content rather than this outer frame: tall
-  // structures such as fractions may legitimately change frame geometry without
-  // any glyph escaping the worksheet cell. JSDOM has no MathLive shadow layout,
-  // so tests fall back to the frame rectangle.
+  // Intrinsically-sized mathematical expressions are constrained by the logical
+  // worksheet cell. Fixed scalar fields use a separate presentation policy: their
+  // grid frame owns placement/clipping and scalar validity is handled by parsing.
   frame.style.removeProperty('width');
   frame.style.removeProperty('height');
-
-  const cell = document.querySelector<HTMLElement>(`[data-problem-index="${problemIndex}"]`);
-  const cellRect = cell?.getBoundingClientRect();
-  if (!cellRect || cellRect.width <= 0 || cellRect.height <= 0) return true;
-
   const contentRect = mathfieldPaintedBounds(mathfield) ?? frame.getBoundingClientRect();
+  const cellRect = document.querySelector<HTMLElement>(`[data-problem-index="${problemIndex}"]`)?.getBoundingClientRect();
+  if (!cellRect || cellRect.width <= 0 || cellRect.height <= 0) return true;
   const escapesHorizontally = contentRect.left < cellRect.left + ANSWER_CELL_GUTTER
     || contentRect.right > cellRect.right - ANSWER_CELL_GUTTER;
   const escapesVertically = contentRect.top < cellRect.top + ANSWER_CELL_GUTTER
@@ -401,11 +449,6 @@ function acceptedLatexKey(problemId: string, slot: MathfieldSlot): string {
   return slot === 'single' ? problemId : `${problemId}:${slot}`;
 }
 
-function isCoordinateAnswer(answer: AnswerNode): boolean {
-  if (answer.type === 'empty' || answer.type === 'integer' || answer.type === 'nan_error') return true;
-  return answer.type === 'negative' && isCoordinateAnswer(answer.value);
-}
-
 function selectedPeople(answer: AnswerNode): Set<number> {
   if (answer.type !== 'tuple') return new Set();
   return new Set(answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : []));
@@ -427,7 +470,7 @@ type WorksheetAnswerFieldProps = {
   onSelect: (index: number, slot: MathfieldSlot) => void;
   onSelectColumnDigit: (index: number, slot: ColumnAnswerSlot, digitIndex: number) => void;
   onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
-  onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
+  onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string, visualOverflowPolicy?: MathfieldVisualOverflowPolicy) => void;
   onCommit: (index: number, slot: MathfieldSlot) => void;
   onTogglePerson: (index: number, person: number) => void;
 };
@@ -491,7 +534,7 @@ function WorksheetAnswerField({
     return (
       <span className="problem-answer-area problem-answer-area-liar">
         {renderPeople(chosen, !inputLocked)}
-        {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
+        {result?.correct ? <span className="result-mark liar-result-mark" aria-label="正解">○</span> : null}
         {result && !result.correct ? (
           <span className="correct-answer liar-correct-answer" aria-label={`正しい答え ${[...canonical].map(liarPersonLabel).join('、')}`}>
             {renderPeople(canonical, false)}
@@ -549,7 +592,7 @@ function WorksheetAnswerField({
               readOnly={inputLocked}
               numericSansFont
               onSelect={() => onSelect(index, 'remainder')}
-              onInputLatex={(mathfield, latex) => onMathInput(index, 'remainder', mathfield, latex)}
+              onInputLatex={(mathfield, latex) => onMathInput(index, 'remainder', mathfield, latex, 'fixed-scalar')}
               onCommit={() => onCommit(index, 'remainder')}
               onRegister={(mathfield) => onRegisterMathfield(index, 'remainder', mathfield)}
             />
@@ -1002,7 +1045,7 @@ export function AutoDrillApp({
     setError(value instanceof Error ? value.message : '処理に失敗しました。');
   }, [showNotice]);
 
-  const generate = useCallback(async (printAfterGeneration: boolean) => {
+  const generate = useCallback(async (printAfterGeneration: boolean, useExplicitSeed: boolean) => {
     if (!selectedTheme.implemented) {
       setError('このテーマはまだ利用できません');
       return;
@@ -1014,7 +1057,7 @@ export function AutoDrillApp({
     setSettingsBusyAction(printAfterGeneration ? 'print' : 'generate');
     const worksheetUiReady = printAfterGeneration ? null : preloadWorksheetUi();
     try {
-      const seed = settings.seed === '' ? seedGenerator() : settings.seed;
+      const seed = useExplicitSeed && settings.seed !== '' ? settings.seed : seedGenerator();
       const metadata = createWorksheetMetadata(seed, dateGenerator());
       const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
       const loadedWorksheetUi = worksheetUiReady ? await worksheetUiReady : null;
@@ -1103,7 +1146,7 @@ export function AutoDrillApp({
     registerControllerMathfield(key, mathfield);
   }, [registerControllerMathfield]);
 
-  const updateMathLiveAnswer = useCallback((index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => {
+  const updateMathLiveAnswer = useCallback((index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string, visualOverflowPolicy: MathfieldVisualOverflowPolicy = 'intrinsic-expression') => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing' || !inputEnabledRef.current || !worksheet.problems[index]) return Promise.resolve();
     const problem = worksheet.problems[index];
     const problemId = problem.problem_id;
@@ -1138,10 +1181,6 @@ export function AutoDrillApp({
 
       let answer = parsed;
       if (isCoordinateSlot) {
-        if (!isCoordinateAnswer(parsed)) {
-          mathfield.setValue(previousLatex, { silenceNotifications: true });
-          return;
-        }
         const values: [AnswerNode, AnswerNode] = [answerCoordinate(previous, 0), answerCoordinate(previous, 1)];
         values[slot === 'x' || slot === 'quotient' ? 0 : 1] = parsed;
         answer = { type: 'tuple', value: values };
@@ -1150,10 +1189,10 @@ export function AutoDrillApp({
       // Empty is always a valid visual state. In particular, MathLive may leave
       // a caret/placeholder paint box after deleteAll; that UI chrome must never
       // turn a successful clear into a false "too large" rejection.
-      if (parsed.type !== 'empty') {
+      if (parsed.type !== 'empty' && visualOverflowPolicy === 'intrinsic-expression') {
         // MathLive and the intrinsic answer frame resolve in the same layout pass.
-        // Wait only to validate the settled geometry against the worksheet cell;
-        // JS no longer resizes the visible frame after paint.
+        // Fixed scalar fields deliberately skip this formula-paint check: their
+        // worksheet grid may cross a logical problem-cell boundary by design.
         await waitForMathfieldLayout();
         if (!mathfieldPaintFitsCell(mathfield, index)) {
           // Render-size rejection is also a true NOP. Restore the exact accepted
@@ -1536,30 +1575,8 @@ export function AutoDrillApp({
     dismissNotice();
   }, [dismissNotice, installWorksheet, worksheet, worksheetMetadata]);
 
-  const generateDifferentWorksheet = useCallback(async () => {
-    if (worksheetPhaseRef.current !== 'graded') return;
-    // Replacing is a worksheet phase, not just a generic loading flag. Lock it
-    // synchronously so stale result-panel actions cannot launch a second
-    // replacement before React has painted disabled buttons.
-    transitionWorksheetPhase('replacing');
-    setBusy(true);
-    setError(null);
-    dismissNotice();
-    try {
-      const seed = seedGenerator();
-      const metadata = createWorksheetMetadata(seed, dateGenerator());
-      const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
-      installWorksheet({ ...generatedWorksheet, seed }, metadata);
-    } catch (value) {
-      transitionWorksheetPhase('graded');
-      showEngineError(value);
-    } finally {
-      setBusy(false);
-    }
-  }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, settings, showEngineError, transitionWorksheetPhase]);
-
   const backToTop = useCallback(() => {
-    if (worksheetPhaseRef.current === 'grading' || worksheetPhaseRef.current === 'replacing') return;
+    if (worksheetPhaseRef.current === 'grading') return;
     setScreen('settings');
     clearSelection();
     setStartedAt(null);
@@ -1591,8 +1608,8 @@ export function AutoDrillApp({
             onDifficultyChange={changeDifficulty}
             onFuriganaChange={changeFurigana}
             onGradingSettingsChange={setGradingSettings}
-            onGenerate={() => void generate(false)}
-            onPrint={() => void generate(true)}
+            onGenerate={(useExplicitSeed) => void generate(false, useExplicitSeed)}
+            onPrint={(useExplicitSeed) => void generate(true, useExplicitSeed)}
           />
         ) : worksheet && worksheetUi ? (
           <WorksheetScreen
@@ -1616,14 +1633,13 @@ export function AutoDrillApp({
             onSelectDigitGridCell={selectDigitGridCell}
             onCommand={applyMathCommand}
             onRegisterMathfield={registerMathfield}
-            onMathInput={(index, slot, mathfield, latex) => void updateMathLiveAnswer(index, slot, mathfield, latex)}
+            onMathInput={updateMathLiveAnswer}
             onCommit={(index, slot) => void commitMathfield(index, slot)}
             onTogglePerson={togglePerson}
             onCloseInput={closeInputPanel}
             onGrade={() => void grade()}
             onReturnToProblems={returnToProblems}
             onRetryWorksheet={retryWorksheet}
-            onDifferentWorksheet={() => void generateDifferentWorksheet()}
             onPrint={() => {
               void openWorksheetPdfLazy(worksheet, worksheetMetadata ?? undefined).catch(showEngineError);
             }}
@@ -1660,8 +1676,8 @@ type SettingsScreenProps = {
   onDifficultyChange: (difficulty: DifficultyLevel) => void;
   onFuriganaChange: (enabled: boolean) => void;
   onGradingSettingsChange: (settings: GradingSettings) => void;
-  onGenerate: () => void;
-  onPrint: () => void;
+  onGenerate: (useExplicitSeed: boolean) => void;
+  onPrint: (useExplicitSeed: boolean) => void;
 };
 
 function SettingsScreen({
@@ -1690,8 +1706,18 @@ function SettingsScreen({
     ? genres.find((genre) => genre.themes.some((theme) => theme.themeKey === webSettings.themeKey)) ?? genres[0]!
     : selection.genre;
   const unavailable = !selection.theme.implemented;
+  const [advancedSettingsOpened, setAdvancedSettingsOpened] = useState(false);
   const [gradingSettingsOpen, setGradingSettingsOpen] = useState(false);
+  const [gradingWorksheetUi, setGradingWorksheetUi] = useState<WorksheetUiComponents | null>(null);
+  const GradingMathLiveStatic = gradingWorksheetUi?.MathLiveStatic ?? null;
   const gradingDialogCloseRef = useRef<HTMLButtonElement | null>(null);
+
+  const openGradingSettings = () => {
+    void preloadWorksheetUi().then((ui) => {
+      setGradingWorksheetUi(ui);
+      setGradingSettingsOpen(true);
+    });
+  };
 
   useEffect(() => {
     if (!gradingSettingsOpen) return undefined;
@@ -1739,7 +1765,8 @@ function SettingsScreen({
             <input type="checkbox" checked={furiganaEnabled} onChange={(event) => onFuriganaChange(event.target.checked)} />
             <span>ふりがな</span>
           </label>
-          <h1 id="settings-title" aria-label="計算ドリルをつくる"><RubyMessage text="計算ドリルをつくる" /></h1>
+          <h1 id="settings-title" aria-label="まいんドリル"><RubyMessage text="まいんドリル" /></h1>
+          <p className="description" aria-label="自分だけの計算ドリルを作る"><RubyMessage text="自分だけの計算ドリルを作る" /></p>
         </header>
 
         <div className="settings-card">
@@ -1834,7 +1861,7 @@ function SettingsScreen({
 
           <FuriganaContext.Provider value={false}>
           <details className="advanced-settings">
-            <summary>
+            <summary onClick={() => setAdvancedSettingsOpened(true)}>
               <RubyMessage text="詳細設定" />
               <svg className="advanced-settings-chevron" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" /></svg>
             </summary>
@@ -1861,7 +1888,7 @@ function SettingsScreen({
                 type="button"
                 className="grading-settings-open-button"
                 aria-haspopup="dialog"
-                onClick={() => setGradingSettingsOpen(true)}
+                onClick={openGradingSettings}
               >
                 <RubyMessage text="採点設定" />
                 <span aria-hidden="true">›</span>
@@ -1880,11 +1907,11 @@ function SettingsScreen({
         ) : null}
 
         <div className="settings-actions">
-          <button type="button" className="primary-button" aria-label={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} disabled={busy || unavailable} onClick={onGenerate}>
+          <button type="button" className="primary-button" aria-label={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} disabled={busy || unavailable} onClick={() => onGenerate(advancedSettingsOpened)}>
             <span className="button-icon" aria-hidden="true">▶</span>
             <RubyMessage text={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} />
           </button>
-          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷 (pdfで出力)'} disabled={busy || unavailable} onClick={onPrint}>
+          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷 (pdfで出力)'} disabled={busy || unavailable} onClick={() => onPrint(advancedSettingsOpened)}>
             <svg className="share-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 15V3" />
               <path d="m8 7 4-4 4 4" />
@@ -1925,11 +1952,29 @@ function SettingsScreen({
             </header>
             <p className="grading-settings-modal-note">○では数学的に同じ答えを正解として扱い、×では次の表記の違いを採点に反映します。</p>
             <div className="grading-settings-modal-body">
-              {GRADING_SETTING_ROWS.map(({ category, label, description }) => (
+              {GRADING_SETTING_ROWS.map(({ category, label, description, example }) => (
                 <div className="grading-setting-row" key={category}>
                   <div className="grading-setting-copy">
                     <strong><RubyMessage text={label} /></strong>
-                    <span>{description}</span>
+                    {example && GradingMathLiveStatic ? (
+                      <span className="grading-setting-example" aria-label={description}>
+                        <span>例:</span>
+                        <GradingMathLiveStatic
+                          className="grading-setting-example-math"
+                          latex={example.left.latex}
+                          ariaLabel={example.left.ariaLabel}
+                          displayStyle
+                        />
+                        <span>と</span>
+                        <GradingMathLiveStatic
+                          className="grading-setting-example-math"
+                          latex={example.right.latex}
+                          ariaLabel={example.right.ariaLabel}
+                          displayStyle
+                        />
+                        <span>の表記を区別します。</span>
+                      </span>
+                    ) : <span>{description}</span>}
                   </div>
                   <div className="grading-setting-toggle" role="group" aria-label={`${label}の採点`}>
                     <button
@@ -1978,19 +2023,18 @@ type WorksheetScreenProps = {
   onSelectDigitGridCell: (index: number, cellIndex: number) => void;
   onCommand: (command: MathInputCommand) => void;
   onRegisterMathfield: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield | null) => void;
-  onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string) => void;
+  onMathInput: (index: number, slot: MathfieldSlot, mathfield: AutoDrillMathfield, latex: string, visualOverflowPolicy?: MathfieldVisualOverflowPolicy) => void;
   onCommit: (index: number, slot: MathfieldSlot) => void;
   onTogglePerson: (index: number, person: number) => void;
   onCloseInput: () => void;
   onGrade: () => void;
   onReturnToProblems: () => void;
   onRetryWorksheet: () => void;
-  onDifferentWorksheet: () => void;
   onPrint: () => void;
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, selectedDigitGridCell, columnDrafts, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onSelectDigitGridCell, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onDifferentWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, selectedDigitGridCell, columnDrafts, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onSelectDigitGridCell, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
@@ -2042,12 +2086,12 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
       <div className="ribbon">
         <div>
           <p className="ribbon-label" aria-label={worksheetCategoryLabel}><RubyMessage text={worksheetCategoryLabel} /></p>
-          <h1 id="worksheet-title">{worksheetTheme.worksheet.title}</h1>
+          <h1 id="worksheet-title" aria-label={worksheetTheme.worksheet.title}><RubyMessage text={worksheetTheme.worksheet.title} /></h1>
         </div>
         <div className="ribbon-meta"><span><RubyMessage text="回答時間" /></span><strong data-testid="elapsed-time">{elapsed}</strong></div>
         <button type="button" className="ribbon-button" aria-label="採点" aria-pressed={worksheetPhase !== 'editing'} data-grade-state={worksheetPhase} onClick={onGrade} disabled={busy || worksheetPhase !== 'editing'}><RubyMessage text="採点" /></button>
         <button type="button" className="ribbon-icon" onClick={onPrint} aria-label="印刷" disabled={busy}><RubyMessage text="印刷" /></button>
-        <button type="button" className="ribbon-link" aria-label="TOPに戻る" onClick={onBack} disabled={busy || worksheetPhase === 'grading' || worksheetPhase === 'replacing'}><RubyMessage text="TOPに戻る" /></button>
+        <button type="button" className="ribbon-link" aria-label="TOPに戻る" onClick={onBack} disabled={busy || worksheetPhase === 'grading'}><RubyMessage text="TOPに戻る" /></button>
       </div>
 
       {notice ? <div className="worksheet-toast" role="status" aria-label={notice} aria-live="polite" aria-atomic="true"><RubyMessage text={notice} /></div> : null}
@@ -2059,7 +2103,6 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
           <div className="grade-actions" aria-label="採点後の操作">
             <button type="button" aria-label="問題に戻る" onClick={onReturnToProblems} disabled={busy}><RubyMessage text="問題に戻る" /></button>
             <button type="button" aria-label="もう一回問題を解く" onClick={onRetryWorksheet} disabled={busy}><RubyMessage text="もう一回問題を解く" /></button>
-            <button type="button" aria-label="別の問題を解く" onClick={onDifferentWorksheet} disabled={busy}><RubyMessage text="別の問題を解く" /></button>
           </div>
         </div>
       ) : null}
@@ -2068,7 +2111,11 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
         <article className={`paper ${gradeBandClass}`} style={{ aspectRatio: `${A4_PAGE.width} / ${A4_PAGE.height}`, ...(usesWorksheetGrid ? worksheetPageGridVariables() : {}) }} aria-label={`${worksheet.layout.problem_count}問の${worksheetTheme.worksheet.title}ワークシート`}>
           <div className={`problem-grid ${usesWorksheetGrid ? 'problem-grid-worksheet-grid' : ''}`}>
             {worksheetTheme.worksheet.instruction ? (
-              <p className="worksheet-instruction">{worksheetTheme.worksheet.instruction}</p>
+              <p className="worksheet-instruction" aria-label={worksheetTheme.worksheet.instruction}>
+                {worksheet.problems[0]?.prompt.kind === 'liar_puzzle'
+                  ? worksheetTheme.worksheet.instruction
+                  : <RubyMessage text={worksheetTheme.worksheet.instruction} />}
+              </p>
             ) : null}
             {dividerStyles.map((style, index) => (
               <div
@@ -2109,7 +2156,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                         correctionAnswer={result && !result.correct ? problem.canonical_answer : null}
                         onSelectCell={(cellIndex) => onSelectDigitGridCell(index, cellIndex)}
                       />
-                      {result ? <span className="result-mark mini-sudoku-result-mark" aria-label={result.correct ? '正解' : '不正解'}>{result.correct ? '○' : '×'}</span> : null}
+                      {result?.correct ? <span className="result-mark mini-sudoku-result-mark" aria-label="正解">○</span> : null}
                     </>
                   ) : (
                     <>
@@ -2153,9 +2200,9 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
           <button type="button" className="input-panel-close" onClick={onCloseInput} aria-label="入力パネルを閉じる" title="入力パネルを閉じる">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 9l7 7 7-7" /></svg>
           </button>
-          <div className={`input-panel-inner ${juniorHighFullKeypad ? 'input-panel-inner-junior-high' : arithmeticOperatorsEnabled ? 'input-panel-inner-algebraic' : ''}`}>
+          <div className={`input-panel-inner ${juniorHighFullKeypad ? 'input-panel-inner-junior-high' : arithmeticOperatorsEnabled ? 'input-panel-inner-algebraic' : visibleStructures.length === 0 ? 'input-panel-inner-simple' : ''}`}>
             {visibleStructures.length > 0 ? (
-              <div className={`formula-keypad ${juniorHighFullKeypad ? 'formula-keypad-junior-high' : arithmeticOperatorsEnabled ? 'formula-keypad-algebraic' : ''}`} aria-label={juniorHighFullKeypad || arithmeticOperatorsEnabled ? '数式キー' : '数式テンプレート'}>
+              <div className={`formula-keypad ${juniorHighFullKeypad ? 'formula-keypad-junior-high' : arithmeticOperatorsEnabled ? 'formula-keypad-algebraic' : ''} ${!juniorHighFullKeypad && visibleStructures.length === 2 ? 'formula-keypad-pair' : ''}`} aria-label={juniorHighFullKeypad || arithmeticOperatorsEnabled ? '数式キー' : '数式テンプレート'}>
                 {visibleStructures.map((structure) => {
                   const label = structure === 'tuple' && selectedProblem.answer_schema.kind === 'ordered_pair'
                     ? 'x, y'
@@ -2178,7 +2225,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               </div>
             ) : null}
             <div
-              className={`keypad-numbers ${juniorHighFullKeypad ? 'keypad-numbers-junior-high' : arithmeticOperatorsEnabled ? 'keypad-numbers-algebraic' : ''} ${!juniorHighFullKeypad && arithmeticOperatorsEnabled && selectedCapabilities?.allow_decimal ? 'keypad-numbers-algebraic-decimal' : ''}`}
+              className={`keypad-numbers ${juniorHighFullKeypad ? 'keypad-numbers-junior-high' : arithmeticOperatorsEnabled ? 'keypad-numbers-algebraic' : ''} ${!juniorHighFullKeypad && arithmeticOperatorsEnabled && selectedCapabilities?.allow_decimal ? 'keypad-numbers-algebraic-decimal' : ''} ${digitGridInputActive ? 'keypad-numbers-digit-grid' : ''}`}
               aria-label="数字キー"
             >
               {numberKeys.map((digit) => (

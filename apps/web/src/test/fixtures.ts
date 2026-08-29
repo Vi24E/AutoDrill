@@ -15,6 +15,8 @@ import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-additio
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
 import { SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/themes/simultaneous-equation-1';
+import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-one-digit';
+import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 const FIXTURE_SEED = 'fixtureSeed';
@@ -139,6 +141,64 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       worked_solution: null,
     };
   });
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
+    identity: {
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: definition.numeric_theme_id,
+      generator_revision: definition.generator_revision,
+      seed: FIXTURE_SEED,
+      difficulty: FIXTURE_DIFFICULTY,
+    },
+    skill_id: definition.themeKey,
+    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
+export function columnDivisionFixtureWorksheet(themeId: 31 | 32 = 31): WorksheetDto {
+  const definition = themeId === 31 ? COLUMN_DIVIDE_1DIGIT_DEFINITION : COLUMN_DIVIDE_2DIGIT_DEFINITION;
+  const divisor = themeId === 31 ? 7 : 23;
+  const dividend = themeId === 31 ? 224 : 1245;
+  const quotient = themeId === 31 ? 32 : 54;
+  const remainder = themeId === 31 ? 0 : 3;
+  const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
+    schema_version: DRILL_SCHEMA_VERSION,
+    id: index + 1,
+    problem_id: String(index + 1),
+    numeric_theme_id: definition.numeric_theme_id,
+    prompt: {
+      kind: 'column_arithmetic',
+      operator: 'divide',
+      left: { kind: 'integer', value: dividend },
+      right: { kind: 'integer', value: divisor },
+    },
+    input_interface: definition.inputInterface,
+    answer_schema: { kind: 'ordered_pair' },
+    canonical_answer: {
+      type: 'tuple',
+      value: [{ type: 'integer', value: String(quotient) }, { type: 'integer', value: String(remainder) }],
+    },
+    worked_solution: {
+      kind: 'long_division',
+      divisor,
+      dividend_coefficient: dividend,
+      dividend_scale: 0,
+      quotient_trailing_cells: 0,
+      steps: themeId === 31
+        ? [
+            { product: 21, after: 14, product_offset: 1, after_offset: 0 },
+            { product: 14, after: 0, product_offset: 0, after_offset: 0 },
+          ]
+        : [
+            { product: 115, after: 95, product_offset: 1, after_offset: 0 },
+            { product: 92, after: 3, product_offset: 0, after_offset: 0 },
+          ],
+    },
+  }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
     problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,

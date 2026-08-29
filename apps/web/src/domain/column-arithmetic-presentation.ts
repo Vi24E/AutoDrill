@@ -87,15 +87,17 @@ export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGe
   };
 
   if (cell) {
-    const laneWidth = (operatorCells + digitCells) * WORKSHEET_GRID_POINT;
     const cellRight = cell.x + cell.width;
-    // The page grid starts at x=0. Put the right edge of every arithmetic lane
-    // directly on a page-grid line; no visual inset/offset is allowed to create a
-    // second coordinate system. The lane must still fit wholly inside its cell.
-    const floorGridLine = Math.floor(cellRight / WORKSHEET_GRID_POINT) * WORKSHEET_GRID_POINT;
-    const minimumRight = cell.x + laneWidth;
-    const snappedRight = Math.max(minimumRight, floorGridLine);
-    const rightOffset = Math.max(0, cellRight - snappedRight);
+    // The page grid is the visual coordinate system. Equal-width logical problem
+    // cells are not grid-aligned, so anchor each worksheet column to an evenly
+    // spaced page-grid line instead of clamping a wide lane to the invisible cell
+    // boundary. The signed margin lets the last columns extend slightly right
+    // when that is what the visible grid requires.
+    const columnIndex = Math.max(0, Math.round((cell.x - A4_PAGE.margin) / cell.width));
+    const firstAnchor = Math.floor((A4_PAGE.margin + cell.width) / WORKSHEET_GRID_POINT);
+    const anchorStride = Math.round(cell.width / WORKSHEET_GRID_POINT);
+    const snappedRight = (firstAnchor + columnIndex * anchorStride) * WORKSHEET_GRID_POINT;
+    const rightOffset = cellRight - snappedRight;
     variables['--column-lane-right-offset'] = `${(rightOffset / A4_PAGE.width) * 100}cqw`;
 
     const gridOriginY = A4_PAGE.margin + A4_PAGE.headerHeight;

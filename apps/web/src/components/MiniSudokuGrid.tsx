@@ -3,7 +3,6 @@ import type { CSSProperties } from 'react';
 import { digitGridValues } from '@/domain/digit-grid-input';
 import type { AnswerNode, ProblemDto } from '@/domain/drill-engine';
 
-const MINI_SUDOKU_BLOCK_SIDE = 2;
 const MINI_SUDOKU_PAGE_GRID_CELL_SPAN = 2;
 
 type MiniSudokuGridProps = {
@@ -48,8 +47,6 @@ export function MiniSudokuGrid({
           given !== null && given !== undefined ? 'digit-grid-cell-given' : 'digit-grid-cell-answer',
           selectedCell === cellIndex ? 'digit-grid-cell-selected' : '',
           needsCorrection ? 'digit-grid-cell-wrong' : '',
-          cellIndex % side === MINI_SUDOKU_BLOCK_SIDE - 1 ? 'digit-grid-cell-block-right' : '',
-          Math.floor(cellIndex / side) === MINI_SUDOKU_BLOCK_SIDE - 1 ? 'digit-grid-cell-block-bottom' : '',
         ].filter(Boolean).join(' ');
         const content = (
           <>
