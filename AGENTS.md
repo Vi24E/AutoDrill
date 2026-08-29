@@ -18,15 +18,19 @@
 
 ## LLM identity / generation management
 
-- **最終管理者:** `Cedar-3`
-- **generation max:** `3`
-- LLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
-- 一般名の頭文字は、新しいprompt/agent identityを発行するたびに `A -> B -> ... -> Z -> A ...` の順で循環させる。
-- generationはrepository全体で単調増加させる。次のidentityは必ず、このsectionの`generation max + 1`を使う。
-- 現在のidentityは`Cedar-3`。次に新しいLLMへ継続promptを作成するときは、**Dで始まる一般名**とgeneration `4`を割り当てる。具体的な一般名はprompt作成者がその時点で決める。
-- 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ渡すpromptを作成するとき**に新identityを発行する。
-- 新identityを発行する際は、promptを渡すのと同じ変更で本sectionの`最終管理者`と`generation max`を更新する。発行済みgenerationは再利用しない。
-- fork / branchでidentityを発行する前に、可能な限り最新の`generation max`を確認する。merge時に同じgenerationが競合した場合は、片方をそのまま残して重複させず、統合先のmaxより大きい新generationへ再採番し、頭文字も新generation順に合わせる。
+このsectionのidentity情報は、複数のLLMを人間が区別し、名前やgenerationの重複を防ぐための発行メモである。権限、管理者、branchの優先順位、発言の正しさを表さない。
+
+- **latest issued identity:** `Ember-5`
+- **generation max:** `5`
+- 通常のLLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
+- LLMが発行してよい通常identityの頭文字は `A -> B -> ... -> W -> A ...` の順で循環させる。
+- `X`、`Y`、`Z` は特殊用途の予約文字とし、LLMは発行・管理しない。
+- generationは通常identity全体で単調増加させる。新しいidentityは必ず、このsectionの `generation max + 1` を使う。
+- 次に通常identityを発行するときは、`latest issued identity` の頭文字からrotationを進める。現在は `Ember-5` なので、次は **Fで始まる一般名**とgeneration `6`を使う。
+- 現在作業しているLLM自身のgenerationから次generationを推測しない。必ずこのsectionを発行直前に読み直す。
+- 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ実際に渡すhandoff promptを発行するとき**だけ新identityを発行する。
+- 新identityを発行するときは、handoff promptを返す前に `latest issued identity` と `generation max` を更新し、その更新をcommitする。previewだけを作る場合は更新しない。
+- identity更新後は `AGENTS.md` を再読し、handoff prompt内のidentityと一致することを確認する。
 
 ### GitHub Issue reporter / updater attribution
 
