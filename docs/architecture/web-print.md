@@ -19,12 +19,14 @@ Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイ�
 
 ## WASM adapter
 
-`src/domain/wasm-adapter.ts`がproductionの数学境界です。generated Rust Web contractのcurrent schema（現行v7）JSON DTOを使い、以下をRust/WASMへ委譲します。
+`src/domain/wasm-adapter.ts`がproductionの数学境界です。generated Rust Web contractのcurrent schema（現行v7）JSON DTOを使い、公開WASM endpointはcurrent productが実際に消費する `generate_worksheet` / `parse_mathlive_answer` / `grade_answer` の3つだけとします。これらを通じて以下をRust/WASMへ委譲します。
 
 - worksheet generation
 - MathLive LaTeX → AnswerNode
 - AnswerNode/input capability validation
 - grading
+
+単一problem生成、problem-set IDからの再生成、standalone normalizationはcurrent Web consumerを持たないためWASM/public facadeへ公開しません。normalizationはgrading等から使うRust core内部primitiveとして保持します。
 
 Webはnormalization、正誤判定、effort、generator条件を再実装しません。
 
@@ -55,7 +57,7 @@ Webでは通常数式を`ProblemExpression` / `MathLiveStatic`の`<math-span>`�
 
 筆算の桁位置は全theme共通のページ方眼で管理します。方眼1辺はA4幅に対する一定比率（実寸約19.5pt）で、Web previewとnative printで同じ物理比率になります。問題文より下の書き込み領域全体へ方眼を薄く表示し、表示数字は文字列を方眼cellへ分解して配置します。operand、operator、rule、answer、worked-solutionの各rowはすべてこのgridの**整数cell座標**だけから決めます。operator別rendererが独自のpx offsetや暗黙の余白でanswer rowを動かしてはいけません。掛け算で必要な作業行も`columnArithmeticWorkingRows(problem)`という共通presentation policyで整数row数として定義し、1桁掛け算は0行、複数桁掛け算だけ必要な作業行を確保します。
 
-小数点はcellを1つ使う文字ではなく、2つの桁cellの境界に置く0幅の黒点として描画します。現行Web digit editorも固定markerを使いますが、小数掛け算では正答の小数点位置を先に露出する問題があるため、この入力モデルの再設計は`M-010`で別Issueとして追跡します。印刷問題/解答も同じ座標系を使うため、児童は問題cellに限定されずページ上の方眼へ自由に途中計算を書き込めます。長除法は除数と被除数の実桁数に応じたcompact laneを使い、除数・曲線・被除数・商を同じ方眼へ揃えます。割り算記号の曲線と上横線は別borderへ分割せず、1本の連続SVG pathとして描画します。長除法のworked solutionでは日本の一般的な表記に合わせ、各減算段へ余計な`−`記号を付けず、桁配置と横線だけで減算stepを表現します。
+小数点はcellを1つ使う文字ではなく、2つの桁cellの境界に置く0幅の黒点として描画します。Web digit editorの入力順序と小数点policyはRust Problem wireの`column_input`だけをauthorityとし、加減算等の`fixed(scale)`、整数系の`none`、小数掛け算の`editable`を区別します。`editable`では未入力時にcanonical小数点位置を表示せず、数字slotとは別semanticとして`.`キーまたは物理`.`で境界を配置・再配置します。割り算の商は`natural_division_flow`、余りは`big_endian`等、answer partごとにtyped policyを指定でき、Webはoperator/schema/theme IDから方向を推測しません。印刷問題/解答も同じ座標系を使うため、児童は問題cellに限定されずページ上の方眼へ自由に途中計算を書き込めます。長除法のdecimal normalizationはRust `worked_solution`が唯一のauthorityであり、`dividend_coefficient` / `dividend_scale` / `quotient_trailing_cells`を確定してwireへ渡します。Webはoperand scaleから正規化後の小数桁や追加0を再計算せず、これらの確定値を方眼cell幅・小数点位置・trailing cellへ投影するだけです。長除法は除数と被除数の実桁数に応じたcompact laneを使い、除数・曲線・被除数・商を同じ方眼へ揃えます。割り算記号の曲線と上横線は別borderへ分割せず、1本の連続SVG pathとして描画します。長除法のworked solutionでは日本の一般的な表記に合わせ、各減算段へ余計な`−`記号を付けず、桁配置と横線だけで減算stepを表現します。
 
 `problem-format.ts`のsemantic tokenはaccessible plain text等には残しますが、数式のvisual renderingには使いません。
 

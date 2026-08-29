@@ -33,6 +33,7 @@ export function useWorksheetAnswerController() {
   const [selectedColumnDigit, setSelectedColumnDigitState] = useState<ColumnDigitSelection | null>(null);
   const [selectedDigitGridCell, setSelectedDigitGridCellState] = useState<DigitGridSelection | null>(null);
   const [columnDrafts, setColumnDraftsState] = useState<Record<string, Array<string | null>>>({});
+  const [columnDecimalBoundaries, setColumnDecimalBoundariesState] = useState<Record<string, number | null>>({});
 
   const answersRef = useRef<Record<string, AnswerNode>>({});
   const selectedIndexRef = useRef<number | null>(null);
@@ -40,6 +41,7 @@ export function useWorksheetAnswerController() {
   const selectedColumnDigitRef = useRef<ColumnDigitSelection | null>(null);
   const selectedDigitGridCellRef = useRef<DigitGridSelection | null>(null);
   const columnDraftsRef = useRef<Record<string, Array<string | null>>>({});
+  const columnDecimalBoundariesRef = useRef<Record<string, number | null>>({});
   const inputEnabledRef = useRef(false);
   const actionQueueRef = useRef(Promise.resolve());
   const mathfieldRefs = useRef(new Map<string, AutoDrillMathfield>());
@@ -66,6 +68,18 @@ export function useWorksheetAnswerController() {
     const next = { ...columnDraftsRef.current, [key]: draft };
     columnDraftsRef.current = next;
     setColumnDraftsState(next);
+    return next;
+  }, []);
+
+  const replaceColumnDecimalBoundaries = useCallback((next: Record<string, number | null>) => {
+    columnDecimalBoundariesRef.current = next;
+    setColumnDecimalBoundariesState(next);
+  }, []);
+
+  const setColumnDecimalBoundary = useCallback((key: string, boundary: number | null) => {
+    const next = { ...columnDecimalBoundariesRef.current, [key]: boundary };
+    columnDecimalBoundariesRef.current = next;
+    setColumnDecimalBoundariesState(next);
     return next;
   }, []);
 
@@ -172,9 +186,10 @@ export function useWorksheetAnswerController() {
     replaceAnswers(nextAnswers);
     acceptedLatexRef.current = Object.fromEntries(worksheet.problems.map((problem) => [problem.problem_id, '']));
     replaceColumnDrafts({});
+    replaceColumnDecimalBoundaries({});
     clearSelection();
     return nextAnswers;
-  }, [clearSelection, replaceAnswers, replaceColumnDrafts]);
+  }, [clearSelection, replaceAnswers, replaceColumnDecimalBoundaries, replaceColumnDrafts]);
 
   const disableInputAndClearSelection = useCallback(() => {
     clearSelection();
@@ -187,12 +202,14 @@ export function useWorksheetAnswerController() {
     selectedColumnDigit,
     selectedDigitGridCell,
     columnDrafts,
+    columnDecimalBoundaries,
     answersRef,
     selectedIndexRef,
     selectedSlotRef,
     selectedColumnDigitRef,
     selectedDigitGridCellRef,
     columnDraftsRef,
+    columnDecimalBoundariesRef,
     inputEnabledRef,
     actionQueueRef,
     acceptedLatexRef,
@@ -200,6 +217,8 @@ export function useWorksheetAnswerController() {
     setAnswer,
     replaceColumnDrafts,
     setColumnDraft,
+    replaceColumnDecimalBoundaries,
+    setColumnDecimalBoundary,
     setSelectedIndex,
     setSelectedSlot,
     setSelectedColumnDigit,

@@ -520,7 +520,11 @@ fn autonomous_large_sample_registry_qa() {
                             seed
                         )),
                     }
-                    match regenerate_problem_set(&worksheet.problem_set_id()) {
+                    match generate_identity_with_clock(
+                        worksheet.identity(),
+                        &GenerationConfig::default(),
+                        &SystemClock::new(),
+                    ) {
                         Ok(regenerated) if regenerated == worksheet => {}
                         Ok(_) => invariant_violations.push(format!(
                             "theme={} difficulty={} seed={} regeneration_mismatch",

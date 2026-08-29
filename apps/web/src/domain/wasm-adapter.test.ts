@@ -76,7 +76,7 @@ describe('versioned WASM adapter', () => {
     await expect(engine.generateWorksheet(fixtureSettings())).resolves.toMatchObject({ schema_version: DRILL_SCHEMA_VERSION });
   });
 
-  it('sends the exact current-schema request and preserves identity/problem-set metadata', async () => {
+  it('sends the exact current-schema request and preserves worksheet identity metadata', async () => {
     const worksheet = fixtureWorksheet();
     const generate = vi.fn().mockResolvedValue(envelope(worksheet));
     const engine = createWasmDrillEngine({ generate_worksheet: generate });
@@ -90,7 +90,6 @@ describe('versioned WASM adapter', () => {
     });
     expect(result).toMatchObject({
       schema_version: DRILL_SCHEMA_VERSION,
-      problem_set_id: `${DRILL_SCHEMA_VERSION}-1-${ONE_DIGIT_ADDITION_DEFINITION.generator_revision}-fixtureSeed-3`,
       identity: { numeric_theme_id: 1, generator_revision: ONE_DIGIT_ADDITION_DEFINITION.generator_revision, seed: 'fixtureSeed', difficulty: 3 },
     });
     expect(new Set(result.problems.map((problem) => problem.id)).size).toBe(20);

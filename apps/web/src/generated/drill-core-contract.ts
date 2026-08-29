@@ -24,7 +24,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "preserve_operand_order",
       "answer_contract": {
@@ -69,7 +70,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -129,7 +131,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -187,7 +190,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -230,7 +234,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -273,7 +278,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "preserve_operand_order",
       "answer_contract": {
@@ -316,7 +322,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -367,7 +374,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -421,7 +429,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "mixed_number_when_improper"
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -471,7 +480,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "mixed_number_when_improper"
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -521,7 +531,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "mixed_number_when_improper"
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -571,7 +582,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "mixed_number_when_improper"
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -620,7 +632,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -665,7 +678,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -724,7 +738,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -783,7 +798,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -842,7 +858,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -886,7 +903,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -931,7 +949,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": true,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -984,7 +1003,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1030,7 +1050,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "mixed_number_when_improper"
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1080,7 +1101,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "mixed_number_when_improper"
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1133,7 +1155,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "keep_improper_fraction"
+        "fraction": "keep_improper_fraction",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1183,7 +1206,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1227,7 +1251,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1271,7 +1303,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1315,7 +1355,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1359,7 +1407,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1403,7 +1459,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1447,7 +1511,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1491,7 +1563,18 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": null,
+          "quotient": {
+            "order": "natural_division_flow",
+            "decimal_point": "none"
+          },
+          "remainder": {
+            "order": "big_endian",
+            "decimal_point": "none"
+          }
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1537,7 +1620,18 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": null,
+          "quotient": {
+            "order": "natural_division_flow",
+            "decimal_point": "none"
+          },
+          "remainder": {
+            "order": "big_endian",
+            "decimal_point": "none"
+          }
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1585,7 +1679,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1630,7 +1732,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1675,7 +1785,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "natural_division_flow",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1720,7 +1838,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "editable"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1765,7 +1891,15 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": true,
         "print_recommended": true,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "natural_division_flow",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
       },
       "dedup": "canonicalize_commutative",
       "answer_contract": {
@@ -1808,7 +1942,8 @@ export const DRILL_CORE_CONTRACT = {
         "column_arithmetic": false,
         "print_recommended": false,
         "equation_layout": false,
-        "fraction": "none"
+        "fraction": "none",
+        "column_input": null
       },
       "dedup": "preserve_operand_order",
       "answer_contract": {

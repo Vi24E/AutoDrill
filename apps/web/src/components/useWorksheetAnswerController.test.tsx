@@ -13,6 +13,7 @@ describe('useWorksheetAnswerController', () => {
       result.current.select(2, 'x');
       result.current.setAnswer(worksheet.problems[0]!.problem_id, { type: 'integer', value: '7' });
       result.current.setColumnDraft('draft', ['1', null]);
+      result.current.setColumnDecimalBoundary('draft', 2);
       result.current.resetForWorksheet(worksheet);
     });
 
@@ -21,6 +22,7 @@ describe('useWorksheetAnswerController', () => {
     expect(result.current.selectedColumnDigit).toBeNull();
     expect(result.current.inputEnabledRef.current).toBe(false);
     expect(result.current.columnDrafts).toEqual({});
+    expect(result.current.columnDecimalBoundaries).toEqual({});
     expect(result.current.answersRef.current).toEqual(result.current.answers);
     expect(Object.values(result.current.answers)).toHaveLength(worksheet.problems.length);
     expect(Object.values(result.current.answers).every((answer) => answer.type === 'empty')).toBe(true);

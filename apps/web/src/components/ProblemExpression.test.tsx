@@ -12,6 +12,16 @@ function columnProblem(prompt: ProblemDto['prompt'], canonical_answer: ProblemDt
     numeric_theme_id: 25,
     prompt,
     input_interface: { type: 'simple_numeric', allow_decimal: true, allow_negative: false },
+    column_input: {
+      single: {
+        order: prompt.kind === 'column_arithmetic' && prompt.operator === 'divide' ? 'natural_division_flow' : 'least_significant_first',
+        decimal_point: canonical_answer.type === 'exact_decimal'
+          ? { type: 'fixed', scale: canonical_answer.value.scale }
+          : { type: 'none' },
+      },
+      quotient: null,
+      remainder: null,
+    },
     answer_schema: { kind: 'decimal', max_scale: 3 },
     canonical_answer,
     worked_solution,

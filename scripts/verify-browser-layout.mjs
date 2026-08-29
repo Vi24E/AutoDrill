@@ -409,6 +409,10 @@ function uiStateGraphProbe() {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       }
       await waitFor(() => !document.querySelector('.worksheet-print-preview') && true, 'preview close');
+      await waitFor(() => {
+        const generateButton = document.querySelector('button.primary-button');
+        return generateButton && !generateButton.disabled ? generateButton : null;
+      }, 'settings ready after preview close');
       return Boolean(document.querySelector('.settings-screen'));
     };
     edge('settings.print.preview.back', await previewFromSettings(false));
@@ -416,7 +420,13 @@ function uiStateGraphProbe() {
 
     const generate = async () => {
       document.querySelector('button[aria-label="問題生成"]')?.click();
-      return waitFor(() => document.querySelector('.worksheet-screen'), 'worksheet');
+      return waitFor(() => {
+        const worksheet = document.querySelector('.worksheet-screen');
+        if (worksheet) return worksheet;
+        const error = document.querySelector('.error-message');
+        if (error) throw new Error('Worksheet generation failed: ' + (error.getAttribute('aria-label') || error.textContent || 'unknown error'));
+        return null;
+      }, 'worksheet');
     };
     let worksheet = await generate();
     edge('settings.generate.worksheet', Boolean(worksheet));
@@ -638,6 +648,18 @@ function exerciseInputPanelActionsProbe() {
       return false;
     };
 
+    const movementTargetIndex = (descriptor) => {
+      if (!['カーソルを左へ', 'カーソルを右へ'].includes(descriptor)) return -1;
+      const delta = descriptor === 'カーソルを右へ' ? 1 : -1;
+      return targets().findIndex((candidate) => {
+        if (!candidate.matches('button[data-column-digit-index]')) return false;
+        const current = Number(candidate.getAttribute('data-column-digit-index'));
+        const container = candidate.closest('[data-column-answer-slot]');
+        const siblings = [...(container?.querySelectorAll('button[data-column-digit-index]:not(:disabled)') ?? [])];
+        return siblings.some((sibling) => Number(sibling.getAttribute('data-column-digit-index')) === current + delta);
+      });
+    };
+
     const resetReusedTarget = async (targetIndex) => {
       const { target, panel } = await open(targetIndex);
       if (target.matches('math-field.answer-mathfield')) {
@@ -654,7 +676,8 @@ function exerciseInputPanelActionsProbe() {
     };
 
     for (const [actionIndex, descriptor] of descriptors.entries()) {
-      const targetIndex = descriptor === '確定' ? 0 : actionIndex;
+      const movableTargetIndex = movementTargetIndex(descriptor);
+      const targetIndex = movableTargetIndex >= 0 ? movableTargetIndex : (descriptor === '確定' ? 0 : actionIndex);
       const reusedTarget = targetIndex < actionIndex || targetIndex >= targetCount;
       let current = reusedTarget
         ? await resetReusedTarget(targetIndex)

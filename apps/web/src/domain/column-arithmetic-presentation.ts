@@ -4,11 +4,7 @@ import { WORKSHEET_GRID_POINT } from '@/domain/worksheet-grid-presentation';
 
 const COLUMN_DIVISION_WORK_ROWS = 3;
 const COLUMN_REMAINDER_CELLS = 2;
-import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
-
-function expressionScale(expression: ArithmeticExpression): number {
-  return expression.kind === 'exact_decimal' ? expression.scale : 0;
-}
+import { answerNodeText, type AnswerNode, type ProblemDto } from '@/domain/drill-engine';
 
 export function columnAnswerScale(answer: AnswerNode): number {
   if (answer.type === 'exact_decimal') return answer.value.scale;
@@ -24,12 +20,14 @@ function gridCellCount(text: string): number {
   return [...text].filter((character) => character !== '.' && character !== '−' && character !== '-').length;
 }
 
-export function columnDivisionTargetScale(problem: ProblemDto): number {
-  if (problem.prompt.kind !== 'column_arithmetic' || problem.prompt.operator !== 'divide') return 0;
-  const leftScale = expressionScale(problem.prompt.left);
-  const rightScale = expressionScale(problem.prompt.right);
-  const normalizedDividendScale = rightScale <= leftScale ? leftScale - rightScale : 0;
-  return Math.max(normalizedDividendScale, columnAnswerScale(problem.canonical_answer));
+type LongDivisionWorkedSolution = Extract<NonNullable<ProblemDto['worked_solution']>, { kind: 'long_division' }>;
+
+function longDivisionWorkedSolution(problem: ProblemDto): LongDivisionWorkedSolution {
+  const worked = problem.worked_solution;
+  if (!worked || worked.kind !== 'long_division') {
+    throw new Error('Column division presentation requires Rust long-division worked solution metadata.');
+  }
+  return worked;
 }
 
 type CellGeometry = { x: number; y: number; width: number };
@@ -47,20 +45,16 @@ export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells:
     };
   }
 
-  const leftScale = expressionScale(problem.prompt.left);
-  const rightScale = expressionScale(problem.prompt.right);
-  const normalizedDividendScale = rightScale <= leftScale ? leftScale - rightScale : 0;
-  const targetScale = columnDivisionTargetScale(problem);
-  const appendedZeros = Math.max(0, targetScale - normalizedDividendScale);
-  const normalizedDividendDigits = problem.prompt.left.kind === 'integer'
-    ? Math.abs(problem.prompt.left.value).toString().length + appendedZeros
-    : problem.prompt.left.kind === 'exact_decimal'
-      ? Math.abs(problem.prompt.left.coefficient).toString().length + appendedZeros
-      : gridCellCount(leftText) + appendedZeros;
+  const worked = longDivisionWorkedSolution(problem);
+  const normalizedDividendDigits = Math.max(
+    Math.abs(worked.dividend_coefficient).toString().length,
+    worked.dividend_scale + 1,
+  );
+  const quotientDigits = gridCellCount(answerText) + worked.quotient_trailing_cells;
 
   return {
     operatorCells: Math.max(1, gridCellCount(rightText)),
-    digitCells: Math.max(2, gridCellCount(leftText), normalizedDividendDigits, gridCellCount(answerText)),
+    digitCells: Math.max(2, gridCellCount(leftText), normalizedDividendDigits, quotientDigits),
   };
 }
 
@@ -108,12 +102,11 @@ export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGe
   }
 
   if (problem.prompt.operator === 'divide') {
-    const quotientScale = columnAnswerScale(problem.canonical_answer);
-    const targetScale = columnDivisionTargetScale(problem);
+    const worked = longDivisionWorkedSolution(problem);
     variables['--column-division-active-width'] = `calc(${digitCells} * var(--worksheet-grid-cell))`;
     variables['--column-division-work-rows'] = String(COLUMN_DIVISION_WORK_ROWS);
     variables['--column-remainder-width'] = `calc(${COLUMN_REMAINDER_CELLS} * var(--worksheet-grid-cell))`;
-    variables['--column-division-quotient-trailing-width'] = `calc(${Math.max(0, targetScale - quotientScale)} * var(--worksheet-grid-cell))`;
+    variables['--column-division-quotient-trailing-width'] = `calc(${worked.quotient_trailing_cells} * var(--worksheet-grid-cell))`;
   }
   return variables;
 }

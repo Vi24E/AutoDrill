@@ -26,9 +26,9 @@ pub use answer::{AnswerBinaryOperator, AnswerNode};
 pub use contract::web_contract;
 pub use error::{EditorError, GenerationError};
 pub use generator::{
-    generate_identity_with_clock, generate_problem_request, generate_worksheet_request,
-    generate_worksheet_request_with_clock, regenerate_problem_set, GenerationConfig,
-    MonotonicClock, DEFAULT_MAX_ATTEMPTS, DEFAULT_TIMEOUT,
+    generate_identity_with_clock, generate_worksheet_request,
+    generate_worksheet_request_with_clock, GenerationConfig, MonotonicClock, DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_TIMEOUT,
 };
 pub use grade::{grade_answer, grade_answer_with_schema, GradeError};
 pub use identity::{
@@ -37,11 +37,9 @@ pub use identity::{
 };
 pub use mathlive_input::parse_mathlive_answer;
 pub use model::{
-    AnswerInputInterface, AnswerSchema, EditorStructure, GenerateProblemRequest,
-    GenerateWorksheetRequest, GradeResult, GradeStatus, GradeWarning, LayoutMetadata, Problem,
-    Worksheet, MAX_ANSWER_AST_SIZE,
+    AnswerInputInterface, AnswerSchema, EditorStructure, GenerateWorksheetRequest, GradeResult,
+    GradeStatus, GradeWarning, LayoutMetadata, Problem, Worksheet, MAX_ANSWER_AST_SIZE,
 };
-pub use normalize::normalize_answer;
 pub use schema::SCHEMA_VERSION;
 #[doc(hidden)]
 pub use wire::GradeResultWire;
@@ -63,6 +61,7 @@ mod tests {
     };
     use crate::generator::StepClock;
     use crate::model::{ProblemPrompt, RationalCoefficient};
+    use crate::normalize::normalize_answer;
     use crate::registry::active_registration;
     use crate::themes::basic_arithmetic::{
         GENERATOR_REVISION_ONE_DIGIT_ADDITION, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
@@ -117,11 +116,7 @@ mod tests {
     }
 
     fn one_digit_problem(seed: impl Into<String>) -> Problem {
-        generate_problem_request(&GenerateProblemRequest::new(
-            THEME_ID_ONE_DIGIT_ADDITION,
-            seed,
-        ))
-        .unwrap()
+        one_digit_worksheet(seed).problems()[0].clone()
     }
 
     proptest! {

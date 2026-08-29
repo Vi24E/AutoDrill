@@ -1,5 +1,5 @@
 import { createRoot, type Root } from 'react-dom/client';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import { MathLiveStatic } from '@/components/MathLiveMath';
 import { ProblemExpression } from '@/components/ProblemExpression';
@@ -311,19 +311,6 @@ function WorksheetPrintPreview({
   const [printError, setPrintError] = useState<string | null>(null);
   const [rotateAnswers, setRotateAnswers] = useState(true);
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [onClose]);
-
   const printNow = async () => {
     if (printing) return;
     setPrinting(true);
@@ -493,14 +480,22 @@ export async function openWorksheetPdf(
   host.className = 'worksheet-print-host worksheet-print-host-preview';
   document.body.append(host);
   const root = createRoot(host);
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
+    window.removeEventListener('keydown', onKeyDown);
+    document.body.style.overflow = previousOverflow;
     root.unmount();
     host.remove();
     if (activePreviewCleanup === cleanup) activePreviewCleanup = null;
   };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') cleanup();
+  };
+  window.addEventListener('keydown', onKeyDown);
   activePreviewCleanup = cleanup;
 
   root.render(

@@ -17,6 +17,7 @@ import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2'
 import { SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/themes/simultaneous-equation-1';
 import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-one-digit';
 import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit';
+import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from '@/domain/themes/column-decimal-multiplication';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 const FIXTURE_SEED = 'fixtureSeed';
@@ -44,6 +45,7 @@ export function fixtureWorksheet(): WorksheetDto {
       numeric_theme_id: FIXTURE_THEME_ID,
       prompt: { kind: 'addition', left, right },
       input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
+      column_input: null,
       answer_schema: { kind: 'integer', min: '1', max: '18' },
       canonical_answer: answer,
       worked_solution: null,
@@ -51,7 +53,6 @@ export function fixtureWorksheet(): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-1-${ONE_DIGIT_ADDITION_DEFINITION.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: FIXTURE_THEME_ID,
@@ -59,8 +60,6 @@ export function fixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: ONE_DIGIT_ADDITION_DEFINITION.themeKey,
-    curriculum_path: ONE_DIGIT_ADDITION_DEFINITION.curriculumPath.map((segment) => segment.label),
     layout: ONE_DIGIT_ADDITION_DEFINITION.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -95,6 +94,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
         right_negative_constant_as_subtraction: false,
       },
       input_interface: definition.inputInterface,
+      column_input: null,
       answer_schema: themeId === 2
         ? { kind: 'integer', min: '-15', max: '15' }
         : { kind: 'rational', max_abs_numerator: 20, max_denominator: 12, require_reduced_fraction_form: true },
@@ -104,7 +104,6 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-${themeId}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: themeId,
@@ -112,8 +111,6 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.themeKey,
-    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -136,6 +133,7 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       numeric_theme_id: definition.numeric_theme_id,
       prompt: { kind: 'simultaneous_equation', a, b, c: a * x + b * y, d, e, f: d * x + e * y },
       input_interface: definition.inputInterface,
+      column_input: null,
       answer_schema: { kind: 'ordered_pair', min: '-15', max: '15' },
       canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: String(x) }, { type: 'integer', value: String(y) }] },
       worked_solution: null,
@@ -143,7 +141,6 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
   });
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: definition.numeric_theme_id,
@@ -151,8 +148,6 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.themeKey,
-    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -177,6 +172,11 @@ export function columnDivisionFixtureWorksheet(themeId: 31 | 32 = 31): Worksheet
       right: { kind: 'integer', value: divisor },
     },
     input_interface: definition.inputInterface,
+    column_input: {
+      single: null,
+      quotient: { order: 'natural_division_flow', decimal_point: { type: 'none' } },
+      remainder: { order: 'big_endian', decimal_point: { type: 'none' } },
+    },
     answer_schema: { kind: 'ordered_pair' },
     canonical_answer: {
       type: 'tuple',
@@ -201,7 +201,6 @@ export function columnDivisionFixtureWorksheet(themeId: 31 | 32 = 31): Worksheet
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: definition.numeric_theme_id,
@@ -209,8 +208,44 @@ export function columnDivisionFixtureWorksheet(themeId: 31 | 32 = 31): Worksheet
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.themeKey,
-    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
+export function columnDecimalMultiplicationFixtureWorksheet(): WorksheetDto {
+  const definition = COLUMN_DECIMAL_MULTIPLICATION_DEFINITION;
+  const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
+    schema_version: DRILL_SCHEMA_VERSION,
+    id: index + 1,
+    problem_id: String(index + 1),
+    numeric_theme_id: definition.numeric_theme_id,
+    prompt: {
+      kind: 'column_arithmetic',
+      operator: 'multiply',
+      left: { kind: 'exact_decimal', coefficient: 12, scale: 1 },
+      right: { kind: 'exact_decimal', coefficient: 3, scale: 1 },
+    },
+    input_interface: definition.inputInterface,
+    column_input: {
+      single: { order: 'least_significant_first', decimal_point: { type: 'editable' } },
+      quotient: null,
+      remainder: null,
+    },
+    answer_schema: { kind: 'decimal', max_scale: 6 },
+    canonical_answer: { type: 'exact_decimal', value: { coefficient: '36', scale: 2 } },
+    worked_solution: { kind: 'column_multiplication', partial_products: [{ value: 36, place: 0 }] },
+  }));
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    identity: {
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: definition.numeric_theme_id,
+      generator_revision: definition.generator_revision,
+      seed: FIXTURE_SEED,
+      difficulty: FIXTURE_DIFFICULTY,
+    },
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -232,16 +267,14 @@ export function liarFixtureWorksheet(): WorksheetDto {
     numeric_theme_id: definition.numeric_theme_id,
     prompt: { kind: 'liar_puzzle', people_count: 4, statements },
     input_interface: definition.inputInterface,
+    column_input: null,
     answer_schema: { kind: 'algebraic' },
     canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '1' }, { type: 'integer', value: '3' }] },
     worked_solution: null,
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-2`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: FIXTURE_SEED, difficulty: 2 },
-    skill_id: definition.themeKey,
-    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -259,6 +292,7 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
     numeric_theme_id: definition.numeric_theme_id,
     prompt: { kind: 'mini_sudoku', givens },
     input_interface: definition.inputInterface,
+    column_input: null,
     answer_schema: { kind: 'ordered_tuple', length: 16 },
     canonical_answer: {
       type: 'tuple',
@@ -268,7 +302,6 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`,
     identity: {
       schema_version: DRILL_SCHEMA_VERSION,
       numeric_theme_id: definition.numeric_theme_id,
@@ -276,8 +309,6 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
-    skill_id: definition.themeKey,
-    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,

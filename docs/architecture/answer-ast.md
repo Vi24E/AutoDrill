@@ -20,7 +20,7 @@
 
 小数はbinary floating-pointへ変換しない。例えば`0.3`は`coefficient = 3, scale = 1`、`0.57`は`57, 2`である。JSON/WASM境界ではi64 payloadを`"3"`のようなcanonical decimal stringにし、18桁整数もJavaScriptの`number`へ変換しない。BigNumもこのcoefficientや整数nodeから直接導出し、表示floatから桁列を復元しない。分数`41/57`は整数child 41と57を別々のBigNum sourceにする。
 
-入力・表示中の`AnswerNode`は呼び出し側がそのまま所有し、採点用の正規形を別の永続fieldとして二重保持しない。`normalize_answer(&AnswerNode)`は必要な時に新しいcanonical treeを返し、元のdisplay/input treeを書き換えない。整数、有限小数、分数、帯分数、negativeから構成できる正確な数値は、Floatを使わず符号を分子へ集約した既約分数（分母1ならinteger）へ統一する。従って`2/4`、`0.5`、`1/2`は同じnormalized treeになり、`4.0`はinteger `4`になる。
+入力・表示中の`AnswerNode`は呼び出し側がそのまま所有し、採点用の正規形を別の永続fieldとして二重保持しない。Rust core内部の`normalize_answer(&AnswerNode)`は必要な時に新しいcanonical treeを返し、元のdisplay/input treeを書き換えない。整数、有限小数、分数、帯分数、negativeから構成できる正確な数値は、Floatを使わず符号を分子へ集約した既約分数（分母1ならinteger）へ統一する。従って`2/4`、`0.5`、`1/2`は同じnormalized treeになり、`4.0`はinteger `4`になる。
 
 `AnswerNode`自体はediting/draft syntaxも表せるため、生成済み`Problem`の内部では生の`AnswerNode`をcanonical answerの型として保持しない。`Problem::generated`がdraft-only nodeを拒否し、具体的`AnswerSchema`のrange/shapeとtheme contractを満たすことを確認した後、private `CanonicalAnswer` wrapperとして格納する。同様にschemaもprivate `ValidatedAnswerSchema`として保持する。native Rust / WASM grading boundaryでexternal schemaを受け取る場合も、expected canonical answerとの整合性を検証してから採点へ渡す。`grade_answer_with_schema`はfallible APIであり、不正なboundary schemaを採点結果へ偽装しない。
 

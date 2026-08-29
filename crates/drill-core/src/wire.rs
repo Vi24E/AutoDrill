@@ -86,6 +86,7 @@ pub(crate) struct ProblemWire {
     pub numeric_theme_id: u32,
     pub prompt: ProblemPrompt,
     pub input_interface: AnswerInputInterface,
+    pub column_input: Option<crate::model::ColumnArithmeticInput>,
     pub answer_schema: AnswerSchema,
     pub canonical_answer: AnswerNode,
     pub worked_solution: Option<WorkedSolutionWire>,
@@ -99,6 +100,7 @@ impl From<&Problem> for ProblemWire {
             numeric_theme_id: problem.numeric_theme_id(),
             prompt: problem.prompt().clone(),
             input_interface: problem.input_interface().clone(),
+            column_input: problem.column_input().copied(),
             answer_schema: problem.answer_schema().clone(),
             canonical_answer: problem.canonical_answer().clone(),
             worked_solution: problem.worked_solution().map(|solution| solution.to_wire()),
@@ -113,10 +115,7 @@ impl From<&Problem> for ProblemWire {
 #[cfg_attr(feature = "wire-types", ts(rename = "Worksheet"))]
 pub struct WorksheetWire {
     schema_version: u16,
-    problem_set_id: String,
     identity: ProblemSetIdentity,
-    skill_id: String,
-    curriculum_path: Vec<String>,
     layout: LayoutMetadata,
     problems: Vec<ProblemWire>,
 }
@@ -125,10 +124,7 @@ impl From<&Worksheet> for WorksheetWire {
     fn from(worksheet: &Worksheet) -> Self {
         Self {
             schema_version: worksheet.schema_version(),
-            problem_set_id: worksheet.problem_set_id(),
             identity: worksheet.identity().clone(),
-            skill_id: worksheet.skill_id().to_owned(),
-            curriculum_path: worksheet.curriculum_path().to_vec(),
             layout: worksheet.layout().clone(),
             problems: worksheet.problems().iter().map(ProblemWire::from).collect(),
         }
@@ -138,17 +134,69 @@ impl From<&Worksheet> for WorksheetWire {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::generate_problem_request;
-    use crate::model::GenerateProblemRequest;
+    use crate::generator::generate_worksheet_request;
+    use crate::model::GenerateWorksheetRequest;
     use crate::themes::basic_arithmetic::{
         THEME_ID_MULTIPLICATION_TABLE, THEME_ID_ONE_DIGIT_ADDITION,
     };
-    use crate::themes::column_arithmetic::THEME_ID_COLUMN_MULTIPLY_1DIGIT;
+    use crate::themes::column_arithmetic::{
+        THEME_ID_COLUMN_DECIMAL_MULTIPLICATION, THEME_ID_COLUMN_DIVIDE_1DIGIT,
+        THEME_ID_COLUMN_MULTIPLY_1DIGIT,
+    };
+    use crate::Difficulty;
 
     fn problem_wire(theme_id: u32) -> serde_json::Value {
-        let problem =
-            generate_problem_request(&GenerateProblemRequest::new(theme_id, "Ab3Z")).unwrap();
-        serde_json::to_value(ProblemWire::from(&problem)).unwrap()
+        let worksheet = generate_worksheet_request(&GenerateWorksheetRequest::new(
+            theme_id,
+            "Ab3Z",
+            Difficulty::try_from(2).unwrap(),
+        ))
+        .unwrap();
+        serde_json::to_value(ProblemWire::from(&worksheet.problems()[0])).unwrap()
+    }
+
+    #[test]
+    fn worksheet_wire_contains_only_current_web_consumers() {
+        let worksheet = generate_worksheet_request(&GenerateWorksheetRequest::new(
+            THEME_ID_ONE_DIGIT_ADDITION,
+            "Ab3Z",
+            Difficulty::try_from(2).unwrap(),
+        ))
+        .unwrap();
+        let wire = serde_json::to_value(WorksheetWire::from(&worksheet)).unwrap();
+
+        for internal_or_redundant_field in ["problem_set_id", "skill_id", "curriculum_path"] {
+            assert!(wire.get(internal_or_redundant_field).is_none());
+        }
+        for required_field in ["schema_version", "identity", "layout", "problems"] {
+            assert!(wire.get(required_field).is_some());
+        }
+    }
+
+    #[test]
+    fn column_input_policy_is_resolved_into_problem_wire_metadata() {
+        let ordinary = problem_wire(THEME_ID_COLUMN_MULTIPLY_1DIGIT);
+        assert_eq!(
+            ordinary["column_input"]["single"]["order"],
+            "least_significant_first"
+        );
+        assert_eq!(
+            ordinary["column_input"]["single"]["decimal_point"]["type"],
+            "none"
+        );
+
+        let division = problem_wire(THEME_ID_COLUMN_DIVIDE_1DIGIT);
+        assert_eq!(
+            division["column_input"]["quotient"]["order"],
+            "natural_division_flow"
+        );
+        assert_eq!(division["column_input"]["remainder"]["order"], "big_endian");
+
+        let decimal_multiplication = problem_wire(THEME_ID_COLUMN_DECIMAL_MULTIPLICATION);
+        assert_eq!(
+            decimal_multiplication["column_input"]["single"]["decimal_point"]["type"],
+            "editable"
+        );
     }
 
     #[test]

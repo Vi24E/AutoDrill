@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import {
+  columnDecimalBoundaryFromAnswer,
   columnDigitSpec,
   columnDigitsFromAnswer,
   type ColumnAnswerSlot,
@@ -12,14 +13,18 @@ type ColumnArithmeticAnswerInputProps = {
   slot: ColumnAnswerSlot;
   value: AnswerNode;
   draft?: readonly (string | null)[];
+  decimalBoundary?: number | null;
   selectedDigit: number | null;
   readOnly: boolean;
   correction?: boolean;
   onSelectDigit: (digitIndex: number) => void;
 };
 
-function digitPlaceLabel(spec: ReturnType<typeof columnDigitSpec>, index: number): string {
-  const boundary = spec.decimalBoundary ?? (spec.activeEnd + 1);
+function digitPlaceLabel(spec: ReturnType<typeof columnDigitSpec>, index: number, decimalBoundary: number | null): string {
+  if (spec.decimalPoint.type === 'editable' && decimalBoundary === null) {
+    return `解答欄${index - spec.activeStart + 1}桁目`;
+  }
+  const boundary = decimalBoundary ?? (spec.activeEnd + 1);
   const power = boundary - index - 1;
   if (power === 0) return '一の位';
   if (power === 1) return '十の位';
@@ -35,6 +40,7 @@ export function ColumnArithmeticAnswerInput({
   slot,
   value,
   draft,
+  decimalBoundary,
   selectedDigit,
   readOnly,
   correction = false,
@@ -42,6 +48,9 @@ export function ColumnArithmeticAnswerInput({
 }: ColumnArithmeticAnswerInputProps) {
   const spec = columnDigitSpec(problem, slot);
   const digits = draft ? [...draft] : columnDigitsFromAnswer(value, spec);
+  const displayedDecimalBoundary = decimalBoundary !== undefined
+    ? decimalBoundary
+    : columnDecimalBoundaryFromAnswer(value, spec);
   const slotLabel = correction ? (slot === 'quotient' ? '正しい商' : '正しい答え') : (slot === 'quotient' ? '商' : '答え');
   const selectedButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -57,6 +66,8 @@ export function ColumnArithmeticAnswerInput({
       style={{ '--column-answer-digit-count': spec.cellCount } as CSSProperties}
       data-column-answer-slot={slot}
       data-column-direction={spec.direction}
+      data-column-input-order={spec.order}
+      data-column-decimal-mode={spec.decimalPoint.type}
     >
       {digits.map((digit, index) => {
         const active = index >= spec.activeStart && index <= spec.activeEnd;
@@ -73,7 +84,7 @@ export function ColumnArithmeticAnswerInput({
               className={className}
               data-column-digit-index={index}
               key={`digit-${index}`}
-              aria-label={active ? `${problemNumber}番の${slotLabel} ${digitPlaceLabel(spec, index)} ${digit ?? '未入力'}` : undefined}
+              aria-label={active ? `${problemNumber}番の${slotLabel} ${digitPlaceLabel(spec, index, displayedDecimalBoundary)} ${digit ?? '未入力'}` : undefined}
             >{content}</span>
           );
         }
@@ -84,17 +95,17 @@ export function ColumnArithmeticAnswerInput({
             data-column-digit-index={index}
             key={`digit-${index}`}
             ref={selectedDigit === index ? selectedButtonRef : undefined}
-            aria-label={`${problemNumber}番の${slotLabel} ${digitPlaceLabel(spec, index)} ${digit ?? '未入力'}`}
+            aria-label={`${problemNumber}番の${slotLabel} ${digitPlaceLabel(spec, index, displayedDecimalBoundary)} ${digit ?? '未入力'}`}
             aria-pressed={selectedDigit === index}
             onFocus={() => onSelectDigit(index)}
             onClick={() => onSelectDigit(index)}
           >{content}</button>
         );
       })}
-      {spec.decimalBoundary !== null ? (
+      {displayedDecimalBoundary !== null ? (
         <span
           className="column-digit-decimal-marker"
-          style={{ left: `calc(${spec.decimalBoundary} * var(--worksheet-grid-cell))` }}
+          style={{ left: `calc(${displayedDecimalBoundary} * var(--worksheet-grid-cell))` }}
           aria-hidden="true"
         />
       ) : null}

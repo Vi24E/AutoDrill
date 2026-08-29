@@ -17,6 +17,11 @@ function additionProblem(): ProblemDto {
       right: { kind: 'integer', value: 5366 },
     },
     input_interface: { type: 'simple_numeric', allow_decimal: false, allow_negative: false },
+    column_input: {
+      single: { order: 'least_significant_first', decimal_point: { type: 'none' } },
+      quotient: null,
+      remainder: null,
+    },
     answer_schema: { kind: 'integer', min: '0', max: '99999' },
     canonical_answer: { type: 'integer', value: '5506' },
     worked_solution: null,
@@ -41,6 +46,7 @@ describe('ColumnArithmeticAnswerInput', () => {
 
     const editor = container.querySelector('.column-digit-answer')!;
     expect(editor).toHaveAttribute('data-column-direction', 'right-to-left');
+    expect(editor).toHaveAttribute('data-column-input-order', 'least_significant_first');
     const slots = container.querySelectorAll('.column-digit-slot');
     expect(slots.length).toBeGreaterThanOrEqual(4);
     const ones = screen.getByRole('button', { name: /1番の答え 一の位/ });

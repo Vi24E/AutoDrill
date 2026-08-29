@@ -10,7 +10,7 @@ use crate::error::{GenerationError, SamplingError};
 use crate::identity::{validate_seed, ProblemSetIdentity};
 use crate::model::{
     AnswerInputInterface, ArithmeticExpression, ArithmeticOperator, EditorStructure,
-    GenerateProblemRequest, GenerateWorksheetRequest, Problem, ProblemPrompt, Worksheet,
+    GenerateWorksheetRequest, Problem, ProblemPrompt, Worksheet,
 };
 use crate::registry::{active_registration, registration};
 use crate::rng::DeterministicRng;
@@ -157,10 +157,6 @@ impl SamplingLayers {
                 layer_count: self.specs.len(),
             })
         }
-    }
-
-    fn choose(self, rng: &mut DeterministicRng) -> LayerIndex {
-        LayerIndex(rng.next_bounded(self.specs.len() as u64) as usize)
     }
 }
 
@@ -442,78 +438,6 @@ impl MonotonicClock for StepClock {
     }
 }
 
-pub fn generate_problem_request(
-    request: &GenerateProblemRequest,
-) -> Result<Problem, GenerationError> {
-    if request.schema_version != SCHEMA_VERSION {
-        return Err(GenerationError::UnsupportedSchemaVersion {
-            received: request.schema_version,
-            expected: SCHEMA_VERSION,
-        });
-    }
-    validate_seed(&request.seed)?;
-    let registration =
-        active_registration(request.numeric_theme_id)?.ok_or(GenerationError::UnknownTheme {
-            numeric_theme_id: request.numeric_theme_id,
-        })?;
-    let generator = registered_generator(
-        registration.numeric_theme_id(),
-        registration.generator_revision(),
-    )?
-    .ok_or(GenerationError::UnknownGeneratorRevision {
-        numeric_theme_id: registration.numeric_theme_id(),
-        generator_revision: registration.generator_revision(),
-    })?;
-    let mut rng = DeterministicRng::from_seed(&request.seed);
-    let weights = OperationWeights::default();
-    let strategy = generator.sampling_strategy()?;
-    let fixed_answer = match &strategy.kind {
-        SamplingStrategyKind::AnswerConditioned { domain, .. } => Some(domain.choose(&mut rng)),
-        _ => None,
-    };
-    for ordinal in 1..=DEFAULT_MAX_ATTEMPTS {
-        let (problem, requested_layer) = match &strategy.kind {
-            SamplingStrategyKind::Random { source, .. } => (
-                source.draw_candidate(&mut rng, ordinal as u32, &weights)?,
-                None,
-            ),
-            SamplingStrategyKind::Layered { source, .. } => (
-                source.draw_candidate(&mut rng, ordinal as u32, &weights)?,
-                None,
-            ),
-            SamplingStrategyKind::AnswerConditioned { source, .. } => {
-                let answer = fixed_answer.ok_or(SamplingError::EmptyAnswerDomain)?;
-                (
-                    source.draw_candidate_for_answer(&mut rng, ordinal as u32, &weights, answer)?,
-                    None,
-                )
-            }
-            SamplingStrategyKind::ConstructiveLayered { source, layers, .. } => {
-                let layer = layers.choose(&mut rng);
-                (
-                    source.draw_candidate_for_layer(
-                        &mut rng,
-                        ordinal as u32,
-                        &weights,
-                        layer.value(),
-                    )?,
-                    Some(layer),
-                )
-            }
-        };
-        if let Some(problem) = problem {
-            strategy.validate_candidate_contract(fixed_answer, requested_layer, &problem)?;
-            if problem_allowed_by_curriculum(registration, &problem) {
-                return Ok(problem);
-            }
-        }
-    }
-    Err(GenerationError::AttemptLimit {
-        attempts: DEFAULT_MAX_ATTEMPTS,
-        max_attempts: DEFAULT_MAX_ATTEMPTS,
-    })
-}
-
 pub fn generate_worksheet_request(
     request: &GenerateWorksheetRequest,
 ) -> Result<Worksheet, GenerationError> {
@@ -543,12 +467,6 @@ pub fn generate_worksheet_request_with_clock<C: MonotonicClock + ?Sized>(
         request.difficulty,
     )?;
     generate_identity_with_clock(&identity, &GenerationConfig::from_request(request), clock)
-}
-
-pub fn regenerate_problem_set(problem_set_id: &str) -> Result<Worksheet, GenerationError> {
-    let identity: ProblemSetIdentity = problem_set_id.parse()?;
-    let clock = SystemClock::new();
-    generate_identity_with_clock(&identity, &GenerationConfig::default(), &clock)
 }
 
 pub fn generate_identity_with_clock<C: MonotonicClock + ?Sized>(
@@ -1730,9 +1648,14 @@ mod tests {
                         registration.generator_revision()
                     );
                     assert_eq!(
-                        regenerate_problem_set(&first.problem_set_id()).unwrap(),
+                        generate_identity_with_clock(
+                            first.identity(),
+                            &GenerationConfig::default(),
+                            &SystemClock::new(),
+                        )
+                        .unwrap(),
                         first,
-                        "problem_set_id regeneration must preserve the same revision identity"
+                        "identity regeneration must preserve the same revision"
                     );
                     if difficulty_value <= 2 {
                         assert!(

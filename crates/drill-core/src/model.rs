@@ -12,7 +12,10 @@ use crate::effort::EffortModel;
 use crate::effort::{OperationPlan, OperationVector};
 use crate::exact::ExactRational;
 use crate::identity::{Difficulty, ProblemSetIdentity};
-use crate::theme::{DigitGridSpec, ThemeAnswerSchemaKind, ThemePromptKind, ThemeRegistration};
+use crate::theme::{
+    ColumnAnswerPartInputPolicy, ColumnDecimalPointPolicy, ColumnInputOrder, DigitGridSpec,
+    ThemeAnswerSchemaKind, ThemePromptKind, ThemeRegistration,
+};
 
 use crate::schema::SCHEMA_VERSION;
 
@@ -575,6 +578,7 @@ pub struct Problem {
     numeric_theme_id: u32,
     prompt: ProblemPrompt,
     input_interface: AnswerInputInterface,
+    column_input: Option<ColumnArithmeticInput>,
     answer_schema: ValidatedAnswerSchema,
     canonical_answer: CanonicalAnswer,
     worked_solution: Option<WorkedSolution>,
@@ -835,6 +839,65 @@ fn answer_scale(answer: &AnswerNode) -> u32 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ColumnDecimalPointInput {
+    None,
+    Fixed { scale: u32 },
+    Editable,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+pub struct ColumnAnswerPartInput {
+    pub order: ColumnInputOrder,
+    pub decimal_point: ColumnDecimalPointInput,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+pub struct ColumnArithmeticInput {
+    pub single: Option<ColumnAnswerPartInput>,
+    pub quotient: Option<ColumnAnswerPartInput>,
+    pub remainder: Option<ColumnAnswerPartInput>,
+}
+
+fn resolve_column_answer_part_input(
+    policy: Option<ColumnAnswerPartInputPolicy>,
+    answer: &AnswerNode,
+) -> Option<ColumnAnswerPartInput> {
+    policy.map(|policy| ColumnAnswerPartInput {
+        order: policy.order(),
+        decimal_point: match policy.decimal_point() {
+            ColumnDecimalPointPolicy::None => ColumnDecimalPointInput::None,
+            ColumnDecimalPointPolicy::FixedCanonicalScale => ColumnDecimalPointInput::Fixed {
+                scale: answer_scale(answer),
+            },
+            ColumnDecimalPointPolicy::Editable => ColumnDecimalPointInput::Editable,
+        },
+    })
+}
+
+fn column_arithmetic_input(
+    registration: &ThemeRegistration,
+    answer: &AnswerNode,
+) -> Option<ColumnArithmeticInput> {
+    let policy = registration.presentation().column_input()?;
+    let (quotient, remainder) = match answer {
+        AnswerNode::Tuple(values) => (
+            values.first().unwrap_or(answer),
+            values.get(1).unwrap_or(answer),
+        ),
+        _ => (answer, answer),
+    };
+    Some(ColumnArithmeticInput {
+        single: resolve_column_answer_part_input(policy.single(), answer),
+        quotient: resolve_column_answer_part_input(policy.quotient(), quotient),
+        remainder: resolve_column_answer_part_input(policy.remainder(), remainder),
+    })
+}
+
 impl WorkedSolution {
     fn for_column_arithmetic(
         operator: ArithmeticOperator,
@@ -1060,6 +1123,7 @@ impl Problem {
         {
             return Err(ProblemInvariantError::WireIntegerRange);
         }
+        let column_input = column_arithmetic_input(registration, canonical_answer.as_node());
         Ok(Self {
             schema_version: SCHEMA_VERSION,
             id,
@@ -1068,6 +1132,7 @@ impl Problem {
             input_interface: crate::input::input_interface(
                 registration.answer_contract().input_profile(),
             ),
+            column_input,
             answer_schema,
             canonical_answer,
             worked_solution,
@@ -1093,6 +1158,10 @@ impl Problem {
 
     pub const fn input_interface(&self) -> &AnswerInputInterface {
         &self.input_interface
+    }
+
+    pub const fn column_input(&self) -> Option<&ColumnArithmeticInput> {
+        self.column_input.as_ref()
     }
 
     pub const fn answer_schema(&self) -> &AnswerSchema {
@@ -1364,24 +1433,6 @@ impl Serialize for GradeResult {
         S: Serializer,
     {
         crate::wire::GradeResultWire::from(self).serialize(serializer)
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "wire-types", derive(TS))]
-pub struct GenerateProblemRequest {
-    pub schema_version: u16,
-    pub numeric_theme_id: u32,
-    pub seed: String,
-}
-
-impl GenerateProblemRequest {
-    pub fn new(numeric_theme_id: u32, seed: impl Into<String>) -> Self {
-        Self {
-            schema_version: SCHEMA_VERSION,
-            numeric_theme_id,
-            seed: seed.into(),
-        }
     }
 }
 

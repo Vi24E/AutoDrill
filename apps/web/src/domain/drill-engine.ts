@@ -5,6 +5,10 @@ import type {
   AnswerSchema as RustAnswerSchema,
   ArithmeticExpression as RustArithmeticExpression,
   ArithmeticOperator as RustArithmeticOperator,
+  ColumnAnswerPartInput as RustColumnAnswerPartInput,
+  ColumnArithmeticInput as RustColumnArithmeticInput,
+  ColumnDecimalPointInput as RustColumnDecimalPointInput,
+  ColumnInputOrder as RustColumnInputOrder,
   ColumnMultiplicationPartial as RustColumnMultiplicationPartial,
   EditorStructure as RustEditorStructure,
   GenerateWorksheetRequest as RustGenerateWorksheetRequest,
@@ -92,6 +96,10 @@ export type ArithmeticExpression = RustArithmeticExpression;
 export type LiarStatement = RustLiarStatement;
 export type ProblemPrompt = RustProblemPrompt;
 export type AnswerSchema = RustAnswerSchema;
+export type ColumnInputOrder = RustColumnInputOrder;
+export type ColumnDecimalPointInput = RustColumnDecimalPointInput;
+export type ColumnAnswerPartInput = RustColumnAnswerPartInput;
+export type ColumnArithmeticInput = RustColumnArithmeticInput;
 export type ColumnMultiplicationPartial = RustColumnMultiplicationPartial;
 export type LongDivisionStep = RustLongDivisionStep;
 export type WorkedSolution = RustWorkedSolution;
@@ -175,15 +183,6 @@ export interface DrillEngine {
   parseMathLiveAnswer(latex: string, inputInterface: AnswerInputInterface): Promise<AnswerNode>;
   gradeAnswer(request: GradeRequest): Promise<GradeResult>;
 }
-
-export const DEFAULT_DRILL_SETTINGS: DrillSettings = {
-  schema_version: DRILL_SCHEMA_VERSION,
-  // The Web curriculum registry replaces this with the selected theme ID.
-  numeric_theme_id: 2,
-  difficulty: 2,
-  // q1 resolves a blank value to a fresh automatic seed per click.
-  seed: '',
-};
 
 function exactDecimalText(coefficient: string, scale: number): string {
   const negative = coefficient.startsWith('-');

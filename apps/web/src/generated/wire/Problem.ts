@@ -2,6 +2,7 @@
 import type { AnswerInputInterface } from "./AnswerInputInterface";
 import type { AnswerNode } from "./AnswerNode";
 import type { AnswerSchema } from "./AnswerSchema";
+import type { ColumnArithmeticInput } from "./ColumnArithmeticInput";
 import type { ProblemPrompt } from "./ProblemPrompt";
 import type { WorkedSolution } from "./WorkedSolution";
 
@@ -12,4 +13,4 @@ import type { WorkedSolution } from "./WorkedSolution";
  * consumed by WASM/Web. Internal effort diagnostics stay inside Rust until a
  * concrete cross-language consumer exists.
  */
-export type Problem = { schema_version: number, id: number, numeric_theme_id: number, prompt: ProblemPrompt, input_interface: AnswerInputInterface, answer_schema: AnswerSchema, canonical_answer: AnswerNode, worked_solution: WorkedSolution | null, };
+export type Problem = { schema_version: number, id: number, numeric_theme_id: number, prompt: ProblemPrompt, input_interface: AnswerInputInterface, column_input: ColumnArithmeticInput | null, answer_schema: AnswerSchema, canonical_answer: AnswerNode, worked_solution: WorkedSolution | null, };

@@ -77,6 +77,22 @@ describe('print flow integration paths', () => {
     await closePreview();
   });
 
+  it('reopened settings preview closes immediately with Escape after a print-and-back cycle', async () => {
+    renderApp();
+    fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
+    await expectPreviewOpen(printSpy);
+    fireEvent.click(screen.getByRole('button', { name: '印刷する' }));
+    await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
+    await closePreview();
+    printSpy.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
+    await expectPreviewOpen(printSpy);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '印刷プレビュー' })).not.toBeInTheDocument());
+    expect(document.querySelector('.worksheet-print-host')).toBeNull();
+  });
+
   it('worksheet editing -> print preview -> back preserves the worksheet state', async () => {
     renderApp();
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));

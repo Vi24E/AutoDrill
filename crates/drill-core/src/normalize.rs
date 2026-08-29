@@ -21,7 +21,7 @@ fn exact_rational_into_answer(value: ExactRational) -> Option<AnswerNode> {
 /// Raw `AnswerNode` is a public recursive wire/domain syntax type, so native
 /// callers can construct trees deeper than the interactive contract. Reject
 /// those before entering recursive semantic normalization.
-pub fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
+pub(crate) fn normalize_answer(answer: &AnswerNode) -> AnswerNode {
     if !answer.is_within_structural_node_limit() {
         return AnswerNode::NanError("answer_ast_size_limit".to_owned());
     }

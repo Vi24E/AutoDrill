@@ -1,27 +1,30 @@
-import type { AnswerNode, ProblemDto } from '@/domain/drill-engine';
-import { columnAnswerScale, columnArithmeticDigitCells } from '@/domain/column-arithmetic-presentation';
+import type {
+  AnswerNode,
+  ColumnAnswerPartInput,
+  ColumnDecimalPointInput,
+  ColumnInputOrder,
+  ProblemDto,
+} from '@/domain/drill-engine';
+import { columnArithmeticDigitCells } from '@/domain/column-arithmetic-presentation';
 
 export type ColumnAnswerSlot = 'single' | 'quotient';
 export type ColumnInputDirection = 'left-to-right' | 'right-to-left';
 
 export type ColumnDigitSpec = {
   cellCount: number;
-  scale: number;
+  order: ColumnInputOrder;
   direction: ColumnInputDirection;
   activeStart: number;
   activeEnd: number;
   initialIndex: number;
-  decimalBoundary: number | null;
+  decimalPoint: ColumnDecimalPointInput;
+  fixedDecimalBoundary: number | null;
 };
 
 export function columnAnswerPart(answer: AnswerNode, slot: ColumnAnswerSlot): AnswerNode {
   if (slot === 'single') return answer;
   if (answer.type !== 'tuple') return { type: 'empty' };
   return answer.value[0] ?? { type: 'empty' };
-}
-
-function canonicalPart(problem: ProblemDto, slot: ColumnAnswerSlot): AnswerNode {
-  return columnAnswerPart(problem.canonical_answer, slot);
 }
 
 function firstQuotientCell(problem: ProblemDto, digitCells: number, activeEnd: number): number {
@@ -32,41 +35,60 @@ function firstQuotientCell(problem: ProblemDto, digitCells: number, activeEnd: n
   return Math.max(0, Math.min(activeEnd, index));
 }
 
+function partInput(problem: ProblemDto, slot: ColumnAnswerSlot): ColumnAnswerPartInput {
+  const metadata = problem.column_input;
+  const part = slot === 'single' ? metadata?.single : metadata?.quotient;
+  if (!part) throw new Error(`Column input metadata is missing for ${slot}.`);
+  return part;
+}
+
+function directionFor(order: ColumnInputOrder): ColumnInputDirection {
+  return order === 'least_significant_first' ? 'right-to-left' : 'left-to-right';
+}
+
+function fixedDecimalBoundary(
+  decimalPoint: ColumnDecimalPointInput,
+  activeEnd: number,
+): number | null {
+  if (decimalPoint.type !== 'fixed' || decimalPoint.scale === 0) return null;
+  return activeEnd + 1 - decimalPoint.scale;
+}
+
 export function columnDigitSpec(problem: ProblemDto, slot: ColumnAnswerSlot): ColumnDigitSpec {
   if (problem.prompt.kind !== 'column_arithmetic') {
     throw new Error('Column digit input requires a column arithmetic problem.');
   }
 
-
-
   const digitCells = columnArithmeticDigitCells(problem);
-  const part = canonicalPart(problem, slot);
-  const scale = columnAnswerScale(part);
-  if (problem.prompt.operator === 'divide') {
-    const trailingCells = problem.worked_solution?.kind === 'long_division'
-      ? problem.worked_solution.quotient_trailing_cells
-      : 0;
+  const input = partInput(problem, slot);
+  const direction = directionFor(input.order);
+  if (problem.worked_solution?.kind === 'long_division') {
+    const trailingCells = problem.worked_solution.quotient_trailing_cells;
     const activeEnd = Math.max(0, digitCells - trailingCells - 1);
     const activeStart = firstQuotientCell(problem, digitCells, activeEnd);
     return {
       cellCount: digitCells,
-      scale,
-      direction: 'left-to-right',
+      order: input.order,
+      direction,
       activeStart,
       activeEnd,
-      initialIndex: activeStart,
-      decimalBoundary: scale > 0 ? activeEnd + 1 - scale : null,
+      initialIndex: direction === 'left-to-right' ? activeStart : activeEnd,
+      decimalPoint: input.decimal_point,
+      fixedDecimalBoundary: fixedDecimalBoundary(input.decimal_point, activeEnd),
     };
   }
 
+  const activeStart = 0;
+  const activeEnd = digitCells - 1;
   return {
     cellCount: digitCells,
-    scale,
-    direction: 'right-to-left',
-    activeStart: 0,
-    activeEnd: digitCells - 1,
-    initialIndex: digitCells - 1,
-    decimalBoundary: scale > 0 ? digitCells - scale : null,
+    order: input.order,
+    direction,
+    activeStart,
+    activeEnd,
+    initialIndex: direction === 'left-to-right' ? activeStart : activeEnd,
+    decimalPoint: input.decimal_point,
+    fixedDecimalBoundary: fixedDecimalBoundary(input.decimal_point, activeEnd),
   };
 }
 
@@ -97,23 +119,42 @@ function incompleteAnswer(raw: readonly (string | null)[]): AnswerNode {
   return { type: 'nan_error', value: `column-draft:${raw.map((digit) => digit ?? '_').join('')}` };
 }
 
-export function columnDigitsToAnswer(digits: readonly (string | null)[], spec: ColumnDigitSpec): AnswerNode {
+function decimalScale(spec: ColumnDigitSpec, decimalBoundary: number | null): number | null {
+  if (spec.decimalPoint.type === 'none') return 0;
+  if (spec.decimalPoint.type === 'fixed') return spec.decimalPoint.scale;
+  if (decimalBoundary === null) return 0;
+  return Math.max(0, spec.activeEnd + 1 - decimalBoundary);
+}
+
+export function columnDecimalBoundaryFromAnswer(answer: AnswerNode, spec: ColumnDigitSpec): number | null {
+  if (spec.decimalPoint.type === 'none') return null;
+  if (spec.decimalPoint.type === 'fixed') return spec.fixedDecimalBoundary;
+  if (answer.type !== 'exact_decimal' || answer.value.scale === 0) return null;
+  return Math.max(spec.activeStart, spec.activeEnd + 1 - answer.value.scale);
+}
+
+export function columnDigitsToAnswer(
+  digits: readonly (string | null)[],
+  spec: ColumnDigitSpec,
+  decimalBoundary: number | null = spec.fixedDecimalBoundary,
+): AnswerNode {
   const active = digits.slice(spec.activeStart, spec.activeEnd + 1);
   const firstFilled = active.findIndex((digit) => digit !== null);
   if (firstFilled < 0) return { type: 'empty' };
 
-  if (spec.scale === 0) {
+  const scale = decimalScale(spec, decimalBoundary);
+  if (scale === null || scale === 0) {
     const significant = active.slice(firstFilled);
     if (significant.some((digit) => digit === null)) return incompleteAnswer(active);
     const value = significant.join('').replace(/^0+(?=\d)/, '') || '0';
     return { type: 'integer', value };
   }
 
-  const globalBoundary = spec.decimalBoundary ?? (spec.activeEnd + 1 - spec.scale);
+  const globalBoundary = spec.activeEnd + 1 - scale;
   const localBoundary = globalBoundary - spec.activeStart;
   const integerDigits = active.slice(0, Math.max(0, localBoundary));
   const fractionDigits = active.slice(Math.max(0, localBoundary));
-  if (fractionDigits.length !== spec.scale || fractionDigits.some((digit) => digit === null)) {
+  if (fractionDigits.length !== scale || fractionDigits.some((digit) => digit === null)) {
     return incompleteAnswer(active);
   }
 
@@ -122,7 +163,7 @@ export function columnDigitsToAnswer(digits: readonly (string | null)[], spec: C
   if (integerPart.some((digit) => digit === null)) return incompleteAnswer(active);
   const rawCoefficient = `${integerPart.join('') || '0'}${fractionDigits.join('')}`;
   const coefficient = BigInt(rawCoefficient || '0').toString();
-  return { type: 'exact_decimal', value: { coefficient, scale: spec.scale } };
+  return { type: 'exact_decimal', value: { coefficient, scale } };
 }
 
 export function replaceColumnAnswerPart(answer: AnswerNode, slot: ColumnAnswerSlot, part: AnswerNode): AnswerNode {

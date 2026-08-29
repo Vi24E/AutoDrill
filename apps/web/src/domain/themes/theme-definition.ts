@@ -43,6 +43,11 @@ export type ThemeDefinition = {
     print_recommended: boolean;
     equation_layout: boolean;
     fraction: 'none' | 'mixed_number_when_improper' | 'keep_improper_fraction';
+    column_input: {
+      single: { order: 'least_significant_first' | 'natural_division_flow' | 'big_endian'; decimal_point: 'none' | 'fixed_canonical_scale' | 'editable' } | null;
+      quotient: { order: 'least_significant_first' | 'natural_division_flow' | 'big_endian'; decimal_point: 'none' | 'fixed_canonical_scale' | 'editable' } | null;
+      remainder: { order: 'least_significant_first' | 'natural_division_flow' | 'big_endian'; decimal_point: 'none' | 'fixed_canonical_scale' | 'editable' } | null;
+    } | null;
   };
   dedup: 'canonicalize_commutative' | 'preserve_operand_order';
   promptKind: ThemePromptKind;

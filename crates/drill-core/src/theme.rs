@@ -1,5 +1,7 @@
 use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
+#[cfg(feature = "wire-types")]
+use ts_rs::TS;
 
 /// Search/filter taxonomy only. Behavioural capabilities belong to typed policy
 /// values rather than being duplicated here as tags.
@@ -42,6 +44,79 @@ pub enum DedupPolicy {
     PreserveOperandOrder,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(rename_all = "snake_case")]
+pub enum ColumnInputOrder {
+    LeastSignificantFirst,
+    NaturalDivisionFlow,
+    BigEndian,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ColumnDecimalPointPolicy {
+    None,
+    FixedCanonicalScale,
+    Editable,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct ColumnAnswerPartInputPolicy {
+    order: ColumnInputOrder,
+    decimal_point: ColumnDecimalPointPolicy,
+}
+
+impl ColumnAnswerPartInputPolicy {
+    pub const fn new(order: ColumnInputOrder, decimal_point: ColumnDecimalPointPolicy) -> Self {
+        Self {
+            order,
+            decimal_point,
+        }
+    }
+
+    pub const fn order(self) -> ColumnInputOrder {
+        self.order
+    }
+
+    pub const fn decimal_point(self) -> ColumnDecimalPointPolicy {
+        self.decimal_point
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct ColumnArithmeticInputPolicy {
+    single: Option<ColumnAnswerPartInputPolicy>,
+    quotient: Option<ColumnAnswerPartInputPolicy>,
+    remainder: Option<ColumnAnswerPartInputPolicy>,
+}
+
+impl ColumnArithmeticInputPolicy {
+    pub const fn new(
+        single: Option<ColumnAnswerPartInputPolicy>,
+        quotient: Option<ColumnAnswerPartInputPolicy>,
+        remainder: Option<ColumnAnswerPartInputPolicy>,
+    ) -> Self {
+        Self {
+            single,
+            quotient,
+            remainder,
+        }
+    }
+
+    pub const fn single(self) -> Option<ColumnAnswerPartInputPolicy> {
+        self.single
+    }
+
+    pub const fn quotient(self) -> Option<ColumnAnswerPartInputPolicy> {
+        self.quotient
+    }
+
+    pub const fn remainder(self) -> Option<ColumnAnswerPartInputPolicy> {
+        self.remainder
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum WorksheetPresentation {
     Standard,
@@ -58,27 +133,94 @@ enum WorksheetPresentation {
 pub struct ThemePresentationPolicy {
     worksheet: WorksheetPresentation,
     fraction: FractionPresentationPolicy,
+    column_input: Option<ColumnArithmeticInputPolicy>,
 }
 
 impl ThemePresentationPolicy {
     pub const STANDARD: Self = Self {
         worksheet: WorksheetPresentation::Standard,
         fraction: FractionPresentationPolicy::None,
+        column_input: None,
     };
 
     pub const EQUATION: Self = Self {
         worksheet: WorksheetPresentation::Equation,
         fraction: FractionPresentationPolicy::None,
+        column_input: None,
     };
 
     pub const WORKSHEET_GRID: Self = Self {
         worksheet: WorksheetPresentation::Grid,
         fraction: FractionPresentationPolicy::None,
+        column_input: None,
     };
 
     pub const COLUMN_ARITHMETIC: Self = Self {
         worksheet: WorksheetPresentation::ColumnArithmetic,
         fraction: FractionPresentationPolicy::None,
+        column_input: Some(ColumnArithmeticInputPolicy::new(
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::LeastSignificantFirst,
+                ColumnDecimalPointPolicy::None,
+            )),
+            None,
+            None,
+        )),
+    };
+
+    pub const COLUMN_DIVISION: Self = Self {
+        worksheet: WorksheetPresentation::ColumnArithmetic,
+        fraction: FractionPresentationPolicy::None,
+        column_input: Some(ColumnArithmeticInputPolicy::new(
+            None,
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::NaturalDivisionFlow,
+                ColumnDecimalPointPolicy::None,
+            )),
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::BigEndian,
+                ColumnDecimalPointPolicy::None,
+            )),
+        )),
+    };
+
+    pub const COLUMN_DECIMAL: Self = Self {
+        worksheet: WorksheetPresentation::ColumnArithmetic,
+        fraction: FractionPresentationPolicy::None,
+        column_input: Some(ColumnArithmeticInputPolicy::new(
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::LeastSignificantFirst,
+                ColumnDecimalPointPolicy::FixedCanonicalScale,
+            )),
+            None,
+            None,
+        )),
+    };
+
+    pub const COLUMN_DECIMAL_MULTIPLICATION: Self = Self {
+        worksheet: WorksheetPresentation::ColumnArithmetic,
+        fraction: FractionPresentationPolicy::None,
+        column_input: Some(ColumnArithmeticInputPolicy::new(
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::LeastSignificantFirst,
+                ColumnDecimalPointPolicy::Editable,
+            )),
+            None,
+            None,
+        )),
+    };
+
+    pub const COLUMN_DECIMAL_DIVISION: Self = Self {
+        worksheet: WorksheetPresentation::ColumnArithmetic,
+        fraction: FractionPresentationPolicy::None,
+        column_input: Some(ColumnArithmeticInputPolicy::new(
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::NaturalDivisionFlow,
+                ColumnDecimalPointPolicy::FixedCanonicalScale,
+            )),
+            None,
+            None,
+        )),
     };
 
     pub const fn with_fraction(mut self, fraction: FractionPresentationPolicy) -> Self {
@@ -108,6 +250,10 @@ impl ThemePresentationPolicy {
     pub const fn fraction(self) -> FractionPresentationPolicy {
         self.fraction
     }
+
+    pub const fn column_input(self) -> Option<ColumnArithmeticInputPolicy> {
+        self.column_input
+    }
 }
 
 /// Keep the public Web contract stable while deriving every boolean capability
@@ -117,12 +263,13 @@ impl Serialize for ThemePresentationPolicy {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("ThemePresentationPolicy", 5)?;
+        let mut state = serializer.serialize_struct("ThemePresentationPolicy", 6)?;
         state.serialize_field("worksheet_grid", &self.worksheet_grid())?;
         state.serialize_field("column_arithmetic", &self.column_arithmetic())?;
         state.serialize_field("print_recommended", &self.print_recommended())?;
         state.serialize_field("equation_layout", &self.equation_layout())?;
         state.serialize_field("fraction", &self.fraction)?;
+        state.serialize_field("column_input", &self.column_input)?;
         state.end()
     }
 }

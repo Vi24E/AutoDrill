@@ -11,17 +11,14 @@ use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
 use drill_core::generate_worksheet_request as core_generate_worksheet_request;
+#[cfg(test)]
+use drill_core::MAX_ANSWER_AST_SIZE;
 #[cfg(target_arch = "wasm32")]
+use drill_core::{generate_worksheet_request_with_clock, GenerationConfig, MonotonicClock};
 use drill_core::{
-    generate_identity_with_clock, generate_worksheet_request_with_clock, GenerationConfig,
-    MonotonicClock,
-};
-use drill_core::{
-    generate_problem_request as core_generate_problem_request,
     grade_answer_with_schema as core_grade_answer_with_schema,
-    normalize_answer as core_normalize_answer, parse_mathlive_answer as core_parse_mathlive_answer,
-    AnswerInputInterface, AnswerNode, AnswerSchema, EditorError, GenerateProblemRequest,
-    GenerateWorksheetRequest, GenerationError, GradeError, ProblemSetIdentity, MAX_ANSWER_AST_SIZE,
+    parse_mathlive_answer as core_parse_mathlive_answer, AnswerInputInterface, AnswerNode,
+    AnswerSchema, EditorError, GenerateWorksheetRequest, GenerationError, GradeError,
     SCHEMA_VERSION,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -119,12 +116,6 @@ struct ParseMathLiveAnswerRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct NormalizeAnswerRequest {
-    schema_version: u16,
-    answer: AnswerNode,
-}
-
-#[derive(Debug, Deserialize)]
 struct GradeAnswerRequest {
     schema_version: u16,
     expected: AnswerNode,
@@ -151,13 +142,6 @@ struct ApiError {
 }
 
 #[wasm_bindgen]
-pub fn generate_problem(input_json: &str) -> String {
-    respond_with(input_json, |request: GenerateProblemRequest| {
-        core_generate_problem_request(&request).map_err(generation_error)
-    })
-}
-
-#[wasm_bindgen]
 pub fn generate_worksheet(input_json: &str) -> String {
     respond_with(input_json, |request: GenerateWorksheetRequest| {
         generate_worksheet_for_platform(&request).map_err(generation_error)
@@ -181,45 +165,10 @@ fn generate_worksheet_for_platform(
 }
 
 #[wasm_bindgen]
-pub fn regenerate_problem_set(input_json: &str) -> String {
-    respond_with(input_json, |problem_set_id: String| {
-        let identity: ProblemSetIdentity = problem_set_id
-            .parse()
-            .map_err(|error| generation_error(GenerationError::InvalidIdentity(error)))?;
-        regenerate_for_platform(&identity).map_err(generation_error)
-    })
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn regenerate_for_platform(
-    identity: &ProblemSetIdentity,
-) -> Result<drill_core::Worksheet, GenerationError> {
-    drill_core::regenerate_problem_set(&identity.to_string())
-}
-
-#[cfg(target_arch = "wasm32")]
-fn regenerate_for_platform(
-    identity: &ProblemSetIdentity,
-) -> Result<drill_core::Worksheet, GenerationError> {
-    let config = GenerationConfig::default();
-    let clock = BrowserClock::try_new().ok_or_else(|| GenerationError::timeout(config.timeout))?;
-    generate_identity_with_clock(identity, &config, &clock)
-}
-
-#[wasm_bindgen]
 pub fn parse_mathlive_answer(input_json: &str) -> String {
     respond_with(input_json, |request: ParseMathLiveAnswerRequest| {
         validate_schema(request.schema_version)?;
         core_parse_mathlive_answer(&request.latex, &request.input_interface).map_err(editor_error)
-    })
-}
-
-#[wasm_bindgen]
-pub fn normalize_answer(input_json: &str) -> String {
-    respond_with(input_json, |request: NormalizeAnswerRequest| {
-        validate_schema(request.schema_version)?;
-        validate_answer_size(&request.answer)?;
-        Ok(core_normalize_answer(&request.answer))
     })
 }
 
@@ -340,16 +289,6 @@ fn editor_error(error: EditorError) -> ApiError {
     }
 }
 
-fn validate_answer_size(answer: &AnswerNode) -> Result<(), ApiError> {
-    if answer.is_within_size_limit() {
-        Ok(())
-    } else {
-        Err(editor_error(EditorError::AnswerSizeLimit {
-            max_size: MAX_ANSWER_AST_SIZE,
-        }))
-    }
-}
-
 fn invalid_request(message: &str) -> ApiError {
     ApiError {
         code: "invalid_request".to_owned(),
@@ -422,14 +361,15 @@ mod tests {
         let value = parse(&output);
         assert_eq!(value["schema_version"], SCHEMA_VERSION);
         assert_eq!(value["ok"], true);
-        let generator_revision = value["data"]["identity"]["generator_revision"]
+        assert!(value["data"]["identity"]["generator_revision"]
             .as_u64()
-            .expect("generator revision must be a wire integer");
-        assert_eq!(
-            value["data"]["problem_set_id"],
-            format!("{SCHEMA_VERSION}-1-{generator_revision}-Ab3Z-3")
-        );
+            .is_some_and(|revision| revision > 0));
         assert_eq!(value["data"]["identity"]["numeric_theme_id"], 1);
+        assert_eq!(value["data"]["identity"]["seed"], "Ab3Z");
+        assert_eq!(value["data"]["identity"]["difficulty"], 3);
+        for removed_field in ["problem_set_id", "skill_id", "curriculum_path"] {
+            assert!(value["data"].get(removed_field).is_none());
+        }
         assert_eq!(value["data"]["layout"]["problem_count"], 20);
         assert_eq!(value["data"]["problems"][0]["prompt"]["kind"], "addition");
         assert_eq!(value["data"]["problems"][0]["answer_schema"]["min"], "1");
@@ -449,25 +389,14 @@ mod tests {
         ] {
             assert!(problem.get(internal_effort_field).is_none());
         }
-
-        let regenerated_id = format!("\"{SCHEMA_VERSION}-1-{generator_revision}-Ab3Z-3\"");
-        let regenerated = parse(&regenerate_problem_set(&regenerated_id));
-        assert_eq!(regenerated["data"], value["data"]);
     }
 
     #[test]
-    fn non_current_schema_requests_and_ids_fail_closed_at_wasm_boundary() {
+    fn non_current_schema_requests_fail_closed_at_wasm_boundary() {
         let request = parse(&generate_worksheet(
             r#"{"schema_version":2,"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
         ));
         assert_eq!(request["error"]["code"], "unsupported_schema_version");
-        let problem = parse(&generate_problem(
-            r#"{"schema_version":2,"numeric_theme_id":1,"seed":"Ab3Z"}"#,
-        ));
-        assert_eq!(problem["error"]["code"], "unsupported_schema_version");
-        let id = parse(&regenerate_problem_set(r#""2-1-2-Ab3Z-3""#));
-        assert_eq!(id["error"]["code"], "unsupported_schema_version");
-
         let missing_schema = parse(&generate_worksheet(
             r#"{"numeric_theme_id":1,"seed":"Ab3Z","difficulty":3}"#,
         ));
@@ -527,12 +456,6 @@ mod tests {
                 }
             }),
         ] {
-            let normalized = parse(&normalize_answer(
-                &json!({"schema_version": SCHEMA_VERSION, "answer": answer.clone()}).to_string(),
-            ));
-            assert_eq!(normalized["ok"], true);
-            assert_eq!(normalized["data"], answer);
-
             let graded = parse(&grade_answer(
                 &json!({
                     "schema_version": SCHEMA_VERSION,
@@ -716,23 +639,11 @@ mod tests {
             assert_eq!(parsed["ok"], true, "parse failed for {latex}: {parsed}");
             let actual = parsed["data"].clone();
 
-            let normalized = parse(&normalize_answer(
-                &json!({
-                    "schema_version": SCHEMA_VERSION,
-                    "answer": actual.clone()
-                })
-                .to_string(),
-            ));
-            assert_eq!(
-                normalized["ok"], true,
-                "normalize failed for {latex}: {normalized}"
-            );
-
             let graded = parse(&grade_answer(
                 &json!({
                     "schema_version": SCHEMA_VERSION,
                     "input_interface": interface.clone(),
-                    "expected": normalized["data"].clone(),
+                    "expected": actual.clone(),
                     "actual": actual
                 })
                 .to_string(),

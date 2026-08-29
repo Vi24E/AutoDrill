@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import {
-  DEFAULT_DRILL_SETTINGS,
   DRILL_SCHEMA_VERSION,
   DrillEngineError,
   answerNodeText,
@@ -46,6 +45,7 @@ import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presen
 import { worksheetPageGridVariables } from '@/domain/worksheet-grid-presentation';
 import {
   columnAnswerPart,
+  columnDecimalBoundaryFromAnswer,
   columnDigitSpec,
   columnDigitsFromAnswer,
   columnDigitsToAnswer,
@@ -372,7 +372,7 @@ function RubyMessage({ text }: { text: string }) {
 
 export type AutoDrillAppProps = {
   engine?: DrillEngine;
-  initialSettings?: DrillSettings;
+  initialSettings?: Pick<DrillSettings, 'seed'>;
   initialWebSettings?: WebDrillSettings;
   onWebSettingsChange?: (settings: WebDrillSettings) => void;
   seedGenerator?: () => string;
@@ -463,6 +463,7 @@ type WorksheetAnswerFieldProps = {
   selectedSlot: MathfieldSlot;
   selectedColumnDigit: ColumnDigitSelection | null;
   columnDrafts: Record<string, Array<string | null>>;
+  columnDecimalBoundaries: Record<string, number | null>;
   result: GradeResult['items'][number] | undefined;
   gradeResult: GradeResult | null;
   inputLocked: boolean;
@@ -484,6 +485,7 @@ function WorksheetAnswerField({
   selectedSlot,
   selectedColumnDigit,
   columnDrafts,
+  columnDecimalBoundaries,
   result,
   gradeResult,
   inputLocked,
@@ -506,6 +508,7 @@ function WorksheetAnswerField({
       : null
   );
   const columnDraftFor = (slot: ColumnAnswerSlot) => columnDrafts[columnDraftKey(problem.problem_id, slot)];
+  const columnDecimalBoundaryFor = (slot: ColumnAnswerSlot) => columnDecimalBoundaries[columnDraftKey(problem.problem_id, slot)];
   const columnFeedback = result ? (
     <span className={`column-grade-feedback ${result.correct ? 'column-grade-feedback-correct' : 'column-grade-feedback-wrong'}`}>
       <span className="column-grade-mark" aria-label={result.correct ? '正解' : '不正解'}>{result.correct ? '○' : '×'}</span>
@@ -561,6 +564,7 @@ function WorksheetAnswerField({
             slot={quotientSlot}
             value={quotientValue}
             draft={columnDraftFor(quotientSlot)}
+            decimalBoundary={columnDecimalBoundaryFor(quotientSlot)}
             selectedDigit={inputLocked ? null : selectedDigitFor(quotientSlot)}
             readOnly={inputLocked}
             onSelectDigit={(digitIndex) => onSelectColumnDigit(index, quotientSlot, digitIndex)}
@@ -627,6 +631,7 @@ function WorksheetAnswerField({
             slot="single"
             value={answer}
             draft={columnDraftFor('single')}
+            decimalBoundary={columnDecimalBoundaryFor('single')}
             selectedDigit={inputLocked ? null : selectedDigitFor('single')}
             readOnly={inputLocked}
             onSelectDigit={(digitIndex) => onSelectColumnDigit(index, 'single', digitIndex)}
@@ -804,7 +809,7 @@ function scheduleProblemScroll(currentIndex: number, nextIndex: number) {
 
 export function AutoDrillApp({
   engine: injectedEngine,
-  initialSettings = DEFAULT_DRILL_SETTINGS,
+  initialSettings = { seed: '' },
   initialWebSettings = DEFAULT_WEB_DRILL_SETTINGS,
   onWebSettingsChange,
   seedGenerator = generateAutomaticSeed,
@@ -814,10 +819,10 @@ export function AutoDrillApp({
   const [screen, setScreen] = useState<Screen>('settings');
   const [worksheetUi, setWorksheetUi] = useState<WorksheetUiComponents | null>(null);
   const [settings, setSettings] = useState<DrillSettings>(() => ({
-    ...initialSettings,
-    // Route-provided Web settings are the canonical selection for the first
-    // q1 request. Preserve an explicit engine fixture seed when the route
-    // leaves the user-facing seed blank.
+    // Web settings are the sole initial theme/difficulty/schema authority.
+    // `initialSettings` only supplies an explicit seed for injected engines/tests
+    // when the user-facing route leaves the seed blank.
+    schema_version: initialWebSettings.schema_version,
     numeric_theme_id: initialWebSettings.numeric_theme_id,
     difficulty: initialWebSettings.difficulty,
     seed: initialWebSettings.seed === '' ? initialSettings.seed : initialWebSettings.seed,
@@ -831,17 +836,20 @@ export function AutoDrillApp({
     selectedColumnDigit,
     selectedDigitGridCell,
     columnDrafts,
+    columnDecimalBoundaries,
     answersRef,
     selectedIndexRef,
     selectedSlotRef,
     selectedColumnDigitRef,
     selectedDigitGridCellRef,
     columnDraftsRef,
+    columnDecimalBoundariesRef,
     inputEnabledRef,
     actionQueueRef,
     acceptedLatexRef,
     setAnswer,
     setColumnDraft,
+    setColumnDecimalBoundary,
     setSelectedIndex,
     setSelectedSlot,
     setSelectedColumnDigit,
@@ -1102,17 +1110,20 @@ export function AutoDrillApp({
     const spec = columnDigitSpec(problem, slot);
     if (digitIndex < spec.activeStart || digitIndex > spec.activeEnd) return;
     const key = columnDraftKey(problem.problem_id, slot);
+    const current = answersRef.current[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
+    const currentPart = columnAnswerPart(current, slot);
     if (!columnDraftsRef.current[key]) {
-      const current = answersRef.current[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
-      const draft = columnDigitsFromAnswer(columnAnswerPart(current, slot), spec);
-      setColumnDraft(key, draft);
+      setColumnDraft(key, columnDigitsFromAnswer(currentPart, spec));
+    }
+    if (!(key in columnDecimalBoundariesRef.current)) {
+      setColumnDecimalBoundary(key, columnDecimalBoundaryFromAnswer(currentPart, spec));
     }
     const selection = { problemIndex: index, slot, digitIndex };
     selectColumnAnswerDigit(selection);
     scheduleProblemScroll(index, index);
     setError(null);
     dismissNotice();
-  }, [answersRef, columnDraftsRef, dismissNotice, selectColumnAnswerDigit, setColumnDraft, worksheet]);
+  }, [answersRef, columnDecimalBoundariesRef, columnDraftsRef, dismissNotice, selectColumnAnswerDigit, setColumnDecimalBoundary, setColumnDraft, worksheet]);
 
   const selectDigitGridCell = useCallback((index: number, cellIndex: number) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
@@ -1226,12 +1237,35 @@ export function AutoDrillApp({
     setColumnDraft(key, normalizedDraft);
 
     const current = answersRef.current[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
-    const part = columnDigitsToAnswer(normalizedDraft, spec);
+    const boundary = columnDecimalBoundariesRef.current[key] ?? spec.fixedDecimalBoundary;
+    const part = columnDigitsToAnswer(normalizedDraft, spec, boundary);
     const answer = replaceColumnAnswerPart(current, slot, part);
     setAnswer(problem.problem_id, answer);
     setError(null);
     dismissNotice();
-  }, [answersRef, dismissNotice, setAnswer, setColumnDraft, worksheet]);
+  }, [answersRef, columnDecimalBoundariesRef, dismissNotice, setAnswer, setColumnDraft, worksheet]);
+
+  const updateColumnDecimalBoundary = useCallback((index: number, slot: ColumnAnswerSlot, boundary: number | null) => {
+    if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
+    const problem = worksheet.problems[index];
+    if (!problem || problem.prompt.kind !== 'column_arithmetic') return;
+    const spec = columnDigitSpec(problem, slot);
+    if (spec.decimalPoint.type !== 'editable') return;
+    const key = columnDraftKey(problem.problem_id, slot);
+    const boundedBoundary = boundary === null
+      ? null
+      : Math.max(spec.activeStart, Math.min(spec.activeEnd + 1, boundary));
+    setColumnDecimalBoundary(key, boundedBoundary);
+
+    const current = answersRef.current[problem.problem_id] ?? ({ type: 'empty' } satisfies AnswerNode);
+    const draft = columnDraftsRef.current[key]
+      ?? columnDigitsFromAnswer(columnAnswerPart(current, slot), spec);
+    if (!columnDraftsRef.current[key]) setColumnDraft(key, draft);
+    const part = columnDigitsToAnswer(draft, spec, boundedBoundary);
+    setAnswer(problem.problem_id, replaceColumnAnswerPart(current, slot, part));
+    setError(null);
+    dismissNotice();
+  }, [answersRef, columnDraftsRef, dismissNotice, setAnswer, setColumnDecimalBoundary, setColumnDraft, worksheet]);
 
   const togglePerson = useCallback((index: number, person: number) => {
     if (!worksheet || worksheetPhaseRef.current !== 'editing') return;
@@ -1256,8 +1290,7 @@ export function AutoDrillApp({
     }
     if (
       problem.prompt.kind === 'column_arithmetic'
-      && problem.prompt.operator === 'divide'
-      && problem.answer_schema.kind === 'ordered_pair'
+      && problem.column_input?.remainder
       && slot === 'quotient'
       && inputEnabledRef.current
     ) {
@@ -1268,9 +1301,7 @@ export function AutoDrillApp({
       const nextIndex = index + 1;
       const nextProblem = worksheet.problems[nextIndex];
       if (nextProblem?.prompt.kind === 'column_arithmetic') {
-        const nextColumnSlot: ColumnAnswerSlot = nextProblem.prompt.operator === 'divide' && nextProblem.answer_schema.kind === 'ordered_pair'
-          ? 'quotient'
-          : 'single';
+        const nextColumnSlot: ColumnAnswerSlot = nextProblem.column_input?.quotient ? 'quotient' : 'single';
         const spec = columnDigitSpec(nextProblem, nextColumnSlot);
         selectColumnDigit(nextIndex, nextColumnSlot, spec.initialIndex);
         return actionQueueRef.current;
@@ -1378,13 +1409,13 @@ export function AutoDrillApp({
       const writeDraft = (draft: Array<string | null>) => updateColumnDigitDraft(index, slot, draft);
 
       switch (command.kind) {
-        case 'insert_digit': { // 筆算の各桁は独立slot。入力方向だけ演算に応じて変える。
+        case 'insert_digit': { // 筆算の各桁は独立slot。入力順序はRustのtyped metadataに従う。
           currentDraft[columnSelection.digitIndex] = String(command.digit);
           writeDraft(currentDraft);
           if (
             slot === 'quotient'
-            && columnProblem.prompt.operator === 'divide'
-            && columnProblem.answer_schema.kind === 'ordered_pair'
+            && spec.order === 'natural_division_flow'
+            && columnProblem.column_input?.remainder
             && columnSelection.digitIndex === spec.activeEnd
           ) {
             // The quotient is written left-to-right. Once its final place is
@@ -1420,6 +1451,7 @@ export function AutoDrillApp({
           const cleared = currentDraft.map((digit, digitIndex) => (
             digitIndex >= spec.activeStart && digitIndex <= spec.activeEnd ? null : digit
           ));
+          if (spec.decimalPoint.type === 'editable') updateColumnDecimalBoundary(index, slot, null);
           writeDraft(cleared);
           setDigitSelection(spec.initialIndex);
           break;
@@ -1428,6 +1460,10 @@ export function AutoDrillApp({
           void commitMathfield(index, slot);
           break;
         case 'insert_structure':
+          if (command.structure === 'decimal' && spec.decimalPoint.type === 'editable') {
+            updateColumnDecimalBoundary(index, slot, columnSelection.digitIndex + 1);
+          }
+          break;
         case 'insert_latex':
           break;
       }
@@ -1478,13 +1514,14 @@ export function AutoDrillApp({
         void commitMathfield(index, slot);
         break;
     }
-  }, [answersRef, clearSelection, columnDraftsRef, commitMathfield, dismissNotice, getMathfield, inputEnabledRef, selectMiniSudokuGridCell, selectProblem, selectedColumnDigitRef, selectedDigitGridCellRef, selectedIndexRef, selectedSlotRef, setAnswer, setSelectedColumnDigit, setSelectedDigitGridCell, updateColumnDigitDraft, updateMathLiveAnswer, worksheet]);
+  }, [answersRef, clearSelection, columnDraftsRef, commitMathfield, dismissNotice, getMathfield, inputEnabledRef, selectMiniSudokuGridCell, selectProblem, selectedColumnDigitRef, selectedDigitGridCellRef, selectedIndexRef, selectedSlotRef, setAnswer, setSelectedColumnDigit, setSelectedDigitGridCell, updateColumnDecimalBoundary, updateColumnDigitDraft, updateMathLiveAnswer, worksheet]);
 
   useEffect(() => {
     const onColumnKeyDown = (event: KeyboardEvent) => {
       if ((!selectedColumnDigitRef.current && !selectedDigitGridCellRef.current) || worksheetPhaseRef.current !== 'editing') return;
       let command: MathInputCommand | null = null;
       if (/^[0-9]$/.test(event.key)) command = { kind: 'insert_digit', digit: Number(event.key) };
+      else if (event.key === '.' || event.key === 'Decimal') command = { kind: 'insert_structure', structure: 'decimal' };
       else if (event.key === 'ArrowLeft') command = { kind: 'move_left' };
       else if (event.key === 'ArrowRight') command = { kind: 'move_right' };
       else if (event.key === 'Backspace') command = { kind: 'delete_backward' };
@@ -1622,6 +1659,7 @@ export function AutoDrillApp({
             selectedColumnDigit={selectedColumnDigit}
             selectedDigitGridCell={selectedDigitGridCell}
             columnDrafts={columnDrafts}
+            columnDecimalBoundaries={columnDecimalBoundaries}
             elapsed={formatElapsed(startedAt, finishedAt ?? now)}
             gradeResult={gradeResult}
             worksheetPhase={worksheetPhase}
@@ -2012,6 +2050,7 @@ type WorksheetScreenProps = {
   selectedColumnDigit: ColumnDigitSelection | null;
   selectedDigitGridCell: DigitGridSelection | null;
   columnDrafts: Record<string, Array<string | null>>;
+  columnDecimalBoundaries: Record<string, number | null>;
   elapsed: string;
   gradeResult: GradeResult | null;
   worksheetPhase: WorksheetPhase;
@@ -2034,7 +2073,7 @@ type WorksheetScreenProps = {
   onBack: () => void;
 };
 
-function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, selectedDigitGridCell, columnDrafts, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onSelectDigitGridCell, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onPrint, onBack }: WorksheetScreenProps) {
+function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, selectedIndex, selectedSlot, selectedColumnDigit, selectedDigitGridCell, columnDrafts, columnDecimalBoundaries, elapsed, gradeResult, worksheetPhase, busy, error, notice, onSelect, onSelectColumnDigit, onSelectDigitGridCell, onCommand, onRegisterMathfield, onMathInput, onCommit, onTogglePerson, onCloseInput, onGrade, onReturnToProblems, onRetryWorksheet, onPrint, onBack }: WorksheetScreenProps) {
   const { MathTemplateIcon, ProblemExpression } = worksheetUi;
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
@@ -2045,6 +2084,10 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
   const worksheetCategoryLabel = worksheetTheme.grade?.label ?? 'おまけ';
   const selectedProblem = worksheetPhase === 'editing' && selectedIndex !== null ? worksheet.problems[selectedIndex] : null;
   const columnDigitInputActive = selectedProblem?.prompt.kind === 'column_arithmetic' && selectedColumnDigit !== null;
+  const selectedColumnSpec = columnDigitInputActive && selectedProblem && selectedColumnDigit
+    ? columnDigitSpec(selectedProblem, selectedColumnDigit.slot)
+    : null;
+  const columnDecimalInputActive = selectedColumnSpec?.decimalPoint.type === 'editable';
   const digitGridInputActive = selectedProblem?.input_interface.type === 'digit_grid' && selectedDigitGridCell !== null;
   const selectedCapabilities = selectedProblem ? inputCapabilities(worksheetTheme.editorInputInterface) : null;
   const juniorHighFullKeypad = Boolean(selectedProblem && worksheetTheme.grade && worksheetTheme.grade.number >= 7);
@@ -2056,7 +2099,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
           structure !== 'decimal'
           && structure !== 'arithmetic'
           && !(selectedProblem?.prompt.kind === 'simultaneous_equation' && structure === 'tuple')
-          && !(selectedProblem?.prompt.kind === 'column_arithmetic' && selectedProblem.prompt.operator === 'divide' && structure === 'tuple')
+          && !(selectedProblem?.prompt.kind === 'column_arithmetic' && selectedProblem.column_input?.quotient && structure === 'tuple')
           && !(arithmeticOperatorsEnabled && (structure === 'negative' || structure === 'plus_minus'))
         ),
       ) ?? [];
@@ -2170,6 +2213,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                         selectedSlot={selectedSlot}
                         selectedColumnDigit={selectedColumnDigit}
                         columnDrafts={columnDrafts}
+                        columnDecimalBoundaries={columnDecimalBoundaries}
                         result={result}
                         gradeResult={gradeResult}
                         inputLocked={worksheetPhase !== 'editing'}
@@ -2239,7 +2283,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                   {digit}
                 </button>
               ))}
-              {!columnDigitInputActive && (juniorHighFullKeypad || selectedCapabilities?.allow_decimal) ? (
+              {columnDecimalInputActive || (!columnDigitInputActive && (juniorHighFullKeypad || selectedCapabilities?.allow_decimal)) ? (
                 <button
                   type="button"
                   className="keypad-decimal"

@@ -17,11 +17,8 @@ import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
 /** Generated wasm-pack exports. New requests use the current generated schema. */
 export type DrillWasmRuntime = {
-  generate_problem?: (request: string) => unknown | Promise<unknown>;
   generate_worksheet?: (request: string) => unknown | Promise<unknown>;
-  regenerate_problem_set?: (request: string) => unknown | Promise<unknown>;
   parse_mathlive_answer?: (request: string) => unknown | Promise<unknown>;
-  normalize_answer?: (request: string) => unknown | Promise<unknown>;
   grade_answer?: (request: string) => unknown | Promise<unknown>;
 };
 
@@ -458,6 +455,35 @@ function assertAnswerSchema(value: unknown): void {
   invalidDto(`WASM returned an unsupported answer schema: ${value.kind}.`, value);
 }
 
+function assertColumnAnswerPartInput(value: unknown): void {
+  if (!isRecord(value)) invalidDto('WASM returned invalid column answer-part input metadata.', value);
+  if (!['least_significant_first', 'natural_division_flow', 'big_endian'].includes(String(value.order))) {
+    invalidDto('WASM returned an unsupported column input order.', value);
+  }
+  if (!isRecord(value.decimal_point) || typeof value.decimal_point.type !== 'string') {
+    invalidDto('WASM returned invalid column decimal-point metadata.', value);
+  }
+  if (value.decimal_point.type === 'fixed') {
+    assertU32(value.decimal_point.scale, 'column decimal-point fixed scale');
+    return;
+  }
+  if (value.decimal_point.type !== 'none' && value.decimal_point.type !== 'editable') {
+    invalidDto('WASM returned an unsupported column decimal-point policy.', value);
+  }
+}
+
+function assertColumnInput(value: unknown): void {
+  if (!isRecord(value)) invalidDto('WASM returned invalid column input metadata.', value);
+  let present = 0;
+  for (const slot of ['single', 'quotient', 'remainder'] as const) {
+    const part = value[slot];
+    if (part === null) continue;
+    present += 1;
+    assertColumnAnswerPartInput(part);
+  }
+  if (present === 0) invalidDto('WASM returned empty column input metadata.', value);
+}
+
 function assertIdentity(value: unknown): asserts value is ProblemSetIdentity {
   if (!isRecord(value)) invalidDto('WASM returned an empty problem-set identity.', value);
   if (value.schema_version !== DRILL_SCHEMA_VERSION) invalidDto('WASM returned an unsupported identity schema.', value);
@@ -470,15 +496,11 @@ function assertIdentity(value: unknown): asserts value is ProblemSetIdentity {
 function assertWorksheet(value: unknown): WorksheetDto {
   const unwrapped = unwrapEnvelope(value);
   if (!isRecord(unwrapped)) invalidDto('WASM returned an empty worksheet DTO.', value);
-  if (unwrapped.schema_version !== DRILL_SCHEMA_VERSION || typeof unwrapped.problem_set_id !== 'string') {
+  if (unwrapped.schema_version !== DRILL_SCHEMA_VERSION) {
     invalidDto('WASM returned a worksheet with an unsupported schema.', value);
   }
   assertIdentity(unwrapped.identity);
   const identity = unwrapped.identity;
-  if (typeof unwrapped.skill_id !== 'string' || !Array.isArray(unwrapped.curriculum_path)
-      || !unwrapped.curriculum_path.every((segment) => typeof segment === 'string')) {
-    invalidDto('WASM returned an invalid worksheet metadata projection.', value);
-  }
   if (!isRecord(unwrapped.layout)) invalidDto('WASM returned an invalid worksheet layout.', value);
   assertU32(unwrapped.layout.problem_count, 'worksheet problem count');
   assertU32(unwrapped.layout.columns, 'worksheet column count');
@@ -491,6 +513,12 @@ function assertWorksheet(value: unknown): WorksheetDto {
     assertU32(problem.numeric_theme_id, 'problem numeric_theme_id');
     assertPrompt(problem.prompt);
     assertInputInterface(problem.input_interface);
+    if (isRecord(problem.prompt) && problem.prompt.kind === 'column_arithmetic') {
+      if (problem.column_input === null) invalidDto('WASM omitted column input metadata.', problem);
+      assertColumnInput(problem.column_input);
+    } else if (problem.column_input !== null) {
+      invalidDto('WASM returned column input metadata for a non-column problem.', problem);
+    }
     assertAnswerSchema(problem.answer_schema);
     assertAnswerNode(problem.canonical_answer);
     if (problem.worked_solution !== null) {

@@ -7,10 +7,11 @@ import { createWebDrillSettings, findImplementedThemeByNumericId, LINEAR_EQUATIO
 import { DECIMAL_ADD_SUBTRACT_DEFINITION } from '@/domain/themes/decimal-add-subtract';
 import { MINI_SUDOKU_DEFINITION } from '@/domain/themes/mini-sudoku';
 import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-one-digit';
+import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from '@/domain/themes/column-decimal-multiplication';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from '@/domain/themes/signed-arithmetic-1';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
-import { columnDivisionFixtureWorksheet, fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
+import { columnDecimalMultiplicationFixtureWorksheet, columnDivisionFixtureWorksheet, fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
@@ -107,9 +108,6 @@ function numericThemeFixtureEngine(definition: typeof DECIMAL_ADD_SUBTRACT_DEFIN
   const worksheet = fixtureWorksheet();
   worksheet.identity.numeric_theme_id = definition.numeric_theme_id;
   worksheet.identity.generator_revision = definition.generator_revision;
-  worksheet.problem_set_id = `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-fixtureSeed-3`;
-  worksheet.skill_id = definition.themeKey;
-  worksheet.curriculum_path = definition.curriculumPath.map((segment) => segment.label);
   worksheet.layout = definition.layout;
   worksheet.problems = worksheet.problems.slice(0, definition.problemCount).map((problem) => ({
     ...problem,
@@ -457,6 +455,48 @@ describe('AutoDrillApp', () => {
     expect(gradedRemainder.value).toBe('21');
     expect(within(firstProblem).getByLabelText('1番の商 十の位 3')).toBeInTheDocument();
     expect(within(firstProblem).getByLabelText('1番の商 一の位 2')).toBeInTheDocument();
+  });
+
+  it('lets decimal multiplication place and reposition the decimal point without exposing the canonical location', async () => {
+    const worksheet = columnDecimalMultiplicationFixtureWorksheet();
+    const base = fixtureEngine(worksheet);
+    const gradeAnswer = vi.fn(base.gradeAnswer);
+    render(
+      <AutoDrillApp
+        engine={{ ...base, gradeAnswer }}
+        initialWebSettings={createWebDrillSettings(findImplementedThemeByNumericId(COLUMN_DECIMAL_MULTIPLICATION_DEFINITION.numeric_theme_id)!, 3, 'fixtureSeed')}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    const firstProblem = await screen.findByTestId('problem-cell-0');
+    const answerEditor = firstProblem.querySelector('.column-digit-answer-single')!;
+    expect(answerEditor.querySelector('.column-digit-decimal-marker')).toBeNull();
+
+    const digitSlots = within(firstProblem).getAllByRole('button', { name: /^1番の答え 解答欄/ });
+    fireEvent.click(digitSlots.at(-1)!);
+    fireEvent.keyDown(window, { key: '6' });
+    fireEvent.keyDown(window, { key: '3' });
+    expect(answerEditor.querySelector('.column-digit-decimal-marker')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '小数点' }));
+    const firstMarker = answerEditor.querySelector<HTMLElement>('.column-digit-decimal-marker');
+    expect(firstMarker).not.toBeNull();
+    const firstLeft = firstMarker!.style.left;
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: '.' });
+    const movedMarker = answerEditor.querySelector<HTMLElement>('.column-digit-decimal-marker');
+    expect(movedMarker).not.toBeNull();
+    expect(movedMarker!.style.left).not.toBe(firstLeft);
+
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    fireEvent.keyDown(window, { key: '.' });
+    expect(answerEditor.querySelector<HTMLElement>('.column-digit-decimal-marker')!.style.left).toBe(firstLeft);
+
+    fireEvent.click(screen.getByRole('button', { name: '採点' }));
+    await waitFor(() => expect(gradeAnswer).toHaveBeenCalledTimes(1));
+    const submitted = gradeAnswer.mock.calls[0]![0].answers.find((entry) => entry.problem_id === '1')?.answer;
+    expect(submitted).toEqual({ type: 'exact_decimal', value: { coefficient: '36', scale: 2 } });
   });
 
   it('edits the fixed 4x4 digit grid through the shared numeric keypad', async () => {

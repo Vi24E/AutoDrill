@@ -131,6 +131,30 @@ function representativeWorkedSolution(
   return null;
 }
 
+function representativeColumnInput(
+  definition: ThemeDefinition,
+  answer: ProblemDto['canonical_answer'],
+): ProblemDto['column_input'] {
+  const policy = definition.presentation.column_input;
+  if (!policy) return null;
+  const answerPart = (slot: 'single' | 'quotient' | 'remainder') => {
+    if (slot === 'single' || answer.type !== 'tuple') return answer;
+    return answer.value[slot === 'quotient' ? 0 : 1] ?? ({ type: 'empty' } as const);
+  };
+  const resolvePart = (slot: 'single' | 'quotient' | 'remainder') => {
+    const part = policy[slot];
+    if (!part) return null;
+    const value = answerPart(slot);
+    return {
+      order: part.order,
+      decimal_point: part.decimal_point === 'fixed_canonical_scale'
+        ? { type: 'fixed' as const, scale: value.type === 'exact_decimal' ? value.value.scale : 0 }
+        : { type: part.decimal_point as 'none' | 'editable' },
+    };
+  };
+  return { single: resolvePart('single'), quotient: resolvePart('quotient'), remainder: resolvePart('remainder') };
+}
+
 function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
   const representative = representativePrompt(definition);
   const answerSchema = definition.answerSchemaKind === 'integer'
@@ -151,16 +175,14 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
     numeric_theme_id: definition.numeric_theme_id,
     prompt: representative.prompt,
     input_interface: definition.inputInterface,
+    column_input: representativeColumnInput(definition, representative.answer),
     answer_schema: answerSchema,
     canonical_answer: representative.answer,
     worked_solution: representativeWorkedSolution(representative.prompt),
   }));
   return {
     schema_version: DRILL_SCHEMA_VERSION,
-    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-PdfTest1-3`,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: 'PdfTest1', difficulty: 3 },
-    skill_id: definition.themeKey,
-    curriculum_path: definition.curriculumPath.map((segment) => segment.label),
     layout: definition.layout,
     problems,
     seed: 'PdfTest1',
