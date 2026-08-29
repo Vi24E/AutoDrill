@@ -1,6 +1,6 @@
 # 2026-08-18 Independent Rust Core Re-audit
 
-この文書は、fresh audit後の未コミット修正worktreeに対して別担当が実施した独立再監査の記録である。**現行Issueのsource of truthは`docs/issues.md`であり、この監査結果はその後の修正前時点の証拠である。**
+この文書は、fresh audit後の未コミット修正worktreeに対して別担当が実施した独立再監査の記録である。**現行Issueのsource of truthはGitHub Issues (https://github.com/Vi24E/AutoDrill/issues) であり、この監査結果はその後の修正前時点の証拠である。**
 
 ## Verdict at audit time
 

@@ -10,7 +10,7 @@
 - Post-fix automated verification: **all required gates pass**
 - Formal issue closure: **independent re-audit pending**
 
-This document is a dated audit record. The canonical backlog remains [`../issues.md`](../issues.md), and the current architecture remains [`../architecture/`](../architecture/).
+This document is a dated audit record. The canonical backlog is [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues), and the current architecture remains [`../architecture/`](../architecture/).
 
 ---
 

@@ -1,6 +1,6 @@
 # Problem schema v7
 
-上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
+上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で追跡する。
 
 現行Rust domainとWASM JSON境界は新規生成について`schema_version = 7`を使用する。生成requestは次の値だけを持つ。
 すべてのrequestは`schema_version: 7`を明示し、それ以外のschema、version欠落、互換DTOはfail closedで拒否する。pre-releaseでは旧schemaのproblem-set ID再生成をsupportしない。

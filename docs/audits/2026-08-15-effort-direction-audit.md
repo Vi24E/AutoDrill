@@ -1,4 +1,4 @@
-> **Historical document:** この文書は履歴保存用であり、現行仕様のsource of truthではありません。現在の設計は `docs/principles.md` / `docs/architecture/`、未解決事項は `docs/issues.md` を参照してください。
+> **Historical document:** この文書は履歴保存用であり、現行仕様のsource of truthではありません。現在の設計は `docs/principles.md` / `docs/architecture/`、未解決事項は GitHub Issues (https://github.com/Vi24E/AutoDrill/issues) を参照してください。
 
 # Effort direction / difficulty sampling audit — 2026-08-15
 

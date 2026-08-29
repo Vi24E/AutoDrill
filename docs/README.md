@@ -7,7 +7,7 @@
 実装判断では次の順に確認する。
 
 1. [`principles.md`](principles.md) — 最上位の設計思想・判断原則
-2. [`issues.md`](issues.md) — canonical GitHub Issuesへのrepository内入口
+2. [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) — Issue / backlog の唯一のsource of truth
 3. [`roadmap.md`](roadmap.md) — support scopeと将来計画
 4. [`architecture/`](architecture/) — 現行architecture / data model / implementation policy
 5. [`../curriculum.md`](../curriculum.md) — 日本のカリキュラムと数学的教材基準
@@ -15,6 +15,14 @@
 AIエージェントはproduction codeを変更する前に、最低でも`principles.md`と対象領域のarchitecture文書を読むこと。
 
 設計思想が不明、または場当たり的な例外が必要な場合は、ユーザーへ質問してから実装する。
+
+## Issue management
+
+AutoDrillの **Issue / backlog は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で管理し、GitHub Issuesを唯一のsource of truthとする。**
+
+- 新規Issueの作成、本文・label・priority・stateの更新、Close / reopenはGitHub Issues上で行う。
+- repository内にcurrent backlogのMarkdown mirrorを作らない。`docs/issues.md`もcurrent trackerとして復活させない。
+- 2026-08-30の移行前Markdown backlogは[`archive/issues.md`](archive/issues.md)に履歴として保存するが、現行Issueの状態判断には使わない。
 
 ## Architecture
 
@@ -36,4 +44,4 @@ AIエージェントはproduction codeを変更する前に、最低でも`princ
 - `archive/` — 旧plan、旧goal、旧implementation status、旧taxonomy文書
 - `design/` — logo等のdesign asset / concept
 
-古いauditに未解決Issueが書かれていても、現在の対応要否は必ずcanonical GitHub Issues（`issues.md`から参照）で確認する。
+古いauditに未解決Issueが書かれていても、現在の対応要否は必ず [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で確認する。

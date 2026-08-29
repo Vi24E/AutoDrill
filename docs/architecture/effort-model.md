@@ -1,6 +1,6 @@
 # Effort model
 
-上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
+上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で追跡する。
 
 Effortは、標準解法を人間が定数時間で実行できるprimitiveへ分解した回数vectorと、その重みの内積である。
 

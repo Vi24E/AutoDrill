@@ -13,4 +13,4 @@
 - [`web-print.md`](web-print.md) — Web / MathLive / print presentation
 - [`deployment-security.md`](deployment-security.md) — static deployment / security
 
-未解決の設計欠陥はarchitecture文書へ「実装済み」のように書き換えず、[`../issues.md`](../issues.md)で追跡する。
+未解決の設計欠陥はarchitecture文書へ「実装済み」のように書き換えず、[GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で追跡する。

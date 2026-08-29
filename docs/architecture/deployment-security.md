@@ -55,7 +55,7 @@ MathLive等のuser-controlled inputはboundedに扱う。
 
 に明示的な上限を持つ。
 
-正常な構造入力を誤ってoverflow扱いすることと、長大入力を見逃すことの両方を避ける。現行の既知問題は[`../issues.md`](../issues.md)を参照する。
+正常な構造入力を誤ってoverflow扱いすることと、長大入力を見逃すことの両方を避ける。現行の既知問題は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で追跡する。
 
 ## DOM / content injection
 
@@ -80,7 +80,7 @@ MathLive等のuser-controlled inputはboundedに扱う。
 
 ただしGitHub Pagesのstatic exportではNext.jsの`headers()`を適用できないため、**現在のPages公開物にはこのresponse-header policyがそのまま配信されない。**
 
-これは[`../issues.md`](../issues.md)のM-005で追跡する。
+これは [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) のM-005で追跡する。
 
 ## Static-host decision
 

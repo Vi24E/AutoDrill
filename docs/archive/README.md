@@ -7,7 +7,7 @@
 現在の正典:
 
 - [`../principles.md`](../principles.md)
-- canonical GitHub Issues（[`../issues.md`](../issues.md)から参照）
+- [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) — current Issue / backlog の唯一のsource of truth
 - [`../roadmap.md`](../roadmap.md)
 - [`../architecture/`](../architecture/)
 - [`../../curriculum.md`](../../curriculum.md)
@@ -16,4 +16,4 @@ legacy文書と現在の正典が衝突する場合、legacy文書を根拠に�
 
 ## Migration snapshots
 
-- [`issues-md-backlog-2026-08-30.md`](issues-md-backlog-2026-08-30.md) — GitHub Issues移行直前の旧Markdown backlog snapshot。
+- [`issues.md`](issues.md) — GitHub Issues移行直前の旧Markdown backlog snapshot。現行backlogではない。

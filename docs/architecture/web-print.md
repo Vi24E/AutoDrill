@@ -1,6 +1,6 @@
 # Web / MathLive / Print Architecture
 
-上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は[`../issues.md`](../issues.md)で追跡する。
+上位原則は[`../principles.md`](../principles.md)を参照する。未解決の既知問題は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で追跡する。
 
 ## Theme registry
 
@@ -89,4 +89,4 @@ unit testは全38 active themeについて2page print DOMを生成します。�
 
 app codeはuser textを`dangerouslySetInnerHTML`へ渡しません。MathLiveのraw stringは採点authorityではなく、Rust parser/capability validationを通過したAnswerNodeだけが採点へ進みます。
 
-通常のNext deployment向けsecurity headersは設定されていますが、現在のGitHub Pages static exportではNext `headers()`が配信されません。このdeployment差分を含むsecurity方針は[`deployment-security.md`](deployment-security.md)を正とし、既知課題は[`../issues.md`](../issues.md)で追跡します。
+通常のNext deployment向けsecurity headersは設定されていますが、現在のGitHub Pages static exportではNext `headers()`が配信されません。このdeployment差分を含むsecurity方針は[`deployment-security.md`](deployment-security.md)を正とし、既知課題は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) で追跡します。

@@ -14,7 +14,7 @@ identityは少なくとも次のversioned informationを持つ。
 - Seed
 - difficulty
 
-将来Seed自体へ詳細設定を包含する設計変更は`../issues.md` / `../roadmap.md`に従う。
+将来Seed自体へ詳細設定を包含する設計変更は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) / `../roadmap.md` に従う。
 
 performance改善やmodule分割でdeterminismを壊さない。
 
@@ -78,7 +78,7 @@ Themeまたは密接なtheme familyのmoduleが所有するもの:
 - constructive samplerが重複を生成し得る場合、theme policyとしてbootstrap poolをprompt単位でdedupしてからdifficulty selectionへ渡せる。
 - pre-releaseでは旧revisionをproduction codeへ保持しない。finite-domain samplingは現行実装だけを保守する。
 
-詳細と検証結果は`../issues.md`のH-001を参照する。
+詳細と検証結果は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) のH-001を参照する。
 
 ## 5. Difficulty
 

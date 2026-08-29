@@ -6,6 +6,8 @@ AIエージェントを含む実装者は、production codeを変更する前に
 
 設計上の判断が本書から一意に定まらない場合、または場当たり的な例外実装が必要に見える場合は、勝手に補完せずユーザーへ設計を相談する。
 
+**Issue management:** AutoDrillのIssue / backlogは [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) を唯一のsource of truthとする。repository内にcurrent backlogのMarkdown mirrorを持たず、Issueの作成・更新・Close / reopenはGitHub Issues上で行う。
+
 ## 1. Maintainability first
 
 AutoDrillは使い捨てのprototypeではない。小1〜中3の多数のthemeへ拡張し、長期的に保守する前提で設計する。
@@ -139,7 +141,7 @@ Effortを含む数学処理は、標準解法を再利用可能なprimitiveへ�
 - 実ユーザー、保存済みworksheet、外部に公開されたproblem-set ID等が存在し、後方互換性がproduct requirementになった時点で、version compatibility policyを改めて設計する。
 - performance改善を理由に**現行revision内の**determinismを壊さない。
 - `ランダム`がsemantic candidate集合から一様抽選する仕様なら、bootstrap生成時の偶発的なduplicate multiplicityを確率weightとして使わない。dedupがsampling semanticsの一部なら抽選前にsemantic key単位へcollapseする。
-- Seed / worksheet identityの将来拡張は `roadmap.md` と canonical GitHub Issues（`issues.md`から参照）の現行方針に従う。
+- Seed / worksheet identityの将来拡張は `roadmap.md` と [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) の現行方針に従う。
 
 ## 9. Web / print parity
 

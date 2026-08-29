@@ -4,7 +4,7 @@
 
 **現行仕様や未解決Issueのsource of truthではない。**
 
-- 現在のIssue: canonical GitHub Issues（[`../issues.md`](../issues.md)から参照）
+- 現在のIssue / backlog: [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues)
 - 現在の設計思想: [`../principles.md`](../principles.md)
 - 現在のarchitecture: [`../architecture/`](../architecture/)
 

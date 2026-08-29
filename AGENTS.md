@@ -11,7 +11,7 @@
 3. `../../scripts/init-project.sh --check AutoDrill`でbridgeを検証する
 4. Git rootとbranchを確認し、material taskだけ中央`../../board/`へproject名付きで記録する
 5. **`docs/principles.md` と `docs/README.md` を読む**
-6. 変更対象に対応する `docs/architecture/` 文書と、`docs/issues.md` から参照するGitHub Issuesを必要範囲で読む
+6. 変更対象に対応する `docs/architecture/` 文書と [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) を必要範囲で読む
 
 共通の行動・権限・委譲・gate・Git・通知規則は`../../AGENTS.md`が正典である。本ファイルは
 このproduct固有の目的、command、architecture、禁止範囲だけを追加する。
@@ -30,7 +30,7 @@
 | `docs/principles.md` | 最上位の設計思想。実装前に必読 |
 | `docs/README.md` | canonical docsへの入口 |
 | `docs/architecture/` | 現行architecture / implementation policy |
-| `docs/issues.md` | canonical GitHub Issuesへのrepository内入口 |
+| [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) | Issue / backlog の唯一のsource of truth |
 | `docs/roadmap.md` | support scope / 将来計画 |
 | `scripts/build-wasm.sh` | Rust/WASM targetを変更せずに行うローカル生成パイプライン |
 | `README.md` | project概要、インストール、開発、検証コマンド |
@@ -38,6 +38,7 @@
 ## AutoDrill固有の実装原則
 
 - `docs/principles.md`を最上位の設計判断として扱う。
+- Issue / backlogは [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) を唯一のsource of truthとし、repository内へcurrent backlogのMarkdown mirrorを作らない。
 - 設計思想が不明な場合、または場当たり的な例外が必要な場合は、実装前にユーザーへ質問する。
 - theme固有generatorを共通巨大fileへ追加しない。共通資源は再利用し、theme固有処理はtheme moduleへ置く。
 - 本来metadataである性質をnumeric theme ID、slug、表示文言、生成結果等から推測しない。

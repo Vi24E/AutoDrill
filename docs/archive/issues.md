@@ -1,3 +1,5 @@
+> **Archived snapshot (2026-08-30):** この文書はGitHub Issues移行直前の旧Markdown backlogを履歴保存したものです。**現行のIssue / backlogの唯一のsource of truthは [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) です。** この文書の状態・priority・本文をcurrent trackerとして更新しません。
+
 > **Historical document:** 2026-08-30 に `docs/issues.md` から GitHub Issues へ移行する直前のbacklog snapshotです。現行Issueのsource of truthではありません。
 
 # AutoDrill — Open Issues
