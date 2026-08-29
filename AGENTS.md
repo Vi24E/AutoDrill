@@ -18,12 +18,12 @@
 
 ## LLM identity / generation management
 
-- **最終管理者:** `Beacon-2`
-- **generation max:** `2`
+- **最終管理者:** `Cedar-3`
+- **generation max:** `3`
 - LLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
 - 一般名の頭文字は、新しいprompt/agent identityを発行するたびに `A -> B -> ... -> Z -> A ...` の順で循環させる。
 - generationはrepository全体で単調増加させる。次のidentityは必ず、このsectionの`generation max + 1`を使う。
-- 現在のidentityは`Beacon-2`。次に新しいLLMへ継続promptを作成するときは、**Cで始まる一般名**とgeneration `3`を割り当てる。具体的な一般名はprompt作成者がその時点で決める。
+- 現在のidentityは`Cedar-3`。次に新しいLLMへ継続promptを作成するときは、**Dで始まる一般名**とgeneration `4`を割り当てる。具体的な一般名はprompt作成者がその時点で決める。
 - 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ渡すpromptを作成するとき**に新identityを発行する。
 - 新identityを発行する際は、promptを渡すのと同じ変更で本sectionの`最終管理者`と`generation max`を更新する。発行済みgenerationは再利用しない。
 - fork / branchでidentityを発行する前に、可能な限り最新の`generation max`を確認する。merge時に同じgenerationが競合した場合は、片方をそのまま残して重複させず、統合先のmaxより大きい新generationへ再採番し、頭文字も新generation順に合わせる。
