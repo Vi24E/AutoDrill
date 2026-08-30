@@ -196,8 +196,10 @@ function ratingGrid(selected = model.selectedRating, prefix = 'rate') {
 function renderRating(attempt) {
   app.innerHTML = `<section class="attempt-shell"><div class="panel rating-panel">
     <div class="unit-picker"><label for="unit-select">出題単元</label><select id="unit-select">${unitOptions(model.selectedSkillId, attempt)}</select></div>
-    <div class="problem-area"><div class="problem-text">${h(attempt.problem_representation)}</div>
-      <div class="canonical-answer"><span>答え</span><strong>${h(attempt.canonical_answer)}</strong></div>
+    <div class="problem-area print-problem-area"><div class="print-render-shell" data-render-attempt="${h(attempt.id)}">
+      <iframe class="print-render-frame" title="AutoDrill印刷レイアウトの問題と答え" src="/renderer/index.html?attempt=${encodeURIComponent(attempt.id)}"></iframe>
+      <div class="print-render-fallback"><div class="problem-text">${h(attempt.problem_representation)}</div><div class="canonical-answer"><span>答え</span><strong>${h(attempt.canonical_answer)}</strong></div></div>
+    </div>
     </div>
     <div class="rating-heading"><h2>この問題を評価</h2><p>中央を原点として、平面上の位置を選んでください。</p></div>
     ${ratingGrid()}
@@ -273,7 +275,7 @@ async function confirmRating() {
   try {
     await model.ratingEventPromise;
     const attempt = model.state.activeAttempt;
-    const detail = await api(`/api/attempts/${attempt.id}/ratings`, { method: 'POST', body: JSON.stringify({
+    await api(`/api/attempts/${attempt.id}/ratings`, { method: 'POST', body: JSON.stringify({
       difficulty_rating: model.selectedRating.difficulty,
       singularity_rating: model.selectedRating.singularity,
       difficulty_position: model.selectedRating.difficulty_position,
@@ -286,7 +288,6 @@ async function confirmRating() {
     model.selectedRating = null;
     model.ratingEventPromise = null;
     updateChrome();
-    toast(`保存しました（難しさ ${evaluationCoordinate(detail.evaluations.at(-1), 'difficulty')}／特異性 ${evaluationCoordinate(detail.evaluations.at(-1), 'singularity')}）`);
     await startRandomAttempt();
   } finally {
     model.saving = false;
@@ -386,6 +387,12 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('visibilitychange', () => recordEvent(document.hidden ? 'visibility_hidden' : 'visibility_visible'));
 window.addEventListener('blur', () => recordEvent('window_blurred'));
 window.addEventListener('focus', () => recordEvent('window_focused'));
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin || !event.data || event.data.attemptId !== model.state?.activeAttempt?.id) return;
+  const shell = document.querySelector(`[data-render-attempt="${CSS.escape(event.data.attemptId)}"]`);
+  if (event.data.type === 'qa-render-ready') shell?.classList.add('ready');
+  if (event.data.type === 'qa-render-error') toast(`印刷レイアウトを表示できません: ${event.data.message ?? 'unknown error'}`);
+});
 window.addEventListener('unhandledrejection', (event) => { toast(event.reason?.message ?? '操作に失敗しました。'); event.preventDefault(); });
 
 refresh().then(() => {

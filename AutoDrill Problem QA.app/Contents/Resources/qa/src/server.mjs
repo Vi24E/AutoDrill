@@ -10,14 +10,14 @@ import { AutoDrillRuntime } from './autodrill-runtime.mjs';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
 const MAX_BODY_BYTES = 1_200_000;
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
-function securityHeaders() {
+function securityHeaders({ allowSameOriginFrame = false } = {}) {
   return {
     'Cache-Control': 'no-store',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'Content-Security-Policy': `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors ${allowSameOriginFrame ? "'self'" : "'none'"}`,
     'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
+    'X-Frame-Options': allowSameOriginFrame ? 'SAMEORIGIN' : 'DENY',
     'Referrer-Policy': 'no-referrer',
   };
 }
@@ -52,7 +52,7 @@ function serveStatic(pathname, res) {
   const safe = normalize(requested).replace(/^([.][.][/\\])+/, '');
   const file = join(PUBLIC_DIR, safe);
   if (!file.startsWith(PUBLIC_DIR) || !existsSync(file) || !statSync(file).isFile()) return false;
-  res.writeHead(200, { ...securityHeaders(), 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream' });
+  res.writeHead(200, { ...securityHeaders({ allowSameOriginFrame: pathname.startsWith('/renderer/') }), 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(res);
   return true;
 }
@@ -136,6 +136,16 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
       if (req.method === 'POST' && params) { sendJson(res, 201, repository.rateAttempt(params.id, await readJson(req))); return; }
       params = routeMatch(url.pathname, '/api/attempts/:id/abandon');
       if (req.method === 'POST' && params) { sendJson(res, 200, repository.abandonAttempt(params.id, await readJson(req))); return; }
+      params = routeMatch(url.pathname, '/api/attempts/:id/render');
+      if (req.method === 'GET' && params) {
+        const detail = repository.attemptDetail(params.id);
+        if (!detail) throw new QaValidationError('Attempt not found.', 404);
+        const payload = detail.original_source_payload;
+        if (payload?.integration_version !== 'autodrill_qa_wasm_v1' || !payload.worksheet || !Number.isInteger(payload.problem_index)) {
+          throw new QaValidationError('This attempt has no printable AutoDrill worksheet snapshot.', 404);
+        }
+        sendJson(res, 200, { worksheet: payload.worksheet, problem_index: payload.problem_index }); return;
+      }
       params = routeMatch(url.pathname, '/api/attempts/:id');
       if (req.method === 'GET' && params) {
         const detail = repository.attemptDetail(params.id); if (!detail) throw new QaValidationError('Attempt not found.', 404);

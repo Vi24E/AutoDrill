@@ -97,6 +97,12 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
 .unit-picker label { color: var(--muted); font-size: 12px; font-weight: 750; }
 .unit-picker select { padding-block: 7px; }
 .problem-area { text-align: center; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+.print-problem-area { padding-bottom: 8px; }
+.print-render-shell { position: relative; height: 150px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: white; }
+.print-render-frame { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; transition: opacity 120ms ease-out; }
+.print-render-shell.ready .print-render-frame { opacity: 1; }
+.print-render-fallback { position: absolute; z-index: 1; inset: 0; display: grid; align-content: center; justify-items: center; padding: 14px; white-space: pre-wrap; }
+.print-render-shell.ready .print-render-fallback { visibility: hidden; }
 .unit-label {
   display: inline-flex;
   padding: 4px 11px;
@@ -157,11 +163,12 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
   gap: 4px 7px;
 }
 .coordinate-corner { align-self: center; color: var(--muted); font-size: 10px; text-align: right; }
-.x-ruler { display: grid; grid-template-columns: repeat(var(--rating-steps), 46px); align-items: end; text-align: center; color: var(--muted); font-size: 11px; }
-.y-ruler { display: grid; grid-template-rows: repeat(var(--rating-steps), 46px); align-items: center; justify-items: end; color: var(--muted); font-size: 11px; }
+.x-ruler { display: grid; grid-template-columns: repeat(var(--rating-steps), 40px); align-items: end; text-align: center; color: var(--muted); font-size: 11px; }
+.y-ruler { display: grid; grid-template-rows: repeat(var(--rating-steps), 40px); align-items: center; justify-items: end; color: var(--muted); font-size: 11px; }
 .origin-label { color: var(--accent); font-weight: 850; }
 .rating-surface {
   position: relative;
+  justify-self: start;
   overflow: hidden;
   border: 1px solid #aeb9af;
   border-radius: 5px;
@@ -181,8 +188,8 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
 .rating-surface::after { left: 0; right: 0; top: calc(50% - .5px); height: 1px; }
 .rating-matrix {
   display: grid;
-  grid-template-columns: repeat(var(--rating-steps), 46px);
-  grid-template-rows: repeat(var(--rating-steps), 46px);
+  grid-template-columns: repeat(var(--rating-steps), 40px);
+  grid-template-rows: repeat(var(--rating-steps), 40px);
 }
 .rating-cell {
   position: relative;
