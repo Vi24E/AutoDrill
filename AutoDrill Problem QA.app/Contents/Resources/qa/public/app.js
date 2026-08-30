@@ -257,6 +257,24 @@ function renderUnitChooser() {
   select.focus();
 }
 
+async function returnToUnitChooser() {
+  const attempt = model.state?.activeAttempt;
+  if (!attempt) {
+    renderUnitChooser();
+    return;
+  }
+  if (!confirm('現在の問題を未評価として記録し、単元選択へ戻りますか？')) return;
+  discardPrefetch();
+  await api(`/api/attempts/${attempt.id}/abandon`, {
+    method: 'POST', body: JSON.stringify({ reason: 'return_to_unit_chooser_before_rating', ...eventStamp() }),
+  });
+  model.state.activeAttempt = null;
+  model.selectedRating = null;
+  model.ratingEventPromise = null;
+  updateChrome();
+  renderUnitChooser();
+}
+
 async function changeUnit(select) {
   const nextSkillId = select.value;
   const previousSkillId = model.selectedSkillId;
@@ -317,7 +335,7 @@ function renderRating(attempt, prefetched = null) {
   const usePrefetchedFrame = Boolean(prefetched?.ready && attempt.render_prefetch_id === prefetched.id);
   removeActiveRenderOverlay();
   app.innerHTML = `<section class="attempt-shell"><div class="panel rating-panel">
-    <div class="unit-picker"><label for="unit-select">出題単元</label><select id="unit-select">${unitOptions(model.selectedSkillId, attempt)}</select>${samplingToggle(true)}</div>
+    <div class="unit-picker"><button type="button" class="unit-home-button" id="return-to-unit-chooser">← 単元選択</button><select id="unit-select" aria-label="出題単元">${unitOptions(model.selectedSkillId, attempt)}</select>${samplingToggle(true)}</div>
     <div class="problem-area print-problem-area"><div class="print-render-shell" data-render-attempt="${h(attempt.id)}">
       ${usePrefetchedFrame ? '' : `<iframe class="print-render-frame" title="AutoDrill印刷レイアウトの問題と答え" src="/renderer/index.html?attempt=${encodeURIComponent(attempt.id)}"></iframe>`}
       <div class="print-render-fallback"><div class="problem-text">${h(attempt.problem_representation)}</div><div class="canonical-answer"><span>答え</span><strong>${h(attempt.canonical_answer)}</strong></div></div>
@@ -338,6 +356,7 @@ function renderRating(attempt, prefetched = null) {
     model.prefetch = null;
   }
   bindRatingSurface('rate');
+  document.querySelector('#return-to-unit-chooser').addEventListener('click', returnToUnitChooser);
   document.querySelector('#unit-select').addEventListener('change', (event) => changeUnit(event.currentTarget));
   bindSamplingToggle();
   if (model.selectedRating) model.ratingEventPromise = Promise.resolve();
