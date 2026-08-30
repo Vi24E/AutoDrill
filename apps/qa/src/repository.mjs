@@ -196,12 +196,17 @@ export class QaRepository {
     const detail = this.itemDetail(chosen.id);
     const attemptId = randomUUID();
     const shownAt = this.clock();
+    const ratingOnly = input.rating_only === true;
     return transaction(this.db, () => {
       const exposure = this.db.prepare('SELECT COUNT(*)+1 AS n FROM attempts WHERE item_id=?').get(chosen.id).n;
       this.db.prepare(`INSERT INTO attempts
-        (id,session_id,item_id,item_revision_number,exposure_count,state,shown_at,application_version,qa_schema_version,autodrill_git_sha,browser_version)
-        VALUES (?,?,?,?,?,'solving',?,?,?,?,?)`).run(attemptId, session.id, chosen.id, detail.current_revision_number, exposure,
-          shownAt, APP_VERSION, QA_SCHEMA_VERSION, this.gitSha, optionalText(input.browser_version, 'browser_version', 2_000));
+        (id,session_id,item_id,item_revision_number,exposure_count,state,shown_at,rating_started_at,answer_revealed_at,
+         correctness,grading_method,observation_mode,application_version,qa_schema_version,autodrill_git_sha,browser_version)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(attemptId, session.id, chosen.id, detail.current_revision_number, exposure,
+          ratingOnly ? 'rating' : 'solving', shownAt, ratingOnly ? shownAt : null, ratingOnly ? shownAt : null,
+          ratingOnly ? 'ungraded' : null, ratingOnly ? 'not_collected_assumed_solved_v1' : null,
+          ratingOnly ? 'rating_only_answer_shown' : 'answer_then_rating', APP_VERSION, QA_SCHEMA_VERSION, this.gitSha,
+          optionalText(input.browser_version, 'browser_version', 2_000));
       const probability = selectionContext?.selection_probability ?? (input.item_id || policy === 'manual_order' ? 1 : 1 / candidates.length);
       this.db.prepare(`INSERT INTO selection_events
         (id,attempt_id,selected_at,selection_policy,candidate_source,filters_json,random_seed,candidate_item_ids_json,selection_probability)
@@ -211,16 +216,43 @@ export class QaRepository {
           json(selectionContext?.filters ?? { unit }), selectionContext?.random_seed ?? randomSeed,
           json(selectionContext ? [chosen.id] : candidates.map((item) => item.id)), probability);
       this.appendEvent(attemptId, 'shown', { exposure_count: exposure, selection: selectionContext }, input.client_wall_at, input.client_monotonic_ms, shownAt);
+      if (ratingOnly) {
+        this.appendEvent(attemptId, 'answer_revealed', { reason: 'rating_only_answer_shown' }, input.client_wall_at, input.client_monotonic_ms, shownAt);
+        this.appendEvent(attemptId, 'rating_started', { observation_mode: 'rating_only_answer_shown' }, input.client_wall_at, input.client_monotonic_ms, shownAt);
+      }
       return this.safeAttempt(attemptId);
     });
   }
 
   safeAttempt(attemptId) {
-    return this.db.prepare(`SELECT a.id,a.session_id,a.item_id,a.item_revision_number,a.exposure_count,a.state,a.outcome,
+    const row = this.db.prepare(`SELECT a.id,a.session_id,a.item_id,a.item_revision_number,a.exposure_count,a.state,a.outcome,a.observation_mode,
       a.shown_at,a.first_interaction_at,a.answer_started_at,a.submitted_at,a.rating_started_at,a.raw_user_answer,
-      r.unit_name,r.problem_representation,i.source,i.source_identifier
+      r.unit_name,r.problem_representation,r.canonical_answer,i.source,i.source_identifier
       FROM attempts a JOIN items i ON i.id=a.item_id
       JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number WHERE a.id=?`).get(attemptId) ?? null;
+    if (row && row.observation_mode !== 'rating_only_answer_shown') delete row.canonical_answer;
+    return row;
+  }
+
+  beginRatingOnly(attemptId, input = {}) {
+    const attempt = this.db.prepare('SELECT * FROM attempts WHERE id=?').get(attemptId);
+    if (!attempt) throw new QaValidationError('Attempt not found.', 404);
+    if (!['solving', 'rating'].includes(attempt.state)) throw new QaValidationError('Attempt is not active.', 409);
+    if (attempt.observation_mode === 'rating_only_answer_shown') return this.safeAttempt(attemptId);
+    const at = this.clock();
+    return transaction(this.db, () => {
+      if (attempt.state === 'solving') {
+        this.db.prepare(`UPDATE attempts SET state='rating',observation_mode='rating_only_answer_shown',
+          correctness='ungraded',grading_method='not_collected_assumed_solved_v1',rating_started_at=?,answer_revealed_at=? WHERE id=?`)
+          .run(at, at, attemptId);
+      } else {
+        this.db.prepare(`UPDATE attempts SET observation_mode='rating_only_answer_shown',answer_revealed_at=COALESCE(answer_revealed_at,?) WHERE id=?`)
+          .run(at, attemptId);
+      }
+      this.appendEvent(attemptId, 'answer_revealed', { reason: 'flow_simplified_to_rating_only' }, input.client_wall_at, input.client_monotonic_ms, at);
+      if (attempt.state === 'solving') this.appendEvent(attemptId, 'rating_started', { observation_mode: 'rating_only_answer_shown' }, input.client_wall_at, input.client_monotonic_ms, at);
+      return this.safeAttempt(attemptId);
+    });
   }
 
   appendEvent(attemptId, eventType, payload = {}, clientWallAt = null, clientMonotonicMs = null, occurredAt = this.clock()) {
@@ -232,7 +264,7 @@ export class QaRepository {
       (id,attempt_id,sequence_number,event_type,occurred_at,client_wall_at,client_monotonic_ms,payload_json)
       VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), attemptId, sequence, eventType, occurredAt,
         optionalText(clientWallAt, 'client_wall_at', 100), Number.isFinite(clientMonotonicMs) ? clientMonotonicMs : null, json(payload));
-    if (eventType !== 'shown') {
+    if (!['shown', 'answer_revealed', 'rating_started', 'resumed'].includes(eventType)) {
       this.db.prepare('UPDATE attempts SET first_interaction_at=COALESCE(first_interaction_at,?) WHERE id=?').run(occurredAt, attemptId);
     }
     if (eventType === 'answer_started' || eventType === 'first_input') {
@@ -324,9 +356,9 @@ export class QaRepository {
       if (attempt.state === 'rating') {
         this.appendEvent(attemptId, 'rating_submitted', { difficulty: input.difficulty_rating, singularity: input.singularity_rating, revision }, input.client_wall_at, input.client_monotonic_ms, ratedAt);
         const revealedAt = this.clock();
-        this.db.prepare(`UPDATE attempts SET state='complete',rating_submitted_at=?,answer_revealed_at=?,completed_at=?,rating_elapsed_ms=? WHERE id=?`)
+        this.db.prepare(`UPDATE attempts SET state='complete',rating_submitted_at=?,answer_revealed_at=COALESCE(answer_revealed_at,?),completed_at=?,rating_elapsed_ms=? WHERE id=?`)
           .run(ratedAt, revealedAt, revealedAt, Number.isFinite(input.rating_duration_ms) ? input.rating_duration_ms : null, attemptId);
-        this.appendEvent(attemptId, 'answer_revealed', {}, input.client_wall_at, input.client_monotonic_ms, revealedAt);
+        if (preReveal) this.appendEvent(attemptId, 'answer_revealed', {}, input.client_wall_at, input.client_monotonic_ms, revealedAt);
       } else {
         this.appendEvent(attemptId, 'rating_revised', { difficulty: input.difficulty_rating, singularity: input.singularity_rating, revision }, input.client_wall_at, input.client_monotonic_ms, ratedAt);
       }
@@ -406,7 +438,7 @@ export class QaRepository {
   analysisCsv() {
     const exportedAt = this.clock();
     const rows = this.history({}).rows;
-    const columns = ['export_schema_version','qa_schema_version','exported_at','attempt_id','session_id','evaluator','item_id','item_revision_number','source','source_identifier','unit_name','problem_representation','canonical_answer','raw_user_answer','normalized_user_answer','correctness','outcome','exposure_count','shown_at','first_interaction_at','answer_started_at','submitted_at','rating_started_at','rating_submitted_at','answer_revealed_at','completed_at','answer_elapsed_ms','rating_elapsed_ms','difficulty_rating','singularity_rating','evaluation_revision','note','browser_version','application_version','autodrill_git_sha'];
+    const columns = ['export_schema_version','qa_schema_version','exported_at','attempt_id','session_id','evaluator','item_id','item_revision_number','source','source_identifier','unit_name','problem_representation','canonical_answer','observation_mode','raw_user_answer','normalized_user_answer','correctness','outcome','exposure_count','shown_at','first_interaction_at','answer_started_at','submitted_at','rating_started_at','rating_submitted_at','answer_revealed_at','completed_at','answer_elapsed_ms','rating_elapsed_ms','difficulty_rating','singularity_rating','evaluation_revision','note','browser_version','application_version','autodrill_git_sha'];
     const sessionById = new Map(this.listSessions().map((session) => [session.id, session]));
     const lines = [columns.join(',')];
     for (const row of rows) {

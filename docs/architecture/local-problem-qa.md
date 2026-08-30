@@ -16,7 +16,7 @@ raw SQLite recordsをcanonical dataとする。
 
 - `qa_sessions`: evaluator、timezone、app/schema/Git version、開始・終了
 - `items` / `item_revisions`: source identity、content hash、問題、単元、canonical answer、lossless original payload、変更履歴
-- `attempts`: repeated exposureを独立observationとして保持するlifecycle snapshot、answer、explicit outcome、correctness、timing、provenance
+- `attempts`: repeated exposureを独立observationとして保持するlifecycle snapshot、observation mode、answer、explicit outcome、correctness、timing、provenance
 - `selection_events`: candidate集合、selection policy、filter、random seed。将来adaptive selectionを使う場合のmodel/probability fieldも持つ
 - `input_events`: answer change、focus/visibility、submit、rating、reveal等の意味のあるevent chronology
 - `evaluations`: difficulty × singularityの全revision。旧ratingをoverwriteしない
@@ -34,23 +34,22 @@ rating scaleの唯一の定義元は`apps/qa/src/constants.mjs::RATING_SCALE`で
 
 database constraintも現行scaleのvalid rangeを防衛する。将来scaleを変更するときはdefinition versionとmigrationを更新し、既存ratingの意味を変えない。
 
-## Blind evaluation state graph
+## Rating-only state graph
 
 ```text
-queue -> solving -> rating -> reveal/complete -> queue
-              \-> broken / skip -> reveal/complete
-solving/rating -> explicit abandon
+queue -> rating (problem + answer shown) -> complete -> queue
+rating -> explicit abandon
 ```
 
-`solving`と`rating`のAPI responseはcanonical answer、correctness、unit distributionを返さない。active attempt中はhistory、problem detail、exportもserver側でlockする。submit時にcorrectnessはtransaction内で計算・保存するが、rating確定responseまでは公開しない。
+通常flowは`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
 
-manual itemのcorrectnessはNFKC + whitespace normalization後のexact text comparisonであり、`grading_method=manual_exact_text_nfkc_v1`として明示する。これはRustの数学的gradingの代替ではない。AutoDrill-generated problemで数学的grading integrationが必要になった場合はRust coreの既存境界を再利用し、QA serverへ数学ロジックを複製しない。
+旧`answer_then_rating` recordとinternal APIは既存datasetの再解析互換性のため残す。旧flowの回答・correctnessをmigrationで消したり新方式へ偽装したりしない。active attempt中はhistory、problem detail、exportをserver側でlockする。
 
 ## Timing and recovery
 
 server UTC timestampとbrowser monotonic timeを併記する。attemptはshown、first interaction、answer start、submit、rating start/submit、reveal、completeのwall-clock timestampとelapsed millisecondsを持つ。visibility/focus eventをraw保存し、active-time補正は後から再計算する。
 
-answer draftとeventはSQLite transactionで保存する。reload、browser restart、server restart後はopen attemptとdraftをresumeできる。継続しない場合はphysical deleteせず`abandoned`として完了させる。
+rating selection eventと確定処理はSQLiteへ保存する。reload、browser restart、server restart後はopen ratingをresumeできる。旧flowの未完了answer attemptは初回表示時に履歴を残したままrating-onlyへ移行する。継続しない場合はphysical deleteせず`abandoned`として完了させる。
 
 ## Schema evolution and exports
 
@@ -62,6 +61,6 @@ Full JSON exportはmanifestと全raw/projection tableを含む。Analysis CSVは
 
 default flowはsession開始・problem登録・queue選択を自動化する。QA serverがRust `drill-core`の既存WASM boundaryを呼び、canonical web contractのうち`simple_numeric` inputと対応promptを持つthemeから一様に選択する。requested difficultyは`ランダム`、worksheet内problemも一様に選び、selection seed、candidate source、filter、propensityを保存する。theme IDのhard-codeや数学generatorの再実装は行わない。
 
-各item snapshotはtheme / skill / curriculum metadata、generation request、worksheet identity、generator revision、seed、Problem DTO、prompt、answer schema、worked solution、layout、worksheet全体をlossless JSONとして保持する。回答は同じWASMのparse / grade boundaryで採点し、normalized Answer ASTとraw grading resultをevent logへ保存する。rating前のresponseにはcanonical answer、correctness、過去分布を含めない。
+各item snapshotはtheme / skill / curriculum metadata、generation request、worksheet identity、generator revision、seed、Problem DTO、prompt、answer schema、worked solution、layout、worksheet全体をlossless JSONとして保持する。通常flowは回答を収集・採点せず、canonical answerだけをrating前から表示する。過去分布はrating前に表示しない。
 
 manual/import APIと既存recordはdata correction・compatibilityのため内部に保持するが、通常UIには表示しない。Bayesian modelは実装せず、将来追加しても`model_runs` / `derived_results`へ別projectionとして保存する。

@@ -61,7 +61,7 @@ test('active attempt and draft survive a local server restart', async () => {
   }
 });
 
-test('quick flow creates a session and preserves random-generation and WASM-grading provenance', async () => {
+test('quick flow creates a rating-only observation with random-generation provenance', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'autodrill-qa-quick-'));
   const autodrillRuntime = {
     async generateRandomProblem() {
@@ -83,14 +83,7 @@ test('quick flow creates a session and preserves random-generation and WASM-grad
         },
       };
     },
-    async gradeAnswer() {
-      return {
-        correctness: 'correct',
-        normalized_user_answer: '{"type":"integer","value":"5"}',
-        grading_method: 'autodrill_wasm_grade_v1',
-        raw_result: { parsed: { type: 'integer', value: '5' }, graded: { is_correct: true, warnings: [] } },
-      };
-    },
+    async gradeAnswer() { throw new Error('rating-only flow must not grade'); },
   };
   const qa = createQaServer({ databasePath: join(directory, 'qa.sqlite3'), port: 0, gitSha: 'quick-test', quiet: true, autodrillRuntime });
   const address = await qa.listen();
@@ -98,15 +91,17 @@ test('quick flow creates a session and preserves random-generation and WASM-grad
   try {
     const { payload: attempt } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test' });
     assert.equal(attempt.problem_representation, '2 + 3 =');
-    assert.equal(JSON.stringify(attempt).includes('canonical_answer'), false);
-    const { payload: submitted } = await request(base, `/api/attempts/${attempt.id}/submit`, { outcome: 'answered', raw_user_answer: '5' });
-    assert.equal(JSON.stringify(submitted).includes('correctness'), false);
+    assert.equal(attempt.canonical_answer, '5');
+    assert.equal(attempt.state, 'rating');
+    assert.equal(attempt.observation_mode, 'rating_only_answer_shown');
     const { payload: revealed } = await request(base, `/api/attempts/${attempt.id}/ratings`, { difficulty_rating: 2, singularity_rating: 3 });
-    assert.equal(revealed.correctness, 'correct');
-    assert.equal(revealed.grading_method, 'autodrill_wasm_grade_v1');
+    assert.equal(revealed.raw_user_answer, null);
+    assert.equal(revealed.correctness, 'ungraded');
+    assert.equal(revealed.grading_method, 'not_collected_assumed_solved_v1');
+    assert.equal(revealed.evaluations[0].pre_answer_reveal, 0);
     assert.equal(revealed.selection.selection_policy, 'autodrill_random_v1');
     assert.equal(revealed.selection.random_seed, 'selection-seed');
-    assert.deepEqual(revealed.events.find((event) => event.event_type === 'submit').payload.grading.graded.warnings, []);
+    assert.deepEqual(revealed.events.slice(0, 3).map((event) => event.event_type), ['shown', 'answer_revealed', 'rating_started']);
     const { payload: repeated } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test' });
     assert.equal(repeated.item_id, attempt.item_id);
     assert.equal(repeated.exposure_count, 2);

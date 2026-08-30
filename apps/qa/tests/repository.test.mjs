@@ -137,30 +137,56 @@ test('exports contain provenance, raw events, revisions, and analysis columns', 
     data.repository.submitAttempt(attempt.id, { outcome: 'answered', raw_user_answer: '3', elapsed_since_shown_ms: 900 });
     data.repository.rateAttempt(attempt.id, { difficulty_rating: 1, singularity_rating: 1, note: 'easy' });
     const full = data.repository.fullExport();
-    assert.equal(full.manifest.qa_schema_version, 2);
+    assert.equal(full.manifest.qa_schema_version, 3);
     assert.equal(full.data.attempts[0].autodrill_git_sha, 'test-git-sha');
     assert.ok(full.data.input_events.length >= 6);
     assert.equal(full.data.evaluations[0].note, 'easy');
     assert.equal(full.data.selection_events[0].candidate_source, 'local_queue');
     assert.equal(full.data.selection_events[0].selection_probability, 1);
     const csv = data.repository.analysisCsv();
-    for (const header of ['export_schema_version', 'raw_user_answer', 'canonical_answer', 'difficulty_rating', 'singularity_rating', 'autodrill_git_sha']) assert.match(csv.split('\n')[0], new RegExp(header));
+    for (const header of ['export_schema_version', 'observation_mode', 'raw_user_answer', 'canonical_answer', 'difficulty_rating', 'singularity_rating', 'autodrill_git_sha']) assert.match(csv.split('\n')[0], new RegExp(header));
     assert.match(csv, /test-git-sha/);
     assert.equal(data.database.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
     assert.deepEqual(data.database.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { data.cleanup(); }
 });
 
-test('ordered migration preserves observations from schema v1', () => {
-  const data = fixture(1);
-  const { session, item } = seed(data.repository);
-  const attempt = start(data.repository, session, item);
-  data.repository.saveDraft(attempt.id, { raw_user_answer: 'migration-data' });
+test('ordered migration preserves observations from schema v2', () => {
+  const data = fixture(2);
+  const at = '2026-08-30T00:00:00.000Z';
+  data.database.prepare(`INSERT INTO qa_sessions(id,evaluator,started_at,local_timezone,application_version,qa_schema_version,autodrill_git_sha)
+    VALUES ('session-old','User',?,'Asia/Tokyo','0.2.0',2,'old-sha')`).run(at);
+  data.database.prepare(`INSERT INTO items(id,source,content_hash,created_at) VALUES ('item-old','manual','old-hash',?)`).run(at);
+  data.database.prepare(`INSERT INTO item_revisions(id,item_id,revision_number,unit_name,problem_representation,canonical_answer,content_hash,revision_reason,created_at)
+    VALUES ('revision-old','item-old',1,'移行','1 + 1 =','2','old-hash','initial_import',?)`).run(at);
+  data.database.prepare(`INSERT INTO attempts(id,session_id,item_id,item_revision_number,exposure_count,state,shown_at,raw_user_answer,application_version,qa_schema_version,autodrill_git_sha)
+    VALUES ('attempt-old','session-old','item-old',1,1,'solving',?,'migration-data','0.2.0',2,'old-sha')`).run(at);
   data.database.close();
   const reopened = openDatabase({ path: data.path });
   try {
-    assert.equal(reopened.schemaVersion, 2);
-    assert.equal(reopened.database.prepare('SELECT raw_user_answer FROM attempts WHERE id=?').get(attempt.id).raw_user_answer, 'migration-data');
+    assert.equal(reopened.schemaVersion, 3);
+    const migrated = reopened.database.prepare('SELECT raw_user_answer,observation_mode FROM attempts WHERE id=?').get('attempt-old');
+    assert.equal(migrated.raw_user_answer, 'migration-data');
+    assert.equal(migrated.observation_mode, 'answer_then_rating');
     assert.doesNotThrow(() => reopened.database.prepare('SELECT * FROM model_runs').all());
   } finally { reopened.database.close(); rmSync(data.directory, { recursive: true, force: true }); }
+});
+
+test('rating-only observation stores no fabricated answer or correctness and reveals answer immediately', () => {
+  const data = fixture();
+  try {
+    const { session, item } = seed(data.repository);
+    const attempt = data.repository.startAttempt({ session_id: session.id, item_id: item.id, rating_only: true });
+    assert.equal(attempt.state, 'rating');
+    assert.equal(attempt.canonical_answer, '3');
+    assert.equal(attempt.observation_mode, 'rating_only_answer_shown');
+    const rated = data.repository.rateAttempt(attempt.id, { difficulty_rating: 3, singularity_rating: 4, rating_duration_ms: 250 });
+    assert.equal(rated.raw_user_answer, null);
+    assert.equal(rated.normalized_user_answer, null);
+    assert.equal(rated.correctness, 'ungraded');
+    assert.equal(rated.grading_method, 'not_collected_assumed_solved_v1');
+    assert.equal(rated.submitted_at, null);
+    assert.equal(rated.evaluations[0].pre_answer_reveal, 0);
+    assert.deepEqual(rated.events.map((event) => event.event_type), ['shown', 'answer_revealed', 'rating_started', 'rating_submitted']);
+  } finally { data.cleanup(); }
 });

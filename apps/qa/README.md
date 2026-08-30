@@ -16,11 +16,11 @@ pnpm --filter @autodrill/qa build:macos
 
 ## 使い方
 
-通常操作は次の3段階だけである。
+通常操作は次の3段階だけである。回答入力と採点は行わない。
 
 1. 起動すると、AutoDrillの対応単元からランダムな問題が自動表示される。
-2. 答えを入力し、7×7 gridで難しさと特異性を評価する。
-3. 保存結果を確認して「次のランダム問題」を押す。
+2. 問題と表示済みの答えを見て、7×7 gridで難しさと特異性を評価する。
+3. 「評価を保存して次へ」を押し、続ける。
 
 session開始、問題登録、queue選択は不要。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
 
@@ -49,8 +49,8 @@ databaseをrepository内へ置く場合も、`apps/qa/*.sqlite*`はignoreされ�
 ## Data contract
 
 - SQLiteのraw session / item revision / attempt / selection / input event / evaluation revisionがsource of truth。
-- rating前のAPI responseにはcanonical answer、correctness、過去分布を含めない。
-- manual problemのgradingはUnicode NFKC + whitespace正規化後のexact text equalityとして`grading_method`に記録する。AutoDrillの数学的gradingをTypeScriptへ複製しない。
+- 通常flowは`observation_mode=rating_only_answer_shown`としてcanonical answerをrating前から表示する。User answerは収集せず、correctnessは`ungraded`、grading methodは`not_collected_assumed_solved_v1`として明示する。
+- 旧`answer_then_rating` observationは互換性のため保持し、回答・採点履歴を破壊しない。AutoDrillの数学的gradingをTypeScriptへ複製しない。
 - AutoDrill snapshotはsource payload JSONをlosslessに保存する。QAのためにproduction wireを拡張しない。
 - ランダム出題はRust `drill-core`の既存WASM境界を再利用する。数値入力でRust gradingをそのまま利用できるthemeをcanonical contractから選び、theme IDや数学ロジックをQA側へ複製しない。
 - model resultはraw tableへ書き戻さず、`model_runs` / `derived_results`へversioned projectionとして保存する。

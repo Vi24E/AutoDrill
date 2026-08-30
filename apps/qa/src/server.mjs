@@ -87,7 +87,7 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         let session = repository.currentSession();
         if (!session) session = repository.createSession({ evaluator: 'User', local_timezone: input.local_timezone ?? 'UTC' });
         const activeAttempt = repository.activeAttempt(session.id);
-        if (activeAttempt) { sendJson(res, 200, activeAttempt); return; }
+        if (activeAttempt) { sendJson(res, 200, repository.beginRatingOnly(activeAttempt.id, input)); return; }
         const generated = await autodrillRuntime.generateRandomProblem();
         const item = repository.findItemBySourceIdentifier(generated.item.source, generated.item.source_identifier)
           ?? repository.createItem(generated.item);
@@ -98,6 +98,7 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
           client_wall_at: input.client_wall_at,
           client_monotonic_ms: input.client_monotonic_ms,
           selection_context: generated.selection,
+          rating_only: true,
         });
         sendJson(res, 201, attempt); return;
       }
