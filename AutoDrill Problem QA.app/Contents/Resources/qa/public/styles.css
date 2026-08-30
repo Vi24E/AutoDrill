@@ -88,7 +88,7 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
 .unit-choice { margin: 0 auto 18px; text-align: left; }
 .unit-picker {
   display: grid;
-  grid-template-columns: auto minmax(260px, 1fr);
+  grid-template-columns: auto minmax(240px, 1fr) auto;
   align-items: center;
   gap: 10px;
   max-width: 560px;
@@ -96,6 +96,18 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
 }
 .unit-picker label { color: var(--muted); font-size: 12px; font-weight: 750; }
 .unit-picker select { padding-block: 7px; }
+.sampling-toggle {
+  display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: #f8faf8;
+}
+.unit-chooser .sampling-toggle { margin: -4px auto 18px; max-width: 100%; }
+.unit-picker .sampling-toggle { padding-block: 7px; }
+.sampling-toggle.compact { padding: 6px 9px; white-space: nowrap; }
+.sampling-toggle.compact span { display: block; }
+.sampling-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.sampling-toggle span { display: grid; gap: 1px; }
+.sampling-toggle strong { font-size: 12px; }
+.sampling-toggle small { color: var(--muted); font-size: 10px; line-height: 1.35; }
 .problem-area { text-align: center; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
 .print-problem-area { padding-bottom: 8px; }
 .print-render-shell { position: relative; height: 150px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: white; }

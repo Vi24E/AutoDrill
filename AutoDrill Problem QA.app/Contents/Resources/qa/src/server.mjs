@@ -41,6 +41,12 @@ function sendJson(res, status, value, headers = {}) {
   res.end(JSON.stringify(value));
 }
 
+function samplingMode(value) {
+  if (value == null || value === 'random') return 'random';
+  if (value === 'custom') return 'custom';
+  throw new QaValidationError('sampling_mode must be random or custom.');
+}
+
 function routeMatch(pathname, pattern) {
   const names = [];
   const expression = new RegExp(`^${pattern.replace(/:([a-z_]+)/g, (_, name) => { names.push(name); return '([^/]+)'; })}$`);
@@ -103,7 +109,9 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         const activeAttempt = repository.activeAttempt();
         if (!activeAttempt) throw new QaValidationError('An active rating is required before prefetching.', 409);
         if (!input.skill_id || input.skill_id !== activeAttempt.source_skill_id) throw new QaValidationError('Prefetch unit does not match the active rating.', 409);
-        sendJson(res, 201, await prefetchStore.reserve(input.skill_id)); return;
+        const mode = samplingMode(input.sampling_mode);
+        const observations = mode === 'custom' ? repository.unitSamplingObservations(input.skill_id) : [];
+        sendJson(res, 201, await prefetchStore.reserve(input.skill_id, { samplingMode: mode, observations })); return;
       }
       let params = routeMatch(url.pathname, '/api/quick/prefetch/:id/render');
       if (req.method === 'GET' && params) { sendJson(res, 200, prefetchStore.renderPayload(params.id)); return; }
@@ -118,9 +126,11 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         if (!session) session = repository.createSession({ evaluator: 'User', local_timezone: input.local_timezone ?? 'UTC' });
         const activeAttempt = repository.activeAttempt(session.id);
         if (activeAttempt) { sendJson(res, 200, repository.beginRatingOnly(activeAttempt.id, input)); return; }
+        const mode = samplingMode(input.sampling_mode);
+        const observations = mode === 'custom' ? repository.unitSamplingObservations(input.skill_id) : [];
         const generated = input.prefetch_id
-          ? prefetchStore.consume(input.prefetch_id, input.skill_id)
-          : attachGenerationProvenance(await autodrillRuntime.generateRandomProblem({ skillId: input.skill_id }), repository.gitState);
+          ? prefetchStore.consume(input.prefetch_id, input.skill_id, mode)
+          : attachGenerationProvenance(await autodrillRuntime.generateProblem({ skillId: input.skill_id, samplingMode: mode, observations }), repository.gitState);
         const item = repository.findItemBySourceIdentifier(generated.item.source, generated.item.source_identifier)
           ?? repository.createItem(generated.item);
         const attempt = repository.startAttempt({

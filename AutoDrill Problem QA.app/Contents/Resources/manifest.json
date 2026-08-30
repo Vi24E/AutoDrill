@@ -1,10 +1,10 @@
 {
   "application": "AutoDrill Problem QA",
-  "appVersion": "0.7.0",
-  "gitSha": "253e2b762820d5a4df78a9ab3b8e8cc4927ceda4",
+  "appVersion": "0.8.0",
+  "gitSha": "813f942c79e7d126437dd5bdcab735514ef28d15",
   "gitState": {
     "source": "bundled_committed_snapshot",
-    "head_sha": "253e2b762820d5a4df78a9ab3b8e8cc4927ceda4",
+    "head_sha": "813f942c79e7d126437dd5bdcab735514ef28d15",
     "worktree_state": "clean",
     "worktree_dirty": false,
     "status_porcelain": null,
