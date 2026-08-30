@@ -4,7 +4,7 @@ import { WORKSHEET_GRID_POINT } from '@/domain/worksheet-grid-presentation';
 
 const COLUMN_DIVISION_WORK_ROWS = 3;
 const COLUMN_REMAINDER_CELLS = 2;
-import { answerNodeText, type AnswerNode, type ProblemDto } from '@/domain/drill-engine';
+import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
 
 export function columnAnswerScale(answer: AnswerNode): number {
   if (answer.type === 'exact_decimal') return answer.value.scale;
@@ -20,6 +20,45 @@ function gridCellCount(text: string): number {
   return [...text].filter((character) => character !== '.' && character !== '−' && character !== '-').length;
 }
 
+type ColumnOperandShape = { coefficientDigits: number; scale: number; wholeDigits: number };
+
+function columnOperandShape(expression: ArithmeticExpression): ColumnOperandShape {
+  if (expression.kind === 'integer') {
+    const coefficientDigits = Math.abs(expression.value).toString().length;
+    return { coefficientDigits, scale: 0, wholeDigits: coefficientDigits };
+  }
+  if (expression.kind === 'exact_decimal') {
+    const coefficientDigits = Math.abs(expression.coefficient).toString().length;
+    return {
+      coefficientDigits,
+      scale: expression.scale,
+      wholeDigits: Math.max(0, coefficientDigits - expression.scale),
+    };
+  }
+  throw new Error('Column arithmetic presentation requires scalar integer or exact-decimal operands.');
+}
+
+function maximumNonDivisionAnswerCells(
+  operator: 'add' | 'subtract' | 'multiply',
+  left: ArithmeticExpression,
+  right: ArithmeticExpression,
+): number {
+  const leftShape = columnOperandShape(left);
+  const rightShape = columnOperandShape(right);
+  if (operator === 'multiply') {
+    const coefficientDigits = leftShape.coefficientDigits + rightShape.coefficientDigits;
+    const scale = leftShape.scale + rightShape.scale;
+    return Math.max(coefficientDigits, scale + 1);
+  }
+
+  const scale = Math.max(leftShape.scale, rightShape.scale);
+  const widestWholePart = Math.max(leftShape.wholeDigits, rightShape.wholeDigits);
+  const wholeDigits = operator === 'add'
+    ? widestWholePart + 1
+    : Math.max(1, widestWholePart);
+  return wholeDigits + scale;
+}
+
 type LongDivisionWorkedSolution = Extract<NonNullable<ProblemDto['worked_solution']>, { kind: 'long_division' }>;
 
 function longDivisionWorkedSolution(problem: ProblemDto): LongDivisionWorkedSolution {
@@ -32,18 +71,29 @@ function longDivisionWorkedSolution(problem: ProblemDto): LongDivisionWorkedSolu
 
 type CellGeometry = { x: number; y: number; width: number };
 
-export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; digitCells: number } {
-  if (problem.prompt.kind !== 'column_arithmetic') return { operatorCells: 1, digitCells: 2 };
+export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; digitCells: number; totalCells: number } {
+  if (problem.prompt.kind !== 'column_arithmetic') return { operatorCells: 1, digitCells: 2, totalCells: 3 };
   const leftText = arithmeticLeafText(problem.prompt.left);
   const rightText = arithmeticLeafText(problem.prompt.right);
-  const answerText = answerNodeText(answerScalar(problem.canonical_answer));
+  const leftCells = gridCellCount(leftText);
+  const rightCells = gridCellCount(rightText);
 
   if (problem.prompt.operator !== 'divide') {
+    const maximumAnswerCells = maximumNonDivisionAnswerCells(
+      problem.prompt.operator,
+      problem.prompt.left,
+      problem.prompt.right,
+    );
+    const operatorCells = 1;
+    const digitCells = Math.max(2, maximumAnswerCells);
     return {
-      operatorCells: 1,
-      digitCells: Math.max(2, gridCellCount(leftText), gridCellCount(rightText), gridCellCount(answerText)),
+      operatorCells,
+      digitCells,
+      totalCells: Math.max(digitCells, leftCells, operatorCells + rightCells),
     };
   }
+
+  const answerText = answerNodeText(answerScalar(problem.canonical_answer));
 
   const worked = longDivisionWorkedSolution(problem);
   const normalizedDividendDigits = Math.max(
@@ -52,19 +102,13 @@ export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells:
   );
   const quotientDigits = gridCellCount(answerText) + worked.quotient_trailing_cells;
 
+  const operatorCells = Math.max(1, gridCellCount(rightText));
+  const digitCells = Math.max(2, gridCellCount(leftText), normalizedDividendDigits, quotientDigits);
   return {
-    operatorCells: Math.max(1, gridCellCount(rightText)),
-    digitCells: Math.max(2, gridCellCount(leftText), normalizedDividendDigits, quotientDigits),
+    operatorCells,
+    digitCells,
+    totalCells: operatorCells + digitCells,
   };
-}
-
-
-export function columnArithmeticWorkingRows(problem: ProblemDto): number {
-  if (problem.prompt.kind !== 'column_arithmetic') return 0;
-  if (problem.prompt.operator !== 'multiply') return 0;
-  // A one-digit multiplier has no partial-product row. Multi-digit multiplication
-  // reserves one grid row for handwritten partial work before the final answer.
-  return gridCellCount(arithmeticLeafText(problem.prompt.right)) > 1 ? 1 : 0;
 }
 
 export function columnArithmeticDigitCells(problem: ProblemDto): number {
@@ -73,11 +117,11 @@ export function columnArithmeticDigitCells(problem: ProblemDto): number {
 
 export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGeometry): Record<string, string> {
   if (problem.prompt.kind !== 'column_arithmetic') return {};
-  const { operatorCells, digitCells } = columnArithmeticLaneCells(problem);
+  const { operatorCells, digitCells, totalCells } = columnArithmeticLaneCells(problem);
   const variables: Record<string, string> = {
     '--column-operator-width': `calc(${operatorCells} * var(--worksheet-grid-cell))`,
     '--column-digit-width': `calc(${digitCells} * var(--worksheet-grid-cell))`,
-    '--column-working-rows': String(columnArithmeticWorkingRows(problem)),
+    '--column-total-width': `calc(${totalCells} * var(--worksheet-grid-cell))`,
   };
 
   if (cell) {

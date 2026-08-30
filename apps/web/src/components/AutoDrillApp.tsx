@@ -454,6 +454,19 @@ function selectedPeople(answer: AnswerNode): Set<number> {
   return new Set(answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : []));
 }
 
+
+function ProblemGradeMark({ result }: { result: GradeResult['items'][number] | undefined }) {
+  if (!result) return null;
+  return (
+    <span
+      className={`problem-grade-mark ${result.correct ? 'problem-grade-mark-correct' : 'problem-grade-mark-wrong'}`}
+      aria-label={result.correct ? '正解' : '不正解'}
+    >
+      {result.correct ? '○' : '✓'}
+    </span>
+  );
+}
+
 type WorksheetAnswerFieldProps = {
   worksheetUi: WorksheetUiComponents;
   problem: WorksheetDto['problems'][number];
@@ -509,12 +522,6 @@ function WorksheetAnswerField({
   );
   const columnDraftFor = (slot: ColumnAnswerSlot) => columnDrafts[columnDraftKey(problem.problem_id, slot)];
   const columnDecimalBoundaryFor = (slot: ColumnAnswerSlot) => columnDecimalBoundaries[columnDraftKey(problem.problem_id, slot)];
-  const columnFeedback = result ? (
-    <span className={`column-grade-feedback ${result.correct ? 'column-grade-feedback-correct' : 'column-grade-feedback-wrong'}`}>
-      <span className="column-grade-mark" aria-label={result.correct ? '正解' : '不正解'}>{result.correct ? '○' : '×'}</span>
-    </span>
-  ) : null;
-
   if (presentation.kind === 'liar_puzzle') {
     const chosen = selectedPeople(answer);
     const canonical = selectedPeople(problem.canonical_answer);
@@ -537,7 +544,6 @@ function WorksheetAnswerField({
     return (
       <span className="problem-answer-area problem-answer-area-liar">
         {renderPeople(chosen, !inputLocked)}
-        {result?.correct ? <span className="result-mark liar-result-mark" aria-label="正解">○</span> : null}
         {result && !result.correct ? (
           <span className="correct-answer liar-correct-answer" aria-label={`正しい答え ${[...canonical].map(liarPersonLabel).join('、')}`}>
             {renderPeople(canonical, false)}
@@ -607,7 +613,6 @@ function WorksheetAnswerField({
             <MathLiveStatic className="column-remainder-correction-value" latex={answerNodeLatex(canonicalRemainder)} ariaLabel={`正しいあまり ${answerNodeText(canonicalRemainder)}`} />
           </span>
         ) : null}
-        {columnFeedback}
         {result && result.warnings.length > 0 ? (() => {
           const messages = warningMessages(result.warnings);
           return (
@@ -651,7 +656,6 @@ function WorksheetAnswerField({
             />
           </span>
         ) : null}
-        {columnFeedback}
         {result && result.warnings.length > 0 ? (() => {
           const messages = warningMessages(result.warnings);
           return (
@@ -701,7 +705,6 @@ function WorksheetAnswerField({
             onRegister={(mathfield) => onRegisterMathfield(index, 'y', mathfield)}
           />
         </span>
-        {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
         {result && !result.correct ? (
           <span className="correct-answer" aria-label={`正しい答え ${canonicalAnswer}`}>
             <MathLiveStatic
@@ -745,7 +748,6 @@ function WorksheetAnswerField({
         onCommit={() => onCommit(index, 'single')}
         onRegister={(mathfield) => onRegisterMathfield(index, 'single', mathfield)}
       />
-      {result?.correct ? <span className="result-mark" aria-label="正解">○</span> : null}
       {result && !result.correct ? (
         <span className="correct-answer" aria-label={`正しい答え ${canonicalAnswer}`}>
           <MathLiveStatic
@@ -2188,7 +2190,10 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               };
               return (
                 <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${isMiniSudoku ? 'problem-cell-mini-sudoku' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
-                  <span className="problem-number">{index + 1}.</span>
+                  <span className="problem-number-stack">
+                    <ProblemGradeMark result={result} />
+                    <span className="problem-number">{index + 1}.</span>
+                  </span>
                   {isMiniSudoku ? (
                     <>
                       <MiniSudokuGrid
@@ -2199,7 +2204,6 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                         correctionAnswer={result && !result.correct ? problem.canonical_answer : null}
                         onSelectCell={(cellIndex) => onSelectDigitGridCell(index, cellIndex)}
                       />
-                      {result?.correct ? <span className="result-mark mini-sudoku-result-mark" aria-label="正解">○</span> : null}
                     </>
                   ) : (
                     <>

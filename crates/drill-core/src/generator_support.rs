@@ -104,14 +104,13 @@ pub(crate) fn rational_to_arithmetic_expression(
     }
 }
 
-pub(crate) fn draw_decimal_coefficient(
+pub(crate) fn draw_decimal_coefficient_with_significant_digits(
     rng: &mut DeterministicRng,
-    max_significant_digits: u32,
+    significant_digits: u32,
 ) -> Option<i64> {
-    if max_significant_digits == 0 {
+    if significant_digits == 0 {
         return None;
     }
-    let significant_digits = 1 + rng.next_bounded(u64::from(max_significant_digits)) as u32;
     let lower = if significant_digits == 1 {
         1_i64
     } else {
@@ -127,6 +126,30 @@ pub(crate) fn draw_decimal_coefficient(
             break Some(candidate);
         }
     }
+}
+
+pub(crate) fn draw_decimal_coefficient(
+    rng: &mut DeterministicRng,
+    max_significant_digits: u32,
+) -> Option<i64> {
+    if max_significant_digits == 0 {
+        return None;
+    }
+    let significant_digits = 1 + rng.next_bounded(u64::from(max_significant_digits)) as u32;
+    draw_decimal_coefficient_with_significant_digits(rng, significant_digits)
+}
+
+pub(crate) fn draw_decimal_operand_with_significant_digits(
+    rng: &mut DeterministicRng,
+    significant_digits: u32,
+    max_scale: u32,
+) -> Option<(i64, u32)> {
+    if max_scale == 0 {
+        return None;
+    }
+    let coefficient = draw_decimal_coefficient_with_significant_digits(rng, significant_digits)?;
+    let scale = 1 + rng.next_bounded(u64::from(max_scale)) as u32;
+    Some((coefficient, scale))
 }
 
 pub(crate) fn draw_decimal_operand(
@@ -231,6 +254,15 @@ mod tests {
         assert!(draw_decimal_coefficient(&mut rng, u32::MAX).is_none());
         assert!(draw_decimal_operand(&mut rng, 0, 2).is_none());
         assert!(draw_decimal_operand(&mut rng, 2, 0).is_none());
+        assert!(draw_decimal_coefficient_with_significant_digits(&mut rng, 0).is_none());
+        assert!(draw_decimal_operand_with_significant_digits(&mut rng, 2, 0).is_none());
+        for _ in 0..32 {
+            let one_digit = draw_decimal_coefficient_with_significant_digits(&mut rng, 1).unwrap();
+            let two_digit = draw_decimal_coefficient_with_significant_digits(&mut rng, 2).unwrap();
+            assert!((1..=9).contains(&one_digit));
+            assert!((10..=99).contains(&two_digit));
+            assert_ne!(two_digit % 10, 0);
+        }
         assert!(draw_signed_integer(&mut rng, 0).is_none());
         assert!(draw_signed_integer(&mut rng, -1).is_none());
 

@@ -243,7 +243,7 @@ function WorksheetPrintPage({
                 style={cellStyle}
                 key={problem.problem_id}
               >
-                <span className="problem-number">{index + 1}.</span>
+                <span className="problem-number-stack"><span className="problem-number">{index + 1}.</span></span>
                 {isMiniSudoku ? (
                   <MiniSudokuGrid
                     problem={problem}

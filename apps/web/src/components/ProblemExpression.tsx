@@ -231,7 +231,6 @@ function ColumnArithmeticExpression({ problem, solution = false }: { problem: Pr
       <span className="column-arithmetic-row column-arithmetic-row-top"><span className="column-arithmetic-operator-placeholder" aria-hidden="true" />{value(leftText)}</span>
       <span className="column-arithmetic-row column-arithmetic-row-bottom"><span className="column-arithmetic-operator" aria-hidden="true">{operatorText[operator]}</span>{value(rightText)}</span>
       <span className="column-arithmetic-rule" aria-hidden="true" />
-      {operator === 'multiply' ? <span className="column-arithmetic-work-space column-arithmetic-work-space-multiply" aria-hidden="true" /> : null}
     </span>
   );
 }

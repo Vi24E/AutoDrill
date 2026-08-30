@@ -1004,19 +1004,24 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
           const leftDelta = Math.abs(reference.right - answer.right);
           const laneLeft = cell.querySelector('.column-arithmetic')?.getBoundingClientRect().left ?? reference.left;
           const answerLaneLeft = answer.right - answer.width;
-          const horizontalDelta = Math.max(leftDelta, Math.max(0, laneLeft - answerLaneLeft));
+          let operatorGap = 0;
+          if (!divide) {
+            const operator = cell.querySelector('.column-arithmetic-row-bottom .column-arithmetic-operator')?.getBoundingClientRect();
+            const operand = cell.querySelector('.column-arithmetic-row-bottom .column-arithmetic-value')?.getBoundingClientRect();
+            if (operator && operand) operatorGap = Math.abs(operator.right - operand.left);
+          }
+          const horizontalDelta = Math.max(leftDelta, Math.max(0, laneLeft - answerLaneLeft), operatorGap);
           let verticalDelta = 0;
           let expectedTop = null;
           if (!divide) {
-            const gridCell = cell.querySelector('.column-arithmetic-digit-cell')?.getBoundingClientRect().width ?? 0;
-            const workingRows = Number.parseInt(getComputedStyle(cell).getPropertyValue('--column-working-rows').trim() || '0', 10);
-            expectedTop = reference.bottom + workingRows * gridCell;
+            expectedTop = reference.bottom;
             verticalDelta = Math.abs(answer.top - expectedTop);
           }
           if (horizontalDelta > 1 || verticalDelta > 1) {
             columnGridMismatches.push({
               problem: Number(cell.dataset.problemIndex) + 1,
               horizontalDelta: Math.round(horizontalDelta * 10) / 10,
+              operatorGap: Math.round(operatorGap * 10) / 10,
               verticalDelta: Math.round(verticalDelta * 10) / 10,
               expectedTop: expectedTop === null ? null : Math.round(expectedTop * 10) / 10,
               actualTop: Math.round(answer.top * 10) / 10,
@@ -1247,7 +1252,7 @@ function columnAdditionInputProbe() {
 
     document.querySelector('button[aria-label="採点"]')?.click();
     const feedback = await waitFor(() => {
-      const values = [...document.querySelectorAll('.column-grade-feedback')];
+      const values = [...document.querySelectorAll('.problem-grade-mark')];
       return values.length === 16 ? values : null;
     }, 'column grading feedback');
     const gradedEditor = document.querySelector('.problem-cell-column-arithmetic .column-answer-user .column-digit-answer-single');
@@ -1260,6 +1265,11 @@ function columnAdditionInputProbe() {
     const separateCorrectAnswerCount = document.querySelectorAll('.column-grade-correct-answer').length;
     const correctionGlyph = correctionEditor?.querySelector('.column-digit-glyph');
     const correctionColor = correctionGlyph ? getComputedStyle(correctionGlyph).color : null;
+    const firstProblemNumber = document.querySelector('.problem-cell-column-arithmetic .problem-number');
+    const firstMarkRect = feedback[0]?.getBoundingClientRect();
+    const firstNumberRect = firstProblemNumber?.getBoundingClientRect();
+    const firstMarkAboveProblemNumber = Boolean(firstMarkRect && firstNumberRect && firstMarkRect.bottom <= firstNumberRect.top + 1);
+    const firstMarkColor = feedback[0] ? getComputedStyle(feedback[0]).color : null;
     const gradedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
     return {
       fieldCount: editors.length,
@@ -1277,7 +1287,9 @@ function columnAdditionInputProbe() {
       expressionFont,
       slotFont,
       feedbackCount: feedback.length,
-      firstMark: feedback[0]?.querySelector('.column-grade-mark')?.textContent?.trim() ?? null,
+      firstMark: feedback[0]?.textContent?.trim() ?? null,
+      firstMarkAboveProblemNumber,
+      firstMarkColor,
       correctionInGrid,
       correctionValue,
       separateCorrectAnswerCount,
@@ -1445,7 +1457,7 @@ function columnDivisionInputProbe() {
     const bracketPath = bracket?.querySelector('.column-division-bracket-mark path')?.getAttribute('d') ?? null;
     const selectedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
     document.querySelector('button[aria-label="採点"]')?.click();
-    await waitFor(() => document.querySelectorAll('.column-grade-feedback').length === 12, 'division grading feedback');
+    await waitFor(() => document.querySelectorAll('.problem-cell-column-arithmetic-divide .problem-grade-mark').length === 12, 'division grading feedback');
     const gradedFirstCell = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide')][3];
     const gradedQuotient = gradedFirstCell.querySelector('.column-division-answer-coordinate-quotient .column-digit-answer-quotient');
     const gradedRemainder = gradedFirstCell.querySelector('.column-division-answer-coordinate-remainder math-field.answer-mathfield');
@@ -2175,10 +2187,12 @@ try {
             || input.slotOverflow !== 'hidden'
             || !input.slotFont?.includes('Noto Sans JP')
             || input.feedbackCount !== 16
-            || !['○', '×'].includes(input.firstMark)
+            || !['○', '✓'].includes(input.firstMark)
+            || !input.firstMarkAboveProblemNumber
+            || (input.firstMark === '✓' && input.firstMarkColor !== 'rgb(210, 11, 11)')
             || input.gradedValue !== input.value
             || input.separateCorrectAnswerCount !== 0
-            || (input.firstMark === '×' && (!input.correctionInGrid || !input.correctionValue || input.correctionColor !== 'rgb(210, 11, 11)'))
+            || (input.firstMark === '✓' && (!input.correctionInGrid || !input.correctionValue || input.correctionColor !== 'rgb(210, 11, 11)'))
             || !input.selectedGridAlignment?.applicable || input.selectedGridAlignment.maxError > 0.25
             || !input.gradedGridAlignment?.applicable || input.gradedGridAlignment.maxError > 0.25
           ) {

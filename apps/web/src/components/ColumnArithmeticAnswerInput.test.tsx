@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ColumnArithmeticAnswerInput } from '@/components/ColumnArithmeticAnswerInput';
+import { columnDigitSpec } from '@/domain/column-arithmetic-input';
 import { DRILL_SCHEMA_VERSION, type ProblemDto } from '@/domain/drill-engine';
 
 function additionProblem(): ProblemDto {
@@ -32,13 +33,14 @@ describe('ColumnArithmeticAnswerInput', () => {
   it('renders each place as an independent selectable grid slot', () => {
     const onSelectDigit = vi.fn();
     const problem = additionProblem();
+    const spec = columnDigitSpec(problem, 'single');
     const { container } = render(
       <ColumnArithmeticAnswerInput
         problem={problem}
         problemNumber={1}
         slot="single"
         value={{ type: 'empty' }}
-        selectedDigit={3}
+        selectedDigit={spec.initialIndex}
         readOnly={false}
         onSelectDigit={onSelectDigit}
       />,
@@ -52,7 +54,7 @@ describe('ColumnArithmeticAnswerInput', () => {
     const ones = screen.getByRole('button', { name: /1番の答え 一の位/ });
     expect(ones).toHaveClass('column-digit-slot-selected');
     fireEvent.click(ones);
-    expect(onSelectDigit).toHaveBeenCalledWith(3);
+    expect(onSelectDigit).toHaveBeenCalledWith(spec.initialIndex);
   });
 
   it('keeps each digit visible but removes edit controls after grading locks the answer', () => {
@@ -73,6 +75,7 @@ describe('ColumnArithmeticAnswerInput', () => {
   });
   it('moves real DOM focus with the selected digit so no stale keyboard-focus box remains', () => {
     const problem = additionProblem();
+    const spec = columnDigitSpec(problem, 'single');
     const onSelectDigit = vi.fn();
     const { rerender } = render(
       <ColumnArithmeticAnswerInput
@@ -80,7 +83,7 @@ describe('ColumnArithmeticAnswerInput', () => {
         problemNumber={1}
         slot="single"
         value={{ type: 'empty' }}
-        selectedDigit={3}
+        selectedDigit={spec.initialIndex}
         readOnly={false}
         onSelectDigit={onSelectDigit}
       />,
@@ -93,7 +96,7 @@ describe('ColumnArithmeticAnswerInput', () => {
         problemNumber={1}
         slot="single"
         value={{ type: 'empty' }}
-        selectedDigit={2}
+        selectedDigit={spec.initialIndex - 1}
         readOnly={false}
         onSelectDigit={onSelectDigit}
       />,

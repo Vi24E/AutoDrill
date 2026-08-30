@@ -85,6 +85,7 @@ describe('column arithmetic digit grid', () => {
     const unsolved = render(<ProblemExpression problem={problem} />);
     expect(unsolved.container.querySelectorAll('.column-arithmetic-rule')).toHaveLength(1);
     expect(unsolved.container.querySelectorAll('.column-arithmetic-final-rule')).toHaveLength(0);
+    expect(unsolved.container.querySelector('.column-arithmetic-rule')?.nextElementSibling).toBeNull();
     unsolved.unmount();
 
     const solved = render(<ProblemExpression problem={problem} solution />);

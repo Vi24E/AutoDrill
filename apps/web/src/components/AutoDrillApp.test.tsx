@@ -429,9 +429,11 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     const firstProblem = await screen.findByTestId('problem-cell-0');
     const quotientDigits = within(firstProblem).getAllByRole('button', { name: /^1番の商 / });
-    expect(quotientDigits).toHaveLength(2);
+    expect(quotientDigits).toHaveLength(3);
 
-    fireEvent.click(quotientDigits[0]!);
+    // All dividend-aligned quotient positions are offered so the UI does not
+    // reveal that this particular quotient starts in the second cell.
+    fireEvent.click(quotientDigits[1]!);
     fireEvent.keyDown(window, { key: '3' });
     fireEvent.keyDown(window, { key: '2' });
 
@@ -558,7 +560,7 @@ describe('AutoDrillApp', () => {
     expect(secondProblem.querySelector('.digit-grid-cell-selected')).not.toBeNull();
   });
 
-  it('shows Mini Sudoku corrections in red without a separate wrong-problem mark', async () => {
+  it('shows Mini Sudoku corrections with the common wrong-problem mark above its number', async () => {
     const worksheet = miniSudokuFixtureWorksheet();
     render(
       <AutoDrillApp
@@ -571,7 +573,11 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '採点' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 / 4'));
     expect(document.querySelectorAll('.digit-grid-cell-correction').length).toBeGreaterThan(0);
-    expect(document.querySelector('.mini-sudoku-result-mark')).toBeNull();
+    const firstProblem = screen.getByTestId('problem-cell-0');
+    const wrongMark = within(firstProblem).getByLabelText('不正解');
+    expect(wrongMark).toHaveTextContent('✓');
+    expect(wrongMark).toHaveClass('problem-grade-mark-wrong');
+    expect(wrongMark.parentElement).toHaveClass('problem-number-stack');
   });
 
   it('renders simultaneous equations with separate x and y answer boxes and 12 problems', async () => {
@@ -1277,6 +1283,9 @@ describe('AutoDrillApp', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 / 20'), {
       timeout: 1000,
     });
+    const correctMark = within(screen.getByTestId('problem-cell-0')).getByLabelText('正解');
+    expect(correctMark).toHaveTextContent('○');
+    expect(correctMark).toHaveClass('problem-grade-mark-correct');
   });
 
   it('locks grading synchronously and rejects a same-tick second grade request', async () => {
@@ -1520,6 +1529,11 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '採点' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 / 20'));
 
+    const firstProblem = screen.getByTestId('problem-cell-0');
+    const wrongMark = within(firstProblem).getByLabelText('不正解');
+    expect(wrongMark).toHaveTextContent('✓');
+    expect(wrongMark).toHaveClass('problem-grade-mark-wrong');
+    expect(wrongMark.parentElement).toHaveClass('problem-number-stack');
     expect(answerFrame(screen.getByRole('textbox', { name: '1番の答え 9' }))).toHaveClass('answer-box-wrong');
     expect(answerFrame(screen.getByRole('textbox', { name: '2番の答え 未入力' }))).toHaveClass('answer-box-wrong');
     expect(within(screen.getByTestId('problem-cell-0')).getByLabelText('正しい答え 2')).toHaveTextContent('2');

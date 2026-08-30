@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { columnArithmeticGridVariables, columnArithmeticWorkingRows } from '@/domain/column-arithmetic-presentation';
+import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
 import type { ArithmeticExpression, ProblemDto } from '@/domain/drill-engine';
 
 function columnProblem(operator: 'add' | 'multiply' | 'divide', left: ArithmeticExpression, right: ArithmeticExpression): ProblemDto {
@@ -29,18 +29,23 @@ describe('column arithmetic presentation grid', () => {
     const problem = columnProblem('add', { kind: 'integer', value: 57 }, { kind: 'integer', value: 38 });
     expect(columnArithmeticGridVariables(problem)).toEqual({
       '--column-operator-width': 'calc(1 * var(--worksheet-grid-cell))',
-      '--column-digit-width': 'calc(2 * var(--worksheet-grid-cell))',
-      '--column-working-rows': '0',
+      '--column-digit-width': 'calc(3 * var(--worksheet-grid-cell))',
+      '--column-total-width': 'calc(3 * var(--worksheet-grid-cell))',
     });
   });
 
-  it('derives multiplication workspace only from the shared integer-grid policy', () => {
+  it('reserves the maximum possible product width without adding a blank work row', () => {
     const oneDigit = columnProblem('multiply', { kind: 'integer', value: 91 }, { kind: 'integer', value: 3 });
     const twoDigit = columnProblem('multiply', { kind: 'integer', value: 91 }, { kind: 'integer', value: 23 });
-    expect(columnArithmeticWorkingRows(oneDigit)).toBe(0);
-    expect(columnArithmeticWorkingRows(twoDigit)).toBe(1);
-    expect(columnArithmeticGridVariables(oneDigit)['--column-working-rows']).toBe('0');
-    expect(columnArithmeticGridVariables(twoDigit)['--column-working-rows']).toBe('1');
+    expect(columnArithmeticGridVariables(oneDigit)).toMatchObject({
+      '--column-digit-width': 'calc(3 * var(--worksheet-grid-cell))',
+      '--column-total-width': 'calc(3 * var(--worksheet-grid-cell))',
+    });
+    expect(columnArithmeticGridVariables(twoDigit)).toMatchObject({
+      '--column-digit-width': 'calc(4 * var(--worksheet-grid-cell))',
+      '--column-total-width': 'calc(4 * var(--worksheet-grid-cell))',
+    });
+    expect(columnArithmeticGridVariables(twoDigit)).not.toHaveProperty('--column-working-rows');
   });
 
   it('sizes integer long division to the actual divisor and dividend digits', () => {
@@ -53,7 +58,7 @@ describe('column arithmetic presentation grid', () => {
     expect(columnArithmeticGridVariables(problem)).toEqual({
       '--column-operator-width': 'calc(1 * var(--worksheet-grid-cell))',
       '--column-digit-width': 'calc(3 * var(--worksheet-grid-cell))',
-      '--column-working-rows': '0',
+      '--column-total-width': 'calc(4 * var(--worksheet-grid-cell))',
       '--column-division-active-width': 'calc(3 * var(--worksheet-grid-cell))',
       '--column-division-work-rows': '3',
       '--column-remainder-width': 'calc(2 * var(--worksheet-grid-cell))',
