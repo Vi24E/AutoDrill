@@ -884,16 +884,24 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 .problem-cell-column-arithmetic .problem-number-stack {
   position: absolute;
-  /* Keep every problem number at the same grid-relative location as problem 1.
-     The expression start is snapped to the page grid per row, so deriving the
-     number from that anchor prevents cumulative fractional-row drift. */
-  top: calc(var(--column-expression-top-offset, var(--worksheet-grid-cell)) - .85 * var(--worksheet-grid-cell));
-  right: calc(var(--column-lane-right-offset, 0px) + var(--column-operator-width) + var(--column-operand-width) - 1.7 * var(--worksheet-grid-cell));
-  width: auto;
+  inset: auto;
+  /* The number is a real page-grid cell inside the already-snapped arithmetic
+     lane. No logical problem-cell percentage or second positioning model is
+     involved. */
+  top: calc(-1 * var(--worksheet-grid-cell));
+  left: calc(var(--column-total-width) - var(--column-operator-width) - var(--column-operand-width));
+  display: grid;
+  width: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  place-items: center;
+}
+.problem-cell-column-arithmetic-divide .problem-number-stack {
+  left: 0;
 }
 .problem-cell-column-arithmetic .problem-number { font-size: 14px; }
 .problem-cell-column-arithmetic .expression {
-  position: static;
+  position: relative;
+  inset: auto;
   grid-column: 1;
   grid-row: 2;
   display: block;
@@ -1206,7 +1214,8 @@ button.column-digit-slot:focus { outline: none; }
   justify-items: stretch;
 }
 .problem-cell-column-arithmetic-divide .expression {
-  position: static;
+  position: relative;
+  inset: auto;
   grid-column: 1;
   grid-row: 4;
   width: var(--column-total-width);
@@ -1548,19 +1557,26 @@ button.column-digit-slot:focus { outline: none; }
 
 /* Fixed digit-grid puzzles share the worksheet page grid but own no column-arithmetic geometry. */
 .problem-cell-mini-sudoku {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-content: start;
-  justify-items: center;
-  padding: calc(1.1 * var(--worksheet-grid-cell)) calc(.5 * var(--worksheet-grid-cell)) 0;
+  display: block;
+  padding: 0;
   overflow: hidden;
 }
 .problem-cell-mini-sudoku > .problem-number-stack {
-  justify-self: start;
+  position: absolute;
+  inset: auto;
+  top: var(--mini-sudoku-number-top);
+  left: var(--mini-sudoku-number-left);
+  display: grid;
+  width: var(--worksheet-grid-cell);
+  height: var(--worksheet-grid-cell);
+  place-items: center;
 }
 .problem-cell-mini-sudoku > .mini-sudoku-grid {
-  grid-column: 1 / -1;
-  margin-top: calc(.45 * var(--worksheet-grid-cell));
+  position: absolute;
+  inset: auto;
+  top: var(--mini-sudoku-grid-top);
+  left: var(--mini-sudoku-grid-left);
+  margin: 0;
 }
 .mini-sudoku-grid {
   --digit-grid-cell-size: calc(var(--digit-grid-cell-span) * var(--worksheet-grid-cell));

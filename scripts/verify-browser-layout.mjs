@@ -742,12 +742,15 @@ function exerciseInputPanelActionsProbe() {
   })()`;
 }
 
-function browserColumnGridAlignment(root) {
+function browserWorksheetGridAlignment(root) {
   if (!root) return { applicable: false, reason: 'missing root', maxError: 0, sampleCount: 0, worst: null };
   const grid = root.matches?.('.problem-grid-worksheet-grid') ? root : root.querySelector?.('.problem-grid-worksheet-grid');
   if (!grid) return { applicable: false, reason: 'missing worksheet grid', maxError: 0, sampleCount: 0, worst: null };
-  const cells = [...root.querySelectorAll('.problem-cell-column-arithmetic')];
-  if (cells.length === 0) return { applicable: false, reason: 'no column arithmetic cells', maxError: 0, sampleCount: 0, worst: null };
+  const columnCells = [...root.querySelectorAll('.problem-cell-column-arithmetic')];
+  const miniSudokuCells = [...root.querySelectorAll('.problem-cell-mini-sudoku')];
+  if (columnCells.length === 0 && miniSudokuCells.length === 0) {
+    return { applicable: false, reason: 'no worksheet-grid presentation cells', maxError: 0, sampleCount: 0, worst: null };
+  }
 
   const gridRect = grid.getBoundingClientRect();
   const gridStyle = getComputedStyle(grid);
@@ -795,10 +798,12 @@ function browserColumnGridAlignment(root) {
     }
   };
 
-  for (const cell of cells) {
+  for (const cell of columnCells) {
     const problem = Number(cell.dataset.problemIndex ?? cell.dataset.printProblemIndex ?? -1) + 1;
     const lane = cell.querySelector('.column-arithmetic');
     if (lane) recordRect(problem, 'lane', lane.getBoundingClientRect(), 'x');
+    const problemNumberCell = cell.querySelector('.problem-number-stack');
+    if (problemNumberCell) recordRect(problem, 'problem-number-cell', problemNumberCell.getBoundingClientRect());
     for (const digit of cell.querySelectorAll('.column-arithmetic-digit-cell')) {
       recordRect(problem, 'digit-cell', digit.getBoundingClientRect());
     }
@@ -824,6 +829,17 @@ function browserColumnGridAlignment(root) {
     }
   }
 
+  for (const cell of miniSudokuCells) {
+    const problem = Number(cell.dataset.problemIndex ?? cell.dataset.printProblemIndex ?? -1) + 1;
+    const problemNumberCell = cell.querySelector('.problem-number-stack');
+    if (problemNumberCell) recordRect(problem, 'problem-number-cell', problemNumberCell.getBoundingClientRect());
+    const board = cell.querySelector('.mini-sudoku-grid');
+    if (board) recordRect(problem, 'mini-sudoku-grid', board.getBoundingClientRect());
+    for (const digitCell of cell.querySelectorAll('.mini-sudoku-grid [data-digit-grid-cell]')) {
+      recordRect(problem, 'mini-sudoku-cell', digitCell.getBoundingClientRect());
+    }
+  }
+
   const roundedWorst = worst ? { ...worst, error: Math.round(worst.error * 1000) / 1000, value: Math.round(worst.value * 1000) / 1000 } : null;
   return {
     applicable: true,
@@ -839,7 +855,7 @@ function browserColumnLaneSafety(root) {
   const page = root.matches?.('.paper, .worksheet-print-page') ? root : root.closest?.('.paper, .worksheet-print-page') ?? root.querySelector?.('.paper, .worksheet-print-page') ?? root;
   const pageRect = page.getBoundingClientRect();
   const items = [...root.querySelectorAll('.problem-cell-column-arithmetic')].flatMap((cell) => {
-    const rects = [...cell.querySelectorAll('.column-arithmetic, .column-answer-user, .column-answer-correction, .column-division-answer-coordinate, .column-division-correction')]
+    const rects = [...cell.querySelectorAll('.problem-number-stack, .column-arithmetic, .column-answer-user, .column-answer-correction, .column-division-answer-coordinate, .column-division-correction')]
       .map((element) => element.getBoundingClientRect())
       .filter((rect) => rect.width > 0 && rect.height > 0);
     if (rects.length === 0) return [];
@@ -886,16 +902,16 @@ function browserColumnLaneSafety(root) {
   return issues;
 }
 
-function columnPrintAlignmentProbe() {
+function worksheetGridPrintAlignmentProbe() {
   return `(async () => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
       throw new Error('Timed out waiting for ' + label);
     };
-    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
+    const measureWorksheetGridAlignment = ${browserWorksheetGridAlignment.toString()};
     const print = document.querySelector('button[aria-label="印刷"]');
-    if (!print) throw new Error('Missing print button for column alignment probe');
+    if (!print) throw new Error('Missing print button for worksheet-grid alignment probe');
     print.click();
     const preview = await waitFor(() => document.querySelector('.worksheet-print-preview'), 'print preview');
     await document.fonts.ready;
@@ -909,8 +925,8 @@ function columnPrintAlignmentProbe() {
     }
     const problemPage = preview.querySelector('[data-print-page="problems"]');
     const answerPage = preview.querySelector('[data-print-page="answers"]');
-    const problems = measureColumnGridAlignment(problemPage);
-    const answers = measureColumnGridAlignment(answerPage);
+    const problems = measureWorksheetGridAlignment(problemPage);
+    const answers = measureWorksheetGridAlignment(answerPage);
     const back = preview.querySelector('.worksheet-print-preview-back')
       ?? [...preview.querySelectorAll('button')].find((button) => button.textContent?.trim() === '戻る');
     back?.click();
@@ -923,7 +939,7 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
   return `(async () => {
     const seed = ${JSON.stringify(seed)};
     const difficultyLabel = ${JSON.stringify(difficultyLabel)};
-    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
+    const measureWorksheetGridAlignment = ${browserWorksheetGridAlignment.toString()};
     const measureColumnLaneSafety = ${browserColumnLaneSafety.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
@@ -965,34 +981,33 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
     const columnGridMismatches = [];
     for (const cell of cells) {
       const column = Number(cell.dataset.layoutColumn);
-      // Check every cell boundary rather than a single center divider so 4-column
-      // printable themes get the same clipping guarantees as legacy 2-column themes.
-      const boundarySelector = cell.classList.contains('problem-cell-column-arithmetic')
-        ? '.problem-number'
-        : '.problem-number, math-span.problem-math-expression, .liar-statements, .mini-sudoku-grid, .problem-answer-area';
-      const rects = [...cell.querySelectorAll(boundarySelector)]
-        .map((element) => element.getBoundingClientRect())
-        .filter((rect) => rect.width > 0 && rect.height > 0);
-      if (rects.length === 0) continue;
-      const cellRect = cell.getBoundingClientRect();
-      const minLeft = Math.min(...rects.map((rect) => rect.left));
-      const maxRight = Math.max(...rects.map((rect) => rect.right));
-      const overflow = Math.max(cellRect.left - minLeft, maxRight - cellRect.right);
-      if (overflow > 1) {
-        crossings.push({
-          problem: Number(cell.dataset.problemIndex) + 1,
-          column,
-          overflow: Math.round(overflow * 10) / 10,
-          expression: cell.querySelector('math-span')?.getAttribute('aria-label') ?? cell.querySelector('.expression')?.textContent ?? '',
-          promptAria: cell.querySelector('.column-arithmetic')?.getAttribute('aria-label') ?? null,
-          cellWidth: Math.round(cellRect.width * 10) / 10,
-          expressionWidth: Math.round((cell.querySelector('.column-arithmetic')?.getBoundingClientRect().width ?? 0) * 10) / 10,
-          operatorWidth: getComputedStyle(cell).getPropertyValue('--column-operator-width').trim(),
-          digitWidth: getComputedStyle(cell).getPropertyValue('--column-digit-width').trim(),
-          laneRightOffset: getComputedStyle(cell).getPropertyValue('--column-lane-right-offset').trim(),
-        });
+      const isColumnArithmetic = cell.classList.contains('problem-cell-column-arithmetic');
+      // Ordinary worksheet content is owned by its logical A4 cell, so crossing
+      // that cell is a clipping/layout failure. Column arithmetic is different:
+      // its canonical owner is the page-wide worksheet grid, and a correctly
+      // snapped lane may cross an invisible logical cell edge. For column lanes
+      // we check actual page overflow and sibling-lane overlap below instead.
+      if (!isColumnArithmetic) {
+        const boundarySelector = '.problem-number, math-span.problem-math-expression, .liar-statements, .mini-sudoku-grid, .problem-answer-area';
+        const rects = [...cell.querySelectorAll(boundarySelector)]
+          .map((element) => element.getBoundingClientRect())
+          .filter((rect) => rect.width > 0 && rect.height > 0);
+        if (rects.length > 0) {
+          const cellRect = cell.getBoundingClientRect();
+          const minLeft = Math.min(...rects.map((rect) => rect.left));
+          const maxRight = Math.max(...rects.map((rect) => rect.right));
+          const overflow = Math.max(cellRect.left - minLeft, maxRight - cellRect.right);
+          if (overflow > 1) {
+            crossings.push({
+              problem: Number(cell.dataset.problemIndex) + 1,
+              column,
+              overflow: Math.round(overflow * 10) / 10,
+              expression: cell.querySelector('math-span')?.getAttribute('aria-label') ?? cell.querySelector('.expression')?.textContent ?? '',
+            });
+          }
+        }
       }
-      if (cell.classList.contains('problem-cell-column-arithmetic')) {
+      if (isColumnArithmetic) {
         const divide = cell.classList.contains('problem-cell-column-arithmetic-divide');
         const reference = divide
           ? cell.querySelector('.column-division-bracket')?.getBoundingClientRect()
@@ -1005,33 +1020,46 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
           const laneLeft = cell.querySelector('.column-arithmetic')?.getBoundingClientRect().left ?? reference.left;
           const answerLaneLeft = answer.right - answer.width;
           let operatorDelta = 0;
-          let problemNumberGap = 0;
+          let problemNumberDelta = 0;
+          const problemNumberCell = cell.querySelector('.problem-number-stack')?.getBoundingClientRect();
+          const expressionLane = cell.querySelector('.column-arithmetic')?.getBoundingClientRect();
+          const digitCell = cell.querySelector('.column-arithmetic-digit-cell')?.getBoundingClientRect();
           if (!divide) {
             const row = cell.querySelector('.column-arithmetic-row-bottom')?.getBoundingClientRect();
             const operator = cell.querySelector('.column-arithmetic-row-bottom .column-arithmetic-operator')?.getBoundingClientRect();
-            const problemNumber = cell.querySelector('.problem-number-stack')?.getBoundingClientRect();
-            const expressionLane = cell.querySelector('.column-arithmetic')?.getBoundingClientRect();
-            const digitCell = cell.querySelector('.column-arithmetic-digit-cell')?.getBoundingClientRect();
             const topDigits = cell.querySelectorAll('.column-arithmetic-row-top .column-arithmetic-digit-cell').length;
             const bottomDigits = cell.querySelectorAll('.column-arithmetic-row-bottom .column-arithmetic-digit-cell').length;
             const operandDigits = Math.max(topDigits, bottomDigits);
-            if (row && operator && problemNumber && expressionLane && digitCell && operandDigits > 0) {
+            if (row && operator && problemNumberCell && expressionLane && digitCell && operandDigits > 0) {
               const expectedOperatorRight = row.right - operandDigits * digitCell.width;
-              operatorDelta = Math.abs(operator.right - expectedOperatorRight);
-              const problemGroupLeft = expectedOperatorRight - operator.width;
-              problemNumberGap = problemGroupLeft - problemNumber.right;
-              const problemNumberRelativeXCells = (problemNumber.right - problemGroupLeft) / digitCell.width;
-              const problemNumberRelativeYCells = (expressionLane.top - problemNumber.top) / digitCell.height;
-              const problemNumberPlacementDelta = Math.max(
-                Math.abs(problemNumberRelativeXCells - 1.7) * digitCell.width,
-                Math.abs(problemNumberRelativeYCells - 0.85) * digitCell.height,
+              const expectedOperatorLeft = expectedOperatorRight - operator.width;
+              operatorDelta = Math.max(
+                Math.abs(operator.left - expectedOperatorLeft),
+                Math.abs(operator.right - expectedOperatorRight),
               );
-              if (problemNumberPlacementDelta > 1) {
-                operatorDelta = Math.max(operatorDelta, problemNumberPlacementDelta);
-              }
+              problemNumberDelta = Math.max(
+                Math.abs(problemNumberCell.left - expectedOperatorLeft),
+                Math.abs(problemNumberCell.right - expectedOperatorRight),
+                Math.abs(problemNumberCell.bottom - expressionLane.top),
+                Math.abs(problemNumberCell.width - digitCell.width),
+                Math.abs(problemNumberCell.height - digitCell.height),
+              );
             }
+          } else if (problemNumberCell && expressionLane && digitCell) {
+            problemNumberDelta = Math.max(
+              Math.abs(problemNumberCell.left - expressionLane.left),
+              Math.abs(problemNumberCell.right - (expressionLane.left + digitCell.width)),
+              Math.abs(problemNumberCell.bottom - expressionLane.top),
+              Math.abs(problemNumberCell.width - digitCell.width),
+              Math.abs(problemNumberCell.height - digitCell.height),
+            );
           }
-          const horizontalDelta = Math.max(leftDelta, Math.max(0, laneLeft - answerLaneLeft), operatorDelta);
+          const horizontalDelta = Math.max(
+            leftDelta,
+            Math.max(0, laneLeft - answerLaneLeft),
+            operatorDelta,
+            problemNumberDelta,
+          );
           let verticalDelta = 0;
           let expectedTop = null;
           if (!divide) {
@@ -1043,7 +1071,7 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
               problem: Number(cell.dataset.problemIndex) + 1,
               horizontalDelta: Math.round(horizontalDelta * 10) / 10,
               operatorDelta: Math.round(operatorDelta * 10) / 10,
-              problemNumberGap: Math.round(problemNumberGap * 10) / 10,
+              problemNumberDelta: Math.round(problemNumberDelta * 10) / 10,
               verticalDelta: Math.round(verticalDelta * 10) / 10,
               expectedTop: expectedTop === null ? null : Math.round(expectedTop * 10) / 10,
               actualTop: Math.round(answer.top * 10) / 10,
@@ -1058,8 +1086,8 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
     const gradeClass = [...paper.classList].find((name) => name.startsWith('worksheet-grade-')) ?? null;
     const expression = paper.querySelector('.expression');
     const fontSize = expression ? getComputedStyle(expression).fontSize : null;
-    const columnGridAlignment = measureColumnGridAlignment(paper);
-    return { crossings, columnGridMismatches, columnGridAlignment, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
+    const worksheetGridAlignment = measureWorksheetGridAlignment(paper);
+    return { crossings, columnGridMismatches, worksheetGridAlignment, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
   })()`;
 }
 
@@ -1182,6 +1210,7 @@ function simultaneousInputProbe() {
 
 function miniSudokuInputProbe() {
   return `(async () => {
+    const measureWorksheetGridAlignment = ${browserWorksheetGridAlignment.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -1217,6 +1246,11 @@ function miniSudokuInputProbe() {
       boxShadow: overlayStyle.boxShadow,
       backgroundImage: overlayStyle.backgroundImage,
     };
+    document.querySelector('button[aria-label="採点"]')?.click();
+    await waitFor(() => document.querySelector('.grade-result-panel'), 'mini sudoku grading');
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const gradedGridAlignment = measureWorksheetGridAlignment(document.querySelector('.worksheet-screen .paper'));
     return {
       gridCount: grids.length,
       counts,
@@ -1227,13 +1261,14 @@ function miniSudokuInputProbe() {
       gridWidthDelta: Math.abs(gridRect.width - 4 * cellSize),
       overlay,
       panelDigitGrid: panel.classList.contains('input-panel-digit-grid'),
+      gradedGridAlignment,
     };
   })()`;
 }
 
 function columnAdditionInputProbe() {
   return `(async () => {
-    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
+    const measureWorksheetGridAlignment = ${browserWorksheetGridAlignment.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -1270,7 +1305,7 @@ function columnAdditionInputProbe() {
     const firstSlot = slots[0];
     const expressionFont = getComputedStyle(expression).fontFamily;
     const slotFont = getComputedStyle(firstSlot).fontFamily;
-    const selectedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
+    const selectedGridAlignment = measureWorksheetGridAlignment(document.querySelector('.worksheet-screen .paper'));
 
     document.querySelector('button[aria-label="採点"]')?.click();
     const feedback = await waitFor(() => {
@@ -1301,7 +1336,7 @@ function columnAdditionInputProbe() {
     const minMarkFontPx = Math.min(...feedback.map((mark) => parseFloat(getComputedStyle(mark).fontSize || '0')));
     const problemNumberFontPx = firstProblemNumber ? parseFloat(getComputedStyle(firstProblemNumber).fontSize || '0') : 0;
     const markToNumberFontRatio = problemNumberFontPx > 0 ? minMarkFontPx / problemNumberFontPx : null;
-    const gradedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
+    const gradedGridAlignment = measureWorksheetGridAlignment(document.querySelector('.worksheet-screen .paper'));
     return {
       fieldCount: editors.length,
       value,
@@ -1383,16 +1418,11 @@ function columnDivisionKeyboardTargetProbe() {
       return values.length === 12 ? values : null;
     }, '12 remainder fields for physical keyboard probe');
     const field = remainders[7];
-    const frame = field?.closest('.answer-box');
-    const cell = field?.closest('.problem-cell-column-arithmetic-divide');
-    if (!field || !frame || !cell) throw new Error('Missing right-edge remainder field for physical keyboard probe');
+    if (!field) throw new Error('Missing remainder field for physical keyboard probe');
     const rect = field.getBoundingClientRect();
-    const frameRect = frame.getBoundingClientRect();
-    const cellRect = cell.getBoundingClientRect();
     return {
       x: (rect.left + rect.right) / 2,
       y: (rect.top + rect.bottom) / 2,
-      crossesLogicalCell: frameRect.right > cellRect.right + 1,
       ariaLabel: field.getAttribute('aria-label'),
     };
   })()`;
@@ -1426,7 +1456,7 @@ function columnDivisionKeyboardFocusProbe() {
 
 function columnDivisionInputProbe() {
   return `(async () => {
-    const measureColumnGridAlignment = ${browserColumnGridAlignment.toString()};
+    const measureWorksheetGridAlignment = ${browserWorksheetGridAlignment.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label) => {
       for (let i = 0; i < 400; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
@@ -1464,14 +1494,10 @@ function columnDivisionInputProbe() {
     const quotientValue = [...quotient.querySelectorAll('.column-digit-slot-active')].map((slot) => slot.textContent?.trim() ?? '').join('').replace(/^0+(?=[0-9])/, '');
     const remainderValue = remainder.value;
     const noticeAfterAutoRemainder = document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null;
-    const autoCellRect = remainder.closest('.problem-cell-column-arithmetic-divide')?.getBoundingClientRect();
-    const autoFrameRect = remainder.closest('.answer-box')?.getBoundingClientRect();
-    const autoRemainderCrossesLogicalCell = Boolean(autoCellRect && autoFrameRect && autoFrameRect.right > autoCellRect.right + 1);
 
-    // M-039 regression: use an answer field in the rightmost worksheet column,
-    // where shared page-grid alignment intentionally places the fixed remainder
-    // frame beyond the logical problem-cell edge. Direct click must still accept
-    // ordinary big-endian integer input without invoking the formula overflow guard.
+    // Exercise a separate remainder field through direct click as well as the
+    // automatic quotient-to-remainder transition. Logical problem-cell crossing
+    // is presentation-dependent and is not an input semantic invariant.
     const directRemainder = remainders.at(-1);
     directRemainder?.click();
     await sleep(80);
@@ -1482,13 +1508,10 @@ function columnDivisionInputProbe() {
     }
     const directRemainderValue = directRemainder?.value ?? null;
     const noticeAfterDirectRemainder = document.querySelector('.worksheet-toast')?.getAttribute('aria-label') ?? null;
-    const directCellRect = directRemainder?.closest('.problem-cell-column-arithmetic-divide')?.getBoundingClientRect();
-    const directFrameRect = directRemainder?.closest('.answer-box')?.getBoundingClientRect();
-    const directRemainderCrossesLogicalCell = Boolean(directCellRect && directFrameRect && directFrameRect.right > directCellRect.right + 1);
 
     const bracket = firstCell.querySelector('.column-division-bracket');
     const bracketPath = bracket?.querySelector('.column-division-bracket-mark path')?.getAttribute('d') ?? null;
-    const selectedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
+    const selectedGridAlignment = measureWorksheetGridAlignment(document.querySelector('.worksheet-screen .paper'));
     document.querySelector('button[aria-label="採点"]')?.click();
     await waitFor(() => document.querySelectorAll('.problem-cell-column-arithmetic-divide .problem-grade-mark').length === 12, 'division grading feedback');
     const gradedFirstCell = [...document.querySelectorAll('.problem-cell-column-arithmetic-divide')][3];
@@ -1507,7 +1530,7 @@ function columnDivisionInputProbe() {
     const quotientCorrectionColor = quotientCorrectionGlyph ? getComputedStyle(quotientCorrectionGlyph).color : null;
     const remainderCorrectionValue = remainderCorrection?.textContent?.trim() ?? null;
     const remainderCorrectionColor = remainderCorrection ? getComputedStyle(remainderCorrection).color : null;
-    const gradedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
+    const gradedGridAlignment = measureWorksheetGridAlignment(document.querySelector('.worksheet-screen .paper'));
     const returnButton = document.querySelector('button[aria-label="問題に戻る"]');
     returnButton?.click();
     await waitFor(() => document.querySelector('button[aria-label="採点"]')?.getAttribute('aria-pressed') === 'false', 'editing after grading');
@@ -1528,10 +1551,8 @@ function columnDivisionInputProbe() {
       quotientValue,
       remainderValue,
       noticeAfterAutoRemainder,
-      autoRemainderCrossesLogicalCell,
       directRemainderValue,
       noticeAfterDirectRemainder,
-      directRemainderCrossesLogicalCell,
       autoMovedToRemainder,
       quotientDirection: quotient.getAttribute('data-column-direction'),
       remainderUsesDigitSlots: Boolean(firstCell.querySelector('.column-digit-answer-remainder')),
@@ -1877,11 +1898,12 @@ function printPreviewProbe(seed) {
     const equalsCount = stacked.filter((cell) => cell.querySelector('math-span.problem-math-expression')?.getAttribute('aria-label')?.includes('=')).length;
     const cells = [...problemPage.querySelectorAll('.problem-cell')];
     const crossingDetails = cells.flatMap((cell) => {
+      // Column arithmetic is positioned by the page-wide worksheet grid, not by
+      // the invisible logical problem-cell edge. Its real page/sibling safety is
+      // measured below by measureColumnLaneSafety, matching the Web probe.
+      if (cell.classList.contains('problem-cell-column-arithmetic')) return [];
       const cellRect = cell.getBoundingClientRect();
-      const boundarySelector = cell.classList.contains('problem-cell-column-arithmetic')
-        ? '.problem-number'
-        : '.problem-number, math-span.problem-math-expression, .mini-sudoku-grid, .problem-answer-area';
-      const entries = [...cell.querySelectorAll(boundarySelector)]
+      const entries = [...cell.querySelectorAll('.problem-number, math-span.problem-math-expression, .mini-sudoku-grid, .problem-answer-area')]
         .map((element) => ({ element, rect: element.getBoundingClientRect() }))
         .filter(({ rect }) => rect.width > 0 && rect.height > 0);
       if (entries.length === 0) return [];
@@ -1901,7 +1923,6 @@ function printPreviewProbe(seed) {
             width: Math.round(rect.width * 10) / 10,
           })),
         cell: { left: Math.round(cellRect.left * 10) / 10, right: Math.round(cellRect.right * 10) / 10, width: Math.round(cellRect.width * 10) / 10 },
-        laneRightOffset: getComputedStyle(cell).getPropertyValue('--column-lane-right-offset').trim(),
       }];
     });
     crossingDetails.push(...measureColumnLaneSafety(problemPage).map((issue) => ({
@@ -2130,16 +2151,16 @@ try {
           console.warn(`[layout] column grid mismatch: ${route} seed=${seed} problem=${mismatch.problem} horizontal=${mismatch.horizontalDelta}px vertical=${mismatch.verticalDelta}px`);
           failures.push({ route, seed, reason: `column arithmetic answer is not on the shared digit grid`, ...mismatch });
         }
-        if (result.columnGridAlignment?.applicable && result.columnGridAlignment.maxError > 0.25) {
-          failures.push({ route, seed, reason: `column arithmetic paint is not aligned to the worksheet background grid`, alignment: result.columnGridAlignment });
+        if (result.worksheetGridAlignment?.applicable && result.worksheetGridAlignment.maxError > 0.25) {
+          failures.push({ route, seed, reason: `worksheet-grid paint is not aligned to the worksheet background grid`, alignment: result.worksheetGridAlignment });
         }
-        if (result.columnGridAlignment?.applicable && seed === SEEDS[0]) {
-          const printAlignment = await cdp.evaluate(columnPrintAlignmentProbe());
+        if (result.worksheetGridAlignment?.applicable && seed === SEEDS[0]) {
+          const printAlignment = await cdp.evaluate(worksheetGridPrintAlignmentProbe());
           if (!printAlignment.problems?.applicable || !printAlignment.answers?.applicable
             || printAlignment.problems.maxError > 0.5 || printAlignment.answers.maxError > 0.5) {
-            failures.push({ route, seed, reason: `column print problem/answer paint is not aligned to the worksheet background grid`, printAlignment });
+            failures.push({ route, seed, reason: `worksheet-grid print problem/answer paint is not aligned to the worksheet background grid`, printAlignment });
           }
-          console.log(`[grid] ${route} seed=${seed}: web=${result.columnGridAlignment.maxError}px print=${printAlignment.problems.maxError}px answer=${printAlignment.answers.maxError}px`);
+          console.log(`[grid] ${route} seed=${seed}: web=${result.worksheetGridAlignment.maxError}px print=${printAlignment.problems.maxError}px answer=${printAlignment.answers.maxError}px`);
         }
         if (cdp.consoleErrors.length > 0) failures.push({ route, seed, reason: `console errors: ${cdp.consoleErrors.join(' | ')}` });
         console.log(`[layout] ${route} seed=${seed}: ${result.count} problems, ${result.gradeClass}, expression ${result.fontSize}, crossings=${result.crossings.length}, gridMismatches=${result.columnGridMismatches?.length ?? 0}`);
@@ -2200,6 +2221,7 @@ try {
             || input.overlay.boxShadow === 'none'
             || (input.overlay.backgroundImage.match(/linear-gradient/g) ?? []).length < 4
             || !input.panelDigitGrid
+            || !input.gradedGridAlignment?.applicable || input.gradedGridAlignment.maxError > 0.25
           ) {
             failures.push({ route, seed, reason: `mini sudoku grid/input mismatch: ${JSON.stringify(input)}` });
           }
@@ -2261,8 +2283,7 @@ try {
           await typeKeyboardText(cdp, '1');
           const keyboardInput = await cdp.evaluate(columnDivisionKeyboardResultProbe());
           if (
-            !keyboardTarget.crossesLogicalCell
-            || !keyboardFocused
+            !keyboardFocused
             || keyboardAfterFirstDigit.value !== '2'
             || !keyboardInput.selected
             || keyboardInput.value !== '21'
@@ -2283,10 +2304,8 @@ try {
             || input.remainderLabel !== 'あまり'
             || input.remainderValue !== '21'
             || input.noticeAfterAutoRemainder === '式が大きすぎます！'
-            || !input.autoRemainderCrossesLogicalCell
             || input.directRemainderValue !== '21'
             || input.noticeAfterDirectRemainder === '式が大きすぎます！'
-            || !input.directRemainderCrossesLogicalCell
             || input.gradedDirectRemainderValue !== input.directRemainderValue
             || input.returnedQuotientValue !== input.quotientValue
             || input.returnedRemainderValue !== input.remainderValue

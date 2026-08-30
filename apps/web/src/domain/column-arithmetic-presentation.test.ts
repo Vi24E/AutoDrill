@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
+import { columnAddSubtractValueLayout, columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
 import { A4_PAGE } from '@/domain/layout';
 import { WORKSHEET_GRID_POINT } from '@/domain/worksheet-grid-presentation';
 import type { ArithmeticExpression, ProblemDto } from '@/domain/drill-engine';
@@ -34,6 +34,27 @@ describe('column arithmetic presentation grid', () => {
       '--column-operand-width': 'calc(2 * var(--worksheet-grid-cell))',
       '--column-digit-width': 'calc(3 * var(--worksheet-grid-cell))',
       '--column-total-width': 'calc(3 * var(--worksheet-grid-cell))',
+    });
+  });
+
+  it('uses the aligned decimal display width when whole and fractional maxima come from different operands', () => {
+    const layout = columnAddSubtractValueLayout(['12', '3.45']);
+    expect(layout).toEqual({
+      texts: ['12  ', ' 3.45'],
+      cellCount: 4,
+      usesDecimalAlignment: true,
+    });
+
+    const problem = columnProblem(
+      'add',
+      { kind: 'integer', value: 12 },
+      { kind: 'exact_decimal', coefficient: 345, scale: 2 },
+    );
+    expect(columnArithmeticGridVariables(problem)).toMatchObject({
+      '--column-operator-width': 'calc(1 * var(--worksheet-grid-cell))',
+      '--column-operand-width': 'calc(4 * var(--worksheet-grid-cell))',
+      '--column-digit-width': 'calc(5 * var(--worksheet-grid-cell))',
+      '--column-total-width': 'calc(5 * var(--worksheet-grid-cell))',
     });
   });
 

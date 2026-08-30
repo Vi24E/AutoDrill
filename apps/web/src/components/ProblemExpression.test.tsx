@@ -50,6 +50,20 @@ describe('column arithmetic digit grid', () => {
     expect(top.querySelectorAll('.column-arithmetic-decimal-marker')).toHaveLength(1);
   });
 
+  it('renders decimal add/subtract operands with the canonical aligned cell width', () => {
+    const problem = columnProblem(
+      { kind: 'column_arithmetic', operator: 'add', left: { kind: 'integer', value: 12 }, right: { kind: 'exact_decimal', coefficient: 345, scale: 2 } },
+      { type: 'exact_decimal', value: { coefficient: '1545', scale: 2 } },
+    );
+    const { container } = render(<ProblemExpression problem={problem} />);
+    const top = container.querySelector('.column-arithmetic-row-top')!;
+    const bottom = container.querySelector('.column-arithmetic-row-bottom')!;
+    expect(top.querySelectorAll('.column-arithmetic-digit-cell')).toHaveLength(4);
+    expect(bottom.querySelectorAll('.column-arithmetic-digit-cell')).toHaveLength(4);
+    expect(top.querySelectorAll('.column-arithmetic-digit-cell-empty')).toHaveLength(2);
+    expect(bottom.querySelectorAll('.column-arithmetic-digit-cell-empty')).toHaveLength(1);
+  });
+
   it('renders the long-division decimal point as a zero-width grid intersection marker', () => {
     const problem = columnProblem(
       { kind: 'column_arithmetic', operator: 'divide', left: { kind: 'exact_decimal', coefficient: 135, scale: 1 }, right: { kind: 'integer', value: 5 } },

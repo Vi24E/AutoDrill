@@ -34,6 +34,7 @@ import { RubyText, type RubyPart } from '@/components/RubyText';
 import { CustomSelect } from '@/components/CustomSelect';
 import { ColumnArithmeticAnswerInput } from '@/components/ColumnArithmeticAnswerInput';
 import { MiniSudokuGrid } from '@/components/MiniSudokuGrid';
+import { WorksheetProblemCell } from '@/components/WorksheetProblemCell';
 import { deleteEmptyMathLiveStructureBackward } from '@/components/mathlive-structure';
 import { useWorksheetAnswerController, type ColumnDigitSelection, type DigitGridSelection, type MathfieldSlot } from '@/components/useWorksheetAnswerController';
 import type { AutoDrillMathfield } from '@/components/MathLiveMath';
@@ -41,7 +42,6 @@ import { answerNodeLatex, answerPrefixLatex, mathTemplateInsertLatex } from '@/d
 import { initialDigitGridAnswer, replaceDigitGridCell } from '@/domain/digit-grid-input';
 import { liarPersonLabel } from '@/domain/problem-format';
 import { answerCoordinate, answerPresentationPlan } from '@/domain/answer-presentation';
-import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
 import { worksheetPageGridVariables } from '@/domain/worksheet-grid-presentation';
 import {
   columnAnswerPart,
@@ -2076,7 +2076,6 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
   const sharedLayout = buildSharedWorksheetLayout(worksheet);
   const worksheetTheme = findImplementedThemeByNumericId(worksheet.identity.numeric_theme_id) ?? ONE_DIGIT_ADDITION_THEME;
   const usesWorksheetGrid = worksheetTheme.presentation.worksheet_grid;
-  const isColumnArithmeticWorksheet = worksheetTheme.presentation.column_arithmetic;
   const isEquationWorksheet = worksheetTheme.presentation.equation_layout;
   const gradeBandClass = worksheetTheme.grade ? worksheetGradeBandClass(worksheetTheme.grade.number) : 'worksheet-grade-junior-high';
   const worksheetCategoryLabel = worksheetTheme.grade?.label ?? 'おまけ';
@@ -2172,62 +2171,55 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
               const isSelected = selectedIndex === index;
               const result = resultById.get(problem.problem_id);
               const position = getCellTopPosition(sharedLayout, cell);
-              const isLinearEquation = isEquationWorksheet;
-              const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
-              const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
-              const isMiniSudoku = problem.prompt.kind === 'mini_sudoku';
-              const stackAnswerBelow = worksheetTheme.worksheet.answerPlacement === 'below' && !isLinearEquation;
-              const cellStyle: CSSProperties = {
-                left: toPagePercent(position.x, A4_PAGE.width),
-                top: toPagePercent(position.y, A4_PAGE.height),
-                width: toPagePercent(position.width, A4_PAGE.width),
-                height: toPagePercent(position.height, A4_PAGE.height),
-                ...(isColumnArithmetic ? columnArithmeticGridVariables(problem, position) : {}),
-              };
               return (
-                <div className={`problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${isMiniSudoku ? 'problem-cell-mini-sudoku' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''} ${result ? 'problem-cell-graded' : ''}`} data-layout-index={index} data-layout-column={cell.column} data-problem-index={index} data-testid={`problem-cell-${index}`} style={cellStyle} key={problem.problem_id}>
-                  <span className="problem-number-stack">
-                    <ProblemGradeMark result={result} />
-                    <span className="problem-number">{index + 1}.</span>
-                  </span>
-                  {isMiniSudoku ? (
-                    <>
-                      <MiniSudokuGrid
-                        problem={problem}
-                        answer={answer}
-                        selectedCell={selectedDigitGridCell?.problemIndex === index ? selectedDigitGridCell.cellIndex : null}
-                        readOnly={worksheetPhase !== 'editing'}
-                        correctionAnswer={result && !result.correct ? problem.canonical_answer : null}
-                        onSelectCell={(cellIndex) => onSelectDigitGridCell(index, cellIndex)}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} /></span>
-                      <WorksheetAnswerField
-                        worksheetUi={worksheetUi}
-                        problem={problem}
-                        index={index}
-                        answer={answer}
-                        isSelected={isSelected}
-                        selectedSlot={selectedSlot}
-                        selectedColumnDigit={selectedColumnDigit}
-                        columnDrafts={columnDrafts}
-                        columnDecimalBoundaries={columnDecimalBoundaries}
-                        result={result}
-                        gradeResult={gradeResult}
-                        inputLocked={worksheetPhase !== 'editing'}
-                        answerPrefix={worksheetTheme.worksheet.answerPrefix}
-                        onSelect={onSelect}
-                        onSelectColumnDigit={onSelectColumnDigit}
-                        onRegisterMathfield={onRegisterMathfield}
-                        onMathInput={onMathInput}
-                        onCommit={onCommit}
-                        onTogglePerson={onTogglePerson}
-                      />
-                    </>
+                <WorksheetProblemCell
+                  problem={problem}
+                  index={index}
+                  position={position}
+                  answerPlacement={worksheetTheme.worksheet.answerPlacement}
+                  equationLayout={isEquationWorksheet}
+                  mode="web"
+                  layoutColumn={cell.column}
+                  graded={Boolean(result)}
+                  problemNumberAdornment={<ProblemGradeMark result={result} />}
+                  renderExpression={({ includeAnswerEquals }) => (
+                    <ProblemExpression problem={problem} includeAnswerEquals={includeAnswerEquals} />
                   )}
-                </div>
+                  answer={(
+                    <WorksheetAnswerField
+                      worksheetUi={worksheetUi}
+                      problem={problem}
+                      index={index}
+                      answer={answer}
+                      isSelected={isSelected}
+                      selectedSlot={selectedSlot}
+                      selectedColumnDigit={selectedColumnDigit}
+                      columnDrafts={columnDrafts}
+                      columnDecimalBoundaries={columnDecimalBoundaries}
+                      result={result}
+                      gradeResult={gradeResult}
+                      inputLocked={worksheetPhase !== 'editing'}
+                      answerPrefix={worksheetTheme.worksheet.answerPrefix}
+                      onSelect={onSelect}
+                      onSelectColumnDigit={onSelectColumnDigit}
+                      onRegisterMathfield={onRegisterMathfield}
+                      onMathInput={onMathInput}
+                      onCommit={onCommit}
+                      onTogglePerson={onTogglePerson}
+                    />
+                  )}
+                  miniSudoku={(
+                    <MiniSudokuGrid
+                      problem={problem}
+                      answer={answer}
+                      selectedCell={selectedDigitGridCell?.problemIndex === index ? selectedDigitGridCell.cellIndex : null}
+                      readOnly={worksheetPhase !== 'editing'}
+                      correctionAnswer={result && !result.correct ? problem.canonical_answer : null}
+                      onSelectCell={(cellIndex) => onSelectDigitGridCell(index, cellIndex)}
+                    />
+                  )}
+                  key={problem.problem_id}
+                />
               );
             })}
             {worksheetMetadata ? (

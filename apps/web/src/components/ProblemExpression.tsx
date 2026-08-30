@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { MathLiveStatic } from '@/components/MathLiveMath';
+import { columnAddSubtractValueLayout } from '@/domain/column-arithmetic-presentation';
 import { arithmeticLeafText, liarPersonLabel, liarStatementText, problemExpression } from '@/domain/problem-format';
 import { problemExpressionLatex } from '@/domain/mathlive-format';
 import { answerNodeText, type AnswerNode, type ArithmeticOperator, type ProblemDto } from '@/domain/drill-engine';
@@ -31,14 +32,6 @@ function ColumnGridValue({ text, className = '' }: { text: string; className?: s
   );
 }
 
-function splitDecimal(text: string): { whole: string; fraction: string | null } {
-  const dot = text.indexOf('.');
-  return dot < 0
-    ? { whole: text, fraction: null }
-    : { whole: text.slice(0, dot), fraction: text.slice(dot + 1) };
-}
-
-
 function LongDivisionBracket({ children }: { children: ReactNode }) {
   return (
     <span className="column-division-bracket">
@@ -49,12 +42,6 @@ function LongDivisionBracket({ children }: { children: ReactNode }) {
     </span>
   );
 }
-function AlignedColumnValue({ text, wholeWidth, fractionWidth }: { text: string; wholeWidth: number; fractionWidth: number }) {
-  const { whole, fraction } = splitDecimal(text);
-  const aligned = `${' '.repeat(Math.max(0, wholeWidth - whole.length))}${whole}${fraction === null ? ' '.repeat(fractionWidth) : `.${fraction.padEnd(fractionWidth, ' ')}`}`;
-  return <ColumnGridValue text={aligned} className="column-arithmetic-value-decimal" />;
-}
-
 
 function formatScaledDigits(coefficient: bigint, scale: number): string {
   const negative = coefficient < 0n;
@@ -75,19 +62,17 @@ function ColumnAddSubtractSolution({ problem }: { problem: ProblemDto }) {
   const leftText = arithmeticLeafText(left);
   const rightText = arithmeticLeafText(right);
   const answerText = answerScalarText(problem.canonical_answer);
-  const parts = [leftText, rightText, answerText].map(splitDecimal);
-  const alignDecimal = parts.some((part) => part.fraction !== null);
-  const wholeWidth = Math.max(...parts.map((part) => part.whole.length));
-  const fractionWidth = Math.max(...parts.map((part) => part.fraction?.length ?? 0));
-  const value = (text: string) => alignDecimal
-    ? <AlignedColumnValue text={text} wholeWidth={wholeWidth} fractionWidth={fractionWidth} />
-    : <ColumnGridValue text={text} />;
+  const layout = columnAddSubtractValueLayout([leftText, rightText, answerText]);
+  const [displayLeft = leftText, displayRight = rightText, displayAnswer = answerText] = layout.texts;
+  const value = (text: string) => (
+    <ColumnGridValue text={text} className={layout.usesDecimalAlignment ? 'column-arithmetic-value-decimal' : ''} />
+  );
   return (
     <span className={`column-arithmetic column-arithmetic-${operator} column-arithmetic-solution`} data-column-arithmetic={operator} data-column-solution="true">
-      <span className="column-arithmetic-row"><span className="column-arithmetic-operator-placeholder" />{value(leftText)}</span>
-      <span className="column-arithmetic-row"><span className="column-arithmetic-operator">{operator === 'add' ? '＋' : '−'}</span>{value(rightText)}</span>
+      <span className="column-arithmetic-row"><span className="column-arithmetic-operator-placeholder" />{value(displayLeft)}</span>
+      <span className="column-arithmetic-row"><span className="column-arithmetic-operator">{operator === 'add' ? '＋' : '−'}</span>{value(displayRight)}</span>
       <span className="column-arithmetic-rule" />
-      <span className="column-arithmetic-row column-arithmetic-solution-result"><span className="column-arithmetic-operator-placeholder" />{value(answerText)}</span>
+      <span className="column-arithmetic-row column-arithmetic-solution-result"><span className="column-arithmetic-operator-placeholder" />{value(displayAnswer)}</span>
     </span>
   );
 }
@@ -219,17 +204,18 @@ function ColumnArithmeticExpression({ problem, solution = false }: { problem: Pr
       </span>
     );
   }
-  const leftParts = splitDecimal(leftText);
-  const rightParts = splitDecimal(rightText);
-  const alignDecimal = (operator === 'add' || operator === 'subtract') && (leftParts.fraction !== null || rightParts.fraction !== null);
-  const wholeWidth = Math.max(leftParts.whole.length, rightParts.whole.length);
-  const fractionWidth = Math.max(leftParts.fraction?.length ?? 0, rightParts.fraction?.length ?? 0);
+  const layout = operator === 'add' || operator === 'subtract'
+    ? columnAddSubtractValueLayout([leftText, rightText])
+    : { texts: [leftText, rightText], usesDecimalAlignment: false };
+  const [displayLeft = leftText, displayRight = rightText] = layout.texts;
   const operatorText: Record<Exclude<ArithmeticOperator, 'divide'>, string> = { add: '＋', subtract: '−', multiply: '×' };
-  const value = (text: string) => alignDecimal ? <AlignedColumnValue text={text} wholeWidth={wholeWidth} fractionWidth={fractionWidth} /> : <ColumnGridValue text={text} />;
+  const value = (text: string) => (
+    <ColumnGridValue text={text} className={layout.usesDecimalAlignment ? 'column-arithmetic-value-decimal' : ''} />
+  );
   return (
     <span className={`column-arithmetic column-arithmetic-${operator}`} aria-label={ariaLabel} data-column-arithmetic={operator}>
-      <span className="column-arithmetic-row column-arithmetic-row-top"><span className="column-arithmetic-operator-placeholder" aria-hidden="true" />{value(leftText)}</span>
-      <span className="column-arithmetic-row column-arithmetic-row-bottom"><span className="column-arithmetic-operator" aria-hidden="true">{operatorText[operator]}</span>{value(rightText)}</span>
+      <span className="column-arithmetic-row column-arithmetic-row-top"><span className="column-arithmetic-operator-placeholder" aria-hidden="true" />{value(displayLeft)}</span>
+      <span className="column-arithmetic-row column-arithmetic-row-bottom"><span className="column-arithmetic-operator" aria-hidden="true">{operatorText[operator]}</span>{value(displayRight)}</span>
       <span className="column-arithmetic-rule" aria-hidden="true" />
     </span>
   );

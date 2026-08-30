@@ -508,6 +508,12 @@ describe('AutoDrillApp', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     const firstProblem = await screen.findByTestId('problem-cell-0');
+    expect([
+      '--mini-sudoku-grid-left',
+      '--mini-sudoku-grid-top',
+      '--mini-sudoku-number-left',
+      '--mini-sudoku-number-top',
+    ].every((property) => firstProblem.style.getPropertyValue(property).endsWith('cqw'))).toBe(true);
     const firstEditable = within(firstProblem).getByRole('button', { name: '2番目のマス 未入力' });
     fireEvent.click(firstEditable);
     const inputPanel = screen.getByLabelText('数式入力パネル');

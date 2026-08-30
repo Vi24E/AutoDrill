@@ -1,11 +1,18 @@
+import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
+import { A4_PAGE, type CellGeometry } from '@/domain/layout';
 import { arithmeticLeafText } from '@/domain/problem-format';
-import { A4_PAGE } from '@/domain/layout';
-import { WORKSHEET_GRID_POINT } from '@/domain/worksheet-grid-presentation';
+import {
+  WORKSHEET_GRID_POINT,
+  worksheetGridColumnAt,
+  worksheetGridLineX,
+  worksheetGridLineY,
+  worksheetGridPointOffsetCqw,
+  worksheetGridRowAt,
+} from '@/domain/worksheet-grid-presentation';
 
 const COLUMN_DIVISION_WORK_ROWS = 3;
 const COLUMN_REMAINDER_CELLS = 2;
 const COLUMN_LANE_RIGHT_SHIFT_CELLS = -2;
-import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
 
 export function columnAnswerScale(answer: AnswerNode): number {
   if (answer.type === 'exact_decimal') return answer.value.scale;
@@ -19,6 +26,36 @@ function answerScalar(answer: AnswerNode): AnswerNode {
 
 function gridCellCount(text: string): number {
   return [...text].filter((character) => character !== '.' && character !== '−' && character !== '-').length;
+}
+
+function splitColumnDecimal(text: string): { whole: string; fraction: string | null } {
+  const dot = text.indexOf('.');
+  return dot < 0
+    ? { whole: text, fraction: null }
+    : { whole: text.slice(0, dot), fraction: text.slice(dot + 1) };
+}
+
+export function columnAddSubtractValueLayout(values: readonly string[]): { texts: string[]; cellCount: number; usesDecimalAlignment: boolean } {
+  const parts = values.map(splitColumnDecimal);
+  const usesDecimalAlignment = parts.some((part) => part.fraction !== null);
+  if (!usesDecimalAlignment) {
+    return {
+      texts: [...values],
+      cellCount: Math.max(0, ...values.map(gridCellCount)),
+      usesDecimalAlignment: false,
+    };
+  }
+
+  const wholeWidth = Math.max(0, ...parts.map((part) => part.whole.length));
+  const fractionWidth = Math.max(0, ...parts.map((part) => part.fraction?.length ?? 0));
+  const texts = parts.map((part) => (
+    `${' '.repeat(Math.max(0, wholeWidth - part.whole.length))}${part.whole}${part.fraction === null ? ' '.repeat(fractionWidth) : `.${part.fraction.padEnd(fractionWidth, ' ')}`}`
+  ));
+  return {
+    texts,
+    cellCount: Math.max(0, ...texts.map(gridCellCount)),
+    usesDecimalAlignment: true,
+  };
 }
 
 type ColumnOperandShape = { coefficientDigits: number; scale: number; wholeDigits: number };
@@ -70,7 +107,6 @@ function longDivisionWorkedSolution(problem: ProblemDto): LongDivisionWorkedSolu
   return worked;
 }
 
-type CellGeometry = { x: number; y: number; width: number };
 
 export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; operandCells: number; digitCells: number; totalCells: number } {
   if (problem.prompt.kind !== 'column_arithmetic') return { operatorCells: 1, operandCells: 2, digitCells: 2, totalCells: 3 };
@@ -86,7 +122,9 @@ export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells:
       problem.prompt.right,
     );
     const operatorCells = 1;
-    const operandCells = Math.max(leftCells, rightCells);
+    const operandCells = problem.prompt.operator === 'add' || problem.prompt.operator === 'subtract'
+      ? columnAddSubtractValueLayout([leftText, rightText]).cellCount
+      : Math.max(leftCells, rightCells);
     const digitCells = Math.max(2, maximumAnswerCells);
     return {
       operatorCells,
@@ -120,7 +158,7 @@ export function columnArithmeticDigitCells(problem: ProblemDto): number {
   return columnArithmeticLaneCells(problem).digitCells;
 }
 
-export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGeometry): Record<string, string> {
+export function columnArithmeticGridVariables(problem: ProblemDto, cell?: Pick<CellGeometry, 'x' | 'y' | 'width'>): Record<string, string> {
   if (problem.prompt.kind !== 'column_arithmetic') return {};
   const { operatorCells, operandCells, digitCells, totalCells } = columnArithmeticLaneCells(problem);
   const variables: Record<string, string> = {
@@ -138,21 +176,20 @@ export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGe
     // boundary. The user-selected lane shift moves every written-arithmetic body
     // by the same integer number of grid cells, preserving page-wide alignment.
     const columnIndex = Math.max(0, Math.round((cell.x - A4_PAGE.margin) / cell.width));
-    const firstAnchor = Math.floor((A4_PAGE.margin + cell.width) / WORKSHEET_GRID_POINT);
+    const firstAnchor = worksheetGridColumnAt(A4_PAGE.margin + cell.width, 'floor');
     const anchorStride = Math.round(cell.width / WORKSHEET_GRID_POINT);
-    const snappedRight = (
+    const snappedRight = worksheetGridLineX(
       firstAnchor
       + COLUMN_LANE_RIGHT_SHIFT_CELLS
-      + columnIndex * anchorStride
-    ) * WORKSHEET_GRID_POINT;
+      + columnIndex * anchorStride,
+    );
     const rightOffset = cellRight - snappedRight;
-    variables['--column-lane-right-offset'] = `${(rightOffset / A4_PAGE.width) * 100}cqw`;
+    variables['--column-lane-right-offset'] = worksheetGridPointOffsetCqw(rightOffset);
 
-    const gridOriginY = A4_PAGE.margin + A4_PAGE.headerHeight;
     const desiredTop = cell.y + WORKSHEET_GRID_POINT;
-    const snappedTop = gridOriginY + Math.ceil((desiredTop - gridOriginY) / WORKSHEET_GRID_POINT) * WORKSHEET_GRID_POINT;
+    const snappedTop = worksheetGridLineY(worksheetGridRowAt(desiredTop, 'ceil'));
     const topOffset = Math.max(0, snappedTop - cell.y);
-    variables['--column-expression-top-offset'] = `${(topOffset / A4_PAGE.width) * 100}cqw`;
+    variables['--column-expression-top-offset'] = worksheetGridPointOffsetCqw(topOffset);
   }
 
   if (problem.prompt.operator === 'divide') {

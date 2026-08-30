@@ -4,13 +4,13 @@ import { useState, type CSSProperties } from 'react';
 import { MathLiveStatic } from '@/components/MathLiveMath';
 import { ProblemExpression } from '@/components/ProblemExpression';
 import { MiniSudokuGrid } from '@/components/MiniSudokuGrid';
+import { WorksheetProblemCell } from '@/components/WorksheetProblemCell';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { answerNodeText, type AnswerNode, type WorksheetDto } from '@/domain/drill-engine';
 import { answerNodeLatex, answerPrefixLatex } from '@/domain/mathlive-format';
 import { liarPersonLabel, problemExpression } from '@/domain/problem-format';
 import { answerCoordinate, answerPresentationPlan } from '@/domain/answer-presentation';
-import { columnArithmeticGridVariables } from '@/domain/column-arithmetic-presentation';
 import { worksheetPageGridVariables } from '@/domain/worksheet-grid-presentation';
 import { findThemeDefinitionByNumericId, type ThemeDefinition } from '@/domain/theme-registry';
 import { formatWorksheetFooter, type WorksheetMetadata } from '@/domain/worksheet-metadata';
@@ -186,7 +186,6 @@ function WorksheetPrintPage({
   const layout = buildSharedWorksheetLayout(worksheet);
   const theme = themeForWorksheet(worksheet);
   const usesWorksheetGrid = theme.presentation.worksheet_grid;
-  const isColumnArithmeticWorksheet = theme.presentation.column_arithmetic;
   const isEquationWorksheet = theme.presentation.equation_layout;
   const gradeBandClass = theme.grade ? worksheetGradeBandClass(theme.grade.number) : 'worksheet-grade-junior-high';
   const categoryLabel = theme.grade?.label ?? 'おまけ';
@@ -224,45 +223,38 @@ function WorksheetPrintPage({
           {layout.cells.map((cell) => {
             const { problem, index } = cell;
             const position = getCellTopPosition(layout, cell);
-            const isLinearEquation = isEquationWorksheet;
-            const isLiarPuzzle = problem.prompt.kind === 'liar_puzzle';
-            const isColumnArithmetic = problem.prompt.kind === 'column_arithmetic';
-            const isMiniSudoku = problem.prompt.kind === 'mini_sudoku';
-            const stackAnswerBelow = theme.worksheet.answerPlacement === 'below' && !isLinearEquation;
-            const cellStyle: CSSProperties = {
-              left: toPagePercent(position.x, A4_PAGE.width),
-              top: toPagePercent(position.y, A4_PAGE.height),
-              width: toPagePercent(position.width, A4_PAGE.width),
-              height: toPagePercent(position.height, A4_PAGE.height),
-              ...(isColumnArithmetic ? columnArithmeticGridVariables(problem, position) : {}),
-            };
             return (
-              <div
-                className={`problem-cell worksheet-print-problem-cell ${isLinearEquation ? 'problem-cell-linear-equation' : ''} ${isLiarPuzzle ? 'problem-cell-liar' : ''} ${isColumnArithmetic ? `problem-cell-column-arithmetic problem-cell-column-arithmetic-${problem.prompt.kind === 'column_arithmetic' ? problem.prompt.operator : ''}` : ''} ${isMiniSudoku ? 'problem-cell-mini-sudoku' : ''} ${stackAnswerBelow ? 'problem-cell-answer-below' : ''}`}
-                data-print-problem-index={index}
-                style={cellStyle}
-                key={problem.problem_id}
-              >
-                <span className="problem-number-stack"><span className="problem-number">{index + 1}.</span></span>
-                {isMiniSudoku ? (
+              <WorksheetProblemCell
+                problem={problem}
+                index={index}
+                position={position}
+                answerPlacement={theme.worksheet.answerPlacement}
+                equationLayout={isEquationWorksheet}
+                mode="print"
+                showSolution={Boolean(answers)}
+                renderExpression={({ includeAnswerEquals, solution }) => (
+                  <ProblemExpression
+                    problem={problem}
+                    includeAnswerEquals={includeAnswerEquals}
+                    solution={solution}
+                  />
+                )}
+                answer={(
+                  <PrintAnswer
+                    problem={problem}
+                    answerPrefix={theme.worksheet.answerPrefix}
+                    answers={answers}
+                  />
+                )}
+                miniSudoku={(
                   <MiniSudokuGrid
                     problem={problem}
                     answer={answers ? problem.canonical_answer : undefined}
                     readOnly
                   />
-                ) : (
-                  <>
-                    <span className="expression"><ProblemExpression problem={problem} includeAnswerEquals={!stackAnswerBelow} solution={answers && isColumnArithmetic} /></span>
-                    {answers && isColumnArithmetic ? null : (
-                      <PrintAnswer
-                        problem={problem}
-                        answerPrefix={theme.worksheet.answerPrefix}
-                        answers={answers}
-                      />
-                    )}
-                  </>
                 )}
-              </div>
+                key={problem.problem_id}
+              />
             );
           })}
           {metadata ? (

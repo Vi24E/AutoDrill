@@ -2,8 +2,7 @@ import type { CSSProperties } from 'react';
 
 import { digitGridValues } from '@/domain/digit-grid-input';
 import type { AnswerNode, ProblemDto } from '@/domain/drill-engine';
-
-const MINI_SUDOKU_PAGE_GRID_CELL_SPAN = 2;
+import { MINI_SUDOKU_PAGE_GRID_CELL_SPAN, miniSudokuSide } from '@/domain/mini-sudoku-presentation';
 
 type MiniSudokuGridProps = {
   problem: ProblemDto;
@@ -28,8 +27,7 @@ export function MiniSudokuGrid({
   const input = problem.input_interface;
   const values = answer ? digitGridValues(answer, input) : Array.from({ length: input.cell_count }, () => null);
   const correction = correctionAnswer ? digitGridValues(correctionAnswer, input) : null;
-  const side = Math.sqrt(input.cell_count);
-  if (!Number.isInteger(side)) throw new Error('Digit-grid cell count must form a square.');
+  const side = miniSudokuSide(problem);
 
   return (
     <span
