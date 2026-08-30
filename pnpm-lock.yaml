@@ -12,6 +12,8 @@ importers:
 
   .: {}
 
+  apps/qa: {}
+
   apps/web:
     dependencies:
       '@fontsource/noto-sans-jp':
