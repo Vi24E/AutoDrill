@@ -230,7 +230,17 @@ export class QaRepository {
       r.unit_name,r.problem_representation,r.canonical_answer,i.source,i.source_identifier
       FROM attempts a JOIN items i ON i.id=a.item_id
       JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number WHERE a.id=?`).get(attemptId) ?? null;
-    if (row && row.observation_mode !== 'rating_only_answer_shown') delete row.canonical_answer;
+    if (row) {
+      if (row.observation_mode !== 'rating_only_answer_shown') delete row.canonical_answer;
+      const draft = this.db.prepare(`SELECT payload_json FROM input_events
+        WHERE attempt_id=? AND event_type='rating_selected' ORDER BY sequence_number DESC LIMIT 1`).get(attemptId);
+      row.rating_draft = parseJson(draft?.payload_json);
+      if (row.rating_draft && row.rating_draft.difficulty_position == null) {
+        const span = RATING_SCALE.max - RATING_SCALE.min;
+        row.rating_draft.difficulty_position = (row.rating_draft.difficulty - RATING_SCALE.min) / span;
+        row.rating_draft.singularity_position = (row.rating_draft.singularity - RATING_SCALE.min) / span;
+      }
+    }
     return row;
   }
 
@@ -334,6 +344,18 @@ export class QaRepository {
   rateAttempt(attemptId, input) {
     assertRating(input.difficulty_rating, 'difficulty_rating');
     assertRating(input.singularity_rating, 'singularity_rating');
+    const ratingSpan = RATING_SCALE.max - RATING_SCALE.min;
+    const difficultyPosition = input.difficulty_position == null
+      ? (input.difficulty_rating - RATING_SCALE.min) / ratingSpan : Number(input.difficulty_position);
+    const singularityPosition = input.singularity_position == null
+      ? (input.singularity_rating - RATING_SCALE.min) / ratingSpan : Number(input.singularity_position);
+    for (const [name, position, rating] of [
+      ['difficulty_position', difficultyPosition, input.difficulty_rating],
+      ['singularity_position', singularityPosition, input.singularity_rating],
+    ]) {
+      if (!Number.isFinite(position) || position < 0 || position > 1) throw new QaValidationError(`${name} must be between 0 and 1.`);
+      if (Math.round(RATING_SCALE.min + position * ratingSpan) !== rating) throw new QaValidationError(`${name} does not match its derived rating.`);
+    }
     const confidence = input.confidence == null || input.confidence === '' ? null : Number(input.confidence);
     if (confidence != null && (!Number.isInteger(confidence) || confidence < 1 || confidence > 5)) {
       throw new QaValidationError('confidence must be an integer from 1 to 5.');
@@ -348,19 +370,23 @@ export class QaRepository {
     return transaction(this.db, () => {
       const evaluationId = randomUUID();
       this.db.prepare(`INSERT INTO evaluations
-        (id,attempt_id,revision_number,difficulty_rating,singularity_rating,rating_scale_version,rated_at,rating_duration_ms,
-         confidence,note,pre_answer_reveal,supersedes_evaluation_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(evaluationId, attemptId, revision, input.difficulty_rating, input.singularity_rating,
-          RATING_SCALE.version, ratedAt, Number.isFinite(input.rating_duration_ms) ? input.rating_duration_ms : null,
+        (id,attempt_id,revision_number,difficulty_rating,singularity_rating,difficulty_position,singularity_position,
+         rating_scale_version,rated_at,rating_duration_ms,confidence,note,pre_answer_reveal,supersedes_evaluation_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(evaluationId, attemptId, revision, input.difficulty_rating, input.singularity_rating,
+          difficultyPosition, singularityPosition, RATING_SCALE.version, ratedAt, Number.isFinite(input.rating_duration_ms) ? input.rating_duration_ms : null,
           confidence, optionalText(input.note, 'note', 10_000), preReveal ? 1 : 0, existing?.id ?? null);
+      const ratingPayload = {
+        difficulty: input.difficulty_rating, singularity: input.singularity_rating,
+        difficulty_position: difficultyPosition, singularity_position: singularityPosition, revision,
+      };
       if (attempt.state === 'rating') {
-        this.appendEvent(attemptId, 'rating_submitted', { difficulty: input.difficulty_rating, singularity: input.singularity_rating, revision }, input.client_wall_at, input.client_monotonic_ms, ratedAt);
+        this.appendEvent(attemptId, 'rating_submitted', ratingPayload, input.client_wall_at, input.client_monotonic_ms, ratedAt);
         const revealedAt = this.clock();
         this.db.prepare(`UPDATE attempts SET state='complete',rating_submitted_at=?,answer_revealed_at=COALESCE(answer_revealed_at,?),completed_at=?,rating_elapsed_ms=? WHERE id=?`)
           .run(ratedAt, revealedAt, revealedAt, Number.isFinite(input.rating_duration_ms) ? input.rating_duration_ms : null, attemptId);
         if (preReveal) this.appendEvent(attemptId, 'answer_revealed', {}, input.client_wall_at, input.client_monotonic_ms, revealedAt);
       } else {
-        this.appendEvent(attemptId, 'rating_revised', { difficulty: input.difficulty_rating, singularity: input.singularity_rating, revision }, input.client_wall_at, input.client_monotonic_ms, ratedAt);
+        this.appendEvent(attemptId, 'rating_revised', ratingPayload, input.client_wall_at, input.client_monotonic_ms, ratedAt);
       }
       return this.attemptDetail(attemptId);
     });
@@ -410,7 +436,8 @@ export class QaRepository {
     if (filters.difficulty) { clauses.push('e.difficulty_rating = ?'); values.push(Number(filters.difficulty)); }
     if (filters.singularity) { clauses.push('e.singularity_rating = ?'); values.push(Number(filters.singularity)); }
     const rows = this.db.prepare(`SELECT a.*,i.source,i.source_identifier,r.unit_name,r.problem_representation,r.canonical_answer,
-      r.content_hash AS item_content_hash,e.difficulty_rating,e.singularity_rating,e.note,e.confidence,e.revision_number AS evaluation_revision
+      r.content_hash AS item_content_hash,e.difficulty_rating,e.singularity_rating,e.difficulty_position,e.singularity_position,
+      e.note,e.confidence,e.revision_number AS evaluation_revision
       FROM attempts a JOIN items i ON i.id=a.item_id
       JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number
       LEFT JOIN evaluations e ON e.attempt_id=a.id AND e.revision_number=(SELECT MAX(e2.revision_number) FROM evaluations e2 WHERE e2.attempt_id=a.id)
@@ -438,7 +465,7 @@ export class QaRepository {
   analysisCsv() {
     const exportedAt = this.clock();
     const rows = this.history({}).rows;
-    const columns = ['export_schema_version','qa_schema_version','exported_at','attempt_id','session_id','evaluator','item_id','item_revision_number','source','source_identifier','unit_name','problem_representation','canonical_answer','observation_mode','raw_user_answer','normalized_user_answer','correctness','outcome','exposure_count','shown_at','first_interaction_at','answer_started_at','submitted_at','rating_started_at','rating_submitted_at','answer_revealed_at','completed_at','answer_elapsed_ms','rating_elapsed_ms','difficulty_rating','singularity_rating','evaluation_revision','note','browser_version','application_version','autodrill_git_sha'];
+    const columns = ['export_schema_version','qa_schema_version','exported_at','attempt_id','session_id','evaluator','item_id','item_revision_number','source','source_identifier','unit_name','problem_representation','canonical_answer','observation_mode','raw_user_answer','normalized_user_answer','correctness','outcome','exposure_count','shown_at','first_interaction_at','answer_started_at','submitted_at','rating_started_at','rating_submitted_at','answer_revealed_at','completed_at','answer_elapsed_ms','rating_elapsed_ms','difficulty_rating','singularity_rating','difficulty_position','singularity_position','evaluation_revision','note','browser_version','application_version','autodrill_git_sha'];
     const sessionById = new Map(this.listSessions().map((session) => [session.id, session]));
     const lines = [columns.join(',')];
     for (const row of rows) {
