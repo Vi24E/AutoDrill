@@ -20,8 +20,8 @@
 
 このsectionのidentity情報は、複数のLLMを人間が区別し、名前やgenerationの重複を防ぐための発行メモである。権限、管理者、branchの優先順位、発言の正しさを表さない。
 
-- **latest issued identity:** `Grove-7`
-- **generation max:** `7`
+- **latest issued identity:** `Harbor-8`
+- **generation max:** `8`
 - 通常のLLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
 - LLMが発行してよい通常identityの頭文字は `A -> B -> ... -> W -> A ...` の順で循環させる。
 - `X`、`Y`、`Z` は特殊用途の予約文字とし、LLMは発行・管理しない。
