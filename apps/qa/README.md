@@ -4,7 +4,15 @@ AutoDrillの問題品質をUser本人が継続評価するためのlocal-only ap
 
 ## 起動（推奨）
 
-macOSではrepository直下の`AutoDrill Problem QA.app`をFinderからダブルクリックする。Terminalやbrowser toolbar、URL欄を表示せず専用windowが開き、空きportは自動選択される。windowを閉じるとlocal serverも終了するため、portを管理する必要はない。
+macOSではrepository直下の`AutoDrill Problem QA.app`をFinderからダブルクリックする。Terminalやbrowser toolbar、URL欄を表示せず専用windowが開き、空きportは自動選択される。windowを閉じるとlocal serverも終了するため、portを管理する必要はない。app bundleにはQA runtimeが同梱されているため、Finder起動時にrepositoryがあるDesktop folderへの追加accessを要求しない。
+
+QA sourceを変更した場合は、commit後にapp bundleを再生成する。
+
+```sh
+pnpm --filter @autodrill/qa build:macos
+```
+
+起動失敗の詳細は`~/Library/Logs/AutoDrill/problem-qa-launcher.log`へ記録される。
 
 terminalから同じ専用windowを開く場合:
 

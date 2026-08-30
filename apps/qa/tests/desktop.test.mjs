@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { findAppBrowser, launchDesktop } from '../src/desktop.mjs';
+import { buildMacApp } from '../scripts/build-macos-app.mjs';
 
 test('configured app browser has priority', () => {
   assert.equal(findAppBrowser({ AUTODRILL_QA_BROWSER_PATH: process.execPath }, 'test'), process.execPath);
@@ -29,6 +30,20 @@ test('desktop window uses an ephemeral port and owns server/profile lifecycle', 
     assert.equal(existsSync(profilePath), false);
     assert.equal(existsSync(databasePath), true);
     await assert.rejects(fetch(observedUrl));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('macOS app build contains a self-contained QA runtime', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'autodrill-qa-app-build-test-'));
+  const destination = join(directory, 'AutoDrill Problem QA.app');
+  try {
+    const built = buildMacApp({ destination, gitSha: 'packaged-test-sha' });
+    assert.equal(existsSync(join(built.runtime, 'src', 'desktop.mjs')), true);
+    assert.equal(existsSync(join(built.runtime, 'public', 'app.js')), true);
+    assert.equal(existsSync(join(destination, 'Contents', 'Resources', 'git-sha')), true);
+    assert.equal(existsSync(built.executable), true);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

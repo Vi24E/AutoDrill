@@ -36,6 +36,7 @@ function contentHash({ unitName, problemRepresentation, canonicalAnswer, sourceP
   return createHash('sha256').update(json({ unitName, problemRepresentation, canonicalAnswer, sourcePayload })).digest('hex');
 }
 function currentGitSha() {
+  if (process.env.AUTODRILL_QA_GIT_SHA) return process.env.AUTODRILL_QA_GIT_SHA;
   try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT, encoding: 'utf8' }).trim(); }
   catch { return 'unknown'; }
 }
