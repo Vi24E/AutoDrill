@@ -39,10 +39,11 @@ UIはcolor picker型の2D selection planeとして表示し、横軸をDifficult
 ```text
 unit choice -> rating (problem + answer shown) -> complete -> same-unit next rating
 rating -> explicit abandon
+rating -> explicit return -> unit choice
 rating -> explicit abandon -> new unit rating
 ```
 
-通常flowはUserがcanonical skill identityで単元を選んでから`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。評価確定後は完了画面や保存通知を挟まず同じ単元の次問題へ進む。単元変更時は現在のattemptを`abandoned`として残してから切り替える。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
+通常flowはUserがcanonical skill identityで単元を選んでから`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。評価確定後は完了画面や保存通知を挟まず同じ単元の次問題へ進む。単元変更時は現在のattemptを`abandoned`として残してから切り替える。評価画面から単元選択へ明示的に戻る場合も、表示済みproblemをphysical deleteせず`abandoned`として残してからchooserへ戻る。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
 
 単元選択肢の件数は、canonical skill identityごとの「invalidatedされていない完了attemptかつevaluationが1件以上あるobservation数」である。rating revision数やabandoned attempt数を水増しに使わない。確定直後はclient表示を増分し、reload時はSQLite集計を再取得する。
 
