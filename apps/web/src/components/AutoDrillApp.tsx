@@ -67,7 +67,6 @@ import {
   type WorksheetMetadata,
 } from '@/domain/worksheet-metadata';
 
-
 type WorksheetUiComponents = {
   MathLiveAnswerInput: typeof import('@/components/MathLiveMath').MathLiveAnswerInput;
   MathLiveStatic: typeof import('@/components/MathLiveMath').MathLiveStatic;
@@ -334,7 +333,6 @@ function applyGradingSettings(result: GradeResult, settings: GradingSettings): G
   };
 }
 
-
 const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'>, string>> = {
   fraction: '分数',
   mixed_fraction: '帯分数',
@@ -453,7 +451,6 @@ function selectedPeople(answer: AnswerNode): Set<number> {
   if (answer.type !== 'tuple') return new Set();
   return new Set(answer.value.flatMap((item) => item.type === 'integer' ? [Number(item.value)] : []));
 }
-
 
 function ProblemGradeMark({ result }: { result: GradeResult['items'][number] | undefined }) {
   if (!result) return null;
@@ -1315,7 +1312,6 @@ export function AutoDrillApp({
 
     return actionQueueRef.current;
   }, [actionQueueRef, inputEnabledRef, selectAnswer, selectColumnDigit, selectProblem, setSelectedColumnDigit, setSelectedSlot, worksheet]);
-
 
   const applyMathCommand = useCallback((command: MathInputCommand) => {
     const index = selectedIndexRef.current;

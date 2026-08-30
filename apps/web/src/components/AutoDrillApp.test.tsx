@@ -15,7 +15,6 @@ import { columnDecimalMultiplicationFixtureWorksheet, columnDivisionFixtureWorks
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
-
 function pressKey(key: string) {
   const target = document.querySelector<HTMLElement>('math-field.answer-mathfield-selected') ?? document.activeElement;
   if (!(target instanceof HTMLElement)) throw new Error('No active answer mathfield.');
@@ -190,7 +189,6 @@ function deferredGenerationEngine() {
   };
   return { engine, resolveGeneration };
 }
-
 
 describe('AutoDrillApp', () => {
   beforeEach(() => {
@@ -415,7 +413,6 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('button', { name: '印刷 (pdfで出力)' })).toBeEnabled();
   });
 
-
   it('keeps long-division quotient and remainder separate through focus transition and grading', async () => {
     const worksheet = columnDivisionFixtureWorksheet();
     const base = fixtureEngine(worksheet);
@@ -602,8 +599,6 @@ describe('AutoDrillApp', () => {
     const operators = screen.getByLabelText('演算子キー');
     expect(within(operators).getAllByRole('button').every((button) => !button.hasAttribute('disabled'))).toBe(true);
   });
-
-
 
   it('renders liar puzzles as six questions with oval person selection instead of math input', async () => {
     const worksheet = liarFixtureWorksheet();

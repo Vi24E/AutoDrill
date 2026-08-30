@@ -1004,13 +1004,34 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
           const leftDelta = Math.abs(reference.right - answer.right);
           const laneLeft = cell.querySelector('.column-arithmetic')?.getBoundingClientRect().left ?? reference.left;
           const answerLaneLeft = answer.right - answer.width;
-          let operatorGap = 0;
+          let operatorDelta = 0;
+          let problemNumberGap = 0;
           if (!divide) {
+            const row = cell.querySelector('.column-arithmetic-row-bottom')?.getBoundingClientRect();
             const operator = cell.querySelector('.column-arithmetic-row-bottom .column-arithmetic-operator')?.getBoundingClientRect();
-            const operand = cell.querySelector('.column-arithmetic-row-bottom .column-arithmetic-value')?.getBoundingClientRect();
-            if (operator && operand) operatorGap = Math.abs(operator.right - operand.left);
+            const problemNumber = cell.querySelector('.problem-number-stack')?.getBoundingClientRect();
+            const expressionLane = cell.querySelector('.column-arithmetic')?.getBoundingClientRect();
+            const digitCell = cell.querySelector('.column-arithmetic-digit-cell')?.getBoundingClientRect();
+            const topDigits = cell.querySelectorAll('.column-arithmetic-row-top .column-arithmetic-digit-cell').length;
+            const bottomDigits = cell.querySelectorAll('.column-arithmetic-row-bottom .column-arithmetic-digit-cell').length;
+            const operandDigits = Math.max(topDigits, bottomDigits);
+            if (row && operator && problemNumber && expressionLane && digitCell && operandDigits > 0) {
+              const expectedOperatorRight = row.right - operandDigits * digitCell.width;
+              operatorDelta = Math.abs(operator.right - expectedOperatorRight);
+              const problemGroupLeft = expectedOperatorRight - operator.width;
+              problemNumberGap = problemGroupLeft - problemNumber.right;
+              const problemNumberRelativeXCells = (problemNumber.right - problemGroupLeft) / digitCell.width;
+              const problemNumberRelativeYCells = (expressionLane.top - problemNumber.top) / digitCell.height;
+              const problemNumberPlacementDelta = Math.max(
+                Math.abs(problemNumberRelativeXCells - 1.7) * digitCell.width,
+                Math.abs(problemNumberRelativeYCells - 0.85) * digitCell.height,
+              );
+              if (problemNumberPlacementDelta > 1) {
+                operatorDelta = Math.max(operatorDelta, problemNumberPlacementDelta);
+              }
+            }
           }
-          const horizontalDelta = Math.max(leftDelta, Math.max(0, laneLeft - answerLaneLeft), operatorGap);
+          const horizontalDelta = Math.max(leftDelta, Math.max(0, laneLeft - answerLaneLeft), operatorDelta);
           let verticalDelta = 0;
           let expectedTop = null;
           if (!divide) {
@@ -1021,7 +1042,8 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
             columnGridMismatches.push({
               problem: Number(cell.dataset.problemIndex) + 1,
               horizontalDelta: Math.round(horizontalDelta * 10) / 10,
-              operatorGap: Math.round(operatorGap * 10) / 10,
+              operatorDelta: Math.round(operatorDelta * 10) / 10,
+              problemNumberGap: Math.round(problemNumberGap * 10) / 10,
               verticalDelta: Math.round(verticalDelta * 10) / 10,
               expectedTop: expectedTop === null ? null : Math.round(expectedTop * 10) / 10,
               actualTop: Math.round(answer.top * 10) / 10,
@@ -1268,8 +1290,17 @@ function columnAdditionInputProbe() {
     const firstProblemNumber = document.querySelector('.problem-cell-column-arithmetic .problem-number');
     const firstMarkRect = feedback[0]?.getBoundingClientRect();
     const firstNumberRect = firstProblemNumber?.getBoundingClientRect();
-    const firstMarkAboveProblemNumber = Boolean(firstMarkRect && firstNumberRect && firstMarkRect.bottom <= firstNumberRect.top + 1);
+    const firstMarkAnchoredAboveProblemNumber = Boolean(
+      firstMarkRect
+      && firstNumberRect
+      && firstMarkRect.top < firstNumberRect.top
+      && Math.abs((firstMarkRect.left + firstMarkRect.right) / 2 - (firstNumberRect.left + firstNumberRect.right) / 2) <= 1
+    );
     const firstMarkColor = feedback[0] ? getComputedStyle(feedback[0]).color : null;
+    const allMarksRed = feedback.every((mark) => getComputedStyle(mark).color === 'rgb(210, 11, 11)');
+    const minMarkFontPx = Math.min(...feedback.map((mark) => parseFloat(getComputedStyle(mark).fontSize || '0')));
+    const problemNumberFontPx = firstProblemNumber ? parseFloat(getComputedStyle(firstProblemNumber).fontSize || '0') : 0;
+    const markToNumberFontRatio = problemNumberFontPx > 0 ? minMarkFontPx / problemNumberFontPx : null;
     const gradedGridAlignment = measureColumnGridAlignment(document.querySelector('.worksheet-screen .paper'));
     return {
       fieldCount: editors.length,
@@ -1288,8 +1319,10 @@ function columnAdditionInputProbe() {
       slotFont,
       feedbackCount: feedback.length,
       firstMark: feedback[0]?.textContent?.trim() ?? null,
-      firstMarkAboveProblemNumber,
+      firstMarkAnchoredAboveProblemNumber,
       firstMarkColor,
+      allMarksRed,
+      markToNumberFontRatio,
       correctionInGrid,
       correctionValue,
       separateCorrectAnswerCount,
@@ -2188,8 +2221,10 @@ try {
             || !input.slotFont?.includes('Noto Sans JP')
             || input.feedbackCount !== 16
             || !['○', '✓'].includes(input.firstMark)
-            || !input.firstMarkAboveProblemNumber
-            || (input.firstMark === '✓' && input.firstMarkColor !== 'rgb(210, 11, 11)')
+            || !input.firstMarkAnchoredAboveProblemNumber
+            || input.firstMarkColor !== 'rgb(210, 11, 11)'
+            || !input.allMarksRed
+            || input.markToNumberFontRatio === null || input.markToNumberFontRatio < 1.5
             || input.gradedValue !== input.value
             || input.separateCorrectAnswerCount !== 0
             || (input.firstMark === '✓' && (!input.correctionInGrid || !input.correctionValue || input.correctionColor !== 'rgb(210, 11, 11)'))

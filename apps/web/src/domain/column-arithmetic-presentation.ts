@@ -4,6 +4,7 @@ import { WORKSHEET_GRID_POINT } from '@/domain/worksheet-grid-presentation';
 
 const COLUMN_DIVISION_WORK_ROWS = 3;
 const COLUMN_REMAINDER_CELLS = 2;
+const COLUMN_LANE_RIGHT_SHIFT_CELLS = -2;
 import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ProblemDto } from '@/domain/drill-engine';
 
 export function columnAnswerScale(answer: AnswerNode): number {
@@ -71,8 +72,8 @@ function longDivisionWorkedSolution(problem: ProblemDto): LongDivisionWorkedSolu
 
 type CellGeometry = { x: number; y: number; width: number };
 
-export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; digitCells: number; totalCells: number } {
-  if (problem.prompt.kind !== 'column_arithmetic') return { operatorCells: 1, digitCells: 2, totalCells: 3 };
+export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells: number; operandCells: number; digitCells: number; totalCells: number } {
+  if (problem.prompt.kind !== 'column_arithmetic') return { operatorCells: 1, operandCells: 2, digitCells: 2, totalCells: 3 };
   const leftText = arithmeticLeafText(problem.prompt.left);
   const rightText = arithmeticLeafText(problem.prompt.right);
   const leftCells = gridCellCount(leftText);
@@ -85,11 +86,13 @@ export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells:
       problem.prompt.right,
     );
     const operatorCells = 1;
+    const operandCells = Math.max(leftCells, rightCells);
     const digitCells = Math.max(2, maximumAnswerCells);
     return {
       operatorCells,
+      operandCells,
       digitCells,
-      totalCells: Math.max(digitCells, leftCells, operatorCells + rightCells),
+      totalCells: Math.max(digitCells, operatorCells + operandCells),
     };
   }
 
@@ -103,9 +106,11 @@ export function columnArithmeticLaneCells(problem: ProblemDto): { operatorCells:
   const quotientDigits = gridCellCount(answerText) + worked.quotient_trailing_cells;
 
   const operatorCells = Math.max(1, gridCellCount(rightText));
+  const operandCells = Math.max(leftCells, rightCells);
   const digitCells = Math.max(2, gridCellCount(leftText), normalizedDividendDigits, quotientDigits);
   return {
     operatorCells,
+    operandCells,
     digitCells,
     totalCells: operatorCells + digitCells,
   };
@@ -117,9 +122,10 @@ export function columnArithmeticDigitCells(problem: ProblemDto): number {
 
 export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGeometry): Record<string, string> {
   if (problem.prompt.kind !== 'column_arithmetic') return {};
-  const { operatorCells, digitCells, totalCells } = columnArithmeticLaneCells(problem);
+  const { operatorCells, operandCells, digitCells, totalCells } = columnArithmeticLaneCells(problem);
   const variables: Record<string, string> = {
     '--column-operator-width': `calc(${operatorCells} * var(--worksheet-grid-cell))`,
+    '--column-operand-width': `calc(${operandCells} * var(--worksheet-grid-cell))`,
     '--column-digit-width': `calc(${digitCells} * var(--worksheet-grid-cell))`,
     '--column-total-width': `calc(${totalCells} * var(--worksheet-grid-cell))`,
   };
@@ -129,12 +135,16 @@ export function columnArithmeticGridVariables(problem: ProblemDto, cell?: CellGe
     // The page grid is the visual coordinate system. Equal-width logical problem
     // cells are not grid-aligned, so anchor each worksheet column to an evenly
     // spaced page-grid line instead of clamping a wide lane to the invisible cell
-    // boundary. The signed margin lets the last columns extend slightly right
-    // when that is what the visible grid requires.
+    // boundary. The user-selected lane shift moves every written-arithmetic body
+    // by the same integer number of grid cells, preserving page-wide alignment.
     const columnIndex = Math.max(0, Math.round((cell.x - A4_PAGE.margin) / cell.width));
     const firstAnchor = Math.floor((A4_PAGE.margin + cell.width) / WORKSHEET_GRID_POINT);
     const anchorStride = Math.round(cell.width / WORKSHEET_GRID_POINT);
-    const snappedRight = (firstAnchor + columnIndex * anchorStride) * WORKSHEET_GRID_POINT;
+    const snappedRight = (
+      firstAnchor
+      + COLUMN_LANE_RIGHT_SHIFT_CELLS
+      + columnIndex * anchorStride
+    ) * WORKSHEET_GRID_POINT;
     const rightOffset = cellRight - snappedRight;
     variables['--column-lane-right-offset'] = `${(rightOffset / A4_PAGE.width) * 100}cqw`;
 

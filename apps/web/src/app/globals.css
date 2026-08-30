@@ -391,6 +391,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .ribbon-button, .ribbon-icon, .ribbon-link { min-height: 36px; padding: 7px 12px; border: 1px solid var(--ink); border-radius: 2px; background: var(--paper); cursor: pointer; font-size: 13px; }
 .ribbon-button[aria-pressed='true'] { color: var(--paper); border-color: var(--ink); background: var(--ink); cursor: default; opacity: 1; }
 .ribbon-link { padding-inline: 4px; border-color: transparent; text-decoration: underline; }
+
 .worksheet-toast {
   position: fixed;
   z-index: 40;
@@ -467,15 +468,16 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-grade-mark {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 1px);
+  bottom: calc(100% - .35 * var(--worksheet-grid-cell, 14px));
   translate: -50% 0;
-  font-size: 18px;
+  color: #d20b0b;
+  font-size: calc(1.3 * var(--worksheet-grid-cell, 14px));
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
   pointer-events: none;
 }
-.problem-grade-mark-correct { color: #111; }
+.problem-grade-mark-correct { color: #d20b0b; }
 .problem-grade-mark-wrong { color: #d20b0b; font-family: system-ui, sans-serif; }
 .expression { flex: 0 0 auto; white-space: nowrap; font-size: var(--worksheet-expression-font-size); font-variant-numeric: tabular-nums; }
 .problem-math-expression { display: inline-block; margin: 0; font-size: 1em; line-height: 1; vertical-align: middle; }
@@ -882,8 +884,11 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 .problem-cell-column-arithmetic .problem-number-stack {
   position: absolute;
-  top: 4%;
-  left: 4%;
+  /* Keep every problem number at the same grid-relative location as problem 1.
+     The expression start is snapped to the page grid per row, so deriving the
+     number from that anchor prevents cumulative fractional-row drift. */
+  top: calc(var(--column-expression-top-offset, var(--worksheet-grid-cell)) - .85 * var(--worksheet-grid-cell));
+  right: calc(var(--column-lane-right-offset, 0px) + var(--column-operator-width) + var(--column-operand-width) - 1.7 * var(--worksheet-grid-cell));
   width: auto;
 }
 .problem-cell-column-arithmetic .problem-number { font-size: 14px; }
@@ -910,6 +915,7 @@ button:disabled { cursor: wait; opacity: .5; }
   justify-self: end;
   align-self: start;
 }
+
 .problem-cell-column-arithmetic .answer-box {
   position: relative;
   box-sizing: border-box;
@@ -974,7 +980,7 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 .column-arithmetic-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) var(--column-operator-width) var(--column-operand-width);
   width: var(--column-total-width);
   align-items: center;
   min-height: var(--worksheet-grid-cell);
@@ -984,14 +990,16 @@ button:disabled { cursor: wait; opacity: .5; }
 .column-arithmetic-operator-placeholder {
   display: inline-flex;
   box-sizing: border-box;
+  grid-column: 2;
   width: var(--column-operator-width);
   height: var(--worksheet-grid-cell);
   align-items: center;
   justify-content: center;
-  justify-self: end;
+  justify-self: stretch;
   text-align: center;
 }
 .column-arithmetic-value {
+  grid-column: 3;
   display: flex;
   box-sizing: border-box;
   width: max-content;
@@ -999,6 +1007,7 @@ button:disabled { cursor: wait; opacity: .5; }
   height: var(--worksheet-grid-cell);
   align-items: center;
   justify-content: flex-end;
+  justify-self: end;
   text-align: right;
   white-space: nowrap;
 }
@@ -1083,6 +1092,10 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 .column-arithmetic-solution-result {
   margin-top: 0;
+}
+.column-arithmetic-solution-result .column-arithmetic-value {
+  grid-column: 1 / 4;
+  justify-self: end;
 }
 .worksheet-print-page-answers .column-arithmetic-multiply-solution .column-arithmetic-final-rule,
 .problem-cell-column-arithmetic-multiply.problem-cell-graded .column-arithmetic-final-rule {
