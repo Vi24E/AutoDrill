@@ -4,8 +4,8 @@ const statusStrip = document.querySelector('#status-strip');
 const toastElement = document.querySelector('#toast');
 
 const model = {
-  state: null, view: 'evaluate', currentDetail: null, selectedRating: null,
-  ratingStartedMonotonic: null, ratingEventPromise: null, starting: false,
+  state: null, view: 'evaluate', selectedRating: null,
+  ratingStartedMonotonic: null, ratingEventPromise: null, starting: false, saving: false,
 };
 
 const h = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -76,14 +76,13 @@ function updateChrome() {
   const active = model.state?.activeAttempt;
   statusStrip.innerHTML = `<div>答えを見て、グリッドで評価するだけ</div><div>${active ? h(active.unit_name) : '評価はSQLiteへ保存済み'}</div>`;
   nav.querySelectorAll('button').forEach((button) => {
-    button.disabled = Boolean(active) && button.dataset.view !== 'evaluate';
+    button.disabled = false;
     button.classList.toggle('active', button.dataset.view === model.view);
   });
 }
 
 function render() {
   if (model.view === 'history') { renderHistory(); return; }
-  if (model.currentDetail) { renderSaved(model.currentDetail); return; }
   if (model.state?.activeAttempt) { renderRating(model.state.activeAttempt); return; }
   renderLoading();
 }
@@ -96,7 +95,6 @@ async function startRandomAttempt() {
   if (model.starting) return;
   model.starting = true;
   model.view = 'evaluate';
-  model.currentDetail = null;
   renderLoading();
   try {
     const attempt = await api('/api/quick/next', { method: 'POST', body: JSON.stringify({
@@ -221,35 +219,30 @@ function bindRatingSurface(prefix, onSelect) {
 }
 
 async function confirmRating() {
-  if (!model.selectedRating) return;
-  await model.ratingEventPromise;
-  const attempt = model.state.activeAttempt;
-  const detail = await api(`/api/attempts/${attempt.id}/ratings`, { method: 'POST', body: JSON.stringify({
-    difficulty_rating: model.selectedRating.difficulty,
-    singularity_rating: model.selectedRating.singularity,
-    difficulty_position: model.selectedRating.difficulty_position,
-    singularity_position: model.selectedRating.singularity_position,
-    rating_duration_ms: performance.now() - model.ratingStartedMonotonic,
-    note: document.querySelector('#rating-note')?.value ?? '',
-    ...eventStamp(),
-  }) });
-  model.state.activeAttempt = null;
-  model.currentDetail = detail;
-  model.selectedRating = null;
-  updateChrome();
-  render();
-}
-
-function renderSaved(detail) {
-  const evaluation = detail.evaluations.at(-1);
-  app.innerHTML = `<section class="attempt-shell"><div class="panel saved-panel">
-    <div class="saved-mark" aria-hidden="true">✓</div><h2>保存しました</h2>
-    <span class="unit-label">${h(detail.unit_name)}</span><div class="saved-problem">${h(detail.problem_representation)} <strong>${h(detail.canonical_answer)}</strong></div>
-    <div class="saved-rating"><strong>難しさ ${evaluationCoordinate(evaluation, 'difficulty')}</strong><span>特異性 ${evaluationCoordinate(evaluation, 'singularity')}</span></div>
-    <div class="actions next-row"><button class="button primary-action" id="next-problem">次の問題 <span class="small">N</span></button><button class="button secondary" id="show-history">履歴を見る</button></div>
-  </div></section>`;
-  document.querySelector('#next-problem').addEventListener('click', startRandomAttempt);
-  document.querySelector('#show-history').addEventListener('click', () => { model.currentDetail = null; model.view = 'history'; updateChrome(); render(); });
+  if (!model.selectedRating || model.saving) return;
+  model.saving = true;
+  document.querySelector('#confirm-rating')?.setAttribute('disabled', '');
+  try {
+    await model.ratingEventPromise;
+    const attempt = model.state.activeAttempt;
+    const detail = await api(`/api/attempts/${attempt.id}/ratings`, { method: 'POST', body: JSON.stringify({
+      difficulty_rating: model.selectedRating.difficulty,
+      singularity_rating: model.selectedRating.singularity,
+      difficulty_position: model.selectedRating.difficulty_position,
+      singularity_position: model.selectedRating.singularity_position,
+      rating_duration_ms: performance.now() - model.ratingStartedMonotonic,
+      note: document.querySelector('#rating-note')?.value ?? '',
+      ...eventStamp(),
+    }) });
+    model.state.activeAttempt = null;
+    model.selectedRating = null;
+    model.ratingEventPromise = null;
+    updateChrome();
+    toast(`保存しました（難しさ ${evaluationCoordinate(detail.evaluations.at(-1), 'difficulty')}／特異性 ${evaluationCoordinate(detail.evaluations.at(-1), 'singularity')}）`);
+    await startRandomAttempt();
+  } finally {
+    model.saving = false;
+  }
 }
 
 async function renderHistory() {
@@ -266,8 +259,8 @@ async function loadHistory() {
   const query = new URLSearchParams([...new FormData(form)].filter(([, value]) => value));
   const history = await api(`/api/history?${query}`);
   const { summary } = history;
-  document.querySelector('#history-content').innerHTML = `<div class="stats"><div class="stat"><span>評価数</span><strong>${summary.sample_count}</strong></div><div class="stat"><span>難しさ 中央値</span><strong>${summary.median_difficulty == null ? '—' : coordinateLabel(summary.median_difficulty)}</strong></div><div class="stat"><span>特異性 中央値</span><strong>${summary.median_singularity == null ? '—' : coordinateLabel(summary.median_singularity)}</strong></div></div>
-    <div class="table-wrap"><table><thead><tr><th>日時</th><th>単元 / 問題</th><th>答え</th><th>中心座標（難しさ × 特異性）</th><th>方式</th></tr></thead><tbody>${history.rows.map((row) => `<tr data-id="${h(row.id)}"><td>${fmt(row.shown_at)}</td><td><strong>${h(row.unit_name)}</strong><br>${h(row.problem_representation)}</td><td>${h(row.canonical_answer)}</td><td><strong>${row.difficulty_rating == null ? '—' : evaluationCoordinate(row, 'difficulty')} × ${row.singularity_rating == null ? '—' : evaluationCoordinate(row, 'singularity')}</strong></td><td>${row.observation_mode === 'rating_only_answer_shown' ? '評価のみ' : '旧方式'}</td></tr>`).join('')}</tbody></table></div>`;
+  document.querySelector('#history-content').innerHTML = `<div class="stats"><div class="stat"><span>完了評価</span><strong>${summary.rated_count}</strong></div><div class="stat"><span>難しさ 中央値</span><strong>${summary.median_difficulty == null ? '—' : coordinateLabel(summary.median_difficulty)}</strong></div><div class="stat"><span>特異性 中央値</span><strong>${summary.median_singularity == null ? '—' : coordinateLabel(summary.median_singularity)}</strong></div></div>
+    <div class="table-wrap"><table><thead><tr><th>日時</th><th>単元 / 問題</th><th>答え</th><th>中心座標（難しさ × 特異性）</th><th>状態</th></tr></thead><tbody>${history.rows.map((row) => `<tr data-id="${h(row.id)}" data-state="${h(row.state)}"><td>${fmt(row.shown_at)}</td><td><strong>${h(row.unit_name)}</strong><br>${h(row.problem_representation)}</td><td>${h(row.canonical_answer)}</td><td><strong>${row.difficulty_rating == null ? '—' : evaluationCoordinate(row, 'difficulty')} × ${row.singularity_rating == null ? '—' : evaluationCoordinate(row, 'singularity')}</strong></td><td>${row.state === 'complete' ? '評価済み' : '未評価終了'}</td></tr>`).join('')}</tbody></table></div>`;
   document.querySelectorAll('tbody tr[data-id]').forEach((row) => row.addEventListener('click', async () => {
     const detail = await api(`/api/attempts/${row.dataset.id}`);
     document.querySelector('#history-detail').innerHTML = detailBlock(detail, true);
@@ -316,12 +309,19 @@ async function recordEvent(event_type, payload = {}) {
   }
 }
 
-nav.addEventListener('click', (event) => {
+nav.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-view]');
   if (!button || button.disabled) return;
+  if (button.dataset.view === 'history' && model.state.activeAttempt) {
+    if (!confirm('現在表示中の問題を未評価として記録し、履歴を開きますか？')) return;
+    await api(`/api/attempts/${model.state.activeAttempt.id}/abandon`, {
+      method: 'POST', body: JSON.stringify({ reason: 'open_history_before_rating', ...eventStamp() }),
+    });
+    model.state.activeAttempt = null;
+    model.selectedRating = null;
+  }
   model.view = button.dataset.view;
   if (model.view === 'evaluate' && !model.state.activeAttempt) {
-    model.currentDetail = null;
     startRandomAttempt();
   } else {
     updateChrome();
@@ -334,7 +334,6 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     confirmRating();
   }
-  if (!event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 'n' && model.currentDetail && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) startRandomAttempt();
 });
 document.addEventListener('visibilitychange', () => recordEvent(document.hidden ? 'visibility_hidden' : 'visibility_visible'));
 window.addEventListener('blur', () => recordEvent('window_blurred'));

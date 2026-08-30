@@ -154,7 +154,7 @@ try {
   await waitFor(evaluate, `!document.querySelector('[data-rating-cursor]').hidden`, 'continuous cursor reload resume');
   if (await evaluate(`document.querySelector('#confirm-rating').disabled`)) throw new Error('Reloaded continuous rating could not be confirmed.');
   if (qa.repository.activeAttempt().id !== firstAttempt.id) throw new Error('Reload created a duplicate attempt.');
-  if (!await evaluate(`document.querySelector('[data-view="history"]').disabled`)) throw new Error('History navigation was not locked during attempt.');
+  if (await evaluate(`document.querySelector('[data-view="history"]').disabled`)) throw new Error('History navigation cannot explicitly abandon the current problem.');
 
   await stopChrome(chrome, cdp);
   chrome = null; cdp = null;
@@ -169,20 +169,21 @@ try {
   await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`);
   await waitFor(evaluate, `document.querySelector('#selection-status').innerText.includes('難しさ')`, 'continuous keyboard movement');
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
-  await waitFor(evaluate, `document.querySelector('#next-problem') !== null`, 'rating saved by keyboard');
-  await capture(cdp, '02-saved');
+  await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(firstAttempt.id)}&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after keyboard save');
+  if (await evaluate(`Boolean(document.querySelector('#next-problem, .saved-panel'))`)) throw new Error('A blocking saved screen remains in the flow.');
+  await capture(cdp, '02-next-problem');
 
-  await evaluate(`document.querySelector('#next-problem').click()`);
-  await waitFor(evaluate, `document.querySelectorAll('[data-prefix="rate"]').length === 49`, 'next random problem');
+  const secondAttempt = qa.repository.activeAttempt();
   await dragRating(cdp, evaluate, 'rate', 0.82, 0.23);
   await waitFor(evaluate, `!document.querySelector('#confirm-rating').disabled`, 'second selection');
   await evaluate(`document.querySelector('#confirm-rating').click()`);
-  await waitFor(evaluate, `document.querySelector('#next-problem') !== null`, 'second saved');
-  await evaluate(`document.querySelector('#show-history').click()`);
+  await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(secondAttempt.id)}&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after second save');
+  await evaluate(`window.confirm=()=>true; document.querySelector('[data-view="history"]').click()`);
   await waitFor(evaluate, `document.querySelector('tbody tr[data-id]') !== null`, 'history rows');
-  if (await evaluate(`document.querySelectorAll('tbody tr[data-id]').length`) !== 2) throw new Error('Random attempts were not both visible in history.');
+  if (await evaluate(`document.querySelectorAll('tbody tr[data-id]').length`) !== 3) throw new Error('Completed and explicitly abandoned attempts were not all visible in history.');
+  if (await evaluate(`document.querySelectorAll('tbody tr[data-state="complete"]').length`) !== 2) throw new Error('The two saved ratings were not both visible in history.');
   await capture(cdp, '03-history');
-  await evaluate(`document.querySelector('tbody tr[data-id]').click()`);
+  await evaluate(`document.querySelector('tbody tr[data-state="complete"]').click()`);
   await waitFor(evaluate, `document.querySelector('[data-prefix="revise"]') !== null`, 'history detail');
   await evaluate(`document.querySelector('#revision-grid').closest('details').open=true`);
   await dragRating(cdp, evaluate, 'revise', 0.91, 0.41);
@@ -191,10 +192,10 @@ try {
   await evaluate(`document.querySelector('#save-revision').click()`);
   await waitFor(evaluate, `document.querySelectorAll('#history-detail tbody tr').length >= 2`, 'rating revision history');
 
-  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')}; })()`);
-  if (exportCheck.attempts !== 2 || exportCheck.events < 8 || !exportCheck.autodrill || !exportCheck.ratingOnly || !exportCheck.continuous || !exportCheck.preReveal || !exportCheck.sourcePayload || !exportCheck.csv) throw new Error(`Export verification failed: ${JSON.stringify(exportCheck)}`);
+  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')}; })()`);
+  if (exportCheck.attempts !== 3 || exportCheck.completed !== 2 || exportCheck.abandoned !== 1 || exportCheck.events < 9 || !exportCheck.autodrill || !exportCheck.ratingOnly || !exportCheck.continuous || !exportCheck.preReveal || !exportCheck.sourcePayload || !exportCheck.csv) throw new Error(`Export verification failed: ${JSON.stringify(exportCheck)}`);
   if (cdp.errors.length) throw new Error(`Browser console errors: ${cdp.errors.join(' | ')}`);
-  const result = { status: 'passed', operations: ['automatic session start', 'AutoDrill random generation', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'next problem', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'full JSON export', 'analysis CSV export'], attempts: 2, localServerRestartCoveredBy: 'server.test.mjs' };
+  const result = { status: 'passed', operations: ['automatic session start', 'AutoDrill random generation', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'immediate next problem without saved screen', 'explicit abandon before history', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'full JSON export', 'analysis CSV export'], completedAttempts: 2, abandonedAttempts: 1, localServerRestartCoveredBy: 'server.test.mjs' };
   if (process.env.AUTODRILL_QA_BROWSER_RESULT_PATH) writeFileSync(process.env.AUTODRILL_QA_BROWSER_RESULT_PATH, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {

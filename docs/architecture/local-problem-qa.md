@@ -37,13 +37,13 @@ UIはcolor picker型の2D selection planeとして表示し、横軸をDifficult
 ## Rating-only state graph
 
 ```text
-queue -> rating (problem + answer shown) -> complete -> queue
+queue -> rating (problem + answer shown) -> complete -> next rating
 rating -> explicit abandon
 ```
 
-通常flowは`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
+通常flowは`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。評価確定後は完了画面を挟まず次のランダム問題を生成し、保存結果はnon-blockingな短い通知だけで示す。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
 
-旧`answer_then_rating` recordとinternal APIは既存datasetの再解析互換性のため残す。旧flowの回答・correctnessをmigrationで消したり新方式へ偽装したりしない。active attempt中はhistory、problem detail、exportをserver側でlockする。
+旧`answer_then_rating` recordとinternal APIは既存datasetの再解析互換性のため残す。旧flowの回答・correctnessをmigrationで消したり新方式へ偽装したりしない。active attempt中はhistory、problem detail、exportをserver側でlockする。履歴へ移動するときは、表示中の問題を確認付きで`abandoned`として保存してからlockを解除し、rating前に過去分布を見せない。
 
 ## Timing and recovery
 

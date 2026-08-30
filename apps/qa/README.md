@@ -20,9 +20,9 @@ pnpm --filter @autodrill/qa build:macos
 
 1. 起動すると、AutoDrillの対応単元からランダムな問題が自動表示される。
 2. 問題と表示済みの答えを見て、中央を原点とする2D平面上でcursorを自由にドラッグし、難しさと特異性を評価する。横軸が難しさ、縦軸が特異性である。
-3. 「評価を保存して次へ」を押し、続ける。
+3. 「評価を保存して次へ」を押す。評価は即座に保存され、完了画面を挟まず次のランダム問題へ進む。
 
-session開始、問題登録、queue選択は不要。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
+session開始、問題登録、queue選択は不要。保存完了は操作を妨げない短い通知だけで示す。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。表示中の問題から履歴を開く場合、その問題を未評価として履歴に残す確認を行う。
 
 terminalから同じ専用windowを開く場合:
 
