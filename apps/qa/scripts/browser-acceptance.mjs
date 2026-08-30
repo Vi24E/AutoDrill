@@ -119,9 +119,12 @@ try {
     horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
     matrixBottom: Math.round(document.querySelector('.rating-matrix').getBoundingClientRect().bottom),
     confirmBottom: Math.round(document.querySelector('#confirm-rating').getBoundingClientRect().bottom),
+    horizontalGap: (()=>{const a=document.querySelector('[data-d="1"][data-s="4"]').getBoundingClientRect();const b=document.querySelector('[data-d="2"][data-s="4"]').getBoundingClientRect();return Math.round((b.left-a.right)*10)/10})(),
+    verticalGap: (()=>{const a=document.querySelector('[data-d="4"][data-s="5"]').getBoundingClientRect();const b=document.querySelector('[data-d="4"][data-s="4"]').getBoundingClientRect();return Math.round((b.top-a.bottom)*10)/10})(),
+    originOffset: (()=>{const s=document.querySelector('.rating-surface').getBoundingClientRect();const o=document.querySelector('[data-d="4"][data-s="4"]').getBoundingClientRect();return {x:Math.round((o.left+o.width/2-(s.left+s.width/2))*10)/10,y:Math.round((o.top+o.height/2-(s.top+s.height/2))*10)/10}})(),
     viewportHeight: innerHeight,
   })`);
-  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight) {
+  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5) {
     throw new Error(`Initial rating UI is broken: ${JSON.stringify(initialUi)}`);
   }
   if (firstDetail.observation_mode !== 'rating_only_answer_shown' || firstDetail.raw_user_answer !== null || firstDetail.correctness !== 'ungraded') {

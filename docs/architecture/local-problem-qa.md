@@ -32,7 +32,7 @@ rating scaleの唯一の定義元は`apps/qa/src/constants.mjs::RATING_SCALE`で
 - Difficulty: 1 非常に易しい / 4 中程度 / 7 非常に難しい
 - Singularity: 1 非常に典型的 / 4 やや特徴的 / 7 非常に珍しい・特異
 
-database constraintも現行scaleのvalid rangeを防衛する。将来scaleを変更するときはdefinition versionとmigrationを更新し、既存ratingの意味を変えない。
+UIは隙間のない2D selection planeとして表示し、scale midpointの4×4を視覚上の原点 `(0, 0)`、両軸を`-3〜+3`として示す。これは表示座標であり、raw observationにはcanonicalな1〜7を保存する。database constraintも現行scaleのvalid rangeを防衛する。将来scaleを変更するときはdefinition versionとmigrationを更新し、既存ratingの意味を変えない。
 
 ## Rating-only state graph
 

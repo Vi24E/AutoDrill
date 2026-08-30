@@ -19,7 +19,7 @@ pnpm --filter @autodrill/qa build:macos
 通常操作は次の3段階だけである。回答入力と採点は行わない。
 
 1. 起動すると、AutoDrillの対応単元からランダムな問題が自動表示される。
-2. 問題と表示済みの答えを見て、7×7 gridで難しさと特異性を評価する。
+2. 問題と表示済みの答えを見て、中央を原点とする隙間のない7×7平面で難しさと特異性を評価する。
 3. 「評価を保存して次へ」を押し、続ける。
 
 session開始、問題登録、queue選択は不要。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
