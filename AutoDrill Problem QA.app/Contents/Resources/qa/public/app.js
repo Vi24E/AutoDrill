@@ -21,6 +21,24 @@ const ratingMidpoint = () => {
 };
 const ratingCoordinate = (value) => value - ratingMidpoint();
 const coordinateLabel = (value) => ratingCoordinate(value) > 0 ? `+${ratingCoordinate(value)}` : String(ratingCoordinate(value));
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const ratingFromPosition = (position) => {
+  const { min, max } = model.state.metadata.ratingScale;
+  return Math.round(min + clamp01(position) * (max - min));
+};
+const continuousCoordinateLabel = (position) => {
+  const { min, max } = model.state.metadata.ratingScale;
+  const coordinate = Math.round(((clamp01(position) - 0.5) * (max - min)) * 100) / 100;
+  if (coordinate === 0) return '0';
+  return coordinate > 0 ? `+${coordinate}` : String(coordinate);
+};
+const evaluationCoordinate = (evaluation, axis) => {
+  const position = evaluation?.[`${axis}_position`];
+  return position == null ? coordinateLabel(evaluation?.[`${axis}_rating`]) : continuousCoordinateLabel(position);
+};
+const selectionStatus = (selection) => selection
+  ? `<strong>難しさ ${continuousCoordinateLabel(selection.difficulty_position)}</strong><span>特異性 ${continuousCoordinateLabel(selection.singularity_position)}</span><small>区分 ${selection.difficulty}, ${selection.singularity}</small>`
+  : 'まだ選択されていません';
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -48,6 +66,7 @@ async function refresh() {
     return;
   }
   model.view = 'evaluate';
+  model.selectedRating = active.rating_draft ?? null;
   model.ratingStartedMonotonic = performance.now() - Math.max(0, Date.now() - Date.parse(active.rating_started_at));
   updateChrome();
   render();
@@ -87,7 +106,7 @@ async function startRandomAttempt() {
     }) });
     model.state.activeAttempt = attempt;
     model.ratingStartedMonotonic = performance.now() - Math.max(0, Date.now() - Date.parse(attempt.rating_started_at));
-    model.selectedRating = null;
+    model.selectedRating = attempt.rating_draft ?? null;
     updateChrome();
     render();
   } finally {
@@ -102,22 +121,31 @@ function ratingGrid(selected = model.selectedRating, prefix = 'rate') {
   let cells = '';
   for (let singularity = ratingScale.max; singularity >= ratingScale.min; singularity--) {
     for (let difficulty = ratingScale.min; difficulty <= ratingScale.max; difficulty++) {
-      const active = selected?.difficulty === difficulty && selected?.singularity === singularity;
       const origin = difficulty === midpoint && singularity === midpoint;
-      cells += `<button type="button" class="rating-cell ${origin ? 'origin' : ''} ${active ? 'selected' : ''}" data-rating-cell data-prefix="${prefix}" data-d="${difficulty}" data-s="${singularity}" aria-label="難しさ${difficulty}（中心から${coordinateLabel(difficulty)}）、特異性${singularity}（中心から${coordinateLabel(singularity)}）" aria-pressed="${active}"><span aria-hidden="true"></span></button>`;
+      cells += `<div class="rating-cell ${origin ? 'origin' : ''}" data-rating-cell data-prefix="${prefix}" aria-hidden="true"></div>`;
     }
   }
   const xLabels = scaleValues().map((value) => `<span class="${value === midpoint ? 'origin-label' : ''}">${coordinateLabel(value)}</span>`).join('');
   const yLabels = [...scaleValues()].reverse().map((value) => `<span class="${value === midpoint ? 'origin-label' : ''}">${coordinateLabel(value)}</span>`).join('');
+  const cursorStyle = selected
+    ? `left:${selected.difficulty_position * 100}%;top:${(1 - selected.singularity_position) * 100}%` : '';
   return `<div class="rating-widget">
-    <div class="axis-guide"><span>珍しい ↑ <strong>特異性</strong> ↓ 典型的</span><span>易しい ← <strong>難しさ</strong> → 難しい</span></div>
-    <div class="coordinate-grid" style="--rating-steps:${steps}">
-      <div class="coordinate-corner">中心 0</div>
-      <div class="x-ruler">${xLabels}</div>
-      <div class="y-ruler">${yLabels}</div>
-      <div class="rating-surface"><div class="rating-matrix">${cells}</div></div>
+    <div class="axis-explainer"><span><strong>横軸：難しさ</strong>　左ほど易しい／右ほど難しい</span><span><strong>縦軸：特異性</strong>　下ほど典型的／上ほど珍しい</span></div>
+    <div class="plane-layout">
+      <div></div><div class="plane-endpoint top">↑ 珍しい・特異</div><div></div>
+      <div class="plane-endpoint left">← 易しい</div>
+      <div class="coordinate-grid" style="--rating-steps:${steps}">
+        <div class="coordinate-corner">中心 0</div>
+        <div class="x-ruler">${xLabels}</div>
+        <div class="y-ruler">${yLabels}</div>
+        <div class="rating-surface" id="rating-surface-${prefix}" data-rating-surface="${prefix}" role="application" tabindex="0" aria-label="横軸は難しさ。左が易しく右が難しい。縦軸は特異性。下が典型的で上が珍しい。ドラッグまたは矢印キーで位置を選択。">
+          <div class="rating-matrix">${cells}</div>
+          <span class="rating-cursor" data-rating-cursor ${selected ? '' : 'hidden'} style="${cursorStyle}" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="plane-endpoint right">難しい →</div>
+      <div></div><div class="plane-endpoint bottom">↓ 典型的</div><div></div>
     </div>
-    <div class="matrix-x-title">難しさ</div>
   </div>`;
 }
 
@@ -128,43 +156,68 @@ function renderRating(attempt) {
     </div>
     <div class="rating-heading"><h2>この問題を評価</h2><p>中央を原点として、平面上の位置を選んでください。</p></div>
     ${ratingGrid()}
-    <div class="selection-status" id="selection-status" aria-live="polite">まだ選択されていません</div>
+    <div class="selection-status" id="selection-status" aria-live="polite">${selectionStatus(model.selectedRating)}</div>
     <details class="secondary-options"><summary>任意メモ</summary><label class="field"><span>メモ</span><input id="rating-note" placeholder="計算量が多い、教科書的、境界ケース…"></label></details>
-    <div class="actions confirm-rating-row"><button class="button primary-action" id="confirm-rating" disabled>評価を保存して次へ <span class="small">Enter</span></button></div>
+    <div class="actions confirm-rating-row"><button class="button primary-action" id="confirm-rating" ${model.selectedRating ? '' : 'disabled'}>評価を保存して次へ <span class="small">Enter</span></button></div>
   </div></section>`;
-  bindRatingCells('rate');
+  bindRatingSurface('rate');
+  if (model.selectedRating) model.ratingEventPromise = Promise.resolve();
   document.querySelector('#confirm-rating').addEventListener('click', confirmRating);
-  document.querySelector('[data-prefix="rate"][data-d="4"][data-s="4"]')?.focus();
+  document.querySelector('[data-rating-surface="rate"]')?.focus();
 }
 
-function bindRatingCells(prefix, onSelect) {
-  const cells = [...document.querySelectorAll(`[data-rating-cell][data-prefix="${prefix}"]`)];
-  for (const button of cells) {
-    button.addEventListener('click', async () => {
-      const selection = { difficulty: Number(button.dataset.d), singularity: Number(button.dataset.s) };
-      if (prefix === 'rate') {
-        model.selectedRating = selection;
-        document.querySelectorAll('[data-prefix="rate"]').forEach((cell) => {
-          const active = cell === button;
-          cell.classList.toggle('selected', active);
-          cell.setAttribute('aria-pressed', String(active));
-        });
-        document.querySelector('#selection-status').innerHTML = `<strong>難しさ ${coordinateLabel(selection.difficulty)}</strong><span>特異性 ${coordinateLabel(selection.singularity)}</span><small>保存値 ${selection.difficulty}, ${selection.singularity}</small>`;
-        document.querySelector('#confirm-rating').disabled = false;
-        model.ratingEventPromise = recordEvent('rating_selected', selection);
-        await model.ratingEventPromise;
-      } else onSelect?.(selection, button);
-    });
-    button.addEventListener('keydown', (event) => {
-      const delta = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
-      if (!delta) return;
-      event.preventDefault();
-      const { min, max } = model.state.metadata.ratingScale;
-      const difficulty = Math.min(max, Math.max(min, Number(button.dataset.d) + delta[0]));
-      const singularity = Math.min(max, Math.max(min, Number(button.dataset.s) + delta[1]));
-      document.querySelector(`[data-prefix="${prefix}"][data-d="${difficulty}"][data-s="${singularity}"]`)?.focus();
-    });
-  }
+function bindRatingSurface(prefix, onSelect) {
+  const surface = document.querySelector(`[data-rating-surface="${prefix}"]`);
+  if (!surface) return;
+  let dragging = false;
+  let selection = prefix === 'rate' ? model.selectedRating : null;
+
+  const applyPosition = (difficultyPosition, singularityPosition, record = false) => {
+    const next = {
+      difficulty: ratingFromPosition(difficultyPosition),
+      singularity: ratingFromPosition(singularityPosition),
+      difficulty_position: clamp01(difficultyPosition),
+      singularity_position: clamp01(singularityPosition),
+    };
+    selection = next;
+    const cursor = surface.querySelector('[data-rating-cursor]');
+    cursor.hidden = false;
+    cursor.style.left = `${next.difficulty_position * 100}%`;
+    cursor.style.top = `${(1 - next.singularity_position) * 100}%`;
+    if (prefix === 'rate') {
+      model.selectedRating = next;
+      document.querySelector('#selection-status').innerHTML = selectionStatus(next);
+      document.querySelector('#confirm-rating').disabled = false;
+      if (record) model.ratingEventPromise = recordEvent('rating_selected', next);
+    } else onSelect?.(next);
+  };
+
+  const applyPointer = (event, record = false) => {
+    const bounds = surface.getBoundingClientRect();
+    applyPosition((event.clientX - bounds.left) / bounds.width, 1 - ((event.clientY - bounds.top) / bounds.height), record);
+  };
+  surface.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    dragging = true;
+    surface.focus();
+    try { surface.setPointerCapture(event.pointerId); } catch {}
+    applyPointer(event, false);
+  });
+  surface.addEventListener('pointermove', (event) => { if (dragging) applyPointer(event, false); });
+  surface.addEventListener('pointerup', (event) => {
+    if (!dragging) return;
+    dragging = false;
+    applyPointer(event, true);
+  });
+  surface.addEventListener('pointercancel', () => { dragging = false; });
+  surface.addEventListener('keydown', (event) => {
+    const delta = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 0.1 : 0.02;
+    const current = selection ?? { difficulty_position: 0.5, singularity_position: 0.5 };
+    applyPosition(current.difficulty_position + delta[0] * step, current.singularity_position + delta[1] * step, true);
+  });
 }
 
 async function confirmRating() {
@@ -174,6 +227,8 @@ async function confirmRating() {
   const detail = await api(`/api/attempts/${attempt.id}/ratings`, { method: 'POST', body: JSON.stringify({
     difficulty_rating: model.selectedRating.difficulty,
     singularity_rating: model.selectedRating.singularity,
+    difficulty_position: model.selectedRating.difficulty_position,
+    singularity_position: model.selectedRating.singularity_position,
     rating_duration_ms: performance.now() - model.ratingStartedMonotonic,
     note: document.querySelector('#rating-note')?.value ?? '',
     ...eventStamp(),
@@ -190,7 +245,7 @@ function renderSaved(detail) {
   app.innerHTML = `<section class="attempt-shell"><div class="panel saved-panel">
     <div class="saved-mark" aria-hidden="true">✓</div><h2>保存しました</h2>
     <span class="unit-label">${h(detail.unit_name)}</span><div class="saved-problem">${h(detail.problem_representation)} <strong>${h(detail.canonical_answer)}</strong></div>
-    <div class="saved-rating"><strong>難しさ ${coordinateLabel(evaluation.difficulty_rating)}</strong><span>特異性 ${coordinateLabel(evaluation.singularity_rating)}</span></div>
+    <div class="saved-rating"><strong>難しさ ${evaluationCoordinate(evaluation, 'difficulty')}</strong><span>特異性 ${evaluationCoordinate(evaluation, 'singularity')}</span></div>
     <div class="actions next-row"><button class="button primary-action" id="next-problem">次の問題 <span class="small">N</span></button><button class="button secondary" id="show-history">履歴を見る</button></div>
   </div></section>`;
   document.querySelector('#next-problem').addEventListener('click', startRandomAttempt);
@@ -212,7 +267,7 @@ async function loadHistory() {
   const history = await api(`/api/history?${query}`);
   const { summary } = history;
   document.querySelector('#history-content').innerHTML = `<div class="stats"><div class="stat"><span>評価数</span><strong>${summary.sample_count}</strong></div><div class="stat"><span>難しさ 中央値</span><strong>${summary.median_difficulty == null ? '—' : coordinateLabel(summary.median_difficulty)}</strong></div><div class="stat"><span>特異性 中央値</span><strong>${summary.median_singularity == null ? '—' : coordinateLabel(summary.median_singularity)}</strong></div></div>
-    <div class="table-wrap"><table><thead><tr><th>日時</th><th>単元 / 問題</th><th>答え</th><th>中心座標（難しさ × 特異性）</th><th>方式</th></tr></thead><tbody>${history.rows.map((row) => `<tr data-id="${h(row.id)}"><td>${fmt(row.shown_at)}</td><td><strong>${h(row.unit_name)}</strong><br>${h(row.problem_representation)}</td><td>${h(row.canonical_answer)}</td><td><strong>${row.difficulty_rating == null ? '—' : coordinateLabel(row.difficulty_rating)} × ${row.singularity_rating == null ? '—' : coordinateLabel(row.singularity_rating)}</strong></td><td>${row.observation_mode === 'rating_only_answer_shown' ? '評価のみ' : '旧方式'}</td></tr>`).join('')}</tbody></table></div>`;
+    <div class="table-wrap"><table><thead><tr><th>日時</th><th>単元 / 問題</th><th>答え</th><th>中心座標（難しさ × 特異性）</th><th>方式</th></tr></thead><tbody>${history.rows.map((row) => `<tr data-id="${h(row.id)}"><td>${fmt(row.shown_at)}</td><td><strong>${h(row.unit_name)}</strong><br>${h(row.problem_representation)}</td><td>${h(row.canonical_answer)}</td><td><strong>${row.difficulty_rating == null ? '—' : evaluationCoordinate(row, 'difficulty')} × ${row.singularity_rating == null ? '—' : evaluationCoordinate(row, 'singularity')}</strong></td><td>${row.observation_mode === 'rating_only_answer_shown' ? '評価のみ' : '旧方式'}</td></tr>`).join('')}</tbody></table></div>`;
   document.querySelectorAll('tbody tr[data-id]').forEach((row) => row.addEventListener('click', async () => {
     const detail = await api(`/api/attempts/${row.dataset.id}`);
     document.querySelector('#history-detail').innerHTML = detailBlock(detail, true);
@@ -224,7 +279,7 @@ function detailBlock(detail, allowRevision = false) {
   return `<div class="panel history-detail"><div class="panel-heading"><h3>保存データ詳細</h3><span class="badge">attempt ${h(detail.id.slice(0, 8))}</span></div>
     <div class="answer-pair"><div class="answer-box"><strong>問題</strong>${h(detail.problem_representation)}</div><div class="answer-box"><strong>答え</strong>${h(detail.canonical_answer)}</div></div>
     <p class="observation-note">${detail.observation_mode === 'rating_only_answer_shown' ? '回答未収集（解ける前提）' : `旧方式の回答: ${h(detail.raw_user_answer ?? '—')} / ${h(detail.correctness ?? '—')}`}</p>
-    <h3>評価の変更履歴</h3><div class="table-wrap"><table><thead><tr><th>版</th><th>日時</th><th>難しさ</th><th>特異性</th><th>メモ</th><th>答え表示前</th></tr></thead><tbody>${detail.evaluations.map((evaluation) => `<tr><td>${evaluation.revision_number}</td><td>${fmt(evaluation.rated_at)}</td><td>${evaluation.difficulty_rating}</td><td>${evaluation.singularity_rating}</td><td>${h(evaluation.note ?? '')}</td><td>${evaluation.pre_answer_reveal ? 'はい' : 'いいえ'}</td></tr>`).join('')}</tbody></table></div>
+    <h3>評価の変更履歴</h3><div class="table-wrap"><table><thead><tr><th>版</th><th>日時</th><th>難しさ</th><th>特異性</th><th>保存区分</th><th>メモ</th><th>答え表示前</th></tr></thead><tbody>${detail.evaluations.map((evaluation) => `<tr><td>${evaluation.revision_number}</td><td>${fmt(evaluation.rated_at)}</td><td>${evaluationCoordinate(evaluation, 'difficulty')}</td><td>${evaluationCoordinate(evaluation, 'singularity')}</td><td>${evaluation.difficulty_rating}, ${evaluation.singularity_rating}</td><td>${h(evaluation.note ?? '')}</td><td>${evaluation.pre_answer_reveal ? 'はい' : 'いいえ'}</td></tr>`).join('')}</tbody></table></div>
     ${allowRevision && detail.evaluations.length ? `<details><summary>評価を修正する</summary><div id="revision-grid">${ratingGrid(null, 'revise')}</div><label class="field"><span>修正理由</span><input id="revision-note" required></label><button class="button" id="save-revision" disabled>変更履歴を追加</button></details>` : ''}
     <details><summary>操作時刻と元データ</summary><div class="timeline">${detail.events.map((event) => `<div class="timeline-item"><strong>#${event.sequence_number} ${h(event.event_type)}</strong><div class="muted small">${fmt(event.occurred_at)} · client mono ${event.client_monotonic_ms?.toFixed?.(1) ?? '—'} ms</div><div class="small">${h(JSON.stringify(event.payload))}</div></div>`).join('')}</div><pre class="detail-json">${h(JSON.stringify({ selection: detail.selection, source_payload: detail.original_source_payload, item_revisions: detail.item_revisions }, null, 2))}</pre></details>
   </div>`;
@@ -232,18 +287,16 @@ function detailBlock(detail, allowRevision = false) {
 
 function bindRevision(detail) {
   let selection = null;
-  bindRatingCells('revise', (next, button) => {
+  bindRatingSurface('revise', (next) => {
     selection = next;
-    document.querySelectorAll('[data-prefix="revise"]').forEach((cell) => {
-      const active = cell === button;
-      cell.classList.toggle('selected', active);
-    });
     document.querySelector('#save-revision').disabled = false;
   });
   document.querySelector('#save-revision')?.addEventListener('click', async () => {
     const revised = await api(`/api/attempts/${detail.id}/ratings`, { method: 'POST', body: JSON.stringify({
       difficulty_rating: selection.difficulty,
       singularity_rating: selection.singularity,
+      difficulty_position: selection.difficulty_position,
+      singularity_position: selection.singularity_position,
       note: document.querySelector('#revision-note').value,
       ...eventStamp(),
     }) });
