@@ -60,3 +60,58 @@ test('active attempt and draft survive a local server restart', async () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('quick flow creates a session and preserves random-generation and WASM-grading provenance', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'autodrill-qa-quick-'));
+  const autodrillRuntime = {
+    async generateRandomProblem() {
+      return {
+        item: {
+          source: 'autodrill',
+          source_identifier: '1:5:QaA1:4:0',
+          unit_name: '一桁の足し算',
+          problem_representation: '2 + 3 =',
+          canonical_answer: '5',
+          original_source_payload: { integration_version: 'autodrill_qa_wasm_v1', problem: { id: 1 }, worksheet: { problems: [{ id: 1 }] } },
+        },
+        selection: {
+          selection_policy: 'autodrill_random_v1',
+          candidate_source: 'test_theme_registry',
+          filters: { requested_difficulty: 4 },
+          random_seed: 'selection-seed',
+          selection_probability: 0.01,
+        },
+      };
+    },
+    async gradeAnswer() {
+      return {
+        correctness: 'correct',
+        normalized_user_answer: '{"type":"integer","value":"5"}',
+        grading_method: 'autodrill_wasm_grade_v1',
+        raw_result: { parsed: { type: 'integer', value: '5' }, graded: { is_correct: true, warnings: [] } },
+      };
+    },
+  };
+  const qa = createQaServer({ databasePath: join(directory, 'qa.sqlite3'), port: 0, gitSha: 'quick-test', quiet: true, autodrillRuntime });
+  const address = await qa.listen();
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    const { payload: attempt } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test' });
+    assert.equal(attempt.problem_representation, '2 + 3 =');
+    assert.equal(JSON.stringify(attempt).includes('canonical_answer'), false);
+    const { payload: submitted } = await request(base, `/api/attempts/${attempt.id}/submit`, { outcome: 'answered', raw_user_answer: '5' });
+    assert.equal(JSON.stringify(submitted).includes('correctness'), false);
+    const { payload: revealed } = await request(base, `/api/attempts/${attempt.id}/ratings`, { difficulty_rating: 2, singularity_rating: 3 });
+    assert.equal(revealed.correctness, 'correct');
+    assert.equal(revealed.grading_method, 'autodrill_wasm_grade_v1');
+    assert.equal(revealed.selection.selection_policy, 'autodrill_random_v1');
+    assert.equal(revealed.selection.random_seed, 'selection-seed');
+    assert.deepEqual(revealed.events.find((event) => event.event_type === 'submit').payload.grading.graded.warnings, []);
+    const { payload: repeated } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test' });
+    assert.equal(repeated.item_id, attempt.item_id);
+    assert.equal(repeated.exposure_count, 2);
+  } finally {
+    await qa.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

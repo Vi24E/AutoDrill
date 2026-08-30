@@ -39,6 +39,7 @@ if [[ -z "$NODE_BINARY" ]]; then
 fi
 
 export AUTODRILL_QA_GIT_SHA="$(/usr/bin/tr -d '[:space:]' < "$RESOURCE_ROOT/git-sha")"
+export AUTODRILL_QA_WASM_DIR="$RESOURCE_ROOT/qa/wasm"
 export PATH="$(dirname -- "$NODE_BINARY"):/usr/bin:/bin:${PATH:-}"
 print -- "[$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')] launch node=$NODE_BINARY git=$AUTODRILL_QA_GIT_SHA"
 

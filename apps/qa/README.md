@@ -14,6 +14,16 @@ pnpm --filter @autodrill/qa build:macos
 
 起動失敗の詳細は`~/Library/Logs/AutoDrill/problem-qa-launcher.log`へ記録される。
 
+## 使い方
+
+通常操作は次の3段階だけである。
+
+1. 起動すると、AutoDrillの対応単元からランダムな問題が自動表示される。
+2. 答えを入力し、7×7 gridで難しさと特異性を評価する。
+3. 保存結果を確認して「次のランダム問題」を押す。
+
+session開始、問題登録、queue選択は不要。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
+
 terminalから同じ専用windowを開く場合:
 
 ```sh
@@ -42,6 +52,7 @@ databaseをrepository内へ置く場合も、`apps/qa/*.sqlite*`はignoreされ�
 - rating前のAPI responseにはcanonical answer、correctness、過去分布を含めない。
 - manual problemのgradingはUnicode NFKC + whitespace正規化後のexact text equalityとして`grading_method`に記録する。AutoDrillの数学的gradingをTypeScriptへ複製しない。
 - AutoDrill snapshotはsource payload JSONをlosslessに保存する。QAのためにproduction wireを拡張しない。
+- ランダム出題はRust `drill-core`の既存WASM境界を再利用する。数値入力でRust gradingをそのまま利用できるthemeをcanonical contractから選び、theme IDや数学ロジックをQA側へ複製しない。
 - model resultはraw tableへ書き戻さず、`model_runs` / `derived_results`へversioned projectionとして保存する。
 
 ## 検証

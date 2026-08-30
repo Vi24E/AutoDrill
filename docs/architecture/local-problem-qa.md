@@ -8,7 +8,7 @@ AutoDrillの問題品質をUser本人が観測し、将来の統計解析へ使�
 
 QA applicationのlocal serverはdurable SQLite persistenceを提供するためのもので、network service、cloud DB、login、analyticsを持たない。既定databaseはOSのapplication-data directoryへ置き、`AUTODRILL_QA_DB_PATH`で明示変更できる。
 
-通常起動はrepository直下のmacOS `AutoDrill Problem QA.app`から`apps/qa/src/desktop.mjs`を呼ぶ。desktop launcherはOS割当のephemeral loopback portでserverを開始し、独立temporary profileのChromium app-mode windowを開く。Terminal、address bar、browser tabを表示せず、window processの終了をserver lifecycleへ結びつける。profileは終了時に削除し、durable dataはSQLiteだけへ残す。固定portの`src/server.mjs`起動は開発・debug用途である。
+通常起動はrepository直下のmacOS `AutoDrill Problem QA.app`を使う。app bundleはQA runtime、Rust/WASM generator、versioned Rust contractを`Contents/Resources`へ同梱し、Finder起動時にDesktop配下のrepositoryへaccessしない。desktop launcherはOS割当のephemeral loopback portでserverを開始し、独立temporary profileのChromium app-mode windowを開く。Terminal、address bar、browser tabを表示せず、window processの終了をserver lifecycleへ結びつける。profileは終了時に削除し、durable dataはSQLiteだけへ残す。固定portの`src/server.mjs`起動は開発・debug用途である。
 
 ## Source of truth
 
@@ -60,6 +60,8 @@ Full JSON exportはmanifestと全raw/projection tableを含む。Analysis CSVは
 
 ## AutoDrill integration
 
-v1はmanual entryと、AutoDrill/imported source payload JSONのlossless snapshot importを提供する。production Problem wireをQA都合で拡張せず、source payloadに存在するtheme、skill、curriculum、seed、generator revision、Problem DTO、prompt、answer schema、worked solution、layout/generation settingsをそのまま保存できる。
+default flowはsession開始・problem登録・queue選択を自動化する。QA serverがRust `drill-core`の既存WASM boundaryを呼び、canonical web contractのうち`simple_numeric` inputと対応promptを持つthemeから一様に選択する。requested difficultyは`ランダム`、worksheet内problemも一様に選び、selection seed、candidate source、filter、propensityを保存する。theme IDのhard-codeや数学generatorの再実装は行わない。
 
-generatorを直接呼ぶintegrationとBayesian modelはv1では実装しない。raw observationの完全性を優先し、将来modelを追加しても`model_runs` / `derived_results`へ別projectionとして保存する。
+各item snapshotはtheme / skill / curriculum metadata、generation request、worksheet identity、generator revision、seed、Problem DTO、prompt、answer schema、worked solution、layout、worksheet全体をlossless JSONとして保持する。回答は同じWASMのparse / grade boundaryで採点し、normalized Answer ASTとraw grading resultをevent logへ保存する。rating前のresponseにはcanonical answer、correctness、過去分布を含めない。
+
+manual/import APIと既存recordはdata correction・compatibilityのため内部に保持するが、通常UIには表示しない。Bayesian modelは実装せず、将来追加しても`model_runs` / `derived_results`へ別projectionとして保存する。

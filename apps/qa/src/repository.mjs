@@ -150,6 +150,12 @@ export class QaRepository {
       WHERE i.id=?`).get(itemId) ?? null;
   }
 
+  findItemBySourceIdentifier(source, sourceIdentifier) {
+    if (!sourceIdentifier) return null;
+    return this.db.prepare(`SELECT id FROM items WHERE source=? AND source_identifier=? AND invalidated_at IS NULL ORDER BY created_at LIMIT 1`)
+      .get(source, sourceIdentifier) ?? null;
+  }
+
   activeAttempt(sessionId = null) {
     const sql = `SELECT id FROM attempts WHERE state IN ('solving','rating') ${sessionId ? 'AND session_id=?' : ''}
       ORDER BY shown_at DESC LIMIT 1`;
@@ -162,20 +168,31 @@ export class QaRepository {
     const session = this.getSession(requiredText(input.session_id, 'session_id', 100));
     if (!session || session.ended_at || session.invalidated_at) throw new QaValidationError('An active QA session is required.', 409);
     if (this.activeAttempt(session.id)) throw new QaValidationError('This session already has an active attempt.', 409);
+    const selectionContext = input.selection_context ?? null;
     const policy = input.selection_policy === 'random' ? 'random' : 'manual_order';
     const unit = typeof input.unit_filter === 'string' ? input.unit_filter : '';
-    const candidates = this.listItems({ unit });
-    if (!candidates.length) throw new QaValidationError('No queued problems match the current filter.', 409);
+    let candidates;
     let chosen;
     let randomSeed = null;
     if (input.item_id) {
-      chosen = candidates.find((item) => item.id === input.item_id);
+      chosen = this.db.prepare(`SELECT i.id,i.source,i.source_identifier,i.content_hash,i.created_at,i.current_revision_number,
+        r.unit_name,r.problem_representation,q.position,
+        (SELECT COUNT(*) FROM attempts a WHERE a.item_id=i.id) AS exposure_count
+        FROM items i JOIN item_revisions r ON r.item_id=i.id AND r.revision_number=i.current_revision_number
+        JOIN queue_entries q ON q.item_id=i.id AND q.invalidated_at IS NULL
+        WHERE i.id=? AND i.invalidated_at IS NULL AND (?='' OR r.unit_name LIKE ?)`)
+        .get(input.item_id, unit, `%${unit}%`);
       if (!chosen) throw new QaValidationError('The selected problem is not in the current candidate set.', 409);
-    } else if (policy === 'random') {
+      candidates = [chosen];
+    } else {
+      candidates = this.listItems({ unit });
+      if (!candidates.length) throw new QaValidationError('No queued problems match the current filter.', 409);
+    }
+    if (!chosen && policy === 'random') {
       randomSeed = optionalText(input.random_seed, 'random_seed', 500) ?? randomUUID();
       const digest = createHash('sha256').update(randomSeed).digest();
       chosen = candidates[digest.readUInt32BE(0) % candidates.length];
-    } else chosen = candidates[0];
+    } else if (!chosen) chosen = candidates[0];
     const detail = this.itemDetail(chosen.id);
     const attemptId = randomUUID();
     const shownAt = this.clock();
@@ -185,11 +202,15 @@ export class QaRepository {
         (id,session_id,item_id,item_revision_number,exposure_count,state,shown_at,application_version,qa_schema_version,autodrill_git_sha,browser_version)
         VALUES (?,?,?,?,?,'solving',?,?,?,?,?)`).run(attemptId, session.id, chosen.id, detail.current_revision_number, exposure,
           shownAt, APP_VERSION, QA_SCHEMA_VERSION, this.gitSha, optionalText(input.browser_version, 'browser_version', 2_000));
-      const probability = input.item_id || policy === 'manual_order' ? 1 : 1 / candidates.length;
+      const probability = selectionContext?.selection_probability ?? (input.item_id || policy === 'manual_order' ? 1 : 1 / candidates.length);
       this.db.prepare(`INSERT INTO selection_events
         (id,attempt_id,selected_at,selection_policy,candidate_source,filters_json,random_seed,candidate_item_ids_json,selection_probability)
-        VALUES (?,?,?,?,?,?,?,?,?)`).run(randomUUID(), attemptId, shownAt, input.item_id ? 'explicit_item' : policy, 'local_queue', json({ unit }), randomSeed, json(candidates.map((item) => item.id)), probability);
-      this.appendEvent(attemptId, 'shown', { exposure_count: exposure }, input.client_wall_at, input.client_monotonic_ms, shownAt);
+        VALUES (?,?,?,?,?,?,?,?,?)`).run(randomUUID(), attemptId, shownAt,
+          selectionContext?.selection_policy ?? (input.item_id ? 'explicit_item' : policy),
+          selectionContext?.candidate_source ?? 'local_queue',
+          json(selectionContext?.filters ?? { unit }), selectionContext?.random_seed ?? randomSeed,
+          json(selectionContext ? [chosen.id] : candidates.map((item) => item.id)), probability);
+      this.appendEvent(attemptId, 'shown', { exposure_count: exposure, selection: selectionContext }, input.client_wall_at, input.client_monotonic_ms, shownAt);
       return this.safeAttempt(attemptId);
     });
   }
@@ -234,7 +255,7 @@ export class QaRepository {
     });
   }
 
-  submitAttempt(attemptId, input) {
+  submitAttempt(attemptId, input, grading = null) {
     const attempt = this.db.prepare('SELECT * FROM attempts WHERE id=?').get(attemptId);
     if (!attempt) throw new QaValidationError('Attempt not found.', 404);
     if (attempt.state !== 'solving') throw new QaValidationError('Attempt has already been submitted.', 409);
@@ -244,12 +265,18 @@ export class QaRepository {
     if (outcome === 'answered' && !raw.trim()) throw new QaValidationError('Enter an answer or choose another outcome.');
     const item = this.db.prepare(`SELECT r.canonical_answer FROM item_revisions r
       WHERE r.item_id=? AND r.revision_number=?`).get(attempt.item_id, attempt.item_revision_number);
-    const normalized = raw ? normalizeManualAnswer(raw) : null;
+    let normalized = raw ? normalizeManualAnswer(raw) : null;
     let correctness = 'ungraded';
     let gradingMethod = 'not_graded';
     if (outcome === 'answered') {
-      correctness = normalized === normalizeManualAnswer(item.canonical_answer) ? 'correct' : 'incorrect';
-      gradingMethod = 'manual_exact_text_nfkc_v1';
+      if (grading) {
+        correctness = grading.correctness;
+        normalized = grading.normalized_user_answer;
+        gradingMethod = grading.grading_method;
+      } else {
+        correctness = normalized === normalizeManualAnswer(item.canonical_answer) ? 'correct' : 'incorrect';
+        gradingMethod = 'manual_exact_text_nfkc_v1';
+      }
     } else if (outcome === 'unable_to_solve') {
       correctness = 'incorrect'; gradingMethod = 'explicit_unable_to_solve_v1';
     }
@@ -260,7 +287,7 @@ export class QaRepository {
         submitted_at=?,rating_started_at=?,state=?,answer_elapsed_ms=? WHERE id=?`).run(raw, normalized, correctness, gradingMethod,
           outcome, submittedAt, needsRating ? submittedAt : null, needsRating ? 'rating' : 'complete',
           Number.isFinite(input.elapsed_since_shown_ms) ? input.elapsed_since_shown_ms : null, attemptId);
-      this.appendEvent(attemptId, outcome === 'answered' ? 'submit' : outcome.replace('skipped', 'skip'), { outcome }, input.client_wall_at, input.client_monotonic_ms, submittedAt);
+      this.appendEvent(attemptId, outcome === 'answered' ? 'submit' : outcome.replace('skipped', 'skip'), { outcome, grading: grading?.raw_result ?? null }, input.client_wall_at, input.client_monotonic_ms, submittedAt);
       if (needsRating) {
         this.appendEvent(attemptId, 'rating_started', {}, input.client_wall_at, input.client_monotonic_ms, submittedAt);
         return { attempt_id: attemptId, state: 'rating', rating_started_at: submittedAt };
