@@ -53,10 +53,19 @@ input:focus, textarea:focus, select:focus, button:focus-visible { outline: 3px s
 .attempt-shell { max-width: 920px; margin: 0 auto; }
 .problem-card { min-height: 230px; display: grid; align-content: center; justify-items: center; text-align: center; }
 .problem-card .unit { color: var(--accent); font-weight: 700; }
+.unit-label { display: inline-flex; padding: 5px 12px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 13px; font-weight: 800; }
 .problem-text { margin: 24px 0; font: 500 30px/1.55 ui-serif, "Noto Serif JP", serif; white-space: pre-wrap; }
+.answer-field { width: 100%; align-items: center; }
 .answer-input { max-width: 620px; font-size: 22px; text-align: center; padding: 15px; }
 .save-indicator { min-height: 20px; font-size: 12px; color: var(--muted); }
 .outcome-actions { justify-content: center; margin-top: 20px; }
+.primary-action { min-width: 220px; padding: 13px 22px; font-size: 16px; }
+.secondary-options { width: 100%; margin-top: 22px; text-align: left; }
+.secondary-options .actions, .secondary-options .field { margin-top: 12px; }
+.loading-card { min-height: 360px; display: grid; place-items: center; align-content: center; text-align: center; }
+.loading-card h2 { margin-top: 18px; margin-bottom: 4px; }
+.spinner { width: 38px; height: 38px; border: 4px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .rating-layout { display: grid; grid-template-columns: 170px auto; gap: 16px; justify-content: center; align-items: center; }
 .rating-y-label { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; justify-self: center; font-weight: 700; }
 .rating-board { display: grid; grid-template-columns: 122px repeat(var(--rating-steps), 54px); grid-template-rows: repeat(var(--rating-steps), 54px) 56px; gap: 5px; align-items: stretch; }
@@ -67,13 +76,20 @@ input:focus, textarea:focus, select:focus, button:focus-visible { outline: 3px s
 .x-anchor { display: flex; flex-direction: column; justify-content: flex-start; align-items: center; font-size: 10px; color: var(--muted); text-align: center; }
 .x-axis-title { text-align: center; margin: 8px 0 0 132px; font-weight: 700; }
 .reveal { border-top: 5px solid var(--accent); }
+.rating-intro { text-align: center; }
+.rating-intro h2 { margin-top: 12px; margin-bottom: 6px; }
+.rating-problem { text-align: center; font-size: 24px; }
+.confirm-rating-row, .next-row { justify-content: center; margin-top: 22px; }
+.reveal-heading { display: flex; justify-content: space-between; align-items: center; }
+.reveal-heading h2 { margin: 9px 0 0; }
+.saved-rating { display: flex; justify-content: center; gap: 22px; margin: 20px 0 0; }
 .answer-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .answer-box { padding: 15px; border-radius: 9px; background: #f1f3ef; }
 .answer-box strong { display: block; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
 .result { font-size: 20px; font-weight: 800; }
 .result.correct { color: var(--accent); }
 .result.incorrect { color: var(--warn); }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .stat { padding: 12px; background: #f1f3ef; border-radius: 9px; }
 .stat strong { display: block; font-size: 19px; }
 .plane { display: grid; grid-template-columns: repeat(var(--rating-steps), 32px); gap: 4px; transform: scaleY(-1); width: max-content; }
@@ -92,5 +108,7 @@ tbody tr[data-id]:hover { background: #f0f4ef; }
 .timeline-item::before { content: ''; position: absolute; left: -24px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .toast { position: fixed; right: 24px; bottom: 24px; max-width: 420px; padding: 13px 17px; border-radius: 9px; background: #19221c; color: white; box-shadow: var(--shadow); z-index: 20; }
 .warning { padding: 10px 12px; border-radius: 8px; background: #fff1e8; color: #7d3c26; }
+.history-detail { box-shadow: none; margin-top: 20px; }
+.history-detail h3 { margin-top: 22px; }
 details summary { cursor: pointer; color: var(--accent); font-weight: 700; }
 @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } .filters { grid-template-columns: repeat(3, 1fr); } }

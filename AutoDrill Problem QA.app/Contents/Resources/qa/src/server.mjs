@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { openDatabase } from './db.mjs';
 import { QaRepository } from './repository.mjs';
 import { QaValidationError } from './constants.mjs';
+import { AutoDrillRuntime } from './autodrill-runtime.mjs';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
 const MAX_BODY_BYTES = 1_200_000;
@@ -56,7 +57,7 @@ function serveStatic(pathname, res) {
   return true;
 }
 
-export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', gitSha, quiet = false } = {}) {
+export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', gitSha, quiet = false, autodrillRuntime = new AutoDrillRuntime() } = {}) {
   const opened = openDatabase({ path: databasePath });
   const repository = new QaRepository(opened.database, { gitSha });
   const server = createServer(async (req, res) => {
@@ -73,13 +74,33 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
       if (req.method === 'GET' && url.pathname === '/api/state') {
         const session = repository.currentSession();
         const activeAttempt = session ? repository.activeAttempt(session.id) : null;
-        sendJson(res, 200, { metadata: repository.metadata(), databasePath: opened.path, session, activeAttempt, items: activeAttempt ? [] : repository.listItems({ unit: url.searchParams.get('unit') ?? '' }) });
+        sendJson(res, 200, { metadata: repository.metadata(), databasePath: opened.path, session, activeAttempt });
         return;
       }
       if (req.method === 'POST' && url.pathname === '/api/sessions') { sendJson(res, 201, repository.createSession(await readJson(req))); return; }
       let params = routeMatch(url.pathname, '/api/sessions/:id/end');
       if (req.method === 'POST' && params) { sendJson(res, 200, repository.endSession(params.id)); return; }
       if (req.method === 'GET' && url.pathname === '/api/sessions') { sendJson(res, 200, repository.listSessions()); return; }
+
+      if (req.method === 'POST' && url.pathname === '/api/quick/next') {
+        const input = await readJson(req);
+        let session = repository.currentSession();
+        if (!session) session = repository.createSession({ evaluator: 'User', local_timezone: input.local_timezone ?? 'UTC' });
+        const activeAttempt = repository.activeAttempt(session.id);
+        if (activeAttempt) { sendJson(res, 200, activeAttempt); return; }
+        const generated = await autodrillRuntime.generateRandomProblem();
+        const item = repository.findItemBySourceIdentifier(generated.item.source, generated.item.source_identifier)
+          ?? repository.createItem(generated.item);
+        const attempt = repository.startAttempt({
+          session_id: session.id,
+          item_id: item.id,
+          browser_version: input.browser_version,
+          client_wall_at: input.client_wall_at,
+          client_monotonic_ms: input.client_monotonic_ms,
+          selection_context: generated.selection,
+        });
+        sendJson(res, 201, attempt); return;
+      }
 
       if (req.method === 'POST' && url.pathname === '/api/items') { sendJson(res, 201, repository.createItem(await readJson(req))); return; }
       if (req.method === 'GET' && url.pathname === '/api/items') {
@@ -100,7 +121,13 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
       params = routeMatch(url.pathname, '/api/attempts/:id/events');
       if (req.method === 'POST' && params) { sendJson(res, 201, repository.recordEvent(params.id, await readJson(req))); return; }
       params = routeMatch(url.pathname, '/api/attempts/:id/submit');
-      if (req.method === 'POST' && params) { sendJson(res, 200, repository.submitAttempt(params.id, await readJson(req))); return; }
+      if (req.method === 'POST' && params) {
+        const input = await readJson(req);
+        const detail = repository.attemptDetail(params.id);
+        if (!detail) throw new QaValidationError('Attempt not found.', 404);
+        const grading = input.outcome === 'answered' ? await autodrillRuntime.gradeAnswer(detail.original_source_payload, input.raw_user_answer ?? '') : null;
+        sendJson(res, 200, repository.submitAttempt(params.id, input, grading)); return;
+      }
       params = routeMatch(url.pathname, '/api/attempts/:id/ratings');
       if (req.method === 'POST' && params) { sendJson(res, 201, repository.rateAttempt(params.id, await readJson(req))); return; }
       params = routeMatch(url.pathname, '/api/attempts/:id/abandon');
