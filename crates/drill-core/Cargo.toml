@@ -8,6 +8,7 @@ description = "Typed, deterministic domain engine for AutoDrill"
 
 [features]
 default = []
+qa-diagnostics = []
 wire-types = ["dep:ts-rs"]
 
 [dependencies]

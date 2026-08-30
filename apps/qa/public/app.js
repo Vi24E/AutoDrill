@@ -7,6 +7,7 @@ const model = {
   state: null, view: 'evaluate', selectedRating: null,
   ratingStartedMonotonic: null, ratingEventPromise: null, starting: false, saving: false,
   units: [], selectedSkillId: null, prefetch: null, activeRenderOverlay: null,
+  samplingMode: localStorage.getItem('autodrill.qa.samplingMode') === 'custom' ? 'custom' : 'random',
 };
 
 const h = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -65,7 +66,7 @@ async function refresh() {
   const active = model.state.activeAttempt;
   if (active?.source_skill_id) model.selectedSkillId = active.source_skill_id;
   if (active && active.observation_mode !== 'rating_only_answer_shown') {
-    await startRandomAttempt();
+    await startAttempt();
     return;
   }
   model.view = 'evaluate';
@@ -145,11 +146,12 @@ async function prefetchNext() {
   const ownerAttemptId = attempt.id;
   let resolveReady;
   const readyPromise = new Promise((resolve) => { resolveReady = resolve; });
-  const entry = { id: null, skillId, ownerAttemptId, bin: null, frame: null, ready: false, readyPromise, resolveReady };
+  const samplingMode = model.samplingMode;
+  const entry = { id: null, skillId, samplingMode, ownerAttemptId, bin: null, frame: null, ready: false, readyPromise, resolveReady };
   model.prefetch = entry;
   try {
-    const reservation = await api('/api/quick/prefetch', { method: 'POST', body: JSON.stringify({ skill_id: skillId }) });
-    if (model.prefetch !== entry || model.state?.activeAttempt?.id !== ownerAttemptId || model.selectedSkillId !== skillId) {
+    const reservation = await api('/api/quick/prefetch', { method: 'POST', body: JSON.stringify({ skill_id: skillId, sampling_mode: samplingMode }) });
+    if (model.prefetch !== entry || model.state?.activeAttempt?.id !== ownerAttemptId || model.selectedSkillId !== skillId || model.samplingMode !== samplingMode) {
       entry.resolveReady(false);
       return;
     }
@@ -170,12 +172,12 @@ async function prefetchNext() {
   }
 }
 
-async function startRandomAttempt() {
+async function startAttempt() {
   if (model.starting) return;
   if (!model.selectedSkillId && !model.state.activeAttempt) { renderUnitChooser(); return; }
   model.starting = true;
   model.view = 'evaluate';
-  let prefetched = model.prefetch?.skillId === model.selectedSkillId ? model.prefetch : null;
+  let prefetched = model.prefetch?.skillId === model.selectedSkillId && model.prefetch?.samplingMode === model.samplingMode ? model.prefetch : null;
   if (prefetched && !prefetched.ready) {
     const ready = await Promise.race([
       prefetched.readyPromise,
@@ -192,6 +194,7 @@ async function startRandomAttempt() {
       local_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       browser_version: navigator.userAgent,
       skill_id: model.selectedSkillId,
+      sampling_mode: model.samplingMode,
       ...(prefetchId ? { prefetch_id: prefetchId } : {}),
       ...eventStamp(),
     }) });
@@ -222,17 +225,35 @@ function unitOptions(selectedSkillId = model.selectedSkillId, currentAttempt = m
   return `${currentOption}<option value="" ${selectedSkillId ? '' : 'selected'} disabled>単元を選択</option>${model.units.map((unit) => `<option value="${h(unit.skill_id)}" ${unit.skill_id === selectedSkillId ? 'selected' : ''}>${h(unit.name)}（${Number(unit.observation_count ?? 0)}件）</option>`).join('')}`;
 }
 
+function samplingToggle(compact = false) {
+  const checked = model.samplingMode === 'custom' ? 'checked' : '';
+  if (compact) return `<label class="sampling-toggle compact" title="OFF: ランダム / ON: 情報の薄いeffort vectorを優先"><input type="checkbox" data-custom-sampling ${checked}><span><strong>Custom</strong></span></label>`;
+  return `<label class="sampling-toggle"><input type="checkbox" data-custom-sampling ${checked}><span><strong>Custom sampling</strong><small>OFF: ランダム / ON: 情報の薄いeffort vectorを優先</small></span></label>`;
+}
+
+function bindSamplingToggle() {
+  document.querySelectorAll('[data-custom-sampling]').forEach((toggle) => toggle.addEventListener('change', () => {
+    model.samplingMode = toggle.checked ? 'custom' : 'random';
+    localStorage.setItem('autodrill.qa.samplingMode', model.samplingMode);
+    discardPrefetch();
+    document.querySelectorAll('[data-custom-sampling]').forEach((other) => { other.checked = toggle.checked; });
+    if (model.state?.activeAttempt && model.view === 'evaluate') void prefetchNext();
+  }));
+}
+
 function renderUnitChooser() {
   removeActiveRenderOverlay();
   app.innerHTML = `<section class="attempt-shell"><div class="panel unit-chooser">
-    <p class="eyebrow dark">AUTODRILL QA</p><h2>評価する単元を選択</h2><p class="muted">選んだ単元から問題をランダムに出題します。評価後も同じ単元が続きます。</p>
+    <p class="eyebrow dark">AUTODRILL QA</p><h2>評価する単元を選択</h2><p class="muted">通常はランダム出題です。Custom samplingでは既存評価で情報が薄いeffort vector方向を優先します。</p>
     <label class="field unit-choice"><span>出題単元</span><select id="unit-choice">${unitOptions()}</select></label>
+    ${samplingToggle()}
     <button class="button primary-action" id="start-unit" ${model.selectedSkillId ? '' : 'disabled'}>この単元で開始</button>
   </div></section>`;
   const select = document.querySelector('#unit-choice');
   const start = document.querySelector('#start-unit');
   select.addEventListener('change', () => { model.selectedSkillId = select.value; start.disabled = !select.value; });
-  start.addEventListener('click', startRandomAttempt);
+  start.addEventListener('click', startAttempt);
+  bindSamplingToggle();
   select.focus();
 }
 
@@ -254,7 +275,7 @@ async function changeUnit(select) {
     model.selectedRating = null;
   }
   model.selectedSkillId = nextSkillId;
-  await startRandomAttempt();
+  await startAttempt();
 }
 
 function ratingGrid(selected = model.selectedRating, prefix = 'rate') {
@@ -296,7 +317,7 @@ function renderRating(attempt, prefetched = null) {
   const usePrefetchedFrame = Boolean(prefetched?.ready && attempt.render_prefetch_id === prefetched.id);
   removeActiveRenderOverlay();
   app.innerHTML = `<section class="attempt-shell"><div class="panel rating-panel">
-    <div class="unit-picker"><label for="unit-select">出題単元</label><select id="unit-select">${unitOptions(model.selectedSkillId, attempt)}</select></div>
+    <div class="unit-picker"><label for="unit-select">出題単元</label><select id="unit-select">${unitOptions(model.selectedSkillId, attempt)}</select>${samplingToggle(true)}</div>
     <div class="problem-area print-problem-area"><div class="print-render-shell" data-render-attempt="${h(attempt.id)}">
       ${usePrefetchedFrame ? '' : `<iframe class="print-render-frame" title="AutoDrill印刷レイアウトの問題と答え" src="/renderer/index.html?attempt=${encodeURIComponent(attempt.id)}"></iframe>`}
       <div class="print-render-fallback"><div class="problem-text">${h(attempt.problem_representation)}</div><div class="canonical-answer"><span>答え</span><strong>${h(attempt.canonical_answer)}</strong></div></div>
@@ -318,6 +339,7 @@ function renderRating(attempt, prefetched = null) {
   }
   bindRatingSurface('rate');
   document.querySelector('#unit-select').addEventListener('change', (event) => changeUnit(event.currentTarget));
+  bindSamplingToggle();
   if (model.selectedRating) model.ratingEventPromise = Promise.resolve();
   document.querySelector('#confirm-rating').addEventListener('click', confirmRating);
   document.querySelector('[data-rating-surface="rate"]')?.focus();
@@ -400,7 +422,7 @@ async function confirmRating() {
     model.selectedRating = null;
     model.ratingEventPromise = null;
     updateChrome();
-    await startRandomAttempt();
+    await startAttempt();
   } finally {
     model.saving = false;
   }
@@ -487,7 +509,7 @@ nav.addEventListener('click', async (event) => {
   }
   model.view = button.dataset.view;
   if (model.view === 'evaluate' && !model.state.activeAttempt) {
-    startRandomAttempt();
+    startAttempt();
   } else {
     updateChrome();
     render();

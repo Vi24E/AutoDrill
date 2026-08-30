@@ -200,14 +200,19 @@ export class QaRepository {
           ratingOnly ? 'ungraded' : null, ratingOnly ? 'not_collected_assumed_solved_v1' : null,
           ratingOnly ? 'rating_only_answer_shown' : 'answer_then_rating', APP_VERSION, QA_SCHEMA_VERSION, this.gitSha, json(this.gitState),
           optionalText(input.browser_version, 'browser_version', 2_000));
-      const probability = selectionContext?.selection_probability ?? (input.item_id || policy === 'manual_order' ? 1 : 1 / candidates.length);
+      const probability = selectionContext && Object.hasOwn(selectionContext, 'selection_probability')
+        ? selectionContext.selection_probability
+        : (input.item_id || policy === 'manual_order' ? 1 : 1 / candidates.length);
       this.db.prepare(`INSERT INTO selection_events
-        (id,attempt_id,selected_at,selection_policy,candidate_source,filters_json,random_seed,candidate_item_ids_json,selection_probability)
-        VALUES (?,?,?,?,?,?,?,?,?)`).run(randomUUID(), attemptId, shownAt,
+        (id,attempt_id,selected_at,selection_policy,candidate_source,filters_json,random_seed,candidate_item_ids_json,
+         model_name,model_version,candidate_scores_json,selection_probability)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(), attemptId, shownAt,
           selectionContext?.selection_policy ?? (input.item_id ? 'explicit_item' : policy),
           selectionContext?.candidate_source ?? 'local_queue',
           json(selectionContext?.filters ?? { unit }), selectionContext?.random_seed ?? randomSeed,
-          json(selectionContext ? [chosen.id] : candidates.map((item) => item.id)), probability);
+          json(selectionContext ? [chosen.id] : candidates.map((item) => item.id)),
+          selectionContext?.model_name ?? null, selectionContext?.model_version ?? null,
+          selectionContext?.candidate_scores ? json(selectionContext.candidate_scores) : null, probability);
       this.appendEvent(attemptId, 'shown', { exposure_count: exposure, selection: selectionContext }, input.client_wall_at, input.client_monotonic_ms, shownAt);
       if (ratingOnly) {
         this.appendEvent(attemptId, 'answer_revealed', { reason: 'rating_only_answer_shown' }, input.client_wall_at, input.client_monotonic_ms, shownAt);
@@ -449,6 +454,24 @@ export class QaRepository {
         AND EXISTS (SELECT 1 FROM evaluations e WHERE e.attempt_id=a.id AND e.invalidated_at IS NULL)
         AND json_extract(r.original_source_payload_json,'$.theme.skill_id') IS NOT NULL
       GROUP BY skill_id`).all().map((row) => [row.skill_id, row.observation_count]));
+  }
+
+  unitSamplingObservations(skillId) {
+    return this.db.prepare(`SELECT r.original_source_payload_json,
+      e.difficulty_rating,e.singularity_rating,e.difficulty_position,e.singularity_position
+      FROM attempts a
+      JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number
+      JOIN evaluations e ON e.attempt_id=a.id
+        AND e.revision_number=(SELECT MAX(e2.revision_number) FROM evaluations e2 WHERE e2.attempt_id=a.id AND e2.invalidated_at IS NULL)
+      WHERE a.state='complete' AND a.invalidated_at IS NULL AND e.invalidated_at IS NULL
+        AND json_extract(r.original_source_payload_json,'$.theme.skill_id')=?
+      ORDER BY a.shown_at`).all(skillId).map((row) => ({
+        original_source_payload: parseJson(row.original_source_payload_json),
+        difficulty_rating: row.difficulty_rating,
+        singularity_rating: row.singularity_rating,
+        difficulty_position: row.difficulty_position,
+        singularity_position: row.singularity_position,
+      }));
   }
 
   unitStats(unitName) {

@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.7.0';
+export const APP_VERSION = '0.8.0';
 export const QA_SCHEMA_VERSION = 5;
 export const EXPORT_SCHEMA_VERSION = 2;
 

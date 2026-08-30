@@ -40,7 +40,7 @@ pub enum OperationKind {
 }
 
 impl OperationKind {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "qa-diagnostics"))]
     pub const ALL: [Self; OPERATION_KIND_COUNT] = [
         Self::Identity,
         Self::Count,
@@ -76,7 +76,55 @@ impl OperationKind {
     const fn index(self) -> usize {
         self as usize
     }
+
+    #[cfg(feature = "qa-diagnostics")]
+    const fn qa_name(self) -> &'static str {
+        match self {
+            Self::Identity => "identity",
+            Self::Count => "count",
+            Self::Increment => "increment",
+            Self::Decrement => "decrement",
+            Self::BasePlus => "base_plus",
+            Self::BaseMinus => "base_minus",
+            Self::BaseTimes => "base_times",
+            Self::BaseDivide => "base_divide",
+            Self::BigNum => "big_num",
+            Self::TimeTen => "time_ten",
+            Self::OverheadPf => "overhead_pf",
+            Self::OverheadGcd => "overhead_gcd",
+            Self::OverheadLcm => "overhead_lcm",
+            Self::OverheadNegative => "overhead_negative",
+            Self::OverheadCarryPlus => "overhead_carry_plus",
+            Self::OverheadCarryMinus => "overhead_carry_minus",
+            Self::OverheadCarryMult => "overhead_carry_mult",
+            Self::Transposition => "transposition",
+            Self::OverheadLinear => "overhead_linear",
+            Self::OverheadEqSystem => "overhead_eq_system",
+            Self::OverheadFactorPerfectSquare => "overhead_factor_perfect_square",
+            Self::OverheadFactorDifferenceOfSquares => "overhead_factor_difference_of_squares",
+            Self::OverheadFactorGeneral => "overhead_factor_general",
+            Self::OverheadQuadratic => "overhead_quadratic",
+            Self::BaseRoot => "base_root",
+            Self::Compare => "compare",
+            Self::Reciprocal => "reciprocal",
+            Self::BaseFractionCancel => "base_fraction_cancel",
+            Self::FractionSelfDivision => "fraction_self_division",
+        }
+    }
 }
+
+#[cfg(feature = "qa-diagnostics")]
+/// QA-only names for the current internal operation-vector basis.
+/// This is not part of the production Worksheet wire contract.
+pub const QA_OPERATION_VECTOR_BASIS: [&str; OPERATION_KIND_COUNT] = {
+    let mut names = [""; OPERATION_KIND_COUNT];
+    let mut index = 0;
+    while index < OPERATION_KIND_COUNT {
+        names[index] = OperationKind::ALL[index].qa_name();
+        index += 1;
+    }
+    names
+};
 
 /// Dense operation-count vector for the current internal effort basis.
 ///
@@ -107,6 +155,11 @@ impl OperationVector {
     #[cfg(test)]
     pub fn as_array(&self) -> &[f64; OPERATION_KIND_COUNT] {
         &self.values
+    }
+
+    #[cfg(feature = "qa-diagnostics")]
+    pub(crate) const fn qa_values(&self) -> [f64; OPERATION_KIND_COUNT] {
+        self.values
     }
 
     fn add(&mut self, kind: OperationKind, amount: f64) {
@@ -330,6 +383,22 @@ impl EffortModel {
         match self {
             Self::Operations(plan) => plan.operation_vector(),
             Self::ThemeSpecific(_) => OperationVector::zero(),
+        }
+    }
+
+    #[cfg(feature = "qa-diagnostics")]
+    pub(crate) fn qa_operation_vector(&self) -> Option<[f64; OPERATION_KIND_COUNT]> {
+        match self {
+            Self::Operations(plan) => Some(plan.operation_vector().qa_values()),
+            Self::ThemeSpecific(_) => None,
+        }
+    }
+
+    #[cfg(feature = "qa-diagnostics")]
+    pub(crate) const fn qa_model_kind(&self) -> &'static str {
+        match self {
+            Self::Operations(_) => "operations",
+            Self::ThemeSpecific(_) => "theme_specific",
         }
     }
 

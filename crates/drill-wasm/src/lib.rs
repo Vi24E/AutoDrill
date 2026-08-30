@@ -13,6 +13,8 @@ use std::time::Duration;
 use drill_core::generate_worksheet_request as core_generate_worksheet_request;
 #[cfg(test)]
 use drill_core::MAX_ANSWER_AST_SIZE;
+#[cfg(feature = "qa-diagnostics")]
+use drill_core::QA_OPERATION_VECTOR_BASIS;
 #[cfg(target_arch = "wasm32")]
 use drill_core::{generate_worksheet_request_with_clock, GenerationConfig, MonotonicClock};
 use drill_core::{
@@ -125,6 +127,23 @@ struct GradeAnswerRequest {
     input_interface: AnswerInputInterface,
 }
 
+#[cfg(feature = "qa-diagnostics")]
+#[derive(Debug, Serialize)]
+struct QaProblemEffortDiagnostics {
+    problem_index: usize,
+    effort: f64,
+    effort_model: &'static str,
+    operation_vector: Option<Vec<f64>>,
+}
+
+#[cfg(feature = "qa-diagnostics")]
+#[derive(Debug, Serialize)]
+struct QaWorksheetWithEffortDiagnostics {
+    worksheet: drill_core::Worksheet,
+    operation_vector_basis: Vec<&'static str>,
+    problems: Vec<QaProblemEffortDiagnostics>,
+}
+
 #[derive(Debug, Serialize)]
 struct ApiResponse<T: Serialize> {
     schema_version: u16,
@@ -145,6 +164,34 @@ struct ApiError {
 pub fn generate_worksheet(input_json: &str) -> String {
     respond_with(input_json, |request: GenerateWorksheetRequest| {
         generate_worksheet_for_platform(&request).map_err(generation_error)
+    })
+}
+
+#[cfg(feature = "qa-diagnostics")]
+/// Local QA-only generation endpoint. The production Worksheet wire remains
+/// unchanged; effort diagnostics are exposed only to the explicit QA consumer.
+#[wasm_bindgen]
+pub fn generate_qa_worksheet_with_effort(input_json: &str) -> String {
+    respond_with(input_json, |request: GenerateWorksheetRequest| {
+        let worksheet = generate_worksheet_for_platform(&request).map_err(generation_error)?;
+        let problems = worksheet
+            .problems()
+            .iter()
+            .enumerate()
+            .map(|(problem_index, problem)| QaProblemEffortDiagnostics {
+                problem_index,
+                effort: problem.effort(),
+                effort_model: problem.qa_effort_model_kind(),
+                operation_vector: problem
+                    .qa_effort_operation_vector()
+                    .map(|vector| vector.to_vec()),
+            })
+            .collect();
+        Ok(QaWorksheetWithEffortDiagnostics {
+            worksheet,
+            operation_vector_basis: QA_OPERATION_VECTOR_BASIS.to_vec(),
+            problems,
+        })
     })
 }
 
@@ -388,6 +435,42 @@ mod tests {
             "effort",
         ] {
             assert!(problem.get(internal_effort_field).is_none());
+        }
+    }
+
+    #[cfg(feature = "qa-diagnostics")]
+    #[test]
+    fn qa_effort_endpoint_keeps_diagnostics_outside_the_worksheet_wire() {
+        let output = generate_qa_worksheet_with_effort(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "numeric_theme_id": 2,
+                "seed": "QaV1",
+                "difficulty": 4
+            })
+            .to_string(),
+        );
+        let value = parse(&output);
+        assert_eq!(value["ok"], true);
+        assert_eq!(
+            value["data"]["operation_vector_basis"]
+                .as_array()
+                .unwrap()
+                .len(),
+            QA_OPERATION_VECTOR_BASIS.len()
+        );
+        let diagnostics = value["data"]["problems"].as_array().unwrap();
+        let worksheet_problems = value["data"]["worksheet"]["problems"].as_array().unwrap();
+        assert_eq!(diagnostics.len(), worksheet_problems.len());
+        assert!(diagnostics
+            .iter()
+            .all(|problem| problem["effort"].as_f64().is_some()));
+        assert!(diagnostics
+            .iter()
+            .any(|problem| problem["operation_vector"].is_array()));
+        for problem in worksheet_problems {
+            assert!(problem.get("effort").is_none());
+            assert!(problem.get("operation_vector").is_none());
         }
     }
 

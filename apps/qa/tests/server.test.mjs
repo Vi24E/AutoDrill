@@ -66,6 +66,10 @@ test('quick flow creates a rating-only observation with random-generation proven
   const requestedSkills = [];
   const autodrillRuntime = {
     listUnits() { return [{ skill_id: 'jp.grade2.addition.two_digit', numeric_theme_id: 5, name: '二桁の足し算', curriculum_path: ['root', '二桁の足し算'] }]; },
+    async generateProblem({ skillId, samplingMode = 'random' } = {}) {
+      assert.equal(samplingMode, 'random');
+      return this.generateRandomProblem({ skillId });
+    },
     async generateRandomProblem({ skillId } = {}) {
       requestedSkills.push(skillId ?? null);
       return {

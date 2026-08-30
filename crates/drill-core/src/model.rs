@@ -1180,6 +1180,18 @@ impl Problem {
         self.effort_model.value()
     }
 
+    #[cfg(feature = "qa-diagnostics")]
+    #[doc(hidden)]
+    pub fn qa_effort_operation_vector(&self) -> Option<[f64; crate::effort::OPERATION_KIND_COUNT]> {
+        self.effort_model.qa_operation_vector()
+    }
+
+    #[cfg(feature = "qa-diagnostics")]
+    #[doc(hidden)]
+    pub const fn qa_effort_model_kind(&self) -> &'static str {
+        self.effort_model.qa_model_kind()
+    }
+
     #[cfg(test)]
     pub(crate) fn operation_plan(&self) -> Option<&OperationPlan> {
         self.effort_model.operation_plan()

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { CUSTOM_SAMPLING_PROFILE, scoreInformationCandidates } from './custom-sampling.mjs';
 
 const CONTRACT_PATH = new URL('../generated/drill-core-contract.json', import.meta.url);
 const EXCLUDED_QA_SKILLS = new Set([
@@ -10,6 +11,8 @@ const EXCLUDED_QA_SKILLS = new Set([
   'jp.grade3.division.table.1',
 ]);
 const SEED_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const CUSTOM_CANDIDATE_WORKSHEETS = 4;
+const MAX_DIAGNOSTIC_CACHE_ENTRIES = 128;
 
 function digestNumber(seed, label) {
   return createHash('sha256').update(`${label}:${seed}`).digest().readUInt32BE(0);
@@ -188,6 +191,7 @@ export class AutoDrillRuntime {
     this.selectionSeed = selectionSeed;
     this.runtimePromise = null;
     this.batches = new Map();
+    this.diagnosticCache = new Map();
     this.themes = Object.values(contract.themes).filter((theme) => !EXCLUDED_QA_SKILLS.has(theme.skill_id));
     if (!this.themes.length) throw new Error('QAで評価可能なAutoDrill themeがありません。');
   }
@@ -212,6 +216,161 @@ export class AutoDrillRuntime {
       })();
     }
     return this.runtimePromise;
+  }
+
+  async diagnosticWorksheet(request, { cache = true } = {}) {
+    const key = JSON.stringify(request);
+    if (cache && this.diagnosticCache.has(key)) return this.diagnosticCache.get(key);
+    const runtime = await this.runtime();
+    if (typeof runtime.generate_qa_worksheet_with_effort !== 'function') {
+      throw new Error('QA effort diagnosticsを含むWASMが必要です。pnpm --filter @autodrill/qa build:wasm を実行してください。');
+    }
+    const envelope = JSON.parse(runtime.generate_qa_worksheet_with_effort(JSON.stringify(request)));
+    if (!envelope.ok) throw new Error(`AutoDrill QA diagnostic generation failed: ${envelope.error?.message ?? 'unknown error'}`);
+    if (cache) {
+      this.diagnosticCache.set(key, envelope.data);
+      while (this.diagnosticCache.size > MAX_DIAGNOSTIC_CACHE_ENTRIES) this.diagnosticCache.delete(this.diagnosticCache.keys().next().value);
+    }
+    return envelope.data;
+  }
+
+  async generateProblem({ skillId, samplingMode = 'random', observations = [] } = {}) {
+    if (samplingMode === 'random') return this.generateRandomProblem({ skillId });
+    if (samplingMode !== 'custom') throw new Error(`Unknown QA sampling mode: ${samplingMode}`);
+    return this.generateCustomProblem({ skillId, observations });
+  }
+
+  async generateCustomProblem({ skillId, observations = [] } = {}) {
+    const selectionSeed = this.selectionSeed();
+    const theme = this.themes.find((candidate) => candidate.skill_id === skillId);
+    if (!theme) throw new Error(`QAで選択できない単元です: ${skillId}`);
+
+    const candidates = [];
+    const candidateRequests = [];
+    const seen = new Set();
+    let operationVectorBasis = null;
+    for (let worksheetIndex = 0; worksheetIndex < CUSTOM_CANDIDATE_WORKSHEETS; worksheetIndex += 1) {
+      const request = {
+        schema_version: this.contract.schema_version,
+        numeric_theme_id: theme.numeric_theme_id,
+        seed: generatorSeed(`${selectionSeed}:custom:${worksheetIndex}`),
+        difficulty: 4,
+      };
+      candidateRequests.push(request);
+      const generated = await this.diagnosticWorksheet(request, { cache: false });
+      const basis = generated.operation_vector_basis ?? [];
+      if (operationVectorBasis == null) operationVectorBasis = basis;
+      else if (JSON.stringify(operationVectorBasis) !== JSON.stringify(basis)) {
+        throw new Error('QA effort diagnostic basis changed within one custom candidate pool.');
+      }
+      generated.worksheet.problems.forEach((problem, problemIndex) => {
+        const signature = JSON.stringify(problem.prompt);
+        if (seen.has(signature)) return;
+        seen.add(signature);
+        const diagnostics = generated.problems[problemIndex];
+        const sourceIdentifier = `${generated.worksheet.identity.numeric_theme_id}:${generated.worksheet.identity.generator_revision}:${generated.worksheet.identity.seed}:${generated.worksheet.identity.difficulty}:${problemIndex}`;
+        candidates.push({
+          ...diagnostics,
+          signature,
+          source_identifier: sourceIdentifier,
+          request,
+          worksheet: generated.worksheet,
+          problem_index: problemIndex,
+          problem,
+        });
+      });
+    }
+    operationVectorBasis ??= [];
+
+    const observed = [];
+    const observedSignatures = new Set();
+    for (const observation of observations) {
+      const payload = observation?.original_source_payload;
+      const request = payload?.generation_request;
+      const problemIndex = payload?.problem_index;
+      if (!request || !Number.isInteger(problemIndex) || payload?.theme?.skill_id !== skillId) continue;
+      const signature = JSON.stringify(payload.problem?.prompt);
+      observedSignatures.add(signature);
+      const snapshot = payload.qa_sampling;
+      const snapshotBasisMatches = snapshot?.mode === 'custom'
+        && JSON.stringify(snapshot.operation_vector_basis ?? null) === JSON.stringify(operationVectorBasis);
+      if (snapshotBasisMatches && Number.isFinite(snapshot.effort)) {
+        observed.push({
+          effort: snapshot.effort,
+          effort_model: snapshot.effort_model,
+          operation_vector: snapshot.operation_vector,
+        });
+        continue;
+      }
+      const generated = await this.diagnosticWorksheet(request);
+      if (JSON.stringify(generated.operation_vector_basis ?? []) !== JSON.stringify(operationVectorBasis)) continue;
+      const problem = generated.worksheet?.problems?.[problemIndex];
+      const diagnostic = generated.problems?.[problemIndex];
+      if (!problem || !diagnostic || JSON.stringify(problem.prompt) !== signature) continue;
+      observed.push(diagnostic);
+    }
+
+    const unseen = candidates.filter((candidate) => !observedSignatures.has(candidate.signature));
+    const scoringPool = unseen.length ? unseen : candidates;
+    const scored = scoreInformationCandidates({ observed, candidates: scoringPool });
+    scored.sort((left, right) => right.information_score - left.information_score
+      || digestNumber(selectionSeed, left.source_identifier) - digestNumber(selectionSeed, right.source_identifier));
+    const selected = scored[0];
+    if (!selected) throw new Error('custom sampling candidateを生成できませんでした。');
+    const unitName = theme.curriculum_path.filter((part) => part !== 'root').at(-1) ?? theme.skill_id;
+    return {
+      item: {
+        source: 'autodrill',
+        source_identifier: selected.source_identifier,
+        unit_name: unitName,
+        problem_representation: formatProblem(selected.problem),
+        canonical_answer: formatCanonicalAnswer(selected.problem.canonical_answer, selected.problem),
+        original_source_payload: {
+          integration_version: 'autodrill_qa_wasm_v1',
+          selection_seed: selectionSeed,
+          theme,
+          generation_request: selected.request,
+          problem_index: selected.problem_index,
+          problem: selected.problem,
+          worksheet: selected.worksheet,
+          qa_sampling: {
+            mode: 'custom',
+            profile: CUSTOM_SAMPLING_PROFILE,
+            information_score: selected.information_score,
+            effort: selected.effort,
+            effort_model: selected.effort_model,
+            operation_vector_basis: operationVectorBasis,
+            operation_vector: selected.operation_vector,
+          },
+        },
+      },
+      selection: {
+        selection_policy: 'autodrill_unit_custom_v1',
+        candidate_source: 'drill_core_random_worksheet_effort_pool',
+        filters: {
+          selected_skill_id: skillId,
+          requested_difficulty: 4,
+          custom_profile: CUSTOM_SAMPLING_PROFILE,
+          operation_vector_basis: operationVectorBasis,
+          observed_count: observed.length,
+          worksheet_seed: selected.worksheet.identity.seed,
+          worksheet_problem_index: selected.problem_index,
+          candidate_worksheet_requests: candidateRequests,
+        },
+        random_seed: selectionSeed,
+        selection_probability: null,
+        candidate_count: scoringPool.length,
+        model_name: CUSTOM_SAMPLING_PROFILE.name,
+        model_version: CUSTOM_SAMPLING_PROFILE.version,
+        candidate_scores: scored.map((candidate) => ({
+          source_identifier: candidate.source_identifier,
+          score: candidate.information_score,
+          effort: candidate.effort,
+          effort_model: candidate.effort_model,
+          operation_vector: candidate.operation_vector,
+        })),
+      },
+    };
   }
 
   async generateRandomProblem({ skillId } = {}) {

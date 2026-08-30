@@ -47,6 +47,30 @@ test('AutoDrill runtime exposes every non-excluded unit through the original WAS
   assert.notEqual(nextFraction.item.original_source_payload.problem_index, payload.problem_index);
   assert.equal(nextFraction.selection.candidate_count, payload.worksheet.problems.length - 1);
 
+  const linear = generatedBySkill.get('jp.grade7.equation.linear.1');
+  const custom = await runtime.generateProblem({
+    skillId: 'jp.grade7.equation.linear.1',
+    samplingMode: 'custom',
+    observations: [{
+      original_source_payload: linear.item.original_source_payload,
+      difficulty_position: 0.5,
+      singularity_position: 0.5,
+    }],
+  });
+  assert.equal(custom.selection.selection_policy, 'autodrill_unit_custom_v1');
+  assert.equal(custom.selection.model_name, 'operation_vector_information');
+  assert.equal(custom.selection.model_version, '1');
+  assert.equal(custom.selection.selection_probability, null);
+  assert.ok(custom.selection.candidate_count > 0);
+  assert.ok(custom.selection.candidate_scores.length > 0);
+  assert.equal(custom.item.original_source_payload.qa_sampling.mode, 'custom');
+  assert.ok(Number.isFinite(custom.item.original_source_payload.qa_sampling.effort));
+  assert.ok(Array.isArray(custom.item.original_source_payload.qa_sampling.operation_vector_basis));
+  assert.ok(custom.item.original_source_payload.qa_sampling.operation_vector_basis.length > 0);
+  assert.ok(Array.isArray(custom.item.original_source_payload.qa_sampling.operation_vector));
+  assert.deepEqual(custom.selection.filters.operation_vector_basis, custom.item.original_source_payload.qa_sampling.operation_vector_basis);
+  assert.ok(custom.selection.candidate_scores.every((candidate) => Array.isArray(candidate.operation_vector)));
+
   const numeric = generatedBySkill.get('jp.grade2.addition.two_digit');
   const grading = await runtime.gradeAnswer(numeric.item.original_source_payload, numeric.item.canonical_answer.replaceAll('−', '-'));
   assert.equal(grading.correctness, 'correct');

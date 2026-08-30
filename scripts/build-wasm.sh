@@ -12,8 +12,21 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 # shellcheck source=wasm-toolchain.sh
 source "$SCRIPT_DIR/wasm-toolchain.sh"
 TARGET="wasm32-unknown-unknown"
-OUTPUT_DIR="$REPO_ROOT/apps/web/public/wasm/pkg"
-OUTPUT_RELATIVE="../../apps/web/public/wasm/pkg"
+BUILD_MODE="${1:-web}"
+case "$BUILD_MODE" in
+  web)
+    OUTPUT_DIR="$REPO_ROOT/apps/web/public/wasm/pkg"
+    OUTPUT_RELATIVE="../../apps/web/public/wasm/pkg"
+    ;;
+  qa)
+    OUTPUT_DIR="$REPO_ROOT/apps/qa/wasm"
+    OUTPUT_RELATIVE="../../apps/qa/wasm"
+    ;;
+  *)
+    echo "error: build mode must be 'web' or 'qa'" >&2
+    exit 64
+    ;;
+esac
 
 if ! command -v rustup >/dev/null 2>&1; then
   echo "error: rustup is required to verify the $TARGET target" >&2
@@ -43,6 +56,17 @@ mkdir -p "$OUTPUT_DIR"
 # `--mode no-install` is a second guard against wasm-pack changing the Rust
 # toolchain. The generated package is intentionally ignored by Git and loaded
 # by the browser seam in src/wasm/load-generated.ts.
+if [ "$BUILD_MODE" = "qa" ]; then
+  exec wasm-pack build "$REPO_ROOT/crates/drill-wasm" \
+    --target web \
+    --release \
+    --mode no-install \
+    --no-typescript \
+    --no-pack \
+    --out-dir "$OUTPUT_RELATIVE" \
+    -- --features qa-diagnostics
+fi
+
 exec wasm-pack build "$REPO_ROOT/crates/drill-wasm" \
   --target web \
   --release \

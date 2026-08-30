@@ -40,7 +40,7 @@ export function buildMacApp({ destination = DEFAULT_DESTINATION, gitSha, gitStat
   cpSync(join(QA_ROOT, 'generated'), join(runtime, 'generated'), { recursive: true });
   mkdirSync(join(runtime, 'wasm'), { recursive: true });
   for (const file of ['drill_wasm.js', 'drill_wasm_bg.wasm']) {
-    cpSync(join(REPOSITORY_ROOT, 'apps', 'web', 'public', 'wasm', 'pkg', file), join(runtime, 'wasm', file));
+    cpSync(join(REPOSITORY_ROOT, 'apps', 'qa', 'wasm', file), join(runtime, 'wasm', file));
   }
   cpSync(join(QA_ROOT, 'package.json'), join(runtime, 'package.json'));
   writeFileSync(join(resources, 'node-version'), `${nodeVersion}\n`);
