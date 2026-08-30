@@ -20,13 +20,13 @@
 
 このsectionのidentity情報は、複数のLLMを人間が区別し、名前やgenerationの重複を防ぐための発行メモである。権限、管理者、branchの優先順位、発言の正しさを表さない。
 
-- **latest issued identity:** `Harbor-8`
-- **generation max:** `8`
+- **latest issued identity:** `Iris-9`
+- **generation max:** `9`
 - 通常のLLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
 - LLMが発行してよい通常identityの頭文字は `A -> B -> ... -> W -> A ...` の順で循環させる。
 - `X`、`Y`、`Z` は特殊用途の予約文字とし、LLMは発行・管理しない。
 - generationは通常identity全体で単調増加させる。新しいidentityは必ず、このsectionの `generation max + 1` を使う。
-- 次に通常identityを発行するときは、`latest issued identity` の頭文字からrotationを進める。現在は `Grove-7` なので、次は **Hで始まる一般名**とgeneration `8`を使う。
+- 次に通常identityを発行するときは、`latest issued identity` の頭文字からrotationを進める。現在は `Iris-9` なので、次は **Jで始まる一般名**とgeneration `10`を使う。
 - 現在作業しているLLM自身のgenerationから次generationを推測しない。必ずこのsectionを発行直前に読み直す。
 - 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ実際に渡すhandoff promptを発行するとき**だけ新identityを発行する。
 - 新identityを発行するときは、handoff promptを返す前に `latest issued identity` と `generation max` を更新し、その更新をcommitする。previewだけを作る場合は更新しない。
