@@ -1,0 +1,9 @@
+{
+  "source": "bundled_committed_snapshot",
+  "head_sha": "253e2b762820d5a4df78a9ab3b8e8cc4927ceda4",
+  "worktree_state": "clean",
+  "worktree_dirty": false,
+  "status_porcelain": null,
+  "status_sha256": null,
+  "tracked_diff_sha256": null
+}

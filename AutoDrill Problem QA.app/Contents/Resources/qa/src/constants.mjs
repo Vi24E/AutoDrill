@@ -1,6 +1,6 @@
-export const APP_VERSION = '0.6.0';
-export const QA_SCHEMA_VERSION = 4;
-export const EXPORT_SCHEMA_VERSION = 1;
+export const APP_VERSION = '0.7.0';
+export const QA_SCHEMA_VERSION = 5;
+export const EXPORT_SCHEMA_VERSION = 2;
 
 export const RATING_SCALE = Object.freeze({
   version: 1,
