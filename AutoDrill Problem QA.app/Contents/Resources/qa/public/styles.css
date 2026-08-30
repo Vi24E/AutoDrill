@@ -113,35 +113,68 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
 .rating-heading h2 { margin-bottom: 2px; font-size: 19px; }
 .rating-heading p { margin: 0; color: var(--muted); font-size: 12px; }
 .rating-widget { width: max-content; max-width: 100%; margin: 0 auto; }
-.axis-guide { display: flex; justify-content: space-between; gap: 26px; margin: 0 0 5px 88px; color: var(--muted); font-size: 11px; }
+.axis-guide { display: flex; justify-content: space-between; gap: 26px; margin: 0 0 6px 58px; color: var(--muted); font-size: 11px; }
 .axis-guide strong { color: var(--ink); }
+.coordinate-grid {
+  display: grid;
+  grid-template-columns: 48px auto;
+  grid-template-rows: 22px auto;
+  gap: 4px 7px;
+}
+.coordinate-corner { align-self: center; color: var(--muted); font-size: 10px; text-align: right; }
+.x-ruler { display: grid; grid-template-columns: repeat(var(--rating-steps), 46px); align-items: end; text-align: center; color: var(--muted); font-size: 11px; }
+.y-ruler { display: grid; grid-template-rows: repeat(var(--rating-steps), 46px); align-items: center; justify-items: end; color: var(--muted); font-size: 11px; }
+.origin-label { color: var(--accent); font-weight: 850; }
+.rating-surface {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #aeb9af;
+  border-radius: 5px;
+  background: white;
+}
+.rating-surface::before, .rating-surface::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background: rgb(35 104 75 / 48%);
+}
+.rating-surface::before { top: 0; bottom: 0; left: calc(50% - .5px); width: 1px; }
+.rating-surface::after { left: 0; right: 0; top: calc(50% - .5px); height: 1px; }
 .rating-matrix {
   display: grid;
-  grid-template-columns: 80px repeat(var(--rating-steps), 42px);
-  grid-template-rows: 30px repeat(var(--rating-steps), 42px);
-  gap: 4px;
+  grid-template-columns: repeat(var(--rating-steps), 46px);
+  grid-template-rows: repeat(var(--rating-steps), 46px);
 }
-.matrix-corner, .matrix-column, .matrix-row { color: var(--muted); font-size: 10px; }
-.matrix-corner { align-self: end; padding: 0 7px 4px 0; text-align: right; font-weight: 700; }
-.matrix-column { display: flex; flex-direction: column; align-items: center; justify-content: end; gap: 1px; text-align: center; }
-.matrix-column strong, .matrix-row strong { color: var(--ink); font-size: 13px; }
-.matrix-column span { display: none; }
-.matrix-row span { min-height: 12px; }
-.matrix-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding-right: 7px; text-align: right; }
 .rating-cell {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   padding: 0;
-  border: 1px solid #b9c3ba;
-  border-radius: 8px;
-  background: white;
-  color: white;
-  font-size: 20px;
-  font-weight: 800;
-  transition: background-color 100ms ease, border-color 100ms ease, transform 100ms ease;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset -1px -1px 0 #d7ddd7;
+  transition: background-color 80ms ease;
 }
-.rating-cell:hover { background: var(--accent-soft); border-color: var(--accent); transform: translateY(-1px); }
-.rating-cell.selected { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px rgb(35 104 75 / 17%); }
-.matrix-x-title { margin: 4px 0 0 84px; text-align: center; color: var(--muted); font-size: 11px; font-weight: 700; }
+.rating-cell:hover { background: rgb(35 104 75 / 10%); }
+.rating-cell:focus-visible { z-index: 4; outline: 3px solid rgb(35 104 75 / 35%); outline-offset: -3px; }
+.rating-cell.selected { z-index: 3; background: rgb(35 104 75 / 16%); }
+.rating-cell span { display: none; }
+.rating-cell.selected span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: 17px;
+  height: 17px;
+  border: 4px solid var(--accent);
+  border-radius: 50%;
+  background: var(--panel);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgb(23 33 27 / 20%);
+}
+.matrix-x-title { margin: 4px 0 0 55px; text-align: center; color: var(--muted); font-size: 11px; font-weight: 700; }
 .selection-status {
   min-height: 28px;
   display: flex;
@@ -153,6 +186,7 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
   font-size: 13px;
 }
 .selection-status strong { color: var(--accent); }
+.selection-status small { color: var(--muted); font-size: 10px; }
 .secondary-options { width: 100%; margin-top: 2px; }
 .secondary-options summary, details summary { cursor: pointer; color: var(--accent); font-size: 12px; font-weight: 700; }
 .secondary-options .field { margin-top: 9px; }

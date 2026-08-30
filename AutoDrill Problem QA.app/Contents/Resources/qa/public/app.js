@@ -15,6 +15,12 @@ const scaleValues = () => {
   const { min, max } = model.state.metadata.ratingScale;
   return Array.from({ length: max - min + 1 }, (_, index) => min + index);
 };
+const ratingMidpoint = () => {
+  const { min, max } = model.state.metadata.ratingScale;
+  return min + Math.floor((max - min) / 2);
+};
+const ratingCoordinate = (value) => value - ratingMidpoint();
+const coordinateLabel = (value) => ratingCoordinate(value) > 0 ? `+${ratingCoordinate(value)}` : String(ratingCoordinate(value));
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -92,21 +98,26 @@ async function startRandomAttempt() {
 function ratingGrid(selected = model.selectedRating, prefix = 'rate') {
   const { ratingScale } = model.state.metadata;
   const steps = ratingScale.max - ratingScale.min + 1;
-  let cells = '<div class="matrix-corner" aria-hidden="true">特異性<br>↓</div>';
-  for (let difficulty = ratingScale.min; difficulty <= ratingScale.max; difficulty++) {
-    cells += `<div class="matrix-column"><strong>${difficulty}</strong><span>${h(ratingScale.axes.difficulty.anchors[difficulty] ?? '')}</span></div>`;
-  }
+  const midpoint = ratingMidpoint();
+  let cells = '';
   for (let singularity = ratingScale.max; singularity >= ratingScale.min; singularity--) {
-    cells += `<div class="matrix-row"><strong>${singularity}</strong><span>${h(ratingScale.axes.singularity.anchors[singularity] ?? '')}</span></div>`;
     for (let difficulty = ratingScale.min; difficulty <= ratingScale.max; difficulty++) {
       const active = selected?.difficulty === difficulty && selected?.singularity === singularity;
-      cells += `<button type="button" class="rating-cell ${active ? 'selected' : ''}" data-rating-cell data-prefix="${prefix}" data-d="${difficulty}" data-s="${singularity}" aria-label="難しさ${difficulty}、特異性${singularity}" aria-pressed="${active}"><span>${active ? '✓' : ''}</span></button>`;
+      const origin = difficulty === midpoint && singularity === midpoint;
+      cells += `<button type="button" class="rating-cell ${origin ? 'origin' : ''} ${active ? 'selected' : ''}" data-rating-cell data-prefix="${prefix}" data-d="${difficulty}" data-s="${singularity}" aria-label="難しさ${difficulty}（中心から${coordinateLabel(difficulty)}）、特異性${singularity}（中心から${coordinateLabel(singularity)}）" aria-pressed="${active}"><span aria-hidden="true"></span></button>`;
     }
   }
+  const xLabels = scaleValues().map((value) => `<span class="${value === midpoint ? 'origin-label' : ''}">${coordinateLabel(value)}</span>`).join('');
+  const yLabels = [...scaleValues()].reverse().map((value) => `<span class="${value === midpoint ? 'origin-label' : ''}">${coordinateLabel(value)}</span>`).join('');
   return `<div class="rating-widget">
-    <div class="axis-guide"><span><strong>縦：特異性</strong> 1 典型的 → 7 珍しい</span><span><strong>横：難しさ</strong> 1 易しい → 7 難しい</span></div>
-    <div class="rating-matrix" style="--rating-steps:${steps}">${cells}</div>
-    <div class="matrix-x-title">難しさ →</div>
+    <div class="axis-guide"><span>珍しい ↑ <strong>特異性</strong> ↓ 典型的</span><span>易しい ← <strong>難しさ</strong> → 難しい</span></div>
+    <div class="coordinate-grid" style="--rating-steps:${steps}">
+      <div class="coordinate-corner">中心 0</div>
+      <div class="x-ruler">${xLabels}</div>
+      <div class="y-ruler">${yLabels}</div>
+      <div class="rating-surface"><div class="rating-matrix">${cells}</div></div>
+    </div>
+    <div class="matrix-x-title">難しさ</div>
   </div>`;
 }
 
@@ -115,7 +126,7 @@ function renderRating(attempt) {
     <div class="problem-area"><span class="unit-label">${h(attempt.unit_name)}</span><div class="problem-text">${h(attempt.problem_representation)}</div>
       <div class="canonical-answer"><span>答え</span><strong>${h(attempt.canonical_answer)}</strong></div>
     </div>
-    <div class="rating-heading"><h2>この問題を評価</h2><p>縦と横が交わるマスを選んでください。</p></div>
+    <div class="rating-heading"><h2>この問題を評価</h2><p>中央を原点として、平面上の位置を選んでください。</p></div>
     ${ratingGrid()}
     <div class="selection-status" id="selection-status" aria-live="polite">まだ選択されていません</div>
     <details class="secondary-options"><summary>任意メモ</summary><label class="field"><span>メモ</span><input id="rating-note" placeholder="計算量が多い、教科書的、境界ケース…"></label></details>
@@ -137,9 +148,8 @@ function bindRatingCells(prefix, onSelect) {
           const active = cell === button;
           cell.classList.toggle('selected', active);
           cell.setAttribute('aria-pressed', String(active));
-          cell.querySelector('span').textContent = active ? '✓' : '';
         });
-        document.querySelector('#selection-status').innerHTML = `<strong>難しさ ${selection.difficulty}</strong><span>特異性 ${selection.singularity}</span>`;
+        document.querySelector('#selection-status').innerHTML = `<strong>難しさ ${coordinateLabel(selection.difficulty)}</strong><span>特異性 ${coordinateLabel(selection.singularity)}</span><small>保存値 ${selection.difficulty}, ${selection.singularity}</small>`;
         document.querySelector('#confirm-rating').disabled = false;
         model.ratingEventPromise = recordEvent('rating_selected', selection);
         await model.ratingEventPromise;
@@ -180,7 +190,7 @@ function renderSaved(detail) {
   app.innerHTML = `<section class="attempt-shell"><div class="panel saved-panel">
     <div class="saved-mark" aria-hidden="true">✓</div><h2>保存しました</h2>
     <span class="unit-label">${h(detail.unit_name)}</span><div class="saved-problem">${h(detail.problem_representation)} <strong>${h(detail.canonical_answer)}</strong></div>
-    <div class="saved-rating"><strong>難しさ ${evaluation.difficulty_rating}</strong><span>特異性 ${evaluation.singularity_rating}</span></div>
+    <div class="saved-rating"><strong>難しさ ${coordinateLabel(evaluation.difficulty_rating)}</strong><span>特異性 ${coordinateLabel(evaluation.singularity_rating)}</span></div>
     <div class="actions next-row"><button class="button primary-action" id="next-problem">次の問題 <span class="small">N</span></button><button class="button secondary" id="show-history">履歴を見る</button></div>
   </div></section>`;
   document.querySelector('#next-problem').addEventListener('click', startRandomAttempt);
@@ -189,7 +199,7 @@ function renderSaved(detail) {
 
 async function renderHistory() {
   app.innerHTML = `<section class="panel history-panel"><div class="panel-heading"><div><h2>評価履歴</h2><p class="muted small">回答や正誤は収集せず、問題・答え・評価・操作時刻を保存しています。</p></div><div class="actions"><a class="button secondary" href="/api/export/full">全データ JSON</a><a class="button secondary" href="/api/export/analysis.csv">分析用 CSV</a></div></div>
-    <form id="history-filters" class="filters"><input name="unit" placeholder="単元"><input name="date_from" type="date"><input name="date_to" type="date"><select name="difficulty"><option value="">難しさすべて</option>${scaleValues().map((n) => `<option>${n}</option>`).join('')}</select><select name="singularity"><option value="">特異性すべて</option>${scaleValues().map((n) => `<option>${n}</option>`).join('')}</select></form>
+    <form id="history-filters" class="filters"><input name="unit" placeholder="単元"><input name="date_from" type="date"><input name="date_to" type="date"><select name="difficulty"><option value="">難しさすべて</option>${scaleValues().map((n) => `<option value="${n}">${coordinateLabel(n)}</option>`).join('')}</select><select name="singularity"><option value="">特異性すべて</option>${scaleValues().map((n) => `<option value="${n}">${coordinateLabel(n)}</option>`).join('')}</select></form>
     <div id="history-content"><p class="muted">読み込み中…</p></div><div id="history-detail"></div>
   </section>`;
   document.querySelector('#history-filters').addEventListener('change', loadHistory);
@@ -201,8 +211,8 @@ async function loadHistory() {
   const query = new URLSearchParams([...new FormData(form)].filter(([, value]) => value));
   const history = await api(`/api/history?${query}`);
   const { summary } = history;
-  document.querySelector('#history-content').innerHTML = `<div class="stats"><div class="stat"><span>評価数</span><strong>${summary.sample_count}</strong></div><div class="stat"><span>難しさ 中央値</span><strong>${summary.median_difficulty ?? '—'}</strong></div><div class="stat"><span>特異性 中央値</span><strong>${summary.median_singularity ?? '—'}</strong></div></div>
-    <div class="table-wrap"><table><thead><tr><th>日時</th><th>単元 / 問題</th><th>答え</th><th>難しさ × 特異性</th><th>方式</th></tr></thead><tbody>${history.rows.map((row) => `<tr data-id="${h(row.id)}"><td>${fmt(row.shown_at)}</td><td><strong>${h(row.unit_name)}</strong><br>${h(row.problem_representation)}</td><td>${h(row.canonical_answer)}</td><td><strong>${row.difficulty_rating ?? '—'} × ${row.singularity_rating ?? '—'}</strong></td><td>${row.observation_mode === 'rating_only_answer_shown' ? '評価のみ' : '旧方式'}</td></tr>`).join('')}</tbody></table></div>`;
+  document.querySelector('#history-content').innerHTML = `<div class="stats"><div class="stat"><span>評価数</span><strong>${summary.sample_count}</strong></div><div class="stat"><span>難しさ 中央値</span><strong>${summary.median_difficulty == null ? '—' : coordinateLabel(summary.median_difficulty)}</strong></div><div class="stat"><span>特異性 中央値</span><strong>${summary.median_singularity == null ? '—' : coordinateLabel(summary.median_singularity)}</strong></div></div>
+    <div class="table-wrap"><table><thead><tr><th>日時</th><th>単元 / 問題</th><th>答え</th><th>中心座標（難しさ × 特異性）</th><th>方式</th></tr></thead><tbody>${history.rows.map((row) => `<tr data-id="${h(row.id)}"><td>${fmt(row.shown_at)}</td><td><strong>${h(row.unit_name)}</strong><br>${h(row.problem_representation)}</td><td>${h(row.canonical_answer)}</td><td><strong>${row.difficulty_rating == null ? '—' : coordinateLabel(row.difficulty_rating)} × ${row.singularity_rating == null ? '—' : coordinateLabel(row.singularity_rating)}</strong></td><td>${row.observation_mode === 'rating_only_answer_shown' ? '評価のみ' : '旧方式'}</td></tr>`).join('')}</tbody></table></div>`;
   document.querySelectorAll('tbody tr[data-id]').forEach((row) => row.addEventListener('click', async () => {
     const detail = await api(`/api/attempts/${row.dataset.id}`);
     document.querySelector('#history-detail').innerHTML = detailBlock(detail, true);
@@ -227,7 +237,6 @@ function bindRevision(detail) {
     document.querySelectorAll('[data-prefix="revise"]').forEach((cell) => {
       const active = cell === button;
       cell.classList.toggle('selected', active);
-      cell.querySelector('span').textContent = active ? '✓' : '';
     });
     document.querySelector('#save-revision').disabled = false;
   });
