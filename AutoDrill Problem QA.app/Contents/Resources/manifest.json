@@ -1,6 +1,6 @@
 {
   "application": "AutoDrill Problem QA",
-  "appVersion": "0.2.0",
-  "gitSha": "028bc5da0b253bd1d8156e66466e91757663ed38",
+  "appVersion": "0.3.0",
+  "gitSha": "d8ee4289d88a2f49ffa7cc32713b38bccdd25a91",
   "nodeVersion": "24.19.0"
 }
