@@ -23,9 +23,9 @@ pnpm --filter @autodrill/qa build:macos
 3. 中央を原点とする2D平面上でcursorを自由にドラッグし、難しさと特異性を評価する。横軸が難しさ、縦軸が特異性である。
 4. 「評価を保存して次へ」を押す。評価は即座に保存され、完了画面や保存通知を挟まず同じ単元の次の問題へ進む。
 
-session開始、問題登録、queue操作は不要。現在のAutoDrill contractにある38単元のうち、User指定で除外した一桁の足し算・引き算、九九、九九型の割り算を除く34単元を選べる。分数、一次・二次・連立方程式、論理問題、4×4数独も対象である。単元は問題表示中にも変更でき、その場合は現在の問題を未評価として保存してから切り替える。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
+session開始、問題登録、queue操作は不要。現在のAutoDrill contractにある38単元のうち、User指定で除外した一桁の足し算・引き算、九九、九九型の割り算を除く34単元を選べる。分数、一次・二次・連立方程式、論理問題、4×4数独も対象である。各選択肢には、その単元で保存済みの完了評価件数を表示する。単元は問題表示中にも変更でき、その場合は現在の問題を未評価として保存してから切り替える。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
 
-表示は`apps/web`の既存`WorksheetPrintDocument`を使い、生成済みworksheetの解答ページから対象の1問をそのまま切り抜く。問題用の別レイアウトをQA側に再実装していないため、印刷/PDF用レイアウトの崩れも評価中に発見できる。1 worksheet分をRust/WASM generatorでまとめて生成してmemoryへprefetchし、同じ単元では未表示の問題を重複なしで消費する。worksheetを使い切ったときだけ次のbatchを生成する。
+表示は`apps/web`の既存`WorksheetPrintDocument`を使い、生成済みworksheetの解答ページから対象の1問をそのまま切り抜く。問題用の別レイアウトをQA側に再実装していないため、印刷/PDF用レイアウトの崩れも評価中に発見できる。1 worksheet分をRust/WASM generatorでまとめて生成してmemoryへprefetchし、同じ単元では未表示の問題を重複なしで消費する。さらに評価入力中に次のproblemを予約し、印刷DOM・数式fontまでhidden frameで描画しておく。確定後はiframeを再読込せず描画済みframeの表示位置だけを切り替えるため、plain-text仮表示から印刷表示へ切り替わる待ち時間を通常flowへ出さない。worksheetを使い切ったときだけ次のbatchを生成する。
 
 terminalから同じ専用windowを開く場合:
 
@@ -52,6 +52,7 @@ databaseをrepository内へ置く場合も、`apps/qa/*.sqlite*`はignoreされ�
 ## Data contract
 
 - SQLiteのraw session / item revision / attempt / selection / input event / evaluation revisionがsource of truth。
+- sessionと各attemptにGit HEAD SHA、およびworktreeのclean/dirty、porcelain status、status/diff fingerprintをJSON保存する。AutoDrill item snapshotにも生成時のGit stateを含め、Full JSONとAnalysis CSVへ出力する。
 - 通常flowは`observation_mode=rating_only_answer_shown`としてcanonical answerをrating前から表示する。User answerは収集せず、correctnessは`ungraded`、grading methodは`not_collected_assumed_solved_v1`として明示する。
 - ratingの連続位置は両軸0〜1の`difficulty_position` / `singularity_position`としてlosslessに保存する。1〜7のordinal ratingは互換・集計用に連続位置から導出する。
 - 旧`answer_then_rating` observationは互換性のため保持し、回答・採点履歴を破壊しない。AutoDrillの数学的gradingをTypeScriptへ複製しない。

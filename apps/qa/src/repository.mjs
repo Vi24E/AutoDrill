@@ -1,13 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
 import {
   APP_VERSION, ATTEMPT_OUTCOMES, EXPORT_SCHEMA_VERSION, INPUT_EVENT_TYPES,
   QA_SCHEMA_VERSION, RATING_SCALE, QaValidationError, assertRating,
 } from './constants.mjs';
 import { transaction } from './db.mjs';
+import { captureGitState, normalizeGitState } from './git-state.mjs';
 
-const REPOSITORY_ROOT = resolve(import.meta.dirname, '../../..');
 const MAX_TEXT = 100_000;
 
 function now() { return new Date().toISOString(); }
@@ -35,21 +33,16 @@ function normalizeManualAnswer(value) { return value.normalize('NFKC').trim().re
 function contentHash({ unitName, problemRepresentation, canonicalAnswer, sourcePayload }) {
   return createHash('sha256').update(json({ unitName, problemRepresentation, canonicalAnswer, sourcePayload })).digest('hex');
 }
-function currentGitSha() {
-  if (process.env.AUTODRILL_QA_GIT_SHA) return process.env.AUTODRILL_QA_GIT_SHA;
-  try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT, encoding: 'utf8' }).trim(); }
-  catch { return 'unknown'; }
-}
-
 export class QaRepository {
-  constructor(database, { gitSha = currentGitSha(), clock = now } = {}) {
+  constructor(database, { gitSha, gitState = gitSha ? normalizeGitState(null, gitSha) : captureGitState(), clock = now } = {}) {
     this.db = database;
-    this.gitSha = gitSha;
+    this.gitState = normalizeGitState(gitState, gitSha ?? 'unknown');
+    this.gitSha = this.gitState.head_sha;
     this.clock = clock;
   }
 
   metadata() {
-    return { appVersion: APP_VERSION, qaSchemaVersion: QA_SCHEMA_VERSION, exportSchemaVersion: EXPORT_SCHEMA_VERSION, gitSha: this.gitSha, ratingScale: RATING_SCALE };
+    return { appVersion: APP_VERSION, qaSchemaVersion: QA_SCHEMA_VERSION, exportSchemaVersion: EXPORT_SCHEMA_VERSION, gitSha: this.gitSha, gitState: this.gitState, ratingScale: RATING_SCALE };
   }
 
   createSession(input = {}) {
@@ -60,8 +53,8 @@ export class QaRepository {
       note: optionalText(input.note, 'note', 10_000),
     };
     this.db.prepare(`INSERT INTO qa_sessions
-      (id,evaluator,started_at,local_timezone,application_version,qa_schema_version,autodrill_git_sha,note)
-      VALUES (?,?,?,?,?,?,?,?)`).run(session.id, session.evaluator, session.startedAt, session.timezone, APP_VERSION, QA_SCHEMA_VERSION, this.gitSha, session.note);
+      (id,evaluator,started_at,local_timezone,application_version,qa_schema_version,autodrill_git_sha,autodrill_git_state_json,note)
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(session.id, session.evaluator, session.startedAt, session.timezone, APP_VERSION, QA_SCHEMA_VERSION, this.gitSha, json(this.gitState), session.note);
     return this.getSession(session.id);
   }
 
@@ -201,11 +194,11 @@ export class QaRepository {
       const exposure = this.db.prepare('SELECT COUNT(*)+1 AS n FROM attempts WHERE item_id=?').get(chosen.id).n;
       this.db.prepare(`INSERT INTO attempts
         (id,session_id,item_id,item_revision_number,exposure_count,state,shown_at,rating_started_at,answer_revealed_at,
-         correctness,grading_method,observation_mode,application_version,qa_schema_version,autodrill_git_sha,browser_version)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(attemptId, session.id, chosen.id, detail.current_revision_number, exposure,
+         correctness,grading_method,observation_mode,application_version,qa_schema_version,autodrill_git_sha,autodrill_git_state_json,browser_version)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(attemptId, session.id, chosen.id, detail.current_revision_number, exposure,
           ratingOnly ? 'rating' : 'solving', shownAt, ratingOnly ? shownAt : null, ratingOnly ? shownAt : null,
           ratingOnly ? 'ungraded' : null, ratingOnly ? 'not_collected_assumed_solved_v1' : null,
-          ratingOnly ? 'rating_only_answer_shown' : 'answer_then_rating', APP_VERSION, QA_SCHEMA_VERSION, this.gitSha,
+          ratingOnly ? 'rating_only_answer_shown' : 'answer_then_rating', APP_VERSION, QA_SCHEMA_VERSION, this.gitSha, json(this.gitState),
           optionalText(input.browser_version, 'browser_version', 2_000));
       const probability = selectionContext?.selection_probability ?? (input.item_id || policy === 'manual_order' ? 1 : 1 / candidates.length);
       this.db.prepare(`INSERT INTO selection_events
@@ -446,6 +439,18 @@ export class QaRepository {
     return { rows, summary: summarize(rows) };
   }
 
+  unitObservationCounts() {
+    return new Map(this.db.prepare(`SELECT
+      json_extract(r.original_source_payload_json,'$.theme.skill_id') AS skill_id,
+      COUNT(DISTINCT a.id) AS observation_count
+      FROM attempts a
+      JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number
+      WHERE a.state='complete' AND a.invalidated_at IS NULL
+        AND EXISTS (SELECT 1 FROM evaluations e WHERE e.attempt_id=a.id AND e.invalidated_at IS NULL)
+        AND json_extract(r.original_source_payload_json,'$.theme.skill_id') IS NOT NULL
+      GROUP BY skill_id`).all().map((row) => [row.skill_id, row.observation_count]));
+  }
+
   unitStats(unitName) {
     const rows = this.db.prepare(`SELECT a.correctness,a.answer_elapsed_ms,e.difficulty_rating,e.singularity_rating
       FROM attempts a JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number
@@ -458,7 +463,7 @@ export class QaRepository {
     if (this.anyActiveAttempt()) throw new QaValidationError('Export is locked until the active rating is completed or abandoned.', 423);
     const tables = ['schema_migrations','qa_sessions','items','item_revisions','queue_entries','attempts','selection_events','input_events','evaluations','change_audit','model_runs','derived_results'];
     return {
-      manifest: { export_schema_version: EXPORT_SCHEMA_VERSION, qa_schema_version: QA_SCHEMA_VERSION, exported_at: this.clock(), application_version: APP_VERSION, autodrill_git_sha: this.gitSha, format: 'autodrill-qa-full-json-v1' },
+      manifest: { export_schema_version: EXPORT_SCHEMA_VERSION, qa_schema_version: QA_SCHEMA_VERSION, exported_at: this.clock(), application_version: APP_VERSION, autodrill_git_sha: this.gitSha, autodrill_git_state: this.gitState, format: 'autodrill-qa-full-json-v1' },
       data: Object.fromEntries(tables.map((table) => [table, this.db.prepare(`SELECT * FROM ${table}`).all()])),
     };
   }
@@ -466,11 +471,19 @@ export class QaRepository {
   analysisCsv() {
     const exportedAt = this.clock();
     const rows = this.history({}).rows;
-    const columns = ['export_schema_version','qa_schema_version','exported_at','attempt_id','session_id','evaluator','item_id','item_revision_number','source','source_identifier','unit_name','problem_representation','canonical_answer','observation_mode','raw_user_answer','normalized_user_answer','correctness','outcome','exposure_count','shown_at','first_interaction_at','answer_started_at','submitted_at','rating_started_at','rating_submitted_at','answer_revealed_at','completed_at','answer_elapsed_ms','rating_elapsed_ms','difficulty_rating','singularity_rating','difficulty_position','singularity_position','evaluation_revision','note','browser_version','application_version','autodrill_git_sha'];
+    const columns = ['export_schema_version','qa_schema_version','exported_at','attempt_id','session_id','evaluator','item_id','item_revision_number','source','source_identifier','unit_name','problem_representation','canonical_answer','observation_mode','raw_user_answer','normalized_user_answer','correctness','outcome','exposure_count','shown_at','first_interaction_at','answer_started_at','submitted_at','rating_started_at','rating_submitted_at','answer_revealed_at','completed_at','answer_elapsed_ms','rating_elapsed_ms','difficulty_rating','singularity_rating','difficulty_position','singularity_position','evaluation_revision','note','browser_version','application_version','autodrill_git_sha','autodrill_git_state_json','git_worktree_state','git_worktree_dirty','git_status_sha256','git_tracked_diff_sha256'];
     const sessionById = new Map(this.listSessions().map((session) => [session.id, session]));
     const lines = [columns.join(',')];
     for (const row of rows) {
-      const flat = { export_schema_version: EXPORT_SCHEMA_VERSION, qa_schema_version: QA_SCHEMA_VERSION, exported_at: exportedAt, attempt_id: row.id, evaluator: sessionById.get(row.session_id)?.evaluator, ...row };
+      const gitState = parseJson(row.autodrill_git_state_json, {});
+      const flat = {
+        export_schema_version: EXPORT_SCHEMA_VERSION, qa_schema_version: QA_SCHEMA_VERSION, exported_at: exportedAt,
+        attempt_id: row.id, evaluator: sessionById.get(row.session_id)?.evaluator, ...row,
+        git_worktree_state: gitState.worktree_state,
+        git_worktree_dirty: gitState.worktree_dirty,
+        git_status_sha256: gitState.status_sha256,
+        git_tracked_diff_sha256: gitState.tracked_diff_sha256,
+      };
       lines.push(columns.map((column) => csv(flat[column])).join(','));
     }
     return lines.join('\n');

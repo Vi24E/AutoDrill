@@ -17,7 +17,7 @@ test('desktop window uses an ephemeral port and owns server/profile lifecycle', 
   let observedUrl = null;
   const browserLauncher = ({ url }) => {
     observedUrl = url;
-    const check = `const response=await fetch(${JSON.stringify(`${url}/api/state`)}); if(!response.ok) process.exit(2); const state=await response.json(); if(state.metadata.appVersion!=='0.6.0') process.exit(3);`;
+    const check = `const response=await fetch(${JSON.stringify(`${url}/api/state`)}); if(!response.ok) process.exit(2); const state=await response.json(); if(state.metadata.appVersion!=='0.7.0'||state.metadata.qaSchemaVersion!==5) process.exit(3);`;
     return spawn(process.execPath, ['--input-type=module', '-e', check], { stdio: 'ignore' });
   };
   try {
@@ -45,6 +45,8 @@ test('macOS app build contains a self-contained QA runtime', () => {
     assert.equal(existsSync(join(built.runtime, 'generated', 'drill-core-contract.json')), true);
     assert.equal(existsSync(join(built.runtime, 'wasm', 'drill_wasm_bg.wasm')), true);
     assert.equal(existsSync(join(destination, 'Contents', 'Resources', 'git-sha')), true);
+    assert.equal(existsSync(join(destination, 'Contents', 'Resources', 'git-state.json')), true);
+    assert.equal(built.gitState.head_sha, 'packaged-test-sha');
     assert.equal(existsSync(built.executable), true);
   } finally {
     rmSync(directory, { recursive: true, force: true });

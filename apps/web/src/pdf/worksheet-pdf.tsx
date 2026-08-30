@@ -386,7 +386,7 @@ function mathSpanRenderSignature(element: MathSpanWithRender): string | null {
   return `${rect.width.toFixed(2)}x${rect.height.toFixed(2)}`;
 }
 
-async function prepareMathLiveForPrint(host: HTMLElement, timeoutMs = 4_000): Promise<void> {
+export async function prepareMathLiveForPrint(host: HTMLElement, timeoutMs = 4_000): Promise<void> {
   if (typeof customElements !== 'undefined') await customElements.whenDefined('math-span');
   if (document.fonts?.ready) await document.fonts.ready;
   const deadline = performance.now() + timeoutMs;

@@ -75,7 +75,7 @@ test('quick flow creates a rating-only observation with random-generation proven
           unit_name: '一桁の足し算',
           problem_representation: '2 + 3 =',
           canonical_answer: '5',
-          original_source_payload: { integration_version: 'autodrill_qa_wasm_v1', problem_index: 0, problem: { id: 1 }, worksheet: { problems: [{ id: 1 }] } },
+          original_source_payload: { integration_version: 'autodrill_qa_wasm_v1', theme: { skill_id: 'jp.grade2.addition.two_digit' }, problem_index: 0, problem: { id: 1 }, worksheet: { problems: [{ id: 1 }] } },
         },
         selection: {
           selection_policy: 'autodrill_random_v1',
@@ -93,18 +93,25 @@ test('quick flow creates a rating-only observation with random-generation proven
   const base = `http://127.0.0.1:${address.port}`;
   try {
     const unitsResponse = await fetch(`${base}/api/quick/units`);
-    assert.deepEqual(await unitsResponse.json(), autodrillRuntime.listUnits());
+    assert.deepEqual(await unitsResponse.json(), autodrillRuntime.listUnits().map((unit) => ({ ...unit, observation_count: 0 })));
     const { payload: attempt } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test', skill_id: 'jp.grade2.addition.two_digit' });
     assert.equal(requestedSkills[0], 'jp.grade2.addition.two_digit');
     assert.equal(attempt.problem_representation, '2 + 3 =');
     assert.equal(attempt.canonical_answer, '5');
     assert.equal(attempt.state, 'rating');
     assert.equal(attempt.observation_mode, 'rating_only_answer_shown');
+    const attemptDetail = qa.repository.attemptDetail(attempt.id);
+    assert.equal(JSON.parse(attemptDetail.autodrill_git_state_json).head_sha, 'quick-test');
+    assert.equal(attemptDetail.original_source_payload.generation_git_state.head_sha, 'quick-test');
     const renderResponse = await fetch(`${base}/api/attempts/${attempt.id}/render`);
     const renderPayload = await renderResponse.json();
     assert.equal(renderResponse.status, 200);
     assert.equal(renderPayload.problem_index, 0);
     assert.deepEqual(renderPayload.worksheet, { problems: [{ id: 1 }] });
+    const { payload: prefetched } = await request(base, '/api/quick/prefetch', { skill_id: 'jp.grade2.addition.two_digit' });
+    assert.equal(typeof prefetched.id, 'string');
+    const prefetchedRender = await fetch(`${base}/api/quick/prefetch/${prefetched.id}/render`).then((response) => response.json());
+    assert.equal(prefetchedRender.problem_index, 0);
     const { payload: revealed } = await request(base, `/api/attempts/${attempt.id}/ratings`, { difficulty_rating: 2, singularity_rating: 3 });
     assert.equal(revealed.raw_user_answer, null);
     assert.equal(revealed.correctness, 'ungraded');
@@ -113,9 +120,16 @@ test('quick flow creates a rating-only observation with random-generation proven
     assert.equal(revealed.selection.selection_policy, 'autodrill_random_v1');
     assert.equal(revealed.selection.random_seed, 'selection-seed');
     assert.deepEqual(revealed.events.slice(0, 3).map((event) => event.event_type), ['shown', 'answer_revealed', 'rating_started']);
-    const { payload: repeated } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test' });
+    const unitsAfterRating = await fetch(`${base}/api/quick/units`).then((response) => response.json());
+    assert.equal(unitsAfterRating[0].observation_count, 1);
+    const { payload: repeated } = await request(base, '/api/quick/next', {
+      local_timezone: 'Asia/Tokyo', browser_version: 'test', skill_id: 'jp.grade2.addition.two_digit', prefetch_id: prefetched.id,
+    });
     assert.equal(repeated.item_id, attempt.item_id);
     assert.equal(repeated.exposure_count, 2);
+    assert.equal(repeated.render_prefetch_id, prefetched.id);
+    const reusedRender = await fetch(`${base}/api/quick/prefetch/${prefetched.id}/render`);
+    assert.equal(reusedRender.status, 200, 'consumed prefetch remains renderable by the already loaded frame');
   } finally {
     await qa.close();
     rmSync(directory, { recursive: true, force: true });

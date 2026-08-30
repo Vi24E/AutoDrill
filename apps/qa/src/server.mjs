@@ -7,6 +7,7 @@ import { openDatabase } from './db.mjs';
 import { QaRepository } from './repository.mjs';
 import { QaValidationError } from './constants.mjs';
 import { AutoDrillRuntime } from './autodrill-runtime.mjs';
+import { ProblemPrefetchStore } from './problem-prefetch.mjs';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
 const MAX_BODY_BYTES = 1_200_000;
@@ -57,9 +58,25 @@ function serveStatic(pathname, res) {
   return true;
 }
 
-export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', gitSha, quiet = false, autodrillRuntime = new AutoDrillRuntime() } = {}) {
+function attachGenerationProvenance(generated, gitState) {
+  return {
+    ...generated,
+    item: {
+      ...generated.item,
+      original_source_payload: {
+        ...generated.item.original_source_payload,
+        generation_git_state: gitState,
+      },
+    },
+  };
+}
+
+export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', gitSha, gitState, quiet = false, autodrillRuntime = new AutoDrillRuntime() } = {}) {
   const opened = openDatabase({ path: databasePath });
-  const repository = new QaRepository(opened.database, { gitSha });
+  const repository = new QaRepository(opened.database, { gitSha, gitState });
+  const prefetchStore = new ProblemPrefetchStore(autodrillRuntime, {
+    prepareGenerated: (generated) => attachGenerationProvenance(generated, repository.gitState),
+  });
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`);
@@ -78,10 +95,20 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/quick/units') {
-        sendJson(res, 200, autodrillRuntime.listUnits()); return;
+        const counts = repository.unitObservationCounts();
+        sendJson(res, 200, autodrillRuntime.listUnits().map((unit) => ({ ...unit, observation_count: counts.get(unit.skill_id) ?? 0 }))); return;
       }
+      if (req.method === 'POST' && url.pathname === '/api/quick/prefetch') {
+        const input = await readJson(req);
+        const activeAttempt = repository.activeAttempt();
+        if (!activeAttempt) throw new QaValidationError('An active rating is required before prefetching.', 409);
+        if (!input.skill_id || input.skill_id !== activeAttempt.source_skill_id) throw new QaValidationError('Prefetch unit does not match the active rating.', 409);
+        sendJson(res, 201, await prefetchStore.reserve(input.skill_id)); return;
+      }
+      let params = routeMatch(url.pathname, '/api/quick/prefetch/:id/render');
+      if (req.method === 'GET' && params) { sendJson(res, 200, prefetchStore.renderPayload(params.id)); return; }
       if (req.method === 'POST' && url.pathname === '/api/sessions') { sendJson(res, 201, repository.createSession(await readJson(req))); return; }
-      let params = routeMatch(url.pathname, '/api/sessions/:id/end');
+      params = routeMatch(url.pathname, '/api/sessions/:id/end');
       if (req.method === 'POST' && params) { sendJson(res, 200, repository.endSession(params.id)); return; }
       if (req.method === 'GET' && url.pathname === '/api/sessions') { sendJson(res, 200, repository.listSessions()); return; }
 
@@ -91,7 +118,9 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         if (!session) session = repository.createSession({ evaluator: 'User', local_timezone: input.local_timezone ?? 'UTC' });
         const activeAttempt = repository.activeAttempt(session.id);
         if (activeAttempt) { sendJson(res, 200, repository.beginRatingOnly(activeAttempt.id, input)); return; }
-        const generated = await autodrillRuntime.generateRandomProblem({ skillId: input.skill_id });
+        const generated = input.prefetch_id
+          ? prefetchStore.consume(input.prefetch_id, input.skill_id)
+          : attachGenerationProvenance(await autodrillRuntime.generateRandomProblem({ skillId: input.skill_id }), repository.gitState);
         const item = repository.findItemBySourceIdentifier(generated.item.source, generated.item.source_identifier)
           ?? repository.createItem(generated.item);
         const attempt = repository.startAttempt({
@@ -103,7 +132,7 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
           selection_context: generated.selection,
           rating_only: true,
         });
-        sendJson(res, 201, attempt); return;
+        sendJson(res, 201, { ...attempt, render_prefetch_id: input.prefetch_id ?? null }); return;
       }
 
       if (req.method === 'POST' && url.pathname === '/api/items') { sendJson(res, 201, repository.createItem(await readJson(req))); return; }
