@@ -227,7 +227,8 @@ export class QaRepository {
   safeAttempt(attemptId) {
     const row = this.db.prepare(`SELECT a.id,a.session_id,a.item_id,a.item_revision_number,a.exposure_count,a.state,a.outcome,a.observation_mode,
       a.shown_at,a.first_interaction_at,a.answer_started_at,a.submitted_at,a.rating_started_at,a.raw_user_answer,
-      r.unit_name,r.problem_representation,r.canonical_answer,i.source,i.source_identifier
+      r.unit_name,r.problem_representation,r.canonical_answer,i.source,i.source_identifier,
+      json_extract(r.original_source_payload_json,'$.theme.skill_id') AS source_skill_id
       FROM attempts a JOIN items i ON i.id=a.item_id
       JOIN item_revisions r ON r.item_id=a.item_id AND r.revision_number=a.item_revision_number WHERE a.id=?`).get(attemptId) ?? null;
     if (row) {

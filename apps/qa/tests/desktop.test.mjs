@@ -17,7 +17,7 @@ test('desktop window uses an ephemeral port and owns server/profile lifecycle', 
   let observedUrl = null;
   const browserLauncher = ({ url }) => {
     observedUrl = url;
-    const check = `const response=await fetch(${JSON.stringify(`${url}/api/state`)}); if(!response.ok) process.exit(2); const state=await response.json(); if(state.metadata.appVersion!=='0.4.1') process.exit(3);`;
+    const check = `const response=await fetch(${JSON.stringify(`${url}/api/state`)}); if(!response.ok) process.exit(2); const state=await response.json(); if(state.metadata.appVersion!=='0.5.0') process.exit(3);`;
     return spawn(process.execPath, ['--input-type=module', '-e', check], { stdio: 'ignore' });
   };
   try {

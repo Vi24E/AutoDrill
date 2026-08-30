@@ -37,11 +37,12 @@ UIはcolor picker型の2D selection planeとして表示し、横軸をDifficult
 ## Rating-only state graph
 
 ```text
-queue -> rating (problem + answer shown) -> complete -> next rating
+unit choice -> rating (problem + answer shown) -> complete -> same-unit next rating
 rating -> explicit abandon
+rating -> explicit abandon -> new unit rating
 ```
 
-通常flowは`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。評価確定後は完了画面を挟まず次のランダム問題を生成し、保存結果はnon-blockingな短い通知だけで示す。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
+通常flowはUserがcanonical skill identityで単元を選んでから`observation_mode=rating_only_answer_shown`で開始し、問題とcanonical answerを同時に表示する。回答欄、submit、採点はなく、Userはdifficulty × singularityだけを入力する。評価確定後は完了画面を挟まず同じ単元の次問題を生成し、保存結果はnon-blockingな短い通知だけで示す。単元変更時は現在のattemptを`abandoned`として残してから切り替える。`raw_user_answer` / `normalized_user_answer` / `submitted_at`はnull、`correctness=ungraded`、`grading_method=not_collected_assumed_solved_v1`とし、「全問正解」を観測済みcorrectnessとして捏造しない。ratingは答え表示後なので`pre_answer_reveal=0`である。
 
 旧`answer_then_rating` recordとinternal APIは既存datasetの再解析互換性のため残す。旧flowの回答・correctnessをmigrationで消したり新方式へ偽装したりしない。active attempt中はhistory、problem detail、exportをserver側でlockする。履歴へ移動するときは、表示中の問題を確認付きで`abandoned`として保存してからlockを解除し、rating前に過去分布を見せない。
 
@@ -59,7 +60,7 @@ Full JSON exportはmanifestと全raw/projection tableを含む。Analysis CSVは
 
 ## AutoDrill integration
 
-default flowはsession開始・problem登録・queue選択を自動化する。QA serverがRust `drill-core`の既存WASM boundaryを呼び、canonical web contractのうち`simple_numeric` inputと対応promptを持つthemeから一様に選択する。requested difficultyは`ランダム`、worksheet内problemも一様に選び、selection seed、candidate source、filter、propensityを保存する。theme IDのhard-codeや数学generatorの再実装は行わない。
+default flowはsession開始・problem登録・queue操作を自動化する。QA serverがRust `drill-core`の既存WASM boundaryを呼び、canonical web contractのうちQA用のplain representationを構成できるpromptを持つthemeを単元選択肢として提示する。回答入力interfaceは出題可否の条件にしないため、`structured_math`の分数単元も含む。一桁の足し算・引き算、九九、九九型の割り算はcanonical skill identityによるQA固有の除外集合で通常選択肢から外す。選択後はそのtheme内でworksheet problemを一様に選び、selected skill、selection seed、candidate source、filter、propensityを保存する。numeric theme IDや表示名から単元の性質を推測せず、数学generatorを再実装しない。
 
 各item snapshotはtheme / skill / curriculum metadata、generation request、worksheet identity、generator revision、seed、Problem DTO、prompt、answer schema、worked solution、layout、worksheet全体をlossless JSONとして保持する。通常flowは回答を収集・採点せず、canonical answerだけをrating前から表示する。過去分布はrating前に表示しない。
 

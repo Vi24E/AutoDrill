@@ -16,13 +16,14 @@ pnpm --filter @autodrill/qa build:macos
 
 ## 使い方
 
-通常操作は次の3段階だけである。回答入力と採点は行わない。
+通常操作は次の4段階だけである。回答入力と採点は行わない。
 
-1. 起動すると、AutoDrillの対応単元からランダムな問題が自動表示される。
-2. 問題と表示済みの答えを見て、中央を原点とする2D平面上でcursorを自由にドラッグし、難しさと特異性を評価する。横軸が難しさ、縦軸が特異性である。
-3. 「評価を保存して次へ」を押す。評価は即座に保存され、完了画面を挟まず次のランダム問題へ進む。
+1. 起動後、評価したい単元を選ぶ。
+2. 選んだ単元からランダムに表示された問題と答えを見る。
+3. 中央を原点とする2D平面上でcursorを自由にドラッグし、難しさと特異性を評価する。横軸が難しさ、縦軸が特異性である。
+4. 「評価を保存して次へ」を押す。評価は即座に保存され、完了画面を挟まず同じ単元の次のランダム問題へ進む。
 
-session開始、問題登録、queue選択は不要。保存完了は操作を妨げない短い通知だけで示す。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。表示中の問題から履歴を開く場合、その問題を未評価として履歴に残す確認を行う。
+session開始、問題登録、queue操作は不要。分数を含むQA対応単元から選択でき、一桁の足し算・引き算、九九、九九型の割り算は通常の選択肢から除外する。単元は問題表示中にも変更でき、その場合は現在の問題を未評価として保存してから切り替える。保存完了は操作を妨げない短い通知だけで示す。履歴画面では過去の評価確認、rating revision、Full JSON / Analysis CSV exportができる。
 
 terminalから同じ専用windowを開く場合:
 
@@ -53,7 +54,7 @@ databaseをrepository内へ置く場合も、`apps/qa/*.sqlite*`はignoreされ�
 - ratingの連続位置は両軸0〜1の`difficulty_position` / `singularity_position`としてlosslessに保存する。1〜7のordinal ratingは互換・集計用に連続位置から導出する。
 - 旧`answer_then_rating` observationは互換性のため保持し、回答・採点履歴を破壊しない。AutoDrillの数学的gradingをTypeScriptへ複製しない。
 - AutoDrill snapshotはsource payload JSONをlosslessに保存する。QAのためにproduction wireを拡張しない。
-- ランダム出題はRust `drill-core`の既存WASM境界を再利用する。数値入力でRust gradingをそのまま利用できるthemeをcanonical contractから選び、theme IDや数学ロジックをQA側へ複製しない。
+- 単元内ランダム出題はRust `drill-core`の既存WASM境界を再利用する。themeのskill identityをcanonical contractから選び、theme IDや数学ロジックをQA側へ複製しない。
 - model resultはraw tableへ書き戻さず、`model_runs` / `derived_results`へversioned projectionとして保存する。
 
 ## 検証

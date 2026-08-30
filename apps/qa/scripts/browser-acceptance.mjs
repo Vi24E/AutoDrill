@@ -120,10 +120,22 @@ try {
   const qaUrl = `http://127.0.0.1:${address.port}`;
   ({ chrome, cdp } = await launchChrome(qaUrl, directory, 'first'));
   let { evaluate } = cdp;
+  await waitFor(evaluate, `document.querySelector('#unit-choice') !== null`, 'unit chooser');
+  const unitChooser = await evaluate(`({
+    labels: [...document.querySelector('#unit-choice').options].map(option=>option.textContent),
+    horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+  })`);
+  if (!unitChooser.labels.includes('分数の足し算') || !unitChooser.labels.includes('分数の割り算') || unitChooser.labels.includes('一桁の足し算') || unitChooser.labels.includes('一桁の引き算') || unitChooser.labels.includes('九九') || unitChooser.horizontalOverflow) {
+    throw new Error(`Unit chooser contract is broken: ${JSON.stringify(unitChooser)}`);
+  }
+  await capture(cdp, '00-unit-choice');
+  await evaluate(setAndInput('#unit-choice', 'jp.grade5.fraction.addition'));
+  await evaluate(`document.querySelector('#start-unit').click()`);
   await waitFor(evaluate, `document.querySelectorAll('[data-prefix="rate"]').length === 49`, 'automatic rating-only problem');
   const firstAttempt = qa.repository.activeAttempt();
   const firstDetail = qa.repository.attemptDetail(firstAttempt.id);
   if (firstDetail.source !== 'autodrill') throw new Error('Quick flow did not create an AutoDrill item.');
+  if (firstDetail.unit_name !== '分数の足し算' || !firstDetail.problem_representation.includes('/') || firstDetail.original_source_payload.theme.skill_id !== 'jp.grade5.fraction.addition') throw new Error('Selected fraction unit was not generated.');
   const initialUi = await evaluate(`({
     answerVisible: document.querySelector('.canonical-answer')?.innerText.includes(${JSON.stringify('答え')}),
     hasAnswerInput: Boolean(document.querySelector('#answer, #submit-answer')),
@@ -135,9 +147,10 @@ try {
     verticalGap: (()=>{const a=document.querySelectorAll('[data-prefix="rate"]')[0].getBoundingClientRect();const b=document.querySelectorAll('[data-prefix="rate"]')[7].getBoundingClientRect();return Math.round((b.top-a.bottom)*10)/10})(),
     originOffset: (()=>{const s=document.querySelector('.rating-surface').getBoundingClientRect();const o=document.querySelectorAll('[data-prefix="rate"]')[24].getBoundingClientRect();return {x:Math.round((o.left+o.width/2-(s.left+s.width/2))*10)/10,y:Math.round((o.top+o.height/2-(s.top+s.height/2))*10)/10}})(),
     axisText: document.querySelector('.axis-explainer').innerText,
+    selectedUnit: document.querySelector('#unit-select').value,
     viewportHeight: innerHeight,
   })`);
-  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5 || !initialUi.axisText.includes('横軸：難しさ') || !initialUi.axisText.includes('縦軸：特異性')) {
+  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5 || !initialUi.axisText.includes('横軸：難しさ') || !initialUi.axisText.includes('縦軸：特異性') || initialUi.selectedUnit !== 'jp.grade5.fraction.addition') {
     throw new Error(`Initial rating UI is broken: ${JSON.stringify(initialUi)}`);
   }
   if (firstDetail.observation_mode !== 'rating_only_answer_shown' || firstDetail.raw_user_answer !== null || firstDetail.correctness !== 'ungraded') {
@@ -171,6 +184,7 @@ try {
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
   await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(firstAttempt.id)}&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after keyboard save');
   if (await evaluate(`Boolean(document.querySelector('#next-problem, .saved-panel'))`)) throw new Error('A blocking saved screen remains in the flow.');
+  if (qa.repository.activeAttempt().source_skill_id !== 'jp.grade5.fraction.addition') throw new Error('Auto-next changed the selected unit.');
   await capture(cdp, '02-next-problem');
 
   const secondAttempt = qa.repository.activeAttempt();
@@ -192,10 +206,10 @@ try {
   await evaluate(`document.querySelector('#save-revision').click()`);
   await waitFor(evaluate, `document.querySelectorAll('#history-detail tbody tr').length >= 2`, 'rating revision history');
 
-  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')}; })()`);
-  if (exportCheck.attempts !== 3 || exportCheck.completed !== 2 || exportCheck.abandoned !== 1 || exportCheck.events < 9 || !exportCheck.autodrill || !exportCheck.ratingOnly || !exportCheck.continuous || !exportCheck.preReveal || !exportCheck.sourcePayload || !exportCheck.csv) throw new Error(`Export verification failed: ${JSON.stringify(exportCheck)}`);
+  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')&&item.original_source_payload_json.includes('jp.grade5.fraction.addition')),unitSelection:full.data.selection_events.every(selection=>selection.selection_policy==='autodrill_unit_random_v1'&&JSON.parse(selection.filters_json).selected_skill_id==='jp.grade5.fraction.addition'),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')}; })()`);
+  if (exportCheck.attempts !== 3 || exportCheck.completed !== 2 || exportCheck.abandoned !== 1 || exportCheck.events < 9 || !exportCheck.autodrill || !exportCheck.ratingOnly || !exportCheck.continuous || !exportCheck.preReveal || !exportCheck.sourcePayload || !exportCheck.unitSelection || !exportCheck.csv) throw new Error(`Export verification failed: ${JSON.stringify(exportCheck)}`);
   if (cdp.errors.length) throw new Error(`Browser console errors: ${cdp.errors.join(' | ')}`);
-  const result = { status: 'passed', operations: ['automatic session start', 'AutoDrill random generation', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'immediate next problem without saved screen', 'explicit abandon before history', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'full JSON export', 'analysis CSV export'], completedAttempts: 2, abandonedAttempts: 1, localServerRestartCoveredBy: 'server.test.mjs' };
+  const result = { status: 'passed', operations: ['unit chooser', 'fraction unit availability', 'basic repetition unit exclusion', 'selected-unit random generation', 'same-unit auto-next', 'automatic session start', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'immediate next problem without saved screen', 'explicit abandon before history', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'full JSON export', 'analysis CSV export'], completedAttempts: 2, abandonedAttempts: 1, localServerRestartCoveredBy: 'server.test.mjs' };
   if (process.env.AUTODRILL_QA_BROWSER_RESULT_PATH) writeFileSync(process.env.AUTODRILL_QA_BROWSER_RESULT_PATH, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {

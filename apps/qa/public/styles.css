@@ -82,6 +82,20 @@ input:focus, select:focus, button:focus-visible { outline: 3px solid rgb(35 104 
 .field > span { font-size: 13px; font-weight: 700; }
 .attempt-shell { max-width: 780px; margin: 0 auto; }
 .rating-panel { padding: 16px 28px 18px; }
+.unit-chooser { max-width: 540px; margin: 80px auto 0; text-align: center; }
+.unit-chooser .dark { color: var(--accent); }
+.unit-chooser .muted { margin: -4px 0 22px; }
+.unit-choice { margin: 0 auto 18px; text-align: left; }
+.unit-picker {
+  display: grid;
+  grid-template-columns: auto minmax(260px, 1fr);
+  align-items: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 0 auto 10px;
+}
+.unit-picker label { color: var(--muted); font-size: 12px; font-weight: 750; }
+.unit-picker select { padding-block: 7px; }
 .problem-area { text-align: center; padding: 0 0 10px; border-bottom: 1px solid var(--line); }
 .unit-label {
   display: inline-flex;

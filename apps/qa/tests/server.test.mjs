@@ -63,8 +63,11 @@ test('active attempt and draft survive a local server restart', async () => {
 
 test('quick flow creates a rating-only observation with random-generation provenance', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'autodrill-qa-quick-'));
+  const requestedSkills = [];
   const autodrillRuntime = {
-    async generateRandomProblem() {
+    listUnits() { return [{ skill_id: 'jp.grade2.addition.two_digit', numeric_theme_id: 5, name: '二桁の足し算', curriculum_path: ['root', '二桁の足し算'] }]; },
+    async generateRandomProblem({ skillId } = {}) {
+      requestedSkills.push(skillId ?? null);
       return {
         item: {
           source: 'autodrill',
@@ -89,7 +92,10 @@ test('quick flow creates a rating-only observation with random-generation proven
   const address = await qa.listen();
   const base = `http://127.0.0.1:${address.port}`;
   try {
-    const { payload: attempt } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test' });
+    const unitsResponse = await fetch(`${base}/api/quick/units`);
+    assert.deepEqual(await unitsResponse.json(), autodrillRuntime.listUnits());
+    const { payload: attempt } = await request(base, '/api/quick/next', { local_timezone: 'Asia/Tokyo', browser_version: 'test', skill_id: 'jp.grade2.addition.two_digit' });
+    assert.equal(requestedSkills[0], 'jp.grade2.addition.two_digit');
     assert.equal(attempt.problem_representation, '2 + 3 =');
     assert.equal(attempt.canonical_answer, '5');
     assert.equal(attempt.state, 'rating');

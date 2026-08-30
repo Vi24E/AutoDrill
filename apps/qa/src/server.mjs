@@ -77,6 +77,9 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         sendJson(res, 200, { metadata: repository.metadata(), databasePath: opened.path, session, activeAttempt });
         return;
       }
+      if (req.method === 'GET' && url.pathname === '/api/quick/units') {
+        sendJson(res, 200, autodrillRuntime.listUnits()); return;
+      }
       if (req.method === 'POST' && url.pathname === '/api/sessions') { sendJson(res, 201, repository.createSession(await readJson(req))); return; }
       let params = routeMatch(url.pathname, '/api/sessions/:id/end');
       if (req.method === 'POST' && params) { sendJson(res, 200, repository.endSession(params.id)); return; }
@@ -88,7 +91,7 @@ export function createQaServer({ databasePath, port = 4179, host = '127.0.0.1', 
         if (!session) session = repository.createSession({ evaluator: 'User', local_timezone: input.local_timezone ?? 'UTC' });
         const activeAttempt = repository.activeAttempt(session.id);
         if (activeAttempt) { sendJson(res, 200, repository.beginRatingOnly(activeAttempt.id, input)); return; }
-        const generated = await autodrillRuntime.generateRandomProblem();
+        const generated = await autodrillRuntime.generateRandomProblem({ skillId: input.skill_id });
         const item = repository.findItemBySourceIdentifier(generated.item.source, generated.item.source_identifier)
           ?? repository.createItem(generated.item);
         const attempt = repository.startAttempt({
