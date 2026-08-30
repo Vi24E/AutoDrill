@@ -125,19 +125,25 @@ try {
     labels: [...document.querySelector('#unit-choice').options].map(option=>option.textContent),
     horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
   })`);
-  if (!unitChooser.labels.includes('分数の足し算') || !unitChooser.labels.includes('分数の割り算') || unitChooser.labels.includes('一桁の足し算') || unitChooser.labels.includes('一桁の引き算') || unitChooser.labels.includes('九九') || unitChooser.horizontalOverflow) {
+  if (unitChooser.labels.length !== 35 || !unitChooser.labels.includes('分数の足し算') || !unitChooser.labels.includes('一次方程式(1)') || !unitChooser.labels.includes('二次方程式(3)') || !unitChooser.labels.includes('すうじはひとりぼっち') || unitChooser.labels.includes('一桁の足し算') || unitChooser.labels.includes('一桁の引き算') || unitChooser.labels.includes('九九') || unitChooser.horizontalOverflow) {
     throw new Error(`Unit chooser contract is broken: ${JSON.stringify(unitChooser)}`);
   }
   await capture(cdp, '00-unit-choice');
-  await evaluate(setAndInput('#unit-choice', 'jp.grade5.fraction.addition'));
+  await evaluate(setAndInput('#unit-choice', 'jp.grade7.equation.linear.1'));
   await evaluate(`document.querySelector('#start-unit').click()`);
   await waitFor(evaluate, `document.querySelectorAll('[data-prefix="rate"]').length === 49`, 'automatic rating-only problem');
+  try {
+    await waitFor(evaluate, `document.querySelector('.print-render-shell.ready') !== null`, 'exact print renderer');
+  } catch (error) {
+    const rendererState = await evaluate(`(()=>{const f=document.querySelector('.print-render-frame');return {src:f?.src,body:f?.contentDocument?.body?.innerText,ready:f?.contentDocument?.body?.dataset?.ready,html:f?.contentDocument?.documentElement?.outerHTML?.slice(0,500)}})()`);
+    throw new Error(`${error.message}: ${JSON.stringify(rendererState)}`);
+  }
   const firstAttempt = qa.repository.activeAttempt();
   const firstDetail = qa.repository.attemptDetail(firstAttempt.id);
   if (firstDetail.source !== 'autodrill') throw new Error('Quick flow did not create an AutoDrill item.');
-  if (firstDetail.unit_name !== '分数の足し算' || !firstDetail.problem_representation.includes('/') || firstDetail.original_source_payload.theme.skill_id !== 'jp.grade5.fraction.addition') throw new Error('Selected fraction unit was not generated.');
+  if (firstDetail.unit_name !== '一次方程式(1)' || !firstDetail.problem_representation.includes('x') || firstDetail.original_source_payload.theme.skill_id !== 'jp.grade7.equation.linear.1') throw new Error('Selected linear-equation unit was not generated.');
   const initialUi = await evaluate(`({
-    answerVisible: document.querySelector('.canonical-answer')?.innerText.includes(${JSON.stringify('答え')}),
+    answerVisible: Boolean(document.querySelector('.print-render-frame')?.contentDocument?.querySelector('[data-print-page="answers"] [data-print-problem-index]')),
     hasAnswerInput: Boolean(document.querySelector('#answer, #submit-answer')),
     cells: document.querySelectorAll('[data-prefix="rate"]').length,
     horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
@@ -148,9 +154,10 @@ try {
     originOffset: (()=>{const s=document.querySelector('.rating-surface').getBoundingClientRect();const o=document.querySelectorAll('[data-prefix="rate"]')[24].getBoundingClientRect();return {x:Math.round((o.left+o.width/2-(s.left+s.width/2))*10)/10,y:Math.round((o.top+o.height/2-(s.top+s.height/2))*10)/10}})(),
     axisText: document.querySelector('.axis-explainer').innerText,
     selectedUnit: document.querySelector('#unit-select').value,
+    printRenderer: (()=>{const frame=document.querySelector('.print-render-frame');return {ready:document.querySelector('.print-render-shell').classList.contains('ready'),selectedCell:Boolean(frame.contentDocument.querySelector('[data-print-page="answers"] [data-print-problem-index]')),math:frame.contentDocument.querySelectorAll('math-span').length}})(),
     viewportHeight: innerHeight,
   })`);
-  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5 || !initialUi.axisText.includes('横軸：難しさ') || !initialUi.axisText.includes('縦軸：特異性') || initialUi.selectedUnit !== 'jp.grade5.fraction.addition') {
+  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5 || !initialUi.axisText.includes('横軸：難しさ') || !initialUi.axisText.includes('縦軸：特異性') || initialUi.selectedUnit !== 'jp.grade7.equation.linear.1' || !initialUi.printRenderer.ready || !initialUi.printRenderer.selectedCell || initialUi.printRenderer.math < 1) {
     throw new Error(`Initial rating UI is broken: ${JSON.stringify(initialUi)}`);
   }
   if (firstDetail.observation_mode !== 'rating_only_answer_shown' || firstDetail.raw_user_answer !== null || firstDetail.correctness !== 'ungraded') {
@@ -182,18 +189,26 @@ try {
   await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`);
   await waitFor(evaluate, `document.querySelector('#selection-status').innerText.includes('難しさ')`, 'continuous keyboard movement');
   await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
-  await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(firstAttempt.id)}&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after keyboard save');
+  await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(firstAttempt.id)}&&document.querySelector('.print-render-shell')?.dataset.renderAttempt===s.activeAttempt?.id&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after keyboard save');
   if (await evaluate(`Boolean(document.querySelector('#next-problem, .saved-panel'))`)) throw new Error('A blocking saved screen remains in the flow.');
-  if (qa.repository.activeAttempt().source_skill_id !== 'jp.grade5.fraction.addition') throw new Error('Auto-next changed the selected unit.');
+  if (qa.repository.activeAttempt().source_skill_id !== 'jp.grade7.equation.linear.1') throw new Error('Auto-next changed the selected unit.');
+  if (qa.repository.attemptDetail(qa.repository.activeAttempt().id).original_source_payload.worksheet.identity.seed !== firstDetail.original_source_payload.worksheet.identity.seed) throw new Error('Auto-next did not consume the prefetched worksheet batch.');
+  await waitFor(evaluate, `document.querySelector('.print-render-shell.ready') !== null`, 'next exact print render');
   await capture(cdp, '02-next-problem');
 
   const secondAttempt = qa.repository.activeAttempt();
   await dragRating(cdp, evaluate, 'rate', 0.82, 0.23);
   await waitFor(evaluate, `!document.querySelector('#confirm-rating').disabled`, 'second selection');
   await evaluate(`document.querySelector('#confirm-rating').click()`);
-  await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(secondAttempt.id)}&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after second save');
+  await waitFor(evaluate, `(async()=>{const s=await fetch('/api/state').then(r=>r.json());return s.activeAttempt?.id!==${JSON.stringify(secondAttempt.id)}&&document.querySelector('.print-render-shell')?.dataset.renderAttempt===s.activeAttempt?.id&&document.querySelectorAll('[data-prefix="rate"]').length===49})()`, 'immediate next problem after second save');
+  await waitFor(evaluate, `document.querySelector('.print-render-shell.ready') !== null`, 'third prefetched problem ready');
   await evaluate(`window.confirm=()=>true; document.querySelector('[data-view="history"]').click()`);
-  await waitFor(evaluate, `document.querySelector('tbody tr[data-id]') !== null`, 'history rows');
+  try {
+    await waitFor(evaluate, `document.querySelector('tbody tr[data-id]') !== null`, 'history rows');
+  } catch (error) {
+    const state = await evaluate(`({body:document.body.innerText.slice(0,1500),historyActive:document.querySelector('[data-view="history"]')?.classList.contains('active'),historyDisabled:document.querySelector('[data-view="history"]')?.disabled,html:document.querySelector('#app')?.innerHTML.slice(0,1000)})`);
+    throw new Error(`${error.message}: ${JSON.stringify(state)}`);
+  }
   if (await evaluate(`document.querySelectorAll('tbody tr[data-id]').length`) !== 3) throw new Error('Completed and explicitly abandoned attempts were not all visible in history.');
   if (await evaluate(`document.querySelectorAll('tbody tr[data-state="complete"]').length`) !== 2) throw new Error('The two saved ratings were not both visible in history.');
   await capture(cdp, '03-history');
@@ -206,13 +221,14 @@ try {
   await evaluate(`document.querySelector('#save-revision').click()`);
   await waitFor(evaluate, `document.querySelectorAll('#history-detail tbody tr').length >= 2`, 'rating revision history');
 
-  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')&&item.original_source_payload_json.includes('jp.grade5.fraction.addition')),unitSelection:full.data.selection_events.every(selection=>selection.selection_policy==='autodrill_unit_random_v1'&&JSON.parse(selection.filters_json).selected_skill_id==='jp.grade5.fraction.addition'),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')}; })()`);
+  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')&&item.original_source_payload_json.includes('jp.grade7.equation.linear.1')),unitSelection:full.data.selection_events.every(selection=>selection.selection_policy==='autodrill_unit_random_v1'&&JSON.parse(selection.filters_json).selected_skill_id==='jp.grade7.equation.linear.1'&&Number.isInteger(JSON.parse(selection.filters_json).worksheet_problem_index)),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')}; })()`);
   if (exportCheck.attempts !== 3 || exportCheck.completed !== 2 || exportCheck.abandoned !== 1 || exportCheck.events < 9 || !exportCheck.autodrill || !exportCheck.ratingOnly || !exportCheck.continuous || !exportCheck.preReveal || !exportCheck.sourcePayload || !exportCheck.unitSelection || !exportCheck.csv) throw new Error(`Export verification failed: ${JSON.stringify(exportCheck)}`);
   if (cdp.errors.length) throw new Error(`Browser console errors: ${cdp.errors.join(' | ')}`);
-  const result = { status: 'passed', operations: ['unit chooser', 'fraction unit availability', 'basic repetition unit exclusion', 'selected-unit random generation', 'same-unit auto-next', 'automatic session start', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'immediate next problem without saved screen', 'explicit abandon before history', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'full JSON export', 'analysis CSV export'], completedAttempts: 2, abandonedAttempts: 1, localServerRestartCoveredBy: 'server.test.mjs' };
+  const result = { status: 'passed', operations: ['all current unit chooser', 'equation unit availability', 'fraction unit availability', 'basic repetition unit exclusion', 'original Rust/WASM selected-unit generation', 'prefetched worksheet same-unit auto-next', 'exact production print renderer', 'automatic session start', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'immediate next problem without saved screen', 'explicit abandon before history', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'full JSON export', 'analysis CSV export'], completedAttempts: 2, abandonedAttempts: 1, localServerRestartCoveredBy: 'server.test.mjs' };
   if (process.env.AUTODRILL_QA_BROWSER_RESULT_PATH) writeFileSync(process.env.AUTODRILL_QA_BROWSER_RESULT_PATH, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
 } catch (error) {
+  if (cdp?.errors.length) error.message = `${error.message}\nBrowser errors: ${cdp.errors.join(' | ')}`;
   if (process.env.AUTODRILL_QA_BROWSER_RESULT_PATH) writeFileSync(process.env.AUTODRILL_QA_BROWSER_RESULT_PATH, JSON.stringify({ status: 'failed', error: error.stack ?? String(error) }, null, 2));
   throw error;
 } finally {

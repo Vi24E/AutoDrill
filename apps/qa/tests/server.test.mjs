@@ -75,7 +75,7 @@ test('quick flow creates a rating-only observation with random-generation proven
           unit_name: '一桁の足し算',
           problem_representation: '2 + 3 =',
           canonical_answer: '5',
-          original_source_payload: { integration_version: 'autodrill_qa_wasm_v1', problem: { id: 1 }, worksheet: { problems: [{ id: 1 }] } },
+          original_source_payload: { integration_version: 'autodrill_qa_wasm_v1', problem_index: 0, problem: { id: 1 }, worksheet: { problems: [{ id: 1 }] } },
         },
         selection: {
           selection_policy: 'autodrill_random_v1',
@@ -100,6 +100,11 @@ test('quick flow creates a rating-only observation with random-generation proven
     assert.equal(attempt.canonical_answer, '5');
     assert.equal(attempt.state, 'rating');
     assert.equal(attempt.observation_mode, 'rating_only_answer_shown');
+    const renderResponse = await fetch(`${base}/api/attempts/${attempt.id}/render`);
+    const renderPayload = await renderResponse.json();
+    assert.equal(renderResponse.status, 200);
+    assert.equal(renderPayload.problem_index, 0);
+    assert.deepEqual(renderPayload.worksheet, { problems: [{ id: 1 }] });
     const { payload: revealed } = await request(base, `/api/attempts/${attempt.id}/ratings`, { difficulty_rating: 2, singularity_rating: 3 });
     assert.equal(revealed.raw_user_answer, null);
     assert.equal(revealed.correctness, 'ungraded');

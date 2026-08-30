@@ -1,0 +1,9 @@
+html, body, #root { width: 100%; height: 100%; min-height: 0; overflow: hidden; }
+body { margin: 0; background: #fff; }
+#root { position: relative; }
+.qa-render-status { display: grid; height: 100%; margin: 0; place-items: center; color: #657169; font: 13px/1.5 system-ui, sans-serif; }
+.qa-render-error { color: #8a352c; }
+.worksheet-print-page { position: absolute; inset: 0 auto auto 0; margin: 0 !important; box-shadow: none !important; }
+.worksheet-print-page-problems { display: none !important; }
+.worksheet-print-page-answers:not([data-qa-selected-page="true"]) { visibility: hidden; }
+.worksheet-print-page-inner-rotated { transform: none !important; }

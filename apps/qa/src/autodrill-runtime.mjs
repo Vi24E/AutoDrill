@@ -3,7 +3,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const CONTRACT_PATH = new URL('../generated/drill-core-contract.json', import.meta.url);
-const SIMPLE_PROMPT_KINDS = new Set(['addition', 'arithmetic', 'column_arithmetic']);
 const EXCLUDED_QA_SKILLS = new Set([
   'jp.grade1.addition.one_digit',
   'jp.grade1.subtraction.one_digit',
@@ -30,7 +29,8 @@ function exactDecimal(coefficient, scale) {
 }
 
 function rational(value) {
-  return value.denominator === 1 ? String(value.numerator) : `${value.numerator}/${value.denominator}`;
+  const numerator = String(value.numerator).replace(/^-/, '−');
+  return value.denominator === 1 ? numerator : `${numerator}/${value.denominator}`;
 }
 
 function expression(node) {
@@ -52,20 +52,123 @@ export function formatProblem(problem) {
     const operator = { add: '+', subtract: '−', multiply: '×', divide: '÷' }[prompt.operator] ?? prompt.operator;
     return `${expression(prompt.left)} ${operator} ${expression(prompt.right)} =`;
   }
+  if (prompt.kind === 'linear_equation') {
+    return `${linearSide(prompt.a, prompt.b, prompt.left_negative_constant_as_subtraction)} = ${linearSide(prompt.c, prompt.d, prompt.right_negative_constant_as_subtraction)}`;
+  }
+  if (prompt.kind === 'quadratic_equation') return quadraticEquation(prompt);
+  if (prompt.kind === 'simultaneous_equation') {
+    return `${integerEquation(prompt.a, prompt.b, prompt.c)}\n${integerEquation(prompt.d, prompt.e, prompt.f)}`;
+  }
+  if (prompt.kind === 'liar_puzzle') {
+    return prompt.statements.map((statement, index) => `${personLabel(index + 1)}さん「${liarStatement(statement)}」`).join('\n');
+  }
+  if (prompt.kind === 'mini_sudoku') return `4×4 数独\n${formatGrid(prompt.givens)}`;
   throw new Error(`Unsupported QA prompt kind: ${prompt.kind}`);
 }
 
-export function formatCanonicalAnswer(answer) {
+function formatAnswerNode(answer) {
+  if (answer.type === 'empty') return '';
   if (answer.type === 'integer') return String(answer.value).replace(/^-/, '−');
   if (answer.type === 'exact_decimal') return exactDecimal(answer.value.coefficient, answer.value.scale);
-  if (answer.type === 'negative') return `−${formatCanonicalAnswer(answer.value)}`;
-  if (answer.type === 'fraction') return `${formatCanonicalAnswer(answer.value.numerator)}/${formatCanonicalAnswer(answer.value.denominator)}`;
-  if (answer.type === 'mixed_fraction') return `${formatCanonicalAnswer(answer.value.whole)} ${formatCanonicalAnswer(answer.value.numerator)}/${formatCanonicalAnswer(answer.value.denominator)}`;
-  if (answer.type === 'tuple') {
-    const values = answer.value.map(formatCanonicalAnswer);
-    return values.length === 2 ? `${values[0]} あまり ${values[1]}` : values.join(', ');
+  if (answer.type === 'nan_error') return answer.value;
+  if (answer.type === 'negative') return `−${formatAnswerNode(answer.value)}`;
+  if (answer.type === 'fraction') return `${formatAnswerNode(answer.value.numerator)}/${formatAnswerNode(answer.value.denominator)}`;
+  if (answer.type === 'mixed_fraction') return `${formatAnswerNode(answer.value.whole)} ${formatAnswerNode(answer.value.numerator)}/${formatAnswerNode(answer.value.denominator)}`;
+  if (answer.type === 'root') return answer.value.index ? `${formatAnswerNode(answer.value.index)}√(${formatAnswerNode(answer.value.radicand)})` : `√(${formatAnswerNode(answer.value.radicand)})`;
+  if (answer.type === 'plus_minus') return `±${formatAnswerNode(answer.value)}`;
+  if (answer.type === 'binary') {
+    const operator = { add: '+', subtract: '−', multiply: '×' }[answer.value.operator] ?? answer.value.operator;
+    return `(${formatAnswerNode(answer.value.left)} ${operator} ${formatAnswerNode(answer.value.right)})`;
   }
-  return JSON.stringify(answer);
+  if (answer.type === 'tuple') return answer.value.map(formatAnswerNode).join(', ');
+  if (answer.type === 'variable') return answer.value;
+  throw new Error(`Unsupported canonical answer type: ${answer.type}`);
+}
+
+export function formatCanonicalAnswer(answer, problem) {
+  if (answer.type === 'tuple' && problem?.prompt.kind === 'simultaneous_equation') {
+    return `x = ${formatAnswerNode(answer.value[0])}, y = ${formatAnswerNode(answer.value[1])}`;
+  }
+  if (answer.type === 'tuple' && problem?.prompt.kind === 'liar_puzzle') {
+    return answer.value.map((value) => `${personLabel(Number(formatAnswerNode(value)))}さん`).join('、');
+  }
+  if (answer.type === 'tuple' && problem?.prompt.kind === 'mini_sudoku') {
+    return formatGrid(answer.value.map((value) => Number(formatAnswerNode(value))));
+  }
+  if (answer.type === 'tuple' && problem?.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide') {
+    return `${formatAnswerNode(answer.value[0])} あまり ${formatAnswerNode(answer.value[1])}`;
+  }
+  if (answer.type === 'tuple' && problem?.prompt.kind === 'quadratic_equation') {
+    return `x = ${answer.value.map(formatAnswerNode).join(', ')}`;
+  }
+  return formatAnswerNode(answer);
+}
+
+function linearTerm(value) {
+  if (value.numerator === 0) return '';
+  const coefficient = rational({ numerator: Math.abs(value.numerator), denominator: value.denominator });
+  return `${value.numerator < 0 ? '−' : ''}${coefficient === '1' ? '' : coefficient}x`;
+}
+
+function linearSide(coefficient, constant, negativeAsSubtraction) {
+  const term = linearTerm(coefficient);
+  if (!term) return rational(constant);
+  if (constant.numerator === 0) return term;
+  if (constant.numerator > 0) return `${term} + ${rational(constant)}`;
+  return negativeAsSubtraction
+    ? `${term} − ${rational({ ...constant, numerator: Math.abs(constant.numerator) })}`
+    : `${term} + (${rational(constant)})`;
+}
+
+function polynomialTerm(value, variable, first) {
+  if (value.numerator === 0) return '';
+  const magnitude = rational({ ...value, numerator: Math.abs(value.numerator) });
+  const body = `${magnitude === '1' ? '' : magnitude}${variable}`;
+  if (first) return value.numerator < 0 ? `−${body}` : body;
+  return value.numerator < 0 ? ` − ${body}` : ` + ${body}`;
+}
+
+function polynomialConstant(value, first) {
+  if (value.numerator === 0) return '';
+  const magnitude = rational({ ...value, numerator: Math.abs(value.numerator) });
+  if (first) return value.numerator < 0 ? `−${magnitude}` : magnitude;
+  return value.numerator < 0 ? ` − ${magnitude}` : ` + ${magnitude}`;
+}
+
+function quadraticEquation(prompt) {
+  if (prompt.form === 'factored_scale') {
+    const scale = rational(prompt.a);
+    return `${scale === '1' ? '' : scale}(x²${polynomialTerm(prompt.b, 'x', false)}${polynomialConstant(prompt.c, false)}) = 0`;
+  }
+  const first = polynomialTerm(prompt.a, 'x²', true);
+  if (prompt.form === 'square_equals_constant') return `${first} = ${rational(prompt.c)}`;
+  const middle = prompt.form === 'standard' ? polynomialTerm(prompt.b, 'x', false) : '';
+  return `${first}${middle}${polynomialConstant(prompt.c, !first && !middle)} = 0`;
+}
+
+function integerEquation(a, b, c) {
+  const term = (value, variable, first) => {
+    const magnitude = Math.abs(value);
+    const body = `${magnitude === 1 ? '' : magnitude}${variable}`;
+    if (first) return value < 0 ? `−${body}` : body;
+    return value < 0 ? ` − ${body}` : ` + ${body}`;
+  };
+  return `${term(a, 'x', true)}${term(b, 'y', false)} = ${String(c).replace(/^-/, '−')}`;
+}
+
+function personLabel(person) { return String.fromCharCode('A'.charCodeAt(0) + person - 1); }
+function liarStatement(statement) {
+  if (statement.kind === 'says_liar') return `${personLabel(statement.person)}さんはうそつきだ。`;
+  if (statement.kind === 'says_not_liar') return `${personLabel(statement.person)}さんはうそつきではない。`;
+  if (statement.kind === 'exactly_one_liar') return `${personLabel(statement.first)}さんと${personLabel(statement.second)}さんのうち、うそつきは1人だけだ。`;
+  if (statement.kind === 'exact_liar_count') return `このなかの${statement.count}人がうそつきだ。`;
+  if (statement.kind === 'both_liar') return `${personLabel(statement.first)}さんと${personLabel(statement.second)}さんはうそつきだ。`;
+  if (statement.kind === 'both_not_liar') return `${personLabel(statement.first)}さんと${personLabel(statement.second)}さんはうそつきではない。`;
+  throw new Error(`Unsupported liar statement: ${statement.kind}`);
+}
+
+function formatGrid(values) {
+  return Array.from({ length: 4 }, (_, row) => values.slice(row * 4, row * 4 + 4).map((value) => value ?? '・').join(' ')).join('\n');
 }
 
 function wasmDirectory() {
@@ -84,10 +187,8 @@ export class AutoDrillRuntime {
     this.contract = contract;
     this.selectionSeed = selectionSeed;
     this.runtimePromise = null;
-    this.themes = Object.values(contract.themes).filter((theme) => (
-      SIMPLE_PROMPT_KINDS.has(theme.answer_contract?.prompt_kind)
-      && !EXCLUDED_QA_SKILLS.has(theme.skill_id)
-    ));
+    this.batches = new Map();
+    this.themes = Object.values(contract.themes).filter((theme) => !EXCLUDED_QA_SKILLS.has(theme.skill_id));
     if (!this.themes.length) throw new Error('QAで評価可能なAutoDrill themeがありません。');
   }
 
@@ -114,23 +215,35 @@ export class AutoDrillRuntime {
   }
 
   async generateRandomProblem({ skillId } = {}) {
-    const selectionSeed = this.selectionSeed();
+    let selectionSeed = this.selectionSeed();
     const theme = skillId
       ? this.themes.find((candidate) => candidate.skill_id === skillId)
       : this.themes[digestNumber(selectionSeed, 'theme') % this.themes.length];
     if (!theme) throw new Error(`QAで選択できない単元です: ${skillId}`);
-    const seed = generatorSeed(selectionSeed);
-    const request = {
-      schema_version: this.contract.schema_version,
-      numeric_theme_id: theme.numeric_theme_id,
-      seed,
-      difficulty: 4,
-    };
-    const runtime = await this.runtime();
-    const envelope = JSON.parse(runtime.generate_worksheet(JSON.stringify(request)));
-    if (!envelope.ok) throw new Error(`AutoDrill generation failed: ${envelope.error?.message ?? 'unknown error'}`);
-    const worksheet = envelope.data;
-    const problemIndex = digestNumber(selectionSeed, 'problem') % worksheet.problems.length;
+    let batch = skillId ? this.batches.get(skillId) : null;
+    if (!batch?.remaining.length) {
+      const seed = generatorSeed(selectionSeed);
+      const request = {
+        schema_version: this.contract.schema_version,
+        numeric_theme_id: theme.numeric_theme_id,
+        seed,
+        difficulty: 4,
+      };
+      const runtime = await this.runtime();
+      const envelope = JSON.parse(runtime.generate_worksheet(JSON.stringify(request)));
+      if (!envelope.ok) throw new Error(`AutoDrill generation failed: ${envelope.error?.message ?? 'unknown error'}`);
+      const worksheet = envelope.data;
+      const remaining = worksheet.problems.map((_, index) => index).sort((left, right) => (
+        digestNumber(selectionSeed, `problem:${left}`) - digestNumber(selectionSeed, `problem:${right}`)
+      ));
+      batch = { selectionSeed, request, worksheet, remaining };
+      if (skillId) this.batches.set(skillId, batch);
+    } else {
+      selectionSeed = batch.selectionSeed;
+    }
+    const candidateCount = batch.remaining.length;
+    const problemIndex = batch.remaining.shift();
+    const { worksheet, request } = batch;
     const problem = worksheet.problems[problemIndex];
     const unitName = theme.curriculum_path.filter((part) => part !== 'root').at(-1) ?? theme.skill_id;
     return {
@@ -139,7 +252,7 @@ export class AutoDrillRuntime {
         source_identifier: `${worksheet.identity.numeric_theme_id}:${worksheet.identity.generator_revision}:${worksheet.identity.seed}:${worksheet.identity.difficulty}:${problemIndex}`,
         unit_name: unitName,
         problem_representation: formatProblem(problem),
-        canonical_answer: formatCanonicalAnswer(problem.canonical_answer),
+        canonical_answer: formatCanonicalAnswer(problem.canonical_answer, problem),
         original_source_payload: {
           integration_version: 'autodrill_qa_wasm_v1',
           selection_seed: selectionSeed,
@@ -152,11 +265,11 @@ export class AutoDrillRuntime {
       },
       selection: {
         selection_policy: skillId ? 'autodrill_unit_random_v1' : 'autodrill_random_v1',
-        candidate_source: 'drill_core_web_contract_qa_themes',
-        filters: { selected_skill_id: skillId ?? null, prompt_kinds: [...SIMPLE_PROMPT_KINDS], excluded_skill_ids: [...EXCLUDED_QA_SKILLS], requested_difficulty: 4 },
+        candidate_source: 'drill_core_worksheet_without_replacement',
+        filters: { selected_skill_id: skillId ?? null, worksheet_seed: worksheet.identity.seed, worksheet_problem_index: problemIndex, excluded_skill_ids: [...EXCLUDED_QA_SKILLS], requested_difficulty: 4 },
         random_seed: selectionSeed,
-        selection_probability: 1 / (skillId ? 1 : this.themes.length) / worksheet.problems.length,
-        candidate_count: skillId ? 1 : this.themes.length,
+        selection_probability: 1 / (skillId ? 1 : this.themes.length) / candidateCount,
+        candidate_count: candidateCount,
       },
     };
   }
