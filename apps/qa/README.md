@@ -2,13 +2,23 @@
 
 AutoDrillの問題品質をUser本人が継続評価するためのlocal-only application。公開用`apps/web`とは別のworkspace packageであり、GitHub Pages buildには含まれない。
 
-## 起動
+## 起動（推奨）
+
+macOSではrepository直下の`AutoDrill Problem QA.app`をFinderからダブルクリックする。Terminalやbrowser toolbar、URL欄を表示せず専用windowが開き、空きportは自動選択される。windowを閉じるとlocal serverも終了するため、portを管理する必要はない。
+
+terminalから同じ専用windowを開く場合:
+
+```sh
+pnpm --filter @autodrill/qa open
+```
+
+## Browser tabでの開発起動
 
 ```sh
 pnpm --filter @autodrill/qa dev
 ```
 
-既定では `http://127.0.0.1:4179` を開く。portは`AUTODRILL_QA_PORT`、databaseは`AUTODRILL_QA_DB_PATH`で変更できる。
+開発時だけ既定の `http://127.0.0.1:4179` をbrowserで開く。portは`AUTODRILL_QA_PORT`、databaseは`AUTODRILL_QA_DB_PATH`で変更できる。
 
 macOSの既定database:
 

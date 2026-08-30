@@ -1,0 +1,23 @@
+#!/bin/zsh
+set -uo pipefail
+
+ROOT="$(cd -- "$(dirname -- "$0")/../../.." && pwd)"
+NODE_VERSION="$(/usr/bin/tr -d '[:space:]' < "$ROOT/.nvmrc")"
+ASDF_NODE_BIN="${HOME}/.asdf/installs/nodejs/$NODE_VERSION/bin"
+
+show_error() {
+  /usr/bin/osascript -e 'display dialog "AutoDrill Problem QAを起動できませんでした。Node.js環境またはrepositoryの状態を確認してください。" with title "AutoDrill Problem QA" buttons {"OK"} default button "OK" with icon stop' >/dev/null
+}
+
+if [[ ! -x "$ASDF_NODE_BIN/node" ]]; then
+  show_error
+  exit 1
+fi
+
+export PATH="$ASDF_NODE_BIN:${HOME}/.asdf/shims:/usr/bin:/bin:${PATH:-}"
+"$ASDF_NODE_BIN/node" "$ROOT/apps/qa/src/desktop.mjs"
+code=$?
+if (( code != 0 && code != 130 )); then
+  show_error
+fi
+exit "$code"

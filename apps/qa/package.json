@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node src/server.mjs",
+    "open": "node src/desktop.mjs",
     "start": "node src/server.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/browser-acceptance.mjs"

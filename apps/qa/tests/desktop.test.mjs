@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { findAppBrowser, launchDesktop } from '../src/desktop.mjs';
+
+test('configured app browser has priority', () => {
+  assert.equal(findAppBrowser({ AUTODRILL_QA_BROWSER_PATH: process.execPath }, 'test'), process.execPath);
+});
+
+test('desktop window uses an ephemeral port and owns server/profile lifecycle', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'autodrill-qa-desktop-test-'));
+  const databasePath = join(directory, 'qa.sqlite3');
+  let observedUrl = null;
+  const browserLauncher = ({ url }) => {
+    observedUrl = url;
+    const check = `const response=await fetch(${JSON.stringify(`${url}/api/state`)}); if(!response.ok) process.exit(2); const state=await response.json(); if(state.metadata.appVersion!=='0.1.0') process.exit(3);`;
+    return spawn(process.execPath, ['--input-type=module', '-e', check], { stdio: 'ignore' });
+  };
+  try {
+    const desktop = await launchDesktop({ databasePath, browserBinary: process.execPath, browserLauncher, logger: { log() {} } });
+    assert.match(observedUrl, /^http:\/\/127[.]0[.]0[.]1:\d+$/);
+    assert.ok(Number(new URL(observedUrl).port) > 0);
+    const profilePath = desktop.profilePath;
+    assert.equal(existsSync(profilePath), true);
+    await desktop.finished;
+    assert.equal(existsSync(profilePath), false);
+    assert.equal(existsSync(databasePath), true);
+    await assert.rejects(fetch(observedUrl));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

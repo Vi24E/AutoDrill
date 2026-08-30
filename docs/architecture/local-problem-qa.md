@@ -8,6 +8,8 @@ AutoDrillの問題品質をUser本人が観測し、将来の統計解析へ使�
 
 QA applicationのlocal serverはdurable SQLite persistenceを提供するためのもので、network service、cloud DB、login、analyticsを持たない。既定databaseはOSのapplication-data directoryへ置き、`AUTODRILL_QA_DB_PATH`で明示変更できる。
 
+通常起動はrepository直下のmacOS `AutoDrill Problem QA.app`から`apps/qa/src/desktop.mjs`を呼ぶ。desktop launcherはOS割当のephemeral loopback portでserverを開始し、独立temporary profileのChromium app-mode windowを開く。Terminal、address bar、browser tabを表示せず、window processの終了をserver lifecycleへ結びつける。profileは終了時に削除し、durable dataはSQLiteだけへ残す。固定portの`src/server.mjs`起動は開発・debug用途である。
+
 ## Source of truth
 
 raw SQLite recordsをcanonical dataとする。
