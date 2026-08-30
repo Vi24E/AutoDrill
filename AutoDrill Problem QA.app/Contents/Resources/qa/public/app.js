@@ -6,6 +6,7 @@ const toastElement = document.querySelector('#toast');
 const model = {
   state: null, view: 'evaluate', selectedRating: null,
   ratingStartedMonotonic: null, ratingEventPromise: null, starting: false, saving: false,
+  units: [], selectedSkillId: null,
 };
 
 const h = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -59,22 +60,23 @@ function toast(message) {
 }
 
 async function refresh() {
-  model.state = await api('/api/state');
+  [model.state, model.units] = await Promise.all([api('/api/state'), api('/api/quick/units')]);
   const active = model.state.activeAttempt;
-  if (!active || active.observation_mode !== 'rating_only_answer_shown') {
+  if (active?.source_skill_id) model.selectedSkillId = active.source_skill_id;
+  if (active && active.observation_mode !== 'rating_only_answer_shown') {
     await startRandomAttempt();
     return;
   }
   model.view = 'evaluate';
-  model.selectedRating = active.rating_draft ?? null;
-  model.ratingStartedMonotonic = performance.now() - Math.max(0, Date.now() - Date.parse(active.rating_started_at));
+  model.selectedRating = active?.rating_draft ?? null;
+  model.ratingStartedMonotonic = active ? performance.now() - Math.max(0, Date.now() - Date.parse(active.rating_started_at)) : null;
   updateChrome();
   render();
 }
 
 function updateChrome() {
   const active = model.state?.activeAttempt;
-  statusStrip.innerHTML = `<div>答えを見て、グリッドで評価するだけ</div><div>${active ? h(active.unit_name) : '評価はSQLiteへ保存済み'}</div>`;
+  statusStrip.innerHTML = `<div>単元を選び、答えを見て評価するだけ</div><div>${active ? h(active.unit_name) : '出題する単元を選択'}</div>`;
   nav.querySelectorAll('button').forEach((button) => {
     button.disabled = false;
     button.classList.toggle('active', button.dataset.view === model.view);
@@ -84,7 +86,7 @@ function updateChrome() {
 function render() {
   if (model.view === 'history') { renderHistory(); return; }
   if (model.state?.activeAttempt) { renderRating(model.state.activeAttempt); return; }
-  renderLoading();
+  renderUnitChooser();
 }
 
 function renderLoading() {
@@ -93,6 +95,7 @@ function renderLoading() {
 
 async function startRandomAttempt() {
   if (model.starting) return;
+  if (!model.selectedSkillId && !model.state.activeAttempt) { renderUnitChooser(); return; }
   model.starting = true;
   model.view = 'evaluate';
   renderLoading();
@@ -100,9 +103,11 @@ async function startRandomAttempt() {
     const attempt = await api('/api/quick/next', { method: 'POST', body: JSON.stringify({
       local_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       browser_version: navigator.userAgent,
+      skill_id: model.selectedSkillId,
       ...eventStamp(),
     }) });
     model.state.activeAttempt = attempt;
+    if (attempt.source_skill_id) model.selectedSkillId = attempt.source_skill_id;
     model.ratingStartedMonotonic = performance.now() - Math.max(0, Date.now() - Date.parse(attempt.rating_started_at));
     model.selectedRating = attempt.rating_draft ?? null;
     updateChrome();
@@ -110,6 +115,47 @@ async function startRandomAttempt() {
   } finally {
     model.starting = false;
   }
+}
+
+function unitOptions(selectedSkillId = model.selectedSkillId, currentAttempt = model.state?.activeAttempt) {
+  const currentIsExcluded = selectedSkillId && !model.units.some((unit) => unit.skill_id === selectedSkillId);
+  const currentOption = currentIsExcluded
+    ? `<option value="${h(selectedSkillId)}" selected disabled>${h(currentAttempt?.unit_name ?? selectedSkillId)}（現在の問題のみ）</option>`
+    : '';
+  return `${currentOption}<option value="" ${selectedSkillId ? '' : 'selected'} disabled>単元を選択</option>${model.units.map((unit) => `<option value="${h(unit.skill_id)}" ${unit.skill_id === selectedSkillId ? 'selected' : ''}>${h(unit.name)}</option>`).join('')}`;
+}
+
+function renderUnitChooser() {
+  app.innerHTML = `<section class="attempt-shell"><div class="panel unit-chooser">
+    <p class="eyebrow dark">AUTODRILL QA</p><h2>評価する単元を選択</h2><p class="muted">選んだ単元から問題をランダムに出題します。評価後も同じ単元が続きます。</p>
+    <label class="field unit-choice"><span>出題単元</span><select id="unit-choice">${unitOptions()}</select></label>
+    <button class="button primary-action" id="start-unit" ${model.selectedSkillId ? '' : 'disabled'}>この単元で開始</button>
+  </div></section>`;
+  const select = document.querySelector('#unit-choice');
+  const start = document.querySelector('#start-unit');
+  select.addEventListener('change', () => { model.selectedSkillId = select.value; start.disabled = !select.value; });
+  start.addEventListener('click', startRandomAttempt);
+  select.focus();
+}
+
+async function changeUnit(select) {
+  const nextSkillId = select.value;
+  const previousSkillId = model.selectedSkillId;
+  if (!nextSkillId || nextSkillId === previousSkillId) return;
+  if (model.state.activeAttempt && !confirm('現在の問題を未評価として記録し、単元を切り替えますか？')) {
+    select.value = previousSkillId;
+    return;
+  }
+  select.disabled = true;
+  if (model.state.activeAttempt) {
+    await api(`/api/attempts/${model.state.activeAttempt.id}/abandon`, {
+      method: 'POST', body: JSON.stringify({ reason: 'unit_changed_before_rating', ...eventStamp() }),
+    });
+    model.state.activeAttempt = null;
+    model.selectedRating = null;
+  }
+  model.selectedSkillId = nextSkillId;
+  await startRandomAttempt();
 }
 
 function ratingGrid(selected = model.selectedRating, prefix = 'rate') {
@@ -149,7 +195,8 @@ function ratingGrid(selected = model.selectedRating, prefix = 'rate') {
 
 function renderRating(attempt) {
   app.innerHTML = `<section class="attempt-shell"><div class="panel rating-panel">
-    <div class="problem-area"><span class="unit-label">${h(attempt.unit_name)}</span><div class="problem-text">${h(attempt.problem_representation)}</div>
+    <div class="unit-picker"><label for="unit-select">出題単元</label><select id="unit-select">${unitOptions(model.selectedSkillId, attempt)}</select></div>
+    <div class="problem-area"><div class="problem-text">${h(attempt.problem_representation)}</div>
       <div class="canonical-answer"><span>答え</span><strong>${h(attempt.canonical_answer)}</strong></div>
     </div>
     <div class="rating-heading"><h2>この問題を評価</h2><p>中央を原点として、平面上の位置を選んでください。</p></div>
@@ -159,6 +206,7 @@ function renderRating(attempt) {
     <div class="actions confirm-rating-row"><button class="button primary-action" id="confirm-rating" ${model.selectedRating ? '' : 'disabled'}>評価を保存して次へ <span class="small">Enter</span></button></div>
   </div></section>`;
   bindRatingSurface('rate');
+  document.querySelector('#unit-select').addEventListener('change', (event) => changeUnit(event.currentTarget));
   if (model.selectedRating) model.ratingEventPromise = Promise.resolve();
   document.querySelector('#confirm-rating').addEventListener('click', confirmRating);
   document.querySelector('[data-rating-surface="rate"]')?.focus();

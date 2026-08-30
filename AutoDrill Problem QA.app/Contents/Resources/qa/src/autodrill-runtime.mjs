@@ -4,6 +4,12 @@ import { join, resolve } from 'node:path';
 
 const CONTRACT_PATH = new URL('../generated/drill-core-contract.json', import.meta.url);
 const SIMPLE_PROMPT_KINDS = new Set(['addition', 'arithmetic', 'column_arithmetic']);
+const EXCLUDED_QA_SKILLS = new Set([
+  'jp.grade1.addition.one_digit',
+  'jp.grade1.subtraction.one_digit',
+  'jp.grade2.multiplication.table',
+  'jp.grade3.division.table.1',
+]);
 const SEED_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
 function digestNumber(seed, label) {
@@ -50,9 +56,15 @@ export function formatProblem(problem) {
 }
 
 export function formatCanonicalAnswer(answer) {
-  if (answer.type === 'integer') return answer.value;
+  if (answer.type === 'integer') return String(answer.value).replace(/^-/, '−');
   if (answer.type === 'exact_decimal') return exactDecimal(answer.value.coefficient, answer.value.scale);
   if (answer.type === 'negative') return `−${formatCanonicalAnswer(answer.value)}`;
+  if (answer.type === 'fraction') return `${formatCanonicalAnswer(answer.value.numerator)}/${formatCanonicalAnswer(answer.value.denominator)}`;
+  if (answer.type === 'mixed_fraction') return `${formatCanonicalAnswer(answer.value.whole)} ${formatCanonicalAnswer(answer.value.numerator)}/${formatCanonicalAnswer(answer.value.denominator)}`;
+  if (answer.type === 'tuple') {
+    const values = answer.value.map(formatCanonicalAnswer);
+    return values.length === 2 ? `${values[0]} あまり ${values[1]}` : values.join(', ');
+  }
   return JSON.stringify(answer);
 }
 
@@ -73,10 +85,19 @@ export class AutoDrillRuntime {
     this.selectionSeed = selectionSeed;
     this.runtimePromise = null;
     this.themes = Object.values(contract.themes).filter((theme) => (
-      theme.input_interface?.type === 'simple_numeric'
-      && SIMPLE_PROMPT_KINDS.has(theme.answer_contract?.prompt_kind)
+      SIMPLE_PROMPT_KINDS.has(theme.answer_contract?.prompt_kind)
+      && !EXCLUDED_QA_SKILLS.has(theme.skill_id)
     ));
     if (!this.themes.length) throw new Error('QAで評価可能なAutoDrill themeがありません。');
+  }
+
+  listUnits() {
+    return this.themes.map((theme) => ({
+      skill_id: theme.skill_id,
+      numeric_theme_id: theme.numeric_theme_id,
+      name: theme.curriculum_path.filter((part) => part !== 'root').at(-1) ?? theme.skill_id,
+      curriculum_path: theme.curriculum_path,
+    }));
   }
 
   async runtime() {
@@ -92,9 +113,12 @@ export class AutoDrillRuntime {
     return this.runtimePromise;
   }
 
-  async generateRandomProblem() {
+  async generateRandomProblem({ skillId } = {}) {
     const selectionSeed = this.selectionSeed();
-    const theme = this.themes[digestNumber(selectionSeed, 'theme') % this.themes.length];
+    const theme = skillId
+      ? this.themes.find((candidate) => candidate.skill_id === skillId)
+      : this.themes[digestNumber(selectionSeed, 'theme') % this.themes.length];
+    if (!theme) throw new Error(`QAで選択できない単元です: ${skillId}`);
     const seed = generatorSeed(selectionSeed);
     const request = {
       schema_version: this.contract.schema_version,
@@ -127,12 +151,12 @@ export class AutoDrillRuntime {
         },
       },
       selection: {
-        selection_policy: 'autodrill_random_v1',
-        candidate_source: 'drill_core_web_contract_simple_numeric_themes',
-        filters: { input_interface: 'simple_numeric', prompt_kinds: [...SIMPLE_PROMPT_KINDS], requested_difficulty: 4 },
+        selection_policy: skillId ? 'autodrill_unit_random_v1' : 'autodrill_random_v1',
+        candidate_source: 'drill_core_web_contract_qa_themes',
+        filters: { selected_skill_id: skillId ?? null, prompt_kinds: [...SIMPLE_PROMPT_KINDS], excluded_skill_ids: [...EXCLUDED_QA_SKILLS], requested_difficulty: 4 },
         random_seed: selectionSeed,
-        selection_probability: 1 / this.themes.length / worksheet.problems.length,
-        candidate_count: this.themes.length,
+        selection_probability: 1 / (skillId ? 1 : this.themes.length) / worksheet.problems.length,
+        candidate_count: skillId ? 1 : this.themes.length,
       },
     };
   }
