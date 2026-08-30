@@ -42,6 +42,23 @@
 - 2026-08-30にMarkdown backlogからGitHubへ移行したIssue、および同日に作成したaudit Issueは、ユーザー指示により過去記録を含めて `**報告者:** Alpha-1` とする。
 - Issueを読むLLMは、GitHub accountの投稿者だけでなくこの報告者/更新者表記を見て、自分・他agent・Userの記録を区別する。
 
+#### Issue本文の標準形式
+
+新規Issueは、既存の[#1](https://github.com/Vi24E/AutoDrill/issues/1)を基準に、本文冒頭を次の順で統一する。
+
+```text
+**報告者:** <User または LLM identity>
+
+**状態:** <Open / Planned / Deferred / User confirmation pending / Closed>
+**対象:** <subsystem / feature / architecture boundary>
+```
+
+- 冒頭の後に、観測された問題または達成したい目的を文章で記す。原因・再現条件・evidenceが確認済みなら続けて記す。
+- 解決方針が決まっている場合は `**方針**`、客観的な完了条件を定義できる場合は `**Close条件**` を使う。未決定のproduct decisionを埋めるために推測で方針やClose条件を作らない。
+- `状態` はGitHubのOpen/Closed stateと `status:*` / `priority:deferred` labelの人間向けprojectionであり、本文だけを独立した状態SoTにしない。
+- 既存Issueの履歴記述は削除・再解釈せず、後続更新は原則commentへ `**更新者:** <identity>` とともに追加する。本文を整理する場合も、意味を変えずattributionを残す。
+- Issue titleにはseverity・status・source・独自連番を新規に埋め込まない。GitHubの `#<number>` を唯一のIssue identifierとし、severity / status / source / priorityはlabelをsource of truthにする。既存migration Issueの `C-001` / `H-004` / `AUDIT-*` 等は履歴としてrenameを強制しない。
+
 ### `status:user-confirmation` の運用
 
 - `status:user-confirmation` は、実装と客観的なtechnical verificationが完了し、残る受入条件が見栄え、読みやすさ、操作感、教材としての自然さ等の**人間による主観的確認**だけであるIssueに使う。product/architectureの仕様決定、technical failure、未完了testの代用には使わない。
