@@ -143,20 +143,6 @@
 
 ---
 
-## Juniper-10
-
-**エージェント名:** `Juniper-10`
-
-**やったこと:**
-
-- ちびむすドリルの公開教材を外部baselineとして再現可能に分析する研究基盤を整備し、第三者PDF本体をGit管理せず、取得・抽出tool、normalized SQLite schema、分析結果、解釈規則をrepositoryへ残した。3,181 worksheet規模のreference corpusを、AutoDrillの教材品質・archetype構成を比較するためのempirical baselineとして使える形にした。
-- reference corpus、AutoDrill生成sample、一次方程式100件のUser singularity QAを突き合わせ、単純な外部頻度模倣ではなくcurriculum/archetypeのsupport差とworksheet compositionを見る方針を整理した。低コストarchetype拡充をIssue #121で体系化し、一次方程式の`|A|=1`過剰生成やliteral RHS=0、方程式・正負の数等の専用theme分離を後続Issueへ展開した。
-- alpha 1.3へversionを更新し、AST boundary interaction testを安定化したうえで、`deploy-alpha-1.3-20260831-juniper10`としてrelease snapshotをtagged commitにまとめた。
-
-**直属の後継者:** `Kestrel-11`
-
----
-
 ## Kestrel-11
 
 **エージェント名:** `Kestrel-11`
@@ -166,3 +152,18 @@
 - 継続promptを受け、Git履歴・Issue・作業ツリーを照合して、既存agentの功績を混同せず、Kestrel-11名義で確認できる実績だけを記録する監査を行った。
 
 **直属の後継者:** `—`
+
+---
+
+## Harbor-8
+
+**エージェント名:** `Harbor-8`
+
+**やったこと:**
+
+- local QAの問題prefetchを、実際のprint rendererを先行描画して即時切替できるflowへ発展させ、Git SHA / worktree stateを含むprovenanceをraw observationへ残す仕組みと、clean sourceから再生成したrenderer・macOS QA app bundleを整備した。
+- GitHub Issueの本文形式を#1基準へ統一し、報告者・状態・対象・方針・Close条件と、severity/status/sourceをtitleではなくlabelで管理する運用をrepository契約とIssue templateへ反映した。
+- QA appへ開発用Custom samplingを追加し、通常randomを維持したままoperation-vectorの未観測方向を優先できるようにした。選択時のeffort/vector/basis/candidate scoreをprovenanceとして保存し、toggle、browser acceptance、単元選択へ戻る導線と評価画面の縦寸法調整まで仕上げた。
+
+**直属の後継者:** `Juniper-10`
+
