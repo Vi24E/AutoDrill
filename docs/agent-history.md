@@ -10,7 +10,7 @@
 
 - **エージェント名** — 発行されたidentity。
 - **やったこと** — そのエージェントを思い出すのに十分な、代表的な仕事・判断・仕組み。細かなcommit一覧にはしない。
-- **直属の後継者** — そのエージェントが次の継続promptで命名した直接の後継エージェント。まだ発行していなければ `—` とする。
+- **直属の後継者** — そのエージェントが継続promptで命名した直接の後継エージェント。複数を命名した場合は列挙し、まだ発行していなければ `—` とする。
 
 このページは功績録なので多少の要約表現は許すが、行っていない仕事を後から帰属させない。訂正する場合はGit履歴やIssue attributionなど確認可能な記録を優先する。
 
@@ -29,7 +29,7 @@
 - 未解決Issueを次担当へ引き継ぐための運用promptを整備し、最初の直属後継エージェントとして `Beacon-2` を命名した。
 - 後に、問題を人間が実際に解いて難易度・特異性を評価し、生の観測データを蓄積して問題品質を研究するlocal QA applicationの構想と実装handoff promptを設計した。
 
-**直属の後継者:** `Beacon-2`
+**直属の後継者:** `Beacon-2`, `Forge-6`
 
 ---
 
@@ -45,47 +45,6 @@
 - #14・#41・#42については、hosting architectureやproduct UXの未決定事項を実装で勝手に埋めずdecision gapとして記録し、#3・#19の主観的なuser confirmationも機械検証と分離して次担当へ残した。Close可否の独立判定を行う直属後継者として `Cedar-3` を命名した。
 
 **直属の後継者:** `Cedar-3`
-
----
-
-## Forge-6
-
-**エージェント名:** `Forge-6`
-
-**やったこと:**
-
-- 問題品質を人間が継続評価する独立local QA applicationを`apps/qa`へ新設し、SQLite永続保存とzero-config macOS launcherを整備した。browserやportを意識せず、評価データを再起動後も保持できる土台を作った。
-- ユーザーの回答入力を不要にして解答を常時表示するrating-only flowへ簡素化し、単元選択→単元内random出題、分数を含む対象単元、即時次問、中心原点の連続difficulty × singularity plane（横軸difficulty）を実装した。
-- AutoDrill本体のgeneratorとprint layoutをQAへ接続し、筆算の演算子・解答欄・問題番号・採点markをページ方眼へ揃える修正とreal Chrome / printのlayout regression検証を進め、残る座標系の論点を後続監査へ引き継いだ。
-
-**直属の後継者:** `Grove-7`
-
----
-
-## Grove-7
-
-**エージェント名:** `Grove-7`
-
-**やったこと:**
-
-- Issue #3で露呈した「同じworksheet geometryを複数のCSS規則・座標系・renderer・test-side magic numberが所有する」問題をAutoDrill全体へ一般化して独立監査し、Mini Sudokuのpage-grid位相ずれとWeb/print problem-shellの二重ownershipを新たに特定した。
-- Mini Sudokuをpage-wide worksheet gridへ揃える修正、Web/printのproblem-cell presentation ownership統合、worksheet-grid browser invariantの一般化を実装・検証し、Mini Sudokuの実Chrome grid誤差をWeb約8.376px・print約6.863pxからsub-pixel範囲まで縮小した。
-- 残るIssue #3の妥当性と、追加した抽象化にオーバーエンジニアリングがないかを再査定して適切なcommitへ着地させる継続promptを作成し、直属後継者として `Iris-9` を命名した。
-
-**直属の後継者:** `Iris-9`
-
----
-
-## Iris-9
-
-**エージェント名:** `Iris-9`
-
-**やったこと:**
-
-- Issue #3の2026-08-31 User NGを受け、筆算の問題番号・数字・演算子・解答欄とMini Sudokuを同じpage-grid coordinate systemへ統合した。Web/printのproblem shellとworksheet grid primitivesを共有し、fractionalな問題番号offsetや不可視logical cell境界に依存する検証を廃して、実paint grid・page overflow・隣接lane overlapを測るreal Chrome verificationへ整理した。
-- その監査中に、小数加減算でrendererの小数点揃え幅とlane sizingが別計算になって1cellずれる不具合を発見してIssue #108として記録し、canonical alignment planへ一本化して修正・Closeした。最終的にWeb tests / typecheck / lint / Pages export / full browser verifier / QA browser acceptanceを通し、QA rendererとmacOS QA appも同じworksheet presentationへ同期した。
-
-**直属の後継者:** `Juniper-10`
 
 ---
 
@@ -116,6 +75,74 @@
 
 ---
 
+## Ember-5
+
+**エージェント名:** `Ember-5`
+
+**やったこと:**
+
+- 筆算まわりのgrading / input / presentationを横断して修正し、Rust側generator metadata、Web側のcolumn arithmetic input/presentation、PDF worksheet、browser layout verifierまで一貫して更新した。
+- 筆算の演算子配置、解答欄、採点表示など、教材上の桁位置とpage-grid alignmentに関わる不整合をまとめて扱い、関連testとarchitecture文書も同じ変更で整合させた。
+
+**直属の後継者:** `—`
+
+---
+
+## Forge-6
+
+**エージェント名:** `Forge-6`
+
+**やったこと:**
+
+- 問題品質を人間が継続評価する独立local QA applicationを`apps/qa`へ新設し、SQLite永続保存とzero-config macOS launcherを整備した。browserやportを意識せず、評価データを再起動後も保持できる土台を作った。
+- ユーザーの回答入力を不要にして解答を常時表示するrating-only flowへ簡素化し、単元選択→単元内random出題、分数を含む対象単元、即時次問、中心原点の連続difficulty × singularity plane（横軸difficulty）を実装した。
+- AutoDrill本体のgeneratorとprint layoutをQAへ接続し、筆算の演算子・解答欄・問題番号・採点markをページ方眼へ揃える修正とreal Chrome / printのlayout regression検証を進め、残る座標系の論点を後続監査へ引き継いだ。
+
+**直属の後継者:** `Grove-7`, `Harbor-8`
+
+---
+
+## Grove-7
+
+**エージェント名:** `Grove-7`
+
+**やったこと:**
+
+- Issue #3で露呈した「同じworksheet geometryを複数のCSS規則・座標系・renderer・test-side magic numberが所有する」問題をAutoDrill全体へ一般化して独立監査し、Mini Sudokuのpage-grid位相ずれとWeb/print problem-shellの二重ownershipを新たに特定した。
+- Mini Sudokuをpage-wide worksheet gridへ揃える修正、Web/printのproblem-cell presentation ownership統合、worksheet-grid browser invariantの一般化を実装・検証し、Mini Sudokuの実Chrome grid誤差をWeb約8.376px・print約6.863pxからsub-pixel範囲まで縮小した。
+- 残るIssue #3の妥当性と、追加した抽象化にオーバーエンジニアリングがないかを再査定して適切なcommitへ着地させる継続promptを作成し、直属後継者として `Iris-9` を命名した。
+
+**直属の後継者:** `Iris-9`
+
+---
+
+## Harbor-8
+
+**エージェント名:** `Harbor-8`
+
+**やったこと:**
+
+- local QA applicationでAutoDrill問題を継続評価するため、print observationのprefetchとGit provenance保存を追加し、どのrepository stateから生成・評価した問題かを追跡できるようにした。
+- QA向けにcustom information samplingを実装し、Rust/WASM runtime・effort情報・sampling logicを接続して、単純なrandom出題以外の研究用samplingを可能にした。
+- QA appのunit chooser / navigationを修復・調整し、macOS packageも同期した。あわせてGitHub Issue本文の標準形式とreporter/updater attributionをIssue template / `AGENTS.md`へ明文化した。
+
+**直属の後継者:** `—`
+
+---
+
+## Iris-9
+
+**エージェント名:** `Iris-9`
+
+**やったこと:**
+
+- Issue #3の2026-08-31 User NGを受け、筆算の問題番号・数字・演算子・解答欄とMini Sudokuを同じpage-grid coordinate systemへ統合した。Web/printのproblem shellとworksheet grid primitivesを共有し、fractionalな問題番号offsetや不可視logical cell境界に依存する検証を廃して、実paint grid・page overflow・隣接lane overlapを測るreal Chrome verificationへ整理した。
+- その監査中に、小数加減算でrendererの小数点揃え幅とlane sizingが別計算になって1cellずれる不具合を発見してIssue #108として記録し、canonical alignment planへ一本化して修正・Closeした。最終的にWeb tests / typecheck / lint / Pages export / full browser verifier / QA browser acceptanceを通し、QA rendererとmacOS QA appも同じworksheet presentationへ同期した。
+
+**直属の後継者:** `Juniper-10`
+
+---
+
 ## Juniper-10
 
 **エージェント名:** `Juniper-10`
@@ -127,3 +154,15 @@
 - alpha 1.3へversionを更新し、AST boundary interaction testを安定化したうえで、`deploy-alpha-1.3-20260831-juniper10`としてrelease snapshotをtagged commitにまとめた。
 
 **直属の後継者:** `Kestrel-11`
+
+---
+
+## Kestrel-11
+
+**エージェント名:** `Kestrel-11`
+
+**やったこと:**
+
+- 継続promptを受け、Git履歴・Issue・作業ツリーを照合して、既存agentの功績を混同せず、Kestrel-11名義で確認できる実績だけを記録する監査を行った。
+
+**直属の後継者:** `—`
