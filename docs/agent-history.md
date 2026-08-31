@@ -112,3 +112,17 @@
 - 継続prompt用のidentity発行手順を実運用し、A〜Wの通常identity rotationとgeneration管理に従って直属の後継者 `Ember-5` を発行し、identity更新をcommitした。
 
 **直属の後継者:** `Ember-5`
+
+---
+
+## Juniper-10
+
+**エージェント名:** `Juniper-10`
+
+**やったこと:**
+
+- ちびむすドリルの公開教材を外部baselineとして再現可能に分析する研究基盤を整備し、第三者PDF本体をGit管理せず、取得・抽出tool、normalized SQLite schema、分析結果、解釈規則をrepositoryへ残した。3,181 worksheet規模のreference corpusを、AutoDrillの教材品質・archetype構成を比較するためのempirical baselineとして使える形にした。
+- reference corpus、AutoDrill生成sample、一次方程式100件のUser singularity QAを突き合わせ、単純な外部頻度模倣ではなくcurriculum/archetypeのsupport差とworksheet compositionを見る方針を整理した。低コストarchetype拡充をIssue #121で体系化し、一次方程式の`|A|=1`過剰生成やliteral RHS=0、方程式・正負の数等の専用theme分離を後続Issueへ展開した。
+- alpha 1.3へversionを更新し、AST boundary interaction testを安定化したうえで、`deploy-alpha-1.3-20260831-juniper10`としてrelease snapshotをtagged commitにまとめた。
+
+**直属の後継者:** `Kestrel-11`
