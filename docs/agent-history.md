@@ -61,6 +61,20 @@
 
 ---
 
+## Grove-7
+
+**エージェント名:** `Grove-7`
+
+**やったこと:**
+
+- Issue #3で露呈した「同じworksheet geometryを複数のCSS規則・座標系・renderer・test-side magic numberが所有する」問題をAutoDrill全体へ一般化して独立監査し、Mini Sudokuのpage-grid位相ずれとWeb/print problem-shellの二重ownershipを新たに特定した。
+- Mini Sudokuをpage-wide worksheet gridへ揃える修正、Web/printのproblem-cell presentation ownership統合、worksheet-grid browser invariantの一般化を実装・検証し、Mini Sudokuの実Chrome grid誤差をWeb約8.376px・print約6.863pxからsub-pixel範囲まで縮小した。
+- 残るIssue #3の妥当性と、追加した抽象化にオーバーエンジニアリングがないかを再査定して適切なcommitへ着地させる継続promptを作成し、直属後継者として `Iris-9` を命名した。
+
+**直属の後継者:** `Iris-9`
+
+---
+
 ## Iris-9
 
 **エージェント名:** `Iris-9`
