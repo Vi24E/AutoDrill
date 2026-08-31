@@ -81,10 +81,10 @@
 
 **やったこと:**
 
-- 筆算まわりのgrading / input / presentationを横断して修正し、Rust側generator metadata、Web側のcolumn arithmetic input/presentation、PDF worksheet、browser layout verifierまで一貫して更新した。
-- 筆算の演算子配置、解答欄、採点表示など、教材上の桁位置とpage-grid alignmentに関わる不整合をまとめて扱い、関連testとarchitecture文書も同じ変更で整合させた。
+- `status:user-confirmation` のIssueを独立監査し、#3・#19について実装・自動検証・実Chromeを再確認して、人間の主観確認とtechnical workを分離した。併せて #17 は実装済みでもcanonical architecture docにstale記述が残るtechnical failureだと判定し、他のOpen Issueもproduct decision / planned / deferredとして整理した。
+- Humanの #3 フィードバックを受け、正答桁数を先取りしない筆算answer slot、問題番号上の採点mark、掛け算の不要行・記号位置、長除法の入力露出を修正し、小数掛け算では実質1桁×1桁を生成しないgenerator ruleへ更新した。Web/Rust/Pages/real Chrome/printを検証し、#17のstale docsも現行typed `column_input` architectureへ同期してCloseした。
 
-**直属の後継者:** `—`
+**直属の後継者:** `Grove-7`
 
 ---
 
