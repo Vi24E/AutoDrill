@@ -221,7 +221,7 @@ describe('AutoDrillApp', () => {
 
     const printButton = screen.getByRole('button', { name: '印刷 (pdfで出力)' });
     expect(printButton.querySelector('.share-pdf-icon')).toBeInTheDocument();
-    const version = screen.getByLabelText('AutoDrill alpha 1.2');
+    const version = screen.getByLabelText('AutoDrill alpha 1.3');
     expect(version).toHaveClass('settings-version');
     expect(version.closest('.lobby-panel')).toBeNull();
 
