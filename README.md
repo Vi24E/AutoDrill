@@ -75,4 +75,8 @@ Web問題式はMathLive、解答入力は`math-field`を使用します。MathLi
 
 印刷/PDFは独自の数式rendererを持ちません。印刷ボタンではまず同じA4 DOMの2ページプレビューを表示し、プレビュー内の「印刷する」からブラウザ標準の印刷/PDFエンジンへ進みます。問題式はWebと同じ`ProblemExpression`、解答は同じ`MathLiveStatic`で組版します。そのため分数・根号・指数などを追加してもPDF専用の座標計算やglyph実装は不要です。日本語fontもWebと同じNoto Sans JPを使用し、`pdf-lib`やPDF専用font bundleはありません。印刷moduleは操作時だけdynamic importします。MathLiveのeditor/static renderer・数式template・問題式rendererはq2用dynamic chunkへ分離し、q1のfirst paintをblockしません。idle時と問題生成開始時にpreloadし、worksheetへ切り替える前にchunk readyを待つため、数式だけ後から表示される遅延を避けます。
 
+## 教材品質のreference research
+
+既存ドリルとの教材構成比較には、ローカル研究用のChibimusu reference corpusを使っています。第三者教材そのものはGit管理せず、取得・正規化toolと分析方法・aggregate findingsだけをrepositoryへ残します。再構築手順は[`research/README.md`](research/README.md)、分析単位・解釈規則・既知のbaselineは[`docs/research/chibimusu-reference-corpus.md`](docs/research/chibimusu-reference-corpus.md)を参照してください。
+
 設計思想と現行文書の入口は[`docs/README.md`](docs/README.md)です。AIエージェントを含む実装者は、まず[`docs/principles.md`](docs/principles.md)を確認し、対象領域の[`docs/architecture/`](docs/architecture/)を参照してください。Issue / backlog は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) を唯一のsource of truthとして管理し、support scopeと将来計画は[`docs/roadmap.md`](docs/roadmap.md)で管理します。

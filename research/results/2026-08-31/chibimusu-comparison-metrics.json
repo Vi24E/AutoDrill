@@ -1,0 +1,512 @@
+{
+  "aggregate": {
+    "column_add_3digit": {
+      "n": 100,
+      "carry_count": 2.22,
+      "multi_carry": 0.78,
+      "contains_zero_digit": 0.08,
+      "result_extra_digit": 0.68
+    },
+    "column_add_4digit": {
+      "n": 100,
+      "carry_count": 1.57,
+      "multi_carry": 0.55,
+      "contains_zero_digit": 0.35,
+      "result_extra_digit": 0.0
+    },
+    "column_add_3_4digit_union": {
+      "n": 200,
+      "carry_count": 1.895,
+      "multi_carry": 0.665,
+      "contains_zero_digit": 0.215,
+      "result_extra_digit": 0.34
+    },
+    "column_sub_3digit": {
+      "n": 100,
+      "borrow_count": 1.18,
+      "multi_borrow": 0.33,
+      "borrow_across_zero": 0.12,
+      "contains_zero_digit": 0.3
+    },
+    "column_sub_4digit": {
+      "n": 100,
+      "borrow_count": 1.7,
+      "multi_borrow": 0.64,
+      "borrow_across_zero": 0.05,
+      "contains_zero_digit": 0.35
+    },
+    "column_sub_3_4digit_union": {
+      "n": 200,
+      "borrow_count": 1.44,
+      "multi_borrow": 0.485,
+      "borrow_across_zero": 0.085,
+      "contains_zero_digit": 0.325
+    },
+    "column_mul_2x1": {
+      "n": 100,
+      "contains_zero_digit": 0.01,
+      "multiplier_has_zero": 0.0,
+      "multiplicand_has_zero": 0.01
+    },
+    "column_mul_3x1": {
+      "n": 100,
+      "contains_zero_digit": 0.01,
+      "multiplier_has_zero": 0.0,
+      "multiplicand_has_zero": 0.01
+    },
+    "column_mul_2_3x1_union": {
+      "n": 200,
+      "contains_zero_digit": 0.01,
+      "multiplier_has_zero": 0.0,
+      "multiplicand_has_zero": 0.01
+    },
+    "column_mul_2x2": {
+      "n": 100,
+      "contains_zero_digit": 0.01,
+      "multiplier_has_zero": 0.0,
+      "multiplicand_has_zero": 0.01
+    },
+    "fraction_mul": {
+      "n": 70,
+      "same_denominator": 0.0,
+      "denominator_divides": 0.08571428571428572,
+      "coprime_denominators": 0.7714285714285715,
+      "lcm_over_max_den": 10.1,
+      "improper_input": 0.0,
+      "unit_fraction_input": 0.1,
+      "equal_operands": 0.0,
+      "cross_cancel_available": 0.9428571428571428,
+      "reduction_needed": 0.9428571428571428,
+      "reduction_factor": 26.042857142857144,
+      "answer_integer": 0.0,
+      "answer_mixed": 0.0,
+      "answer_one": 0.0
+    },
+    "fraction_div": {
+      "n": 70,
+      "same_denominator": 0.05714285714285714,
+      "denominator_divides": 0.3142857142857143,
+      "coprime_denominators": 0.4714285714285714,
+      "lcm_over_max_den": 3.3285714285714287,
+      "improper_input": 0.7571428571428571,
+      "unit_fraction_input": 0.12857142857142856,
+      "equal_operands": 0.014285714285714285,
+      "cross_cancel_available": 0.9428571428571428,
+      "reduction_needed": 0.9428571428571428,
+      "reduction_factor": 7.1,
+      "answer_integer": 0.08571428571428572,
+      "answer_mixed": 0.44285714285714284,
+      "answer_one": 0.014285714285714285
+    }
+  },
+  "per_page": {
+    "add3": {
+      "1": {
+        "n": 20,
+        "carry_count": 0.55,
+        "multi_carry": 0.05,
+        "contains_zero_digit": 0.05,
+        "result_extra_digit": 0.0
+      },
+      "2": {
+        "n": 20,
+        "carry_count": 2.5,
+        "multi_carry": 1.0,
+        "contains_zero_digit": 0.0,
+        "result_extra_digit": 0.5
+      },
+      "3": {
+        "n": 20,
+        "carry_count": 3.0,
+        "multi_carry": 1.0,
+        "contains_zero_digit": 0.0,
+        "result_extra_digit": 1.0
+      },
+      "4": {
+        "n": 20,
+        "carry_count": 2.65,
+        "multi_carry": 1.0,
+        "contains_zero_digit": 0.15,
+        "result_extra_digit": 1.0
+      },
+      "5": {
+        "n": 20,
+        "carry_count": 2.4,
+        "multi_carry": 0.85,
+        "contains_zero_digit": 0.2,
+        "result_extra_digit": 0.9
+      }
+    },
+    "add4": {
+      "1": {
+        "n": 20,
+        "carry_count": 1.55,
+        "multi_carry": 0.6,
+        "contains_zero_digit": 0.1,
+        "result_extra_digit": 0.0
+      },
+      "2": {
+        "n": 20,
+        "carry_count": 1.55,
+        "multi_carry": 0.6,
+        "contains_zero_digit": 0.5,
+        "result_extra_digit": 0.0
+      },
+      "3": {
+        "n": 20,
+        "carry_count": 1.75,
+        "multi_carry": 0.6,
+        "contains_zero_digit": 0.2,
+        "result_extra_digit": 0.0
+      },
+      "4": {
+        "n": 20,
+        "carry_count": 1.55,
+        "multi_carry": 0.5,
+        "contains_zero_digit": 0.45,
+        "result_extra_digit": 0.0
+      },
+      "5": {
+        "n": 20,
+        "carry_count": 1.45,
+        "multi_carry": 0.45,
+        "contains_zero_digit": 0.5,
+        "result_extra_digit": 0.0
+      }
+    },
+    "sub3": {
+      "1": {
+        "n": 20,
+        "borrow_count": 0.45,
+        "multi_borrow": 0.0,
+        "borrow_across_zero": 0.1,
+        "contains_zero_digit": 0.2
+      },
+      "2": {
+        "n": 20,
+        "borrow_count": 1.45,
+        "multi_borrow": 0.45,
+        "borrow_across_zero": 0.05,
+        "contains_zero_digit": 0.2
+      },
+      "3": {
+        "n": 20,
+        "borrow_count": 1.65,
+        "multi_borrow": 0.65,
+        "borrow_across_zero": 0.25,
+        "contains_zero_digit": 0.3
+      },
+      "4": {
+        "n": 20,
+        "borrow_count": 1.0,
+        "multi_borrow": 0.2,
+        "borrow_across_zero": 0.05,
+        "contains_zero_digit": 0.4
+      },
+      "5": {
+        "n": 20,
+        "borrow_count": 1.35,
+        "multi_borrow": 0.35,
+        "borrow_across_zero": 0.15,
+        "contains_zero_digit": 0.4
+      }
+    },
+    "sub4": {
+      "1": {
+        "n": 20,
+        "borrow_count": 1.8,
+        "multi_borrow": 0.7,
+        "borrow_across_zero": 0.0,
+        "contains_zero_digit": 0.1
+      },
+      "2": {
+        "n": 20,
+        "borrow_count": 1.15,
+        "multi_borrow": 0.35,
+        "borrow_across_zero": 0.0,
+        "contains_zero_digit": 0.5
+      },
+      "3": {
+        "n": 20,
+        "borrow_count": 1.75,
+        "multi_borrow": 0.75,
+        "borrow_across_zero": 0.05,
+        "contains_zero_digit": 0.2
+      },
+      "4": {
+        "n": 20,
+        "borrow_count": 1.85,
+        "multi_borrow": 0.55,
+        "borrow_across_zero": 0.05,
+        "contains_zero_digit": 0.45
+      },
+      "5": {
+        "n": 20,
+        "borrow_count": 1.95,
+        "multi_borrow": 0.85,
+        "borrow_across_zero": 0.15,
+        "contains_zero_digit": 0.5
+      }
+    },
+    "mul2x1": {
+      "1": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "2": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "3": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "4": {
+        "n": 20,
+        "contains_zero_digit": 0.05,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.05
+      },
+      "5": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      }
+    },
+    "mul3x1": {
+      "1": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "2": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "3": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "4": {
+        "n": 20,
+        "contains_zero_digit": 0.05,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.05
+      },
+      "5": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      }
+    },
+    "mul2x2": {
+      "1": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "2": {
+        "n": 20,
+        "contains_zero_digit": 0.05,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.05
+      },
+      "3": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "4": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      },
+      "5": {
+        "n": 20,
+        "contains_zero_digit": 0.0,
+        "multiplier_has_zero": 0.0,
+        "multiplicand_has_zero": 0.0
+      }
+    },
+    "fraction_mul": {
+      "1": {
+        "n": 14,
+        "same_denominator": 0.0,
+        "denominator_divides": 0.07142857142857142,
+        "coprime_denominators": 0.8571428571428571,
+        "lcm_over_max_den": 7.0,
+        "improper_input": 0.0,
+        "unit_fraction_input": 0.14285714285714285,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 0.8571428571428571,
+        "reduction_needed": 0.8571428571428571,
+        "reduction_factor": 12.285714285714286,
+        "answer_integer": 0.0,
+        "answer_mixed": 0.0,
+        "answer_one": 0.0
+      },
+      "2": {
+        "n": 14,
+        "same_denominator": 0.0,
+        "denominator_divides": 0.21428571428571427,
+        "coprime_denominators": 0.6428571428571429,
+        "lcm_over_max_den": 11.0,
+        "improper_input": 0.0,
+        "unit_fraction_input": 0.07142857142857142,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 0.8571428571428571,
+        "reduction_needed": 0.8571428571428571,
+        "reduction_factor": 48.42857142857143,
+        "answer_integer": 0.0,
+        "answer_mixed": 0.0,
+        "answer_one": 0.0
+      },
+      "3": {
+        "n": 14,
+        "same_denominator": 0.0,
+        "denominator_divides": 0.07142857142857142,
+        "coprime_denominators": 0.7142857142857143,
+        "lcm_over_max_den": 11.0,
+        "improper_input": 0.0,
+        "unit_fraction_input": 0.14285714285714285,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 1.0,
+        "reduction_needed": 1.0,
+        "reduction_factor": 24.642857142857142,
+        "answer_integer": 0.0,
+        "answer_mixed": 0.0,
+        "answer_one": 0.0
+      },
+      "4": {
+        "n": 14,
+        "same_denominator": 0.0,
+        "denominator_divides": 0.07142857142857142,
+        "coprime_denominators": 0.8571428571428571,
+        "lcm_over_max_den": 11.357142857142858,
+        "improper_input": 0.0,
+        "unit_fraction_input": 0.0,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 1.0,
+        "reduction_needed": 1.0,
+        "reduction_factor": 25.5,
+        "answer_integer": 0.0,
+        "answer_mixed": 0.0,
+        "answer_one": 0.0
+      },
+      "5": {
+        "n": 14,
+        "same_denominator": 0.0,
+        "denominator_divides": 0.0,
+        "coprime_denominators": 0.7857142857142857,
+        "lcm_over_max_den": 10.142857142857142,
+        "improper_input": 0.0,
+        "unit_fraction_input": 0.14285714285714285,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 1.0,
+        "reduction_needed": 1.0,
+        "reduction_factor": 19.357142857142858,
+        "answer_integer": 0.0,
+        "answer_mixed": 0.0,
+        "answer_one": 0.0
+      }
+    },
+    "fraction_div": {
+      "1": {
+        "n": 14,
+        "same_denominator": 0.07142857142857142,
+        "denominator_divides": 0.21428571428571427,
+        "coprime_denominators": 0.5,
+        "lcm_over_max_den": 3.642857142857143,
+        "improper_input": 0.7142857142857143,
+        "unit_fraction_input": 0.14285714285714285,
+        "equal_operands": 0.07142857142857142,
+        "cross_cancel_available": 0.8571428571428571,
+        "reduction_needed": 0.8571428571428571,
+        "reduction_factor": 4.5,
+        "answer_integer": 0.07142857142857142,
+        "answer_mixed": 0.5,
+        "answer_one": 0.07142857142857142
+      },
+      "2": {
+        "n": 14,
+        "same_denominator": 0.0,
+        "denominator_divides": 0.42857142857142855,
+        "coprime_denominators": 0.5,
+        "lcm_over_max_den": 3.5,
+        "improper_input": 0.8571428571428571,
+        "unit_fraction_input": 0.07142857142857142,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 1.0,
+        "reduction_needed": 1.0,
+        "reduction_factor": 6.785714285714286,
+        "answer_integer": 0.0,
+        "answer_mixed": 0.5,
+        "answer_one": 0.0
+      },
+      "3": {
+        "n": 14,
+        "same_denominator": 0.07142857142857142,
+        "denominator_divides": 0.5,
+        "coprime_denominators": 0.2857142857142857,
+        "lcm_over_max_den": 2.4285714285714284,
+        "improper_input": 0.7142857142857143,
+        "unit_fraction_input": 0.21428571428571427,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 0.9285714285714286,
+        "reduction_needed": 0.9285714285714286,
+        "reduction_factor": 11.785714285714286,
+        "answer_integer": 0.14285714285714285,
+        "answer_mixed": 0.35714285714285715,
+        "answer_one": 0.0
+      },
+      "4": {
+        "n": 14,
+        "same_denominator": 0.07142857142857142,
+        "denominator_divides": 0.21428571428571427,
+        "coprime_denominators": 0.42857142857142855,
+        "lcm_over_max_den": 3.7142857142857144,
+        "improper_input": 0.6428571428571429,
+        "unit_fraction_input": 0.07142857142857142,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 1.0,
+        "reduction_needed": 1.0,
+        "reduction_factor": 8.214285714285714,
+        "answer_integer": 0.14285714285714285,
+        "answer_mixed": 0.42857142857142855,
+        "answer_one": 0.0
+      },
+      "5": {
+        "n": 14,
+        "same_denominator": 0.07142857142857142,
+        "denominator_divides": 0.21428571428571427,
+        "coprime_denominators": 0.6428571428571429,
+        "lcm_over_max_den": 3.357142857142857,
+        "improper_input": 0.8571428571428571,
+        "unit_fraction_input": 0.14285714285714285,
+        "equal_operands": 0.0,
+        "cross_cancel_available": 0.9285714285714286,
+        "reduction_needed": 0.9285714285714286,
+        "reduction_factor": 4.214285714285714,
+        "answer_integer": 0.07142857142857142,
+        "answer_mixed": 0.42857142857142855,
+        "answer_one": 0.0
+      }
+    }
+  }
+}
