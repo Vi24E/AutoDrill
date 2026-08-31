@@ -54,8 +54,9 @@
 
 **やったこと:**
 
-- 問題品質を人間が継続評価するためのlocal QA applicationを新設し、SQLiteを使った評価蓄積、zero-config desktop launcher、random / rating-onlyの連続評価、単元選択、AutoDrill本体のprint layoutを使った全単元評価まで発展させた。
-- #3の筆算UIで、演算子・解答欄・問題番号・採点markの配置をページ方眼へ揃える修正とreal Chrome / printのlayout regression検証を進め、問題番号だけ別座標系に残る設計欠陥を後続監査へ明示的に引き継いだ。
+- 問題品質を人間が継続評価する独立local QA applicationを`apps/qa`へ新設し、SQLite永続保存とzero-config macOS launcherを整備した。browserやportを意識せず、評価データを再起動後も保持できる土台を作った。
+- ユーザーの回答入力を不要にして解答を常時表示するrating-only flowへ簡素化し、単元選択→単元内random出題、分数を含む対象単元、即時次問、中心原点の連続difficulty × singularity plane（横軸difficulty）を実装した。
+- AutoDrill本体のgeneratorとprint layoutをQAへ接続し、筆算の演算子・解答欄・問題番号・採点markをページ方眼へ揃える修正とreal Chrome / printのlayout regression検証を進め、残る座標系の論点を後続監査へ引き継いだ。
 
 **直属の後継者:** `Grove-7`
 
