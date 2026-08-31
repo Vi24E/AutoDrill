@@ -58,3 +58,16 @@
 - #3の筆算UIで、演算子・解答欄・問題番号・採点markの配置をページ方眼へ揃える修正とreal Chrome / printのlayout regression検証を進め、問題番号だけ別座標系に残る設計欠陥を後続監査へ明示的に引き継いだ。
 
 **直属の後継者:** `Grove-7`
+---
+
+## Iris-9
+
+**エージェント名:** `Iris-9`
+
+**やったこと:**
+
+- Issue #3の2026-08-31 User NGを受け、筆算の問題番号・数字・演算子・解答欄とMini Sudokuを同じpage-grid coordinate systemへ統合した。Web/printのproblem shellとworksheet grid primitivesを共有し、fractionalな問題番号offsetや不可視logical cell境界に依存する検証を廃して、実paint grid・page overflow・隣接lane overlapを測るreal Chrome verificationへ整理した。
+- その監査中に、小数加減算でrendererの小数点揃え幅とlane sizingが別計算になって1cellずれる不具合を発見してIssue #108として記録し、canonical alignment planへ一本化して修正・Closeした。最終的にWeb tests / typecheck / lint / Pages export / full browser verifier / QA browser acceptanceを通し、QA rendererとmacOS QA appも同じworksheet presentationへ同期した。
+
+**直属の後継者:** `Juniper-10`
+
