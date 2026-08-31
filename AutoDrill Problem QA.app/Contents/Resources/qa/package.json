@@ -1,0 +1,26 @@
+{
+  "name": "@autodrill/qa",
+  "version": "0.8.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:renderer": "vite build --config vite.renderer.config.mjs",
+    "build:wasm": "../../scripts/build-wasm.sh qa",
+    "dev": "node src/server.mjs",
+    "open": "node src/desktop.mjs",
+    "build:macos": "pnpm build:wasm && pnpm build:renderer && node scripts/build-macos-app.mjs",
+    "start": "node src/server.mjs",
+    "test": "pnpm build:wasm && node --test tests/*.test.mjs",
+    "test:browser": "pnpm build:wasm && pnpm build:renderer && node scripts/browser-acceptance.mjs"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.0",
+    "mathlive": "0.110.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "vite": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=24.19.0 <25"
+  }
+}

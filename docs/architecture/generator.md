@@ -97,6 +97,8 @@ difficulty samplerはscalar effortだけで教材構成を破壊しない。
 
 Theme固有のquota値はtheme側が所有し、sampler自体へtheme ID特例を追加しない。
 
+local QAの`custom sampling`はこの4段階difficultyへ第5の値を追加しない。production generatorは従来どおり`1..=4`だけを受理し、QA custom modeは通常の`difficulty=4` worksheetを複数candidate sourceとして利用する外側のdevelopment sampling layerである。したがって同一`ProblemSetIdentity`から生成されるWorksheetの意味・determinismはcustom modeによって変化しない。
+
 ## 6. Deduplication
 
 「重複」の意味はtheme固有の数学的意味に沿って明示する。

@@ -278,6 +278,13 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
         expect(container.querySelectorAll('[data-print-page=\"problems\"] button.digit-grid-cell'), definition.label).toHaveLength(0);
         expect(container.querySelectorAll('[data-print-page=\"answers\"] .digit-grid-cell-value'), definition.label).toHaveLength(definition.problemCount * 16);
         expect(container.querySelectorAll('.problem-grid-worksheet-grid'), definition.label).toHaveLength(2);
+        const cells = [...container.querySelectorAll<HTMLElement>('.problem-cell-mini-sudoku')];
+        expect(cells.every((cell) => [
+          '--mini-sudoku-grid-left',
+          '--mini-sudoku-grid-top',
+          '--mini-sudoku-number-left',
+          '--mini-sudoku-number-top',
+        ].every((property) => cell.style.getPropertyValue(property).endsWith('cqw'))), definition.label).toBe(true);
       } else {
         const isColumnArithmetic = definition.presentation.column_arithmetic;
         expect(expressions, definition.label).toHaveLength(isColumnArithmetic ? 0 : definition.problemCount * 2);

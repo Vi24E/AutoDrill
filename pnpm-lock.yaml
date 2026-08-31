@@ -12,6 +12,24 @@ importers:
 
   .: {}
 
+  apps/qa:
+    devDependencies:
+      '@vitejs/plugin-react':
+        specifier: ^6.1.0
+        version: 6.1.0(vite@8.2.2(@types/node@24.13.3))
+      mathlive:
+        specifier: 0.110.0
+        version: 0.110.0
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+      vite:
+        specifier: ^8.2.2
+        version: 8.2.2(@types/node@24.13.3)
+
   apps/web:
     dependencies:
       '@fontsource/noto-sans-jp':

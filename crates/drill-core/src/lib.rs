@@ -24,6 +24,9 @@ mod wire;
 
 pub use answer::{AnswerBinaryOperator, AnswerNode};
 pub use contract::web_contract;
+#[cfg(feature = "qa-diagnostics")]
+#[doc(hidden)]
+pub use effort::QA_OPERATION_VECTOR_BASIS;
 pub use error::{EditorError, GenerationError};
 pub use generator::{
     generate_identity_with_clock, generate_worksheet_request,

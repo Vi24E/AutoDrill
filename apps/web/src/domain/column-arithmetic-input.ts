@@ -27,14 +27,6 @@ export function columnAnswerPart(answer: AnswerNode, slot: ColumnAnswerSlot): An
   return answer.value[0] ?? { type: 'empty' };
 }
 
-function firstQuotientCell(problem: ProblemDto, digitCells: number, activeEnd: number): number {
-  if (problem.worked_solution?.kind !== 'long_division') return 0;
-  const first = problem.worked_solution.steps[0];
-  if (!first) return 0;
-  const index = digitCells - first.product_offset - 1;
-  return Math.max(0, Math.min(activeEnd, index));
-}
-
 function partInput(problem: ProblemDto, slot: ColumnAnswerSlot): ColumnAnswerPartInput {
   const metadata = problem.column_input;
   const part = slot === 'single' ? metadata?.single : metadata?.quotient;
@@ -65,7 +57,7 @@ export function columnDigitSpec(problem: ProblemDto, slot: ColumnAnswerSlot): Co
   if (problem.worked_solution?.kind === 'long_division') {
     const trailingCells = problem.worked_solution.quotient_trailing_cells;
     const activeEnd = Math.max(0, digitCells - trailingCells - 1);
-    const activeStart = firstQuotientCell(problem, digitCells, activeEnd);
+    const activeStart = 0;
     return {
       cellCount: digitCells,
       order: input.order,

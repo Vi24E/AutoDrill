@@ -149,6 +149,8 @@ coreではeffort evidenceを`EffortModel`というsum typeで一元化する。
 
 従って通常modelと特殊modelを同時に格納する状態、planとvectorだけが食い違う状態、stored scoreだけが古い状態はcore型として作らない。`EffortModel`、`OperationPlan`、`OperationVector`、theme固有effort値はgenerator / difficulty selection / Rust内部testのための内部表現であり、**現行のProblem Web wireには公開しない**。具体的なcross-language consumerが存在しないdiagnostic stateを「将来使うかもしれない」という理由だけでwire contractへ追加しない。
 
+local QAのdevelopment custom samplingはoperation-vector coverageを実際に消費する具体的consumerなので、通常Worksheet wireとは別のQA専用WASM endpointだけがscalar effort、effort model kind、current operation vectorを返す。basis名はRustのcurrent internal basisから同時に投影し、TypeScript側でoperation semanticsを再定義しない。QAは選択時basisもraw provenanceへ保存し、basis変更後のsnapshotを現在vectorとして誤用しない。このdiagnostic boundaryはproduction WebのProblem schemaではなく、QA sampling provenanceのためのinternal development contractである。
+
 現行のtheme固有経路:
 
 - 九九: `log10(answer)`。旧実装の`BigNum`借用は廃止した。

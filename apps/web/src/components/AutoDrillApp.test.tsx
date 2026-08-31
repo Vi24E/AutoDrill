@@ -15,7 +15,6 @@ import { columnDecimalMultiplicationFixtureWorksheet, columnDivisionFixtureWorks
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
-
 function pressKey(key: string) {
   const target = document.querySelector<HTMLElement>('math-field.answer-mathfield-selected') ?? document.activeElement;
   if (!(target instanceof HTMLElement)) throw new Error('No active answer mathfield.');
@@ -191,7 +190,6 @@ function deferredGenerationEngine() {
   return { engine, resolveGeneration };
 }
 
-
 describe('AutoDrillApp', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -223,7 +221,7 @@ describe('AutoDrillApp', () => {
 
     const printButton = screen.getByRole('button', { name: '印刷 (pdfで出力)' });
     expect(printButton.querySelector('.share-pdf-icon')).toBeInTheDocument();
-    const version = screen.getByLabelText('AutoDrill alpha 1.2');
+    const version = screen.getByLabelText('AutoDrill alpha 1.3');
     expect(version).toHaveClass('settings-version');
     expect(version.closest('.lobby-panel')).toBeNull();
 
@@ -415,7 +413,6 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('button', { name: '印刷 (pdfで出力)' })).toBeEnabled();
   });
 
-
   it('keeps long-division quotient and remainder separate through focus transition and grading', async () => {
     const worksheet = columnDivisionFixtureWorksheet();
     const base = fixtureEngine(worksheet);
@@ -429,9 +426,11 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     const firstProblem = await screen.findByTestId('problem-cell-0');
     const quotientDigits = within(firstProblem).getAllByRole('button', { name: /^1番の商 / });
-    expect(quotientDigits).toHaveLength(2);
+    expect(quotientDigits).toHaveLength(3);
 
-    fireEvent.click(quotientDigits[0]!);
+    // All dividend-aligned quotient positions are offered so the UI does not
+    // reveal that this particular quotient starts in the second cell.
+    fireEvent.click(quotientDigits[1]!);
     fireEvent.keyDown(window, { key: '3' });
     fireEvent.keyDown(window, { key: '2' });
 
@@ -509,6 +508,12 @@ describe('AutoDrillApp', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     const firstProblem = await screen.findByTestId('problem-cell-0');
+    expect([
+      '--mini-sudoku-grid-left',
+      '--mini-sudoku-grid-top',
+      '--mini-sudoku-number-left',
+      '--mini-sudoku-number-top',
+    ].every((property) => firstProblem.style.getPropertyValue(property).endsWith('cqw'))).toBe(true);
     const firstEditable = within(firstProblem).getByRole('button', { name: '2番目のマス 未入力' });
     fireEvent.click(firstEditable);
     const inputPanel = screen.getByLabelText('数式入力パネル');
@@ -558,7 +563,7 @@ describe('AutoDrillApp', () => {
     expect(secondProblem.querySelector('.digit-grid-cell-selected')).not.toBeNull();
   });
 
-  it('shows Mini Sudoku corrections in red without a separate wrong-problem mark', async () => {
+  it('shows Mini Sudoku corrections with the common wrong-problem mark above its number', async () => {
     const worksheet = miniSudokuFixtureWorksheet();
     render(
       <AutoDrillApp
@@ -571,7 +576,11 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '採点' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 / 4'));
     expect(document.querySelectorAll('.digit-grid-cell-correction').length).toBeGreaterThan(0);
-    expect(document.querySelector('.mini-sudoku-result-mark')).toBeNull();
+    const firstProblem = screen.getByTestId('problem-cell-0');
+    const wrongMark = within(firstProblem).getByLabelText('不正解');
+    expect(wrongMark).toHaveTextContent('✓');
+    expect(wrongMark).toHaveClass('problem-grade-mark-wrong');
+    expect(wrongMark.parentElement).toHaveClass('problem-number-stack');
   });
 
   it('renders simultaneous equations with separate x and y answer boxes and 12 problems', async () => {
@@ -596,8 +605,6 @@ describe('AutoDrillApp', () => {
     const operators = screen.getByLabelText('演算子キー');
     expect(within(operators).getAllByRole('button').every((button) => !button.hasAttribute('disabled'))).toBe(true);
   });
-
-
 
   it('renders liar puzzles as six questions with oval person selection instead of math input', async () => {
     const worksheet = liarFixtureWorksheet();
@@ -1151,17 +1158,22 @@ describe('AutoDrillApp', () => {
     expect(emptyAnswer).toHaveClass('answer-mathfield');
     fireEvent.click(emptyAnswer);
 
-    pressKey('1');
-    pressKey('1');
-    const twoDigits = await screen.findByRole('textbox', { name: '1番の答え 11' }) as HTMLElement & { value: string };
-    expect(twoDigits.value).toBe('11');
-
     const answerLimit = DRILL_CORE_CONTRACT.max_answer_ast_size;
-    for (let index = 2; index <= answerLimit; index += 1) pressKey('1');
     const limitDigits = '1'.repeat(answerLimit);
-    const answer = await screen.findByRole('textbox', { name: `1番の答え ${limitDigits}` }) as HTMLElement & { value: string };
+    const field = emptyAnswer as HTMLElement & { setValue(value: string): void; value: string };
+
+    // This test owns the AST boundary, not rapid-key serialization. Enter the
+    // accepted boundary value in one MathLive input event so CI timing does not
+    // depend on draining one layout cycle per digit. The separate rapid-input
+    // tests above exercise the action queue explicitly.
+    field.setValue(limitDigits);
+    fireEvent.input(field);
+    const answer = await screen.findByRole('textbox', { name: `1番の答え ${limitDigits}` }) as typeof field;
     expect(answer.value).toBe(limitDigits);
+
+    pressKey('1');
     expect(await screen.findByLabelText('式が大きすぎます！')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: `1番の答え ${limitDigits}` })).toHaveValue(limitDigits);
 
     pressKey('Backspace');
     await screen.findByRole('textbox', { name: `1番の答え ${'1'.repeat(answerLimit - 1)}` });
@@ -1277,6 +1289,9 @@ describe('AutoDrillApp', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 / 20'), {
       timeout: 1000,
     });
+    const correctMark = within(screen.getByTestId('problem-cell-0')).getByLabelText('正解');
+    expect(correctMark).toHaveTextContent('○');
+    expect(correctMark).toHaveClass('problem-grade-mark-correct');
   });
 
   it('locks grading synchronously and rejects a same-tick second grade request', async () => {
@@ -1520,6 +1535,11 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '採点' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('0 / 20'));
 
+    const firstProblem = screen.getByTestId('problem-cell-0');
+    const wrongMark = within(firstProblem).getByLabelText('不正解');
+    expect(wrongMark).toHaveTextContent('✓');
+    expect(wrongMark).toHaveClass('problem-grade-mark-wrong');
+    expect(wrongMark.parentElement).toHaveClass('problem-number-stack');
     expect(answerFrame(screen.getByRole('textbox', { name: '1番の答え 9' }))).toHaveClass('answer-box-wrong');
     expect(answerFrame(screen.getByRole('textbox', { name: '2番の答え 未入力' }))).toHaveClass('answer-box-wrong');
     expect(within(screen.getByTestId('problem-cell-0')).getByLabelText('正しい答え 2')).toHaveTextContent('2');

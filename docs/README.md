@@ -37,6 +37,7 @@ AutoDrillの **Issue / backlog は [GitHub Issues](https://github.com/Vi24E/Auto
 - [`architecture/web-print.md`](architecture/web-print.md) — Web / MathLive / 印刷境界
 - [`architecture/deployment-security.md`](architecture/deployment-security.md) — static deploymentとsecurity方針
 - [`architecture/toolchain.md`](architecture/toolchain.md) — Node/pnpm/CI、dependency update policy、compatibility override
+- [`architecture/local-problem-qa.md`](architecture/local-problem-qa.md) — local QA application、raw observation、SQLite、blind rating、export
 
 ## Historical records
 

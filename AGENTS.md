@@ -18,15 +18,19 @@
 
 ## LLM identity / generation management
 
-- **最終管理者:** `Cedar-3`
-- **generation max:** `3`
-- LLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
-- 一般名の頭文字は、新しいprompt/agent identityを発行するたびに `A -> B -> ... -> Z -> A ...` の順で循環させる。
-- generationはrepository全体で単調増加させる。次のidentityは必ず、このsectionの`generation max + 1`を使う。
-- 現在のidentityは`Cedar-3`。次に新しいLLMへ継続promptを作成するときは、**Dで始まる一般名**とgeneration `4`を割り当てる。具体的な一般名はprompt作成者がその時点で決める。
-- 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ渡すpromptを作成するとき**に新identityを発行する。
-- 新identityを発行する際は、promptを渡すのと同じ変更で本sectionの`最終管理者`と`generation max`を更新する。発行済みgenerationは再利用しない。
-- fork / branchでidentityを発行する前に、可能な限り最新の`generation max`を確認する。merge時に同じgenerationが競合した場合は、片方をそのまま残して重複させず、統合先のmaxより大きい新generationへ再採番し、頭文字も新generation順に合わせる。
+このsectionのidentity情報は、複数のLLMを人間が区別し、名前やgenerationの重複を防ぐための発行メモである。権限、管理者、branchの優先順位、発言の正しさを表さない。
+
+- **latest issued identity:** `Juniper-10`
+- **generation max:** `10`
+- 通常のLLM identityは `<一般名>-<generation>` とする。一般名は人間が認識しやすい一般語・一般的な名称を使う。
+- LLMが発行してよい通常identityの頭文字は `A -> B -> ... -> W -> A ...` の順で循環させる。
+- `X`、`Y`、`Z` は特殊用途の予約文字とし、LLMは発行・管理しない。
+- generationは通常identity全体で単調増加させる。新しいidentityは必ず、このsectionの `generation max + 1` を使う。
+- 次に通常identityを発行するときは、`latest issued identity` の頭文字からrotationを進める。現在は `Juniper-10` なので、次は **Kで始まる一般名**とgeneration `11`を使う。
+- 現在作業しているLLM自身のgenerationから次generationを推測しない。必ずこのsectionを発行直前に読み直す。
+- 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ実際に渡すhandoff promptを発行するとき**だけ新identityを発行する。
+- 新identityを発行するときは、handoff promptを返す前に `latest issued identity` と `generation max` を更新し、その更新をcommitする。previewだけを作る場合は更新しない。
+- identity更新後は `AGENTS.md` を再読し、handoff prompt内のidentityと一致することを確認する。
 
 ### GitHub Issue reporter / updater attribution
 
@@ -37,6 +41,37 @@
 - 既存文章のattributionを後続更新者へ上書きしない。誰が書いたかを区別できる単位で報告者/更新者を残す。
 - 2026-08-30にMarkdown backlogからGitHubへ移行したIssue、および同日に作成したaudit Issueは、ユーザー指示により過去記録を含めて `**報告者:** Alpha-1` とする。
 - Issueを読むLLMは、GitHub accountの投稿者だけでなくこの報告者/更新者表記を見て、自分・他agent・Userの記録を区別する。
+
+#### Issue本文の標準形式
+
+新規Issueは、既存の[#1](https://github.com/Vi24E/AutoDrill/issues/1)を基準に、本文冒頭を次の順で統一する。
+
+```text
+**報告者:** <User または LLM identity>
+
+**状態:** <Open / Planned / Deferred / User confirmation pending / Closed>
+**対象:** <subsystem / feature / architecture boundary>
+```
+
+- 冒頭の後に、観測された問題または達成したい目的を文章で記す。原因・再現条件・evidenceが確認済みなら続けて記す。
+- 解決方針が決まっている場合は `**方針**`、客観的な完了条件を定義できる場合は `**Close条件**` を使う。未決定のproduct decisionを埋めるために推測で方針やClose条件を作らない。
+- `状態` はGitHubのOpen/Closed stateと `status:*` / `priority:deferred` labelの人間向けprojectionであり、本文だけを独立した状態SoTにしない。
+- 既存Issueの履歴記述は削除・再解釈せず、後続更新は原則commentへ `**更新者:** <identity>` とともに追加する。本文を整理する場合も、意味を変えずattributionを残す。
+- Issue titleにはseverity・status・source・独自連番を新規に埋め込まない。GitHubの `#<number>` を唯一のIssue identifierとし、severity / status / source / priorityはlabelをsource of truthにする。既存migration Issueの `C-001` / `H-004` / `AUDIT-*` 等は履歴としてrenameを強制しない。
+
+### `status:user-confirmation` の運用
+
+- `status:user-confirmation` は、実装と客観的なtechnical verificationが完了し、残る受入条件が見栄え、読みやすさ、操作感、教材としての自然さ等の**人間による主観的確認**だけであるIssueに使う。product/architectureの仕様決定、technical failure、未完了testの代用には使わない。
+- labelを付与する**前**に、Issue本文または最新commentへ `**更新者:** <identity>` とともに `### User confirmation procedure` を記載する。単に「ユーザー確認待ち」「見栄えを確認」だけでは不十分で、少なくとも次を再現可能に明記する。
+  1. **確認場所**: stableなroute/theme/画面。必要なら公開URLまたはlocal起動commandも記す。
+  2. **再現条件**: seed、difficulty、viewport、設定値、事前状態など、結果へ影響する条件。決定的に固定できる値は固定する。
+  3. **操作手順**: どのcontrolをどの順序で操作するか。問題番号や入力対象を固定できる場合は固定する。
+  4. **確認項目と期待結果**: どこを見て、何なら合格かを具体的に書く。複数観点がある場合は分ける。
+  5. **不合格時に残す情報**: 再現step、problem番号/表示内容、期待との差。見た目の問題ではscreenshotが有用なら依頼してよい。
+- User confirmation手順はagent固有のtemporary file、消えるbrowser state、未共有のlocal dataへ依存させない。可能な限りcanonical route、deterministic seed、repositoryに残る設定/手順を使い、別sessionのLLMやUserが同じ状態を再現できるようにする。
+- ChatでUserへ確認を依頼するときも、**どこで何を確認するか**を具体的に再掲する。Issue番号だけを示して「確認してください」と依頼してはならない。Issueに記録したroute/seed/操作/期待結果とChatの依頼内容を一致させる。
+- 再現可能な確認手順を定義できない場合は `status:user-confirmation` を付けない。要求自体が未確定ならproduct/architecture decisionとして、客観条件が未達ならtechnical failureとして扱う。
+- Userが確認結果を返したら、その結果と確認条件をIssueへ記録する。Userの回答をそのままIssueへ転記する場合は `**更新者:** User` とし、不合格ならlabelを外して新しいtechnical/product workへ戻す。
 
 ## このprojectについて
 

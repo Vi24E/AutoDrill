@@ -9,6 +9,10 @@ description = "Thin JSON/WASM adapter for drill-core"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+qa-diagnostics = ["drill-core/qa-diagnostics"]
+
 [dependencies]
 drill-core = { path = "../drill-core" }
 serde.workspace = true

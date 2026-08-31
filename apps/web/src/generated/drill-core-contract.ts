@@ -1819,7 +1819,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "36": {
       "numeric_theme_id": 36,
-      "generator_revision": 2,
+      "generator_revision": 3,
       "skill_id": "jp.grade5.column.decimal.multiplication",
       "curriculum_path": [
         "root",

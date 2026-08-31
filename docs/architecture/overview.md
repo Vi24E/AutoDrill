@@ -62,6 +62,10 @@ browser presentation / interaction layer。
 
 数学的normalizationやgradingをTypeScriptへ再実装しない。
 
+### `apps/qa`
+
+User本人が問題品質を継続評価するためのlocal-only research tool。公開productとは別のlocalhost server / SQLite境界を持ち、GitHub Pages deploymentには含めない。raw observation、blind rating、revision、exportの詳細は[`local-problem-qa.md`](local-problem-qa.md)を参照する。
+
 ## Cross-language source of truth
 
 RustとWebの両方で必要になるsemantic metadataは、同じ事実を手で二重管理しない。

@@ -47,7 +47,7 @@ describe('column arithmetic digit input', () => {
     expect(columnDigitsToAnswer(draft, spec)).toEqual({ type: 'integer', value: '24' });
   });
 
-  it('starts long-division quotient at the first Rust worked-solution quotient cell and advances left-to-right', () => {
+  it('offers every possible long-division quotient cell without revealing the canonical start position', () => {
     const division = problem({
       numeric_theme_id: 31,
       prompt: {
@@ -78,11 +78,13 @@ describe('column arithmetic digit input', () => {
     const spec = columnDigitSpec(division, 'quotient');
     expect(spec.order).toBe('natural_division_flow');
     expect(spec.direction).toBe('left-to-right');
-    expect(spec.initialIndex).toBe(1);
-    expect(nextColumnDigitIndex(spec, spec.initialIndex)).toBe(2);
+    expect(spec.activeStart).toBe(0);
+    expect(spec.initialIndex).toBe(0);
+    expect(spec.activeEnd).toBe(2);
+    expect(nextColumnDigitIndex(spec, spec.initialIndex)).toBe(1);
   });
 
-  it('uses Rust long-division quotient geometry for decimal division single-slot answers', () => {
+  it('keeps decimal long-division geometry while leaving the quotient width for the learner to determine', () => {
     const division = problem({
       numeric_theme_id: 37,
       prompt: {
@@ -110,8 +112,9 @@ describe('column arithmetic digit input', () => {
     });
     const spec = columnDigitSpec(division, 'single');
     expect(spec.order).toBe('natural_division_flow');
-    expect(spec.initialIndex).toBe(spec.activeStart);
-    expect(spec.activeStart).toBe(spec.activeEnd);
+    expect(spec.activeStart).toBe(0);
+    expect(spec.initialIndex).toBe(0);
+    expect(spec.activeEnd).toBeGreaterThan(spec.activeStart);
     expect(spec.fixedDecimalBoundary).toBe(spec.activeEnd);
   });
 

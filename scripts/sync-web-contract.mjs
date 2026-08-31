@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const generatedPath = resolve(root, 'apps/web/src/generated/drill-core-contract.ts');
+const qaGeneratedPath = resolve(root, 'apps/qa/generated/drill-core-contract.json');
 const writeMode = process.argv.includes('--write');
 
 const cargo = process.env.CARGO || 'cargo';
@@ -32,11 +33,15 @@ try {
 }
 
 const generated = `// GENERATED FILE. DO NOT EDIT BY HAND.\n// Source: drill-core::web_contract(). Run \`pnpm contract:generate\` after changing the Rust contract.\n\nexport const DRILL_CORE_CONTRACT = ${JSON.stringify(contract, null, 2)} as const;\n\nexport type DrillCoreGradeWarningCode = typeof DRILL_CORE_CONTRACT.grade_warning_codes[number];\n`;
+const qaGenerated = `${JSON.stringify(contract, null, 2)}\n`;
 
 if (writeMode) {
   mkdirSync(dirname(generatedPath), { recursive: true });
+  mkdirSync(dirname(qaGeneratedPath), { recursive: true });
   writeFileSync(generatedPath, generated, 'utf8');
+  writeFileSync(qaGeneratedPath, qaGenerated, 'utf8');
   console.log(`Updated ${generatedPath.slice(root.length + 1)}`);
+  console.log(`Updated ${qaGeneratedPath.slice(root.length + 1)}`);
   process.exit(0);
 }
 
@@ -48,6 +53,18 @@ try {
 }
 if (existing !== generated) {
   console.error('Rust/Web compatibility contract is stale.');
+  console.error('Run: node scripts/sync-web-contract.mjs --write');
+  process.exit(1);
+}
+
+let qaExisting = '';
+try {
+  qaExisting = readFileSync(qaGeneratedPath, 'utf8');
+} catch {
+  // Report the same actionable error as a stale generated file.
+}
+if (qaExisting !== qaGenerated) {
+  console.error('Rust/QA compatibility contract is stale.');
   console.error('Run: node scripts/sync-web-contract.mjs --write');
   process.exit(1);
 }

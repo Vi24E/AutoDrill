@@ -9,8 +9,8 @@ use crate::generator::{
 };
 use crate::generator_support::{
     arithmetic_leaf_column_grid_cells, arithmetic_leaf_significant_digits, binary_expression,
-    draw_decimal_coefficient, draw_decimal_operand, exact_decimal_expression,
-    exact_decimal_rational, integer_expression, rational_less_than,
+    draw_decimal_coefficient, draw_decimal_operand, draw_decimal_operand_with_significant_digits,
+    exact_decimal_expression, exact_decimal_rational, integer_expression, rational_less_than,
     rational_to_arithmetic_expression, rational_to_exact_decimal_answer,
 };
 use crate::model::{AnswerSchema, ArithmeticOperator, Problem, ProblemPrompt, RationalCoefficient};
@@ -46,7 +46,7 @@ pub const GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_ADD_SUBTRACT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLY_INTEGER: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 2;
-pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION: u32 = 2;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION: u32 = 3;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION: u32 = 2;
 pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit";
 pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit";
@@ -803,8 +803,19 @@ fn draw_problem(
             )
         }
         Mode::DecimalMultiplication => {
-            let (left_coefficient, left_scale) = draw_decimal_operand(rng, 2, 2)?;
-            let (right_coefficient, right_scale) = draw_decimal_operand(rng, 2, 2)?;
+            // A column-multiplication exercise should not collapse to a one-digit
+            // multiplication fact after removing the decimal points. Choose from
+            // the three allowed significant-digit shapes directly so at least one
+            // operand always has two significant digits.
+            let (left_digits, right_digits) = match rng.next_bounded(3) {
+                0 => (1, 2),
+                1 => (2, 1),
+                _ => (2, 2),
+            };
+            let (left_coefficient, left_scale) =
+                draw_decimal_operand_with_significant_digits(rng, left_digits, 2)?;
+            let (right_coefficient, right_scale) =
+                draw_decimal_operand_with_significant_digits(rng, right_digits, 2)?;
             let left_value = exact_decimal_rational(left_coefficient, left_scale)?;
             let right_value = exact_decimal_rational(right_coefficient, right_scale)?;
             let result = left_value.multiply(right_value)?;
@@ -1113,6 +1124,14 @@ mod curriculum_tests {
                             assert_eq!(*operator, ArithmeticOperator::Multiply);
                             assert!(matches!(left, ArithmeticExpression::ExactDecimal { .. }));
                             assert!(matches!(right, ArithmeticExpression::ExactDecimal { .. }));
+                            let left_digits = arithmetic_leaf_significant_digits(left).unwrap();
+                            let right_digits = arithmetic_leaf_significant_digits(right).unwrap();
+                            assert!((1..=2).contains(&left_digits));
+                            assert!((1..=2).contains(&right_digits));
+                            assert!(
+                                left_digits == 2 || right_digits == 2,
+                                "decimal column multiplication must not reduce to one significant digit × one significant digit"
+                            );
                         }
                         THEME_ID_COLUMN_DECIMAL_DIVISION => {
                             assert_eq!(*operator, ArithmeticOperator::Divide);

@@ -9,6 +9,8 @@ export const A4_PAGE = {
   footerHeight: 24,
 } as const;
 
+export type CellGeometry = { x: number; y: number; width: number; height: number };
+
 export type ProblemCell = {
   index: number;
   problem: ProblemDto;
@@ -58,7 +60,7 @@ export function buildSharedWorksheetLayout(worksheet: WorksheetDto): SharedWorks
 export function getCellTopPosition(
   model: SharedWorksheetLayout,
   cell: ProblemCell,
-): { x: number; y: number; width: number; height: number } {
+): CellGeometry {
   const contentWidth = model.page.width - model.page.margin * 2;
   const contentHeight =
     model.page.height - model.page.margin * 2 - model.page.headerHeight - model.page.footerHeight;
