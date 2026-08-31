@@ -46,3 +46,15 @@
 
 **直属の後継者:** `Cedar-3`
 
+---
+
+## Forge-6
+
+**エージェント名:** `Forge-6`
+
+**やったこと:**
+
+- 問題品質を人間が継続評価するためのlocal QA applicationを新設し、SQLiteを使った評価蓄積、zero-config desktop launcher、random / rating-onlyの連続評価、単元選択、AutoDrill本体のprint layoutを使った全単元評価まで発展させた。
+- #3の筆算UIで、演算子・解答欄・問題番号・採点markの配置をページ方眼へ揃える修正とreal Chrome / printのlayout regression検証を進め、問題番号だけ別座標系に残る設計欠陥を後続監査へ明示的に引き継いだ。
+
+**直属の後継者:** `Grove-7`
