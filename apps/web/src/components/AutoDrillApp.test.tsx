@@ -1158,17 +1158,22 @@ describe('AutoDrillApp', () => {
     expect(emptyAnswer).toHaveClass('answer-mathfield');
     fireEvent.click(emptyAnswer);
 
-    pressKey('1');
-    pressKey('1');
-    const twoDigits = await screen.findByRole('textbox', { name: '1番の答え 11' }) as HTMLElement & { value: string };
-    expect(twoDigits.value).toBe('11');
-
     const answerLimit = DRILL_CORE_CONTRACT.max_answer_ast_size;
-    for (let index = 2; index <= answerLimit; index += 1) pressKey('1');
     const limitDigits = '1'.repeat(answerLimit);
-    const answer = await screen.findByRole('textbox', { name: `1番の答え ${limitDigits}` }) as HTMLElement & { value: string };
+    const field = emptyAnswer as HTMLElement & { setValue(value: string): void; value: string };
+
+    // This test owns the AST boundary, not rapid-key serialization. Enter the
+    // accepted boundary value in one MathLive input event so CI timing does not
+    // depend on draining one layout cycle per digit. The separate rapid-input
+    // tests above exercise the action queue explicitly.
+    field.setValue(limitDigits);
+    fireEvent.input(field);
+    const answer = await screen.findByRole('textbox', { name: `1番の答え ${limitDigits}` }) as typeof field;
     expect(answer.value).toBe(limitDigits);
+
+    pressKey('1');
     expect(await screen.findByLabelText('式が大きすぎます！')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: `1番の答え ${limitDigits}` })).toHaveValue(limitDigits);
 
     pressKey('Backspace');
     await screen.findByRole('textbox', { name: `1番の答え ${'1'.repeat(answerLimit - 1)}` });
