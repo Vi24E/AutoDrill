@@ -30,3 +30,19 @@
 - 後に、問題を人間が実際に解いて難易度・特異性を評価し、生の観測データを蓄積して問題品質を研究するlocal QA applicationの構想と実装handoff promptを設計した。
 
 **直属の後継者:** `Beacon-2`
+
+---
+
+## Beacon-2
+
+**エージェント名:** `Beacon-2`
+
+**やったこと:**
+
+- 筆算入力のinteraction contractをtyped metadataへ移し、割り算の入力順序と小数掛け算の小数点配置をtheme/Rust側の明示policyとして表現した。Webがoperatorや正答値から挙動を推測する構造を縮小し、Rustのtyped grading authorityを維持した。
+- 長除法のdecimal normalizationをRust `worked_solution`へ一本化し、Web側の重複再計算を削除した。併せてcurrent consumerのないWorksheet wire metadata、WASM endpoint、Rust public facadeを整理し、contract/public surfaceを現行利用範囲まで縮小した。
+- real Chromeで再現していたprint preview close raceをlifecycle ownershipの問題として修正し、staleなgeneric numeric theme defaultも除去した。Rust/Webのquality gate、fresh GitHub Pages build、全registered-themeのbrowser/layout/print verificationまで通して修正一式を検証した。
+- #14・#41・#42については、hosting architectureやproduct UXの未決定事項を実装で勝手に埋めずdecision gapとして記録し、#3・#19の主観的なuser confirmationも機械検証と分離して次担当へ残した。Close可否の独立判定を行う直属後継者として `Cedar-3` を命名した。
+
+**直属の後継者:** `Cedar-3`
+
