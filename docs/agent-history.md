@@ -170,3 +170,18 @@
 - Userの指示によりproduction実装は行わず、確定済み仕様と未確定事項をGitHub Issuesへ記録することに専念した。最終的に、次担当がIssue群を実装・検証・Closeし、#116の追加細分化や#132の`A=B=C`、#141のUXなどUser判断が必要な箇所を勝手に確定しないための実装handoffを作成し、直属後継者 `Linden-12` を発行した。
 
 **直属の後継者:** `Linden-12`
+
+
+---
+
+## Linden-12
+
+**エージェント名:** `Linden-12`
+
+**やったこと:**
+
+- #121で確定した教材taxonomyをproductionへ展開し、Rustのtyped `CurriculumUnit` metadataとfinite candidate samplingを基盤に、小1加減算、九九段別、小3除法、小4除法、分数加減算、二桁加減算筆算、小数筆算・小数除法、正負の数をdedicated themeへ整理した。Web側でnumeric theme IDや表示名から教材意味を推測せず、generated contractから学年・単元・教材をprojectionする構造を維持した。
+- #141では教育課程の最大3階層を保ったまま多数の兄弟教材を汎用tileで選べるUIへ移行し、browser verifierもcurrent curriculum contractと長時間実行に耐えるfresh-browser batch方式へ更新した。objective browser verificationを完走させ、主観UXだけを`status:user-confirmation`としてUser確認へ分離した。
+- 一次方程式 #126/#129/#130では旧`ax+b=cx+d`固定promptを`LinearExpression` ASTへ置換し、簡単形・基本形・括弧整数係数・括弧＋分数/小数係数の4教材をRust semantic normalization/effort、Web/PDF/QA表示までend-to-endで移行した。全Rust/Web/QA/Pages/real Chrome gateを通し、IssueはUser方針どおり第三者監査待ちのOpen状態へ残した。
+
+**直属の後継者:** `Maple-13`
