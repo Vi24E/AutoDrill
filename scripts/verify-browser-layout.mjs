@@ -18,6 +18,10 @@ const CPU_THROTTLE_RATE = Number(process.env.AUTODRILL_CPU_THROTTLE_RATE ?? '1')
 const CPU_THROTTLE_THEME_ID = Number(process.env.AUTODRILL_CPU_THROTTLE_THEME_ID ?? '23');
 const GENERATION_PROBE = process.env.AUTODRILL_GENERATION_PROBE === 'true' || CPU_THROTTLE_RATE > 1;
 const SKIP_PRINT_PROBES = process.env.AUTODRILL_SKIP_PRINT_PROBES === 'true';
+const BROWSER_ROUTE_BATCH_SIZE = Number(process.env.AUTODRILL_BROWSER_ROUTE_BATCH_SIZE ?? '12');
+if (!Number.isInteger(BROWSER_ROUTE_BATCH_SIZE) || BROWSER_ROUTE_BATCH_SIZE <= 0) {
+  throw new Error('AUTODRILL_BROWSER_ROUTE_BATCH_SIZE must be a positive integer.');
+}
 
 
 if (!existsSync(join(OUT, 'index.html'))) {
@@ -118,13 +122,20 @@ async function connectCdp(webSocketDebuggerUrl) {
       consoleErrors.push(message.params.exceptionDetails?.exception?.description ?? message.params.exceptionDetails?.text ?? 'Runtime exception');
     }
   });
-  const send = (method, params = {}) => new Promise((resolveSend, reject) => {
+  const send = (method, params = {}, timeoutMs = 30_000) => new Promise((resolveSend, reject) => {
     const messageId = id++;
-    pending.set(messageId, { resolve: resolveSend, reject });
+    const timeout = setTimeout(() => {
+      pending.delete(messageId);
+      reject(new Error(`Timed out waiting for CDP ${method} after ${timeoutMs}ms.`));
+    }, timeoutMs);
+    pending.set(messageId, {
+      resolve: (value) => { clearTimeout(timeout); resolveSend(value); },
+      reject: (error) => { clearTimeout(timeout); reject(error); },
+    });
     ws.send(JSON.stringify({ id: messageId, method, params }));
   });
-  const evaluate = async (expression) => {
-    const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  const evaluate = async (expression, timeoutMs = 30_000) => {
+    const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeoutMs);
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
     return result.result?.value;
   };
@@ -250,8 +261,21 @@ function settingsOptionCoverageProbe() {
       await sleep(10);
       return result;
     };
+    const themeTileLabels = () => {
+      const group = document.querySelector('.curriculum-theme-tiles[role="group"]');
+      if (!group) return [];
+      return [...group.querySelectorAll('button.curriculum-theme-tile')]
+        .map((button) => button.getAttribute('aria-label')?.trim())
+        .filter(Boolean);
+    };
+    const chooseThemeTile = async (themeLabel) => {
+      const button = await waitFor(() => [...document.querySelectorAll('.curriculum-theme-tiles button.curriculum-theme-tile')]
+        .find((candidate) => candidate.getAttribute('aria-label')?.trim() === themeLabel), '教材=' + themeLabel);
+      button.click();
+      await waitFor(() => [...document.querySelectorAll('.curriculum-theme-tiles button.curriculum-theme-tile')]
+        .some((candidate) => candidate.getAttribute('aria-label')?.trim() === themeLabel && candidate.getAttribute('aria-pressed') === 'true'), '教材 selected=' + themeLabel);
+    };
 
-    const visitedThemes = new Set();
     const difficultyLabels = await labels('難易度');
     for (const label of difficultyLabels) await choose('難易度', label);
 
@@ -259,24 +283,39 @@ function settingsOptionCoverageProbe() {
     recommendedButton?.click();
     await sleep(20);
     const recommendedGenres = await labels('ジャンル');
+    const recommendedThemeIds = new Set();
     for (const genre of recommendedGenres) {
       await choose('ジャンル', genre);
-      for (const theme of await labels('テーマ')) {
+      const themeLabels = await labels('テーマ');
+      for (const theme of themeLabels) {
         await choose('テーマ', theme);
-        visitedThemes.add(theme);
+        const themeId = document.querySelector('button[aria-label=\"テーマ\"]')?.getAttribute('data-value');
+        if (!themeId) throw new Error('Selected recommended theme has no data-value: ' + theme);
+        recommendedThemeIds.add(themeId);
       }
     }
 
     document.querySelector('button[aria-label="学年から選ぶ"]')?.click();
     await waitFor(() => document.querySelector('button[aria-label="学年"]'), 'grade select');
     const gradeLabels = await labels('学年');
+    let gradeUnits = 0;
+    let gradeThemes = 0;
+    let gradeThemeTileSelections = 0;
     for (const grade of gradeLabels) {
       await choose('学年', grade);
-      for (const genre of await labels('ジャンル')) {
-        await choose('ジャンル', genre);
-        for (const theme of await labels('テーマ')) {
-          await choose('テーマ', theme);
-          visitedThemes.add(theme);
+      const unitLabels = await labels('単元');
+      for (const unit of unitLabels) {
+        await choose('単元', unit);
+        gradeUnits += 1;
+        const tileLabels = themeTileLabels();
+        if (tileLabels.length === 0) {
+          gradeThemes += 1;
+          continue;
+        }
+        gradeThemes += tileLabels.length;
+        for (const themeLabel of tileLabels) {
+          await chooseThemeTile(themeLabel);
+          gradeThemeTileSelections += 1;
         }
       }
     }
@@ -284,7 +323,10 @@ function settingsOptionCoverageProbe() {
       difficulties: difficultyLabels.length,
       grades: gradeLabels.length,
       recommendedGenres: recommendedGenres.length,
-      themes: visitedThemes.size,
+      recommendedThemes: recommendedThemeIds.size,
+      gradeUnits,
+      gradeThemes,
+      gradeThemeTileSelections,
       alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null,
     };
   })()`;
@@ -323,6 +365,7 @@ function uiStateGraphProbe() {
       if (element.closest('.worksheet-screen') && ['採点', '印刷', 'TOPに戻る'].includes(text(element))) return 'worksheet:' + text(element);
       if (element.matches('.furigana-toggle input')) return 'settings:furigana';
       if (element.matches('button[role="combobox"]')) return 'settings:select:' + text(element);
+      if (element.matches('.curriculum-theme-tile')) return 'settings:theme-tile';
       if (element.matches('.selection-mode-tabs button')) return 'settings:mode:' + text(element);
       if (element.matches('.advanced-settings > summary')) return 'settings:advanced';
       if (element.matches('input[aria-label="Seed"]')) return 'settings:seed';
@@ -394,8 +437,16 @@ function uiStateGraphProbe() {
     window.__AUTODRILL_STATE_GRAPH_PRINTS__ = 0;
     window.print = () => { window.__AUTODRILL_STATE_GRAPH_PRINTS__ += 1; };
     const previewFromSettings = async (closeWithEscape = false) => {
-      document.querySelector('button[aria-label="印刷 (pdfで出力)"]')?.click();
-      const preview = await waitFor(() => document.querySelector('.worksheet-print-preview'), 'settings print preview');
+      const printButton = document.querySelector('button[aria-label="印刷 (pdfで出力)"]');
+      if (!printButton) throw new Error('Settings print button is missing.');
+      printButton.click();
+      const preview = await waitFor(() => {
+        const currentPreview = document.querySelector('.worksheet-print-preview');
+        if (currentPreview) return currentPreview;
+        const error = document.querySelector('.error-message');
+        if (error) throw new Error('Settings print generation failed: ' + (error.getAttribute('aria-label') || error.textContent || 'unknown error'));
+        return null;
+      }, 'settings print preview');
       states.printPreview = states.printPreview ?? census(preview);
       if (!closeWithEscape) {
         const rotate = preview.querySelector('input[type="checkbox"]');
@@ -1978,42 +2029,64 @@ const httpPort = await new Promise((resolveListen, reject) => {
     resolveListen(typeof address === 'object' && address ? address.port : 0);
   });
 });
-const debugPort = await freePort();
-const userDataDir = mkdtempSync(join(tmpdir(), 'autodrill-layout-'));
-const chromeArgs = [
-  '--headless=new',
-  `--remote-debugging-port=${debugPort}`,
-  `--user-data-dir=${userDataDir}`,
-  '--disable-gpu',
-  '--no-first-run',
-  '--no-default-browser-check',
-  '--disable-background-networking',
-  '--disable-extensions',
-];
-if (process.env.CI === 'true' && process.platform === 'linux') {
-  chromeArgs.push('--no-sandbox', '--disable-dev-shm-usage');
-}
-chromeArgs.push('about:blank');
-const chrome = spawn(chromeBinary(), chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
-let chromeStderr = '';
-chrome.stderr.setEncoding('utf8');
-chrome.stderr.on('data', (chunk) => { chromeStderr += chunk; });
+async function launchBrowser() {
+  const debugPort = await freePort();
+  const userDataDir = mkdtempSync(join(tmpdir(), 'autodrill-layout-'));
+  const chromeArgs = [
+    '--headless=new',
+    `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${userDataDir}`,
+    '--disable-gpu',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-networking',
+    '--disable-extensions',
+  ];
+  if (process.env.CI === 'true' && process.platform === 'linux') {
+    chromeArgs.push('--no-sandbox', '--disable-dev-shm-usage');
+  }
+  chromeArgs.push('about:blank');
+  const chrome = spawn(chromeBinary(), chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+  let chromeStderr = '';
+  chrome.stderr.setEncoding('utf8');
+  chrome.stderr.on('data', (chunk) => { chromeStderr += chunk; });
 
-let cdp;
-try {
   let targets;
   try {
     targets = await waitForJson(`http://127.0.0.1:${debugPort}/json/list`, 60_000);
   } catch (error) {
     const diagnostics = chromeStderr.trim();
+    if (chrome.exitCode === null) chrome.kill('SIGTERM');
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     throw new Error(`Chrome DevTools did not become reachable on port ${debugPort}.${diagnostics ? `\nChrome stderr:\n${diagnostics}` : ''}`, { cause: error });
   }
   const page = targets.find((target) => target.type === 'page');
-  if (!page) throw new Error('Chrome page target not found.');
-  cdp = await connectCdp(page.webSocketDebuggerUrl);
+  if (!page) {
+    if (chrome.exitCode === null) chrome.kill('SIGTERM');
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    throw new Error('Chrome page target not found.');
+  }
+  const cdp = await connectCdp(page.webSocketDebuggerUrl);
   await cdp.send('Runtime.enable');
   await cdp.send('Page.enable');
   await cdp.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
+  return { chrome, cdp, userDataDir };
+}
+
+async function closeBrowser(browser) {
+  if (!browser) return;
+  try { browser.cdp?.ws.close(); } catch {}
+  if (browser.chrome.exitCode === null) {
+    const exited = new Promise((resolveExit) => browser.chrome.once('exit', resolveExit));
+    browser.chrome.kill('SIGTERM');
+    await Promise.race([exited, new Promise((resolveWait) => setTimeout(resolveWait, 1000))]);
+  }
+  rmSync(browser.userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+let browser = await launchBrowser();
+let cdp = browser.cdp;
+try {
   const origin = `http://127.0.0.1:${httpPort}`;
   if (!PRINT_ONLY) {
     await navigate(cdp, `${origin}${BASE_PATH}/`);
@@ -2063,16 +2136,16 @@ try {
     const sitemapThemeCount = [...readFileSync(join(OUT, 'sitemap.xml'), 'utf8').matchAll(/<loc>([^<]+)<\/loc>/g)]
       .map((match) => new URL(match[1]).pathname)
       .filter((pathname) => pathname.includes('/drills/')).length;
-    if (optionCoverage.alert || optionCoverage.difficulties === 0 || optionCoverage.grades === 0 || optionCoverage.recommendedGenres === 0 || optionCoverage.themes !== sitemapThemeCount) {
+    if (optionCoverage.alert || optionCoverage.difficulties === 0 || optionCoverage.grades === 0 || optionCoverage.recommendedGenres === 0 || optionCoverage.recommendedThemes !== sitemapThemeCount || optionCoverage.gradeUnits === 0 || optionCoverage.gradeThemes === 0) {
       throw new Error(`Settings option coverage did not exercise the complete current option surface: ${JSON.stringify({ ...optionCoverage, sitemapThemeCount })}`);
     }
-    console.log(`[interaction] settings options: difficulties=${optionCoverage.difficulties}, grades=${optionCoverage.grades}, themes=${optionCoverage.themes}`);
+    console.log(`[interaction] settings options: difficulties=${optionCoverage.difficulties}, grades=${optionCoverage.grades}, units=${optionCoverage.gradeUnits}, themes=${optionCoverage.gradeThemes}, themeTiles=${optionCoverage.gradeThemeTileSelections}`);
 
     await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-1/one-digit-addition/`);
-    const stateGraph = await cdp.evaluate(uiStateGraphProbe());
+    const stateGraph = await cdp.evaluate(uiStateGraphProbe(), 120_000);
     const stateManifest = {
       settings: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:select:ジャンル', 'settings:select:テーマ', 'settings:select:難易度'],
-      settingsGrade: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:select:ジャンル', 'settings:select:テーマ', 'settings:select:学年', 'settings:select:難易度'],
+      settingsGrade: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:select:単元', 'settings:select:学年', 'settings:select:難易度', 'settings:theme-tile'],
       settingsAdvanced: ['settings:advanced', 'settings:furigana', 'settings:generate', 'settings:grading-settings', 'settings:mode:おすすめ', 'settings:mode:学年から選ぶ', 'settings:print', 'settings:seed', 'settings:select:ジャンル', 'settings:select:テーマ', 'settings:select:難易度'],
       gradingModal: [
         'modal:採点設定を閉じる',
@@ -2128,7 +2201,13 @@ try {
   let inputPanelActionCount = 0;
   const inputPanelSignatures = new Set();
   if (!PRINT_ONLY) {
-    for (const route of routes) {
+    for (const [routeIndex, route] of routes.entries()) {
+      if (routeIndex > 0 && routeIndex % BROWSER_ROUTE_BATCH_SIZE === 0) {
+        await closeBrowser(browser);
+        browser = await launchBrowser();
+        cdp = browser.cdp;
+        console.log(`[layout] restarted browser after ${routeIndex} route(s) to isolate verifier state`);
+      }
       const routeSeeds = route.includes('/signed-arithmetic-') ? [...SEEDS, ...EXTRA_SIGNED_SEEDS] : SEEDS;
       for (const seed of routeSeeds) {
         worksheetSampleCount += 1;
@@ -2508,12 +2587,6 @@ try {
   if (failures.length > 0) { console.error(JSON.stringify(failures, null, 2)); throw new Error(`Browser worksheet layout verification failed with ${failures.length} issue(s).`); }
   console.log(`Browser layout/interaction verified: ${worksheetSampleCount} worksheet samples, ${answerAffordanceActionCount} editable affordance actions, ${inputPanelActionCount} unique input-panel actions, and native print readiness all passed.`);
 } finally {
-  try { cdp?.ws.close(); } catch {}
-  if (chrome.exitCode === null) {
-    const exited = new Promise((resolveExit) => chrome.once('exit', resolveExit));
-    chrome.kill('SIGTERM');
-    await Promise.race([exited, new Promise((resolveWait) => setTimeout(resolveWait, 1000))]);
-  }
+  await closeBrowser(browser);
   server.close();
-  rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
