@@ -65,6 +65,8 @@ import { COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION } from './themes/column-deci
 import { COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION } from './themes/column-decimal-divide-integer';
 import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from './themes/column-decimal-multiplication';
 import { COLUMN_DECIMAL_DIVISION_DEFINITION } from './themes/column-decimal-division';
+import { COLUMN_DECIMAL_DIVISION_REMAINDER_DEFINITION } from './themes/column-decimal-division-remainder';
+import { COLUMN_DECIMAL_DIVISION_ROUNDED_DEFINITION } from './themes/column-decimal-division-rounded';
 import type { ThemeDefinition } from './themes/theme-definition';
 
 /** Central registry is intentionally only enumeration + lookup; each theme owns one definition file. */
@@ -117,6 +119,8 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   DECIMAL_DIVISION_DEFINITION,
   COLUMN_DECIMAL_MULTIPLICATION_DEFINITION,
   COLUMN_DECIMAL_DIVISION_DEFINITION,
+  COLUMN_DECIMAL_DIVISION_REMAINDER_DEFINITION,
+  COLUMN_DECIMAL_DIVISION_ROUNDED_DEFINITION,
   FRACTION_SUBTRACTION_DEFINITION,
   FRACTION_MULTIPLICATION_DEFINITION,
   FRACTION_DIVISION_DEFINITION,

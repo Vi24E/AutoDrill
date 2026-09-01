@@ -487,6 +487,13 @@ pub enum AnswerSchema {
     Decimal {
         max_scale: u32,
     },
+    DecimalDivisionRemainder {
+        quotient_scale: u32,
+        remainder_max_scale: u32,
+    },
+    RoundedDecimal {
+        scale: u32,
+    },
     OrderedPair,
     OrderedTuple {
         length: u8,
@@ -718,8 +725,10 @@ impl AnswerSchema {
         match self {
             Self::Integer { .. } => ThemeAnswerSchemaKind::Integer,
             Self::Rational { .. } => ThemeAnswerSchemaKind::Rational,
-            Self::Decimal { .. } => ThemeAnswerSchemaKind::Decimal,
-            Self::OrderedPair => ThemeAnswerSchemaKind::OrderedPair,
+            Self::Decimal { .. } | Self::RoundedDecimal { .. } => ThemeAnswerSchemaKind::Decimal,
+            Self::DecimalDivisionRemainder { .. } | Self::OrderedPair => {
+                ThemeAnswerSchemaKind::OrderedPair
+            }
             Self::OrderedTuple { .. } => ThemeAnswerSchemaKind::OrderedTuple,
             Self::Algebraic => ThemeAnswerSchemaKind::Algebraic,
         }
@@ -732,7 +741,11 @@ impl AnswerSchema {
                 max_denominator, ..
             } => *max_denominator > 0,
             Self::OrderedTuple { length } => *length > 0,
-            Self::Decimal { .. } | Self::OrderedPair | Self::Algebraic => true,
+            Self::Decimal { .. }
+            | Self::DecimalDivisionRemainder { .. }
+            | Self::RoundedDecimal { .. }
+            | Self::OrderedPair
+            | Self::Algebraic => true,
         }
     }
 
@@ -763,6 +776,31 @@ impl AnswerSchema {
                 AnswerNode::ExactDecimal { scale, .. } => scale <= max_scale,
                 _ => false,
             },
+            Self::RoundedDecimal {
+                scale: target_scale,
+            } => match answer {
+                AnswerNode::Integer(_) => true,
+                AnswerNode::ExactDecimal { scale, .. } => scale <= target_scale,
+                _ => false,
+            },
+            Self::DecimalDivisionRemainder {
+                quotient_scale,
+                remainder_max_scale,
+            } => {
+                let AnswerNode::Tuple(values) = answer else {
+                    return false;
+                };
+                if values.len() != 2 {
+                    return false;
+                }
+                let accepts_decimal = |value: &AnswerNode, max_scale: u32| match value {
+                    AnswerNode::Integer(_) => true,
+                    AnswerNode::ExactDecimal { scale, .. } => *scale <= max_scale,
+                    _ => false,
+                };
+                accepts_decimal(&values[0], *quotient_scale)
+                    && accepts_decimal(&values[1], *remainder_max_scale)
+            }
             Self::OrderedPair => {
                 matches!(answer, AnswerNode::Tuple(values) if values.len() == 2)
             }
@@ -903,6 +941,7 @@ impl WorkedSolution {
         operator: ArithmeticOperator,
         left: &ArithmeticExpression,
         right: &ArithmeticExpression,
+        answer_schema: &AnswerSchema,
         answer: &AnswerNode,
     ) -> Option<Self> {
         let kind = match operator {
@@ -941,7 +980,11 @@ impl WorkedSolution {
                     return None;
                 }
                 let quotient_scale = answer_scale(quotient_answer(answer));
-                let target_scale = normalized_dividend_scale.max(quotient_scale);
+                let calculation_scale = match answer_schema {
+                    AnswerSchema::RoundedDecimal { scale } => scale.checked_add(1)?,
+                    _ => quotient_scale,
+                };
+                let target_scale = normalized_dividend_scale.max(calculation_scale);
                 let appended_zeros = target_scale.checked_sub(normalized_dividend_scale)?;
                 let dividend_magnitude = normalized_dividend_coefficient.unsigned_abs();
                 let base_digits = format!(
@@ -949,6 +992,19 @@ impl WorkedSolution {
                     dividend_magnitude,
                     width = normalized_dividend_scale as usize + 1
                 );
+                let remainder_stop_digits = match answer_schema {
+                    AnswerSchema::DecimalDivisionRemainder { quotient_scale, .. } => {
+                        let integer_digits = base_digits
+                            .len()
+                            .checked_sub(usize::try_from(normalized_dividend_scale).ok()?)?;
+                        Some(
+                            integer_digits
+                                .checked_add(usize::try_from(*quotient_scale).ok()?)?
+                                .min(base_digits.len()),
+                        )
+                    }
+                    _ => None,
+                };
                 let mut digits = base_digits;
                 digits.extend(std::iter::repeat_n('0', appended_zeros as usize));
                 let dividend_coefficient = i64::try_from(
@@ -960,7 +1016,8 @@ impl WorkedSolution {
                 let mut current = 0_i64;
                 let mut started = false;
                 let digit_bytes = digits.as_bytes();
-                for (index, byte) in digit_bytes.iter().enumerate() {
+                let processed_digits = remainder_stop_digits.unwrap_or(digit_bytes.len());
+                for (index, byte) in digit_bytes.iter().take(processed_digits).enumerate() {
                     let digit = i64::from(byte - b'0');
                     current = current.checked_mul(10)?.checked_add(digit)?;
                     let quotient_digit = current / divisor;
@@ -1007,6 +1064,7 @@ impl WorkedSolution {
 
     fn for_prompt(
         prompt: &ProblemPrompt,
+        answer_schema: &AnswerSchema,
         answer: &AnswerNode,
     ) -> Result<Option<Self>, ProblemInvariantError> {
         match prompt {
@@ -1014,7 +1072,7 @@ impl WorkedSolution {
                 operator: operator @ (ArithmeticOperator::Multiply | ArithmeticOperator::Divide),
                 left,
                 right,
-            } => Self::for_column_arithmetic(*operator, left, right, answer)
+            } => Self::for_column_arithmetic(*operator, left, right, answer_schema, answer)
                 .map(Some)
                 .ok_or(ProblemInvariantError::WorkedSolution),
             ProblemPrompt::ColumnArithmetic {
@@ -1116,7 +1174,11 @@ impl Problem {
             &prompt,
             canonical_answer,
         )?;
-        let worked_solution = WorkedSolution::for_prompt(&prompt, canonical_answer.as_node())?;
+        let worked_solution = WorkedSolution::for_prompt(
+            &prompt,
+            answer_schema.as_schema(),
+            canonical_answer.as_node(),
+        )?;
         if worked_solution
             .as_ref()
             .is_some_and(|solution| !solution.has_js_safe_wire_values())

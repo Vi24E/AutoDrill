@@ -31,7 +31,8 @@ export function answerPresentationPlan(problem: ProblemDto): AnswerPresentationP
   }
   if (problem.prompt.kind === 'column_arithmetic') {
     if (problem.prompt.operator === 'divide') {
-      const hasRemainder = problem.answer_schema.kind === 'ordered_pair';
+      const hasRemainder = problem.answer_schema.kind === 'ordered_pair'
+        || problem.answer_schema.kind === 'decimal_division_remainder';
       return { kind: 'column_division', hasRemainder, quotientSlot: hasRemainder ? 'quotient' : 'single' };
     }
     return { kind: 'column_arithmetic' };

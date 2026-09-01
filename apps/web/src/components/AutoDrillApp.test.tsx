@@ -404,6 +404,26 @@ describe('AutoDrillApp', () => {
     expect(subtraction).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('shows exact, remainder, and rounded decimal division as sibling curriculum tiles', () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
+    fireEvent.click(screen.getByRole('option', { name: '小学5年生' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '単元' }));
+    fireEvent.click(screen.getByRole('option', { name: '小数の乗法，除法' }));
+
+    const group = screen.getByRole('group', { name: '小数の乗法，除法の教材' });
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      '小数の掛け算の筆算',
+      '小数の割り算の筆算',
+      '余りを答える小数の割り算の筆算',
+      '商を四捨五入する小数の割り算の筆算',
+    ]);
+    const rounded = within(group).getByRole('button', { name: '商を四捨五入する小数の割り算の筆算' });
+    fireEvent.click(rounded);
+    expect(rounded).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('shows the print recommendation only for themes with the print_recommended presentation capability', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     const note = 'この問題は紙に印刷して解くことをおすすめします。';

@@ -3491,6 +3491,127 @@ export const DRILL_CORE_CONTRACT = {
         "columns": 4,
         "rows": 4
       }
+    },
+    "65": {
+      "numeric_theme_id": 65,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.column.decimal.division.remainder",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "小数の乗法，除法",
+        "余りを答える小数の割り算の筆算"
+      ],
+      "curriculum_unit": {
+        "key": "grade5-decimal",
+        "label": "小数の乗法，除法"
+      },
+      "grade": 5,
+      "tags": [
+        "decimals",
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": null,
+          "quotient": {
+            "order": "natural_division_flow",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "remainder": {
+            "order": "big_endian",
+            "decimal_point": "fixed_canonical_scale"
+          }
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "decimal_tuple"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "decimal",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "decimal",
+          "tuple"
+        ]
+      },
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
+      }
+    },
+    "66": {
+      "numeric_theme_id": 66,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.column.decimal.division.rounded",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "小数の乗法，除法",
+        "商を四捨五入する小数の割り算の筆算"
+      ],
+      "curriculum_unit": {
+        "key": "grade5-decimal",
+        "label": "小数の乗法，除法"
+      },
+      "grade": 5,
+      "tags": [
+        "decimals",
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "natural_division_flow",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
+      }
     }
   },
   "grade_warning_codes": [

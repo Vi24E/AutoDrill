@@ -223,6 +223,22 @@ impl ThemePresentationPolicy {
         )),
     };
 
+    pub const COLUMN_DECIMAL_DIVISION_REMAINDER: Self = Self {
+        worksheet: WorksheetPresentation::ColumnArithmetic,
+        fraction: FractionPresentationPolicy::None,
+        column_input: Some(ColumnArithmeticInputPolicy::new(
+            None,
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::NaturalDivisionFlow,
+                ColumnDecimalPointPolicy::FixedCanonicalScale,
+            )),
+            Some(ColumnAnswerPartInputPolicy::new(
+                ColumnInputOrder::BigEndian,
+                ColumnDecimalPointPolicy::FixedCanonicalScale,
+            )),
+        )),
+    };
+
     pub const fn with_fraction(mut self, fraction: FractionPresentationPolicy) -> Self {
         self.fraction = fraction;
         self
@@ -373,6 +389,7 @@ pub enum ThemeInputProfile {
     SimultaneousEquation,
     JuniorHighFull,
     TupleOnly,
+    DecimalTuple,
     DigitGrid(DigitGridSpec),
 }
 
@@ -396,6 +413,8 @@ pub enum ThemeAnswerContract {
     ColumnInteger,
     ColumnIntegerDivision,
     ColumnDecimal,
+    ColumnDecimalDivisionRemainder,
+    ColumnDecimalDivisionRounded,
     LiarPuzzle,
     DigitGrid(DigitGridSpec),
 }
@@ -413,9 +432,11 @@ impl ThemeAnswerContract {
             Self::LinearInteger | Self::LinearRational => ThemePromptKind::LinearEquation,
             Self::QuadraticAlgebraic => ThemePromptKind::QuadraticEquation,
             Self::SimultaneousPair => ThemePromptKind::SimultaneousEquation,
-            Self::ColumnInteger | Self::ColumnIntegerDivision | Self::ColumnDecimal => {
-                ThemePromptKind::ColumnArithmetic
-            }
+            Self::ColumnInteger
+            | Self::ColumnIntegerDivision
+            | Self::ColumnDecimal
+            | Self::ColumnDecimalDivisionRemainder
+            | Self::ColumnDecimalDivisionRounded => ThemePromptKind::ColumnArithmetic,
             Self::LiarPuzzle => ThemePromptKind::LiarPuzzle,
             Self::DigitGrid(_) => ThemePromptKind::MiniSudoku,
         }
@@ -431,10 +452,13 @@ impl ThemeAnswerContract {
             Self::ArithmeticSignedRational | Self::ArithmeticFraction | Self::LinearRational => {
                 ThemeAnswerSchemaKind::Rational
             }
-            Self::ArithmeticDecimal | Self::ColumnDecimal => ThemeAnswerSchemaKind::Decimal,
+            Self::ArithmeticDecimal | Self::ColumnDecimal | Self::ColumnDecimalDivisionRounded => {
+                ThemeAnswerSchemaKind::Decimal
+            }
             Self::SimultaneousPair
             | Self::ArithmeticIntegerDivision
-            | Self::ColumnIntegerDivision => ThemeAnswerSchemaKind::OrderedPair,
+            | Self::ColumnIntegerDivision
+            | Self::ColumnDecimalDivisionRemainder => ThemeAnswerSchemaKind::OrderedPair,
             Self::QuadraticAlgebraic | Self::LiarPuzzle => ThemeAnswerSchemaKind::Algebraic,
             Self::DigitGrid(_) => ThemeAnswerSchemaKind::OrderedTuple,
         }
@@ -447,7 +471,9 @@ impl ThemeAnswerContract {
             }
             Self::ArithmeticSignedInteger => ThemeInputProfile::SimpleSigned,
             Self::ArithmeticSignedRational => ThemeInputProfile::SignedRational,
-            Self::ArithmeticDecimal | Self::ColumnDecimal => ThemeInputProfile::SimpleDecimal,
+            Self::ArithmeticDecimal | Self::ColumnDecimal | Self::ColumnDecimalDivisionRounded => {
+                ThemeInputProfile::SimpleDecimal
+            }
             Self::ArithmeticFraction => ThemeInputProfile::Fraction,
             Self::LinearInteger | Self::LinearRational => ThemeInputProfile::LinearEquation,
             Self::QuadraticAlgebraic => ThemeInputProfile::QuadraticEquation,
@@ -455,6 +481,7 @@ impl ThemeAnswerContract {
             Self::ArithmeticIntegerDivision | Self::ColumnIntegerDivision | Self::LiarPuzzle => {
                 ThemeInputProfile::TupleOnly
             }
+            Self::ColumnDecimalDivisionRemainder => ThemeInputProfile::DecimalTuple,
             Self::DigitGrid(spec) => ThemeInputProfile::DigitGrid(spec),
         }
     }

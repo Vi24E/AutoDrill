@@ -42,6 +42,8 @@ pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: u32 = 61;
 pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: u32 = 62;
 pub const THEME_ID_COLUMN_DECIMAL_ADDITION: u32 = 63;
 pub const THEME_ID_COLUMN_DECIMAL_SUBTRACTION: u32 = 64;
+pub const THEME_ID_COLUMN_DECIMAL_DIVISION_REMAINDER: u32 = 65;
+pub const THEME_ID_COLUMN_DECIMAL_DIVISION_ROUNDED: u32 = 66;
 pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT: u32 = 2;
@@ -62,6 +64,8 @@ pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: u32 = 1;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: u32 = 1;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_ADDITION: u32 = 1;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_SUBTRACTION: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION_REMAINDER: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION_ROUNDED: u32 = 1;
 pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit.summary";
 pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit.summary";
 pub const SKILL_ID_COLUMN_ADD_2DIGIT_NO_CARRY: &str =
@@ -92,6 +96,10 @@ pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: &str =
 pub const SKILL_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: &str = "jp.grade4.column.decimal.divide_integer";
 pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLICATION: &str = "jp.grade5.column.decimal.multiplication";
 pub const SKILL_ID_COLUMN_DECIMAL_DIVISION: &str = "jp.grade5.column.decimal.division";
+pub const SKILL_ID_COLUMN_DECIMAL_DIVISION_REMAINDER: &str =
+    "jp.grade5.column.decimal.division.remainder";
+pub const SKILL_ID_COLUMN_DECIMAL_DIVISION_ROUNDED: &str =
+    "jp.grade5.column.decimal.division.rounded";
 pub const CURRICULUM_PATH_COLUMN_ADD_2DIGIT: [&str; 4] = [
     "root",
     "小学2年生",
@@ -168,6 +176,18 @@ pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION: [&str; 4] = [
     "小数の乗法，除法",
     "小数の割り算の筆算",
 ];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION_REMAINDER: [&str; 4] = [
+    "root",
+    "小学5年生",
+    "小数の乗法，除法",
+    "余りを答える小数の割り算の筆算",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION_ROUNDED: [&str; 4] = [
+    "root",
+    "小学5年生",
+    "小数の乗法，除法",
+    "商を四捨五入する小数の割り算の筆算",
+];
 
 pub const CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT: CurriculumUnit =
     CurriculumUnit::new("grade2-column-add-subtract", "加法，減法");
@@ -210,6 +230,10 @@ pub const DECIMAL_ADD_SUBTRACT_LAYERS: [SamplingLayerSpec; 2] = [
 const INTEGER_COLUMN: AnswerContract = AnswerContract::ColumnInteger;
 const INTEGER_DIVISION_COLUMN: AnswerContract = AnswerContract::ColumnIntegerDivision;
 const DECIMAL_COLUMN: AnswerContract = AnswerContract::ColumnDecimal;
+const DECIMAL_DIVISION_REMAINDER_COLUMN: AnswerContract =
+    AnswerContract::ColumnDecimalDivisionRemainder;
+const DECIMAL_DIVISION_ROUNDED_COLUMN: AnswerContract =
+    AnswerContract::ColumnDecimalDivisionRounded;
 
 pub const COLUMN_ADD_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -571,6 +595,42 @@ pub const COLUMN_DECIMAL_DIVISION_REGISTRATION: ThemeRegistration =
     })
     .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
 
+pub const COLUMN_DECIMAL_DIVISION_REMAINDER_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_DIVISION_REMAINDER),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION_REMAINDER,
+        ),
+        skill_id: SKILL_ID_COLUMN_DECIMAL_DIVISION_REMAINDER,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION_REMAINDER,
+        grade: Some(SchoolGrade::Elementary5),
+        tags: DECIMAL_DIVISION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_DECIMAL_DIVISION_REMAINDER,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: DECIMAL_DIVISION_REMAINDER_COLUMN,
+        layout: COLUMN_DIVISION_12_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
+
+pub const COLUMN_DECIMAL_DIVISION_ROUNDED_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_DIVISION_ROUNDED),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION_ROUNDED,
+        ),
+        skill_id: SKILL_ID_COLUMN_DECIMAL_DIVISION_ROUNDED,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION_ROUNDED,
+        grade: Some(SchoolGrade::Elementary5),
+        tags: DECIMAL_DIVISION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_DECIMAL_DIVISION,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: DECIMAL_DIVISION_ROUNDED_COLUMN,
+        layout: COLUMN_DIVISION_12_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {
     AddTwoDigit,
@@ -589,6 +649,8 @@ enum Mode {
     DecimalDivideInteger,
     DecimalMultiplication,
     DecimalDivision,
+    DecimalDivisionRemainder,
+    DecimalDivisionRounded,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -807,6 +869,16 @@ generator!(
     DECIMAL_DIVISION_GENERATOR,
     COLUMN_DECIMAL_DIVISION_REGISTRATION,
     DecimalDivision
+);
+generator!(
+    DECIMAL_DIVISION_REMAINDER_GENERATOR,
+    COLUMN_DECIMAL_DIVISION_REMAINDER_REGISTRATION,
+    DecimalDivisionRemainder
+);
+generator!(
+    DECIMAL_DIVISION_ROUNDED_GENERATOR,
+    COLUMN_DECIMAL_DIVISION_ROUNDED_REGISTRATION,
+    DecimalDivisionRounded
 );
 
 fn draw_integer_with_digits(rng: &mut DeterministicRng, digits: u32) -> Option<i64> {
@@ -1204,6 +1276,74 @@ fn draw_problem(
                 AnswerSchema::Decimal { max_scale: 2 },
             )
         }
+        Mode::DecimalDivisionRemainder | Mode::DecimalDivisionRounded => {
+            // Keep operand scale as ordinary variation while fixing the *answer*
+            // operation: both themes calculate the exact quotient to hundredths,
+            // then either stop at tenths and report the remainder or round to tenths.
+            // A small positive decimal divisor keeps the complete long-division
+            // setup inside the existing four-column worksheet lane.
+            let divisor_coefficient = 2 + rng.next_bounded(18) as i64;
+            let divisor_scale = 1;
+            let divisor = exact_decimal_rational(divisor_coefficient, divisor_scale)?;
+            let quotient_whole = 1 + rng.next_bounded(4) as i64;
+            let quotient_tenths = rng.next_bounded(10) as i64;
+            let quotient_hundredths = 1 + rng.next_bounded(9) as i64;
+            let exact_quotient_coefficient = quotient_whole
+                .checked_mul(100)?
+                .checked_add(quotient_tenths.checked_mul(10)?)?
+                .checked_add(quotient_hundredths)?;
+            let exact_quotient = exact_decimal_rational(exact_quotient_coefficient, 2)?;
+            let dividend = exact_quotient.multiply(divisor)?;
+            let left = rational_to_arithmetic_expression(dividend, 4)?;
+            let right = exact_decimal_expression(divisor_coefficient, divisor_scale);
+            debug_assert!(
+                arithmetic_leaf_column_grid_cells(&left)?
+                    + arithmetic_leaf_column_grid_cells(&right)?
+                    <= 6
+            );
+            let expression =
+                binary_expression(ArithmeticOperator::Divide, left.clone(), right.clone());
+
+            if mode == Mode::DecimalDivisionRemainder {
+                let quotient_coefficient = exact_quotient_coefficient / 10;
+                let quotient = AnswerNode::ExactDecimal {
+                    coefficient: quotient_coefficient,
+                    scale: 1,
+                };
+                let quotient_value = exact_decimal_rational(quotient_coefficient, 1)?;
+                let remainder = dividend.subtract(divisor.multiply(quotient_value)?)?;
+                let remainder_answer = rational_to_exact_decimal_answer(remainder, 3)?;
+                let answer = AnswerNode::Tuple(vec![quotient, remainder_answer]);
+                let plan = arithmetic_expression_plan(&expression, &answer)?;
+                (
+                    ArithmeticOperator::Divide,
+                    left,
+                    right,
+                    answer,
+                    plan,
+                    AnswerSchema::DecimalDivisionRemainder {
+                        quotient_scale: 1,
+                        remainder_max_scale: 3,
+                    },
+                )
+            } else {
+                let rounded_coefficient =
+                    exact_quotient_coefficient / 10 + i64::from(quotient_hundredths >= 5);
+                let answer = AnswerNode::ExactDecimal {
+                    coefficient: rounded_coefficient,
+                    scale: 1,
+                };
+                let plan = arithmetic_expression_plan(&expression, &answer)?;
+                (
+                    ArithmeticOperator::Divide,
+                    left,
+                    right,
+                    answer,
+                    plan,
+                    AnswerSchema::RoundedDecimal { scale: 1 },
+                )
+            }
+        }
     };
 
     Some(
@@ -1224,7 +1364,7 @@ fn draw_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 20] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 22] = [
     GeneratorEntry::current(&ADD_2DIGIT_GENERATOR),
     GeneratorEntry::current(&SUBTRACT_2DIGIT_GENERATOR),
     GeneratorEntry::current(&ADD_2DIGIT_NO_CARRY_GENERATOR),
@@ -1245,6 +1385,8 @@ pub(crate) static GENERATORS: [GeneratorEntry; 20] = [
     GeneratorEntry::current(&DECIMAL_DIVIDE_INTEGER_GENERATOR),
     GeneratorEntry::current(&DECIMAL_MULTIPLICATION_GENERATOR),
     GeneratorEntry::current(&DECIMAL_DIVISION_GENERATOR),
+    GeneratorEntry::current(&DECIMAL_DIVISION_REMAINDER_GENERATOR),
+    GeneratorEntry::current(&DECIMAL_DIVISION_ROUNDED_GENERATOR),
 ];
 
 #[cfg(test)]
@@ -1397,9 +1539,120 @@ mod curriculum_tests {
     }
 
     #[test]
+    fn decimal_division_result_themes_enforce_remainder_and_rounding_semantics() {
+        use crate::exact_value::rational_parts_from_answer;
+        use crate::semantics::evaluate_expression;
+
+        for difficulty in 1..=4 {
+            for seed in ["DdR1", "DdR2", "DdR3"] {
+                let remainder_worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                    schema_version: SCHEMA_VERSION,
+                    numeric_theme_id: THEME_ID_COLUMN_DECIMAL_DIVISION_REMAINDER,
+                    seed: seed.to_owned(),
+                    difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                    timeout_ms: Some(1_000),
+                    max_attempts: Some(50_000),
+                })
+                .unwrap_or_else(|error| panic!("decimal remainder d{difficulty} {seed}: {error}"));
+
+                for problem in remainder_worksheet.problems() {
+                    let ProblemPrompt::ColumnArithmetic {
+                        operator: ArithmeticOperator::Divide,
+                        left,
+                        right,
+                    } = problem.prompt()
+                    else {
+                        panic!("decimal remainder theme returned a non-division prompt");
+                    };
+                    assert_eq!(
+                        problem.answer_schema(),
+                        &AnswerSchema::DecimalDivisionRemainder {
+                            quotient_scale: 1,
+                            remainder_max_scale: 3,
+                        }
+                    );
+                    let AnswerNode::Tuple(values) = problem.canonical_answer() else {
+                        panic!("decimal remainder answer is not a pair");
+                    };
+                    let dividend = evaluate_expression(left).unwrap();
+                    let divisor = evaluate_expression(right).unwrap();
+                    let (quotient_n, quotient_d) = rational_parts_from_answer(&values[0]).unwrap();
+                    let (remainder_n, remainder_d) =
+                        rational_parts_from_answer(&values[1]).unwrap();
+                    let quotient = RationalCoefficient::new(
+                        i64::try_from(quotient_n).unwrap(),
+                        i64::try_from(quotient_d).unwrap(),
+                    )
+                    .unwrap();
+                    let remainder = RationalCoefficient::new(
+                        i64::try_from(remainder_n).unwrap(),
+                        i64::try_from(remainder_d).unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        divisor
+                            .multiply(quotient)
+                            .unwrap()
+                            .checked_add(remainder)
+                            .unwrap(),
+                        dividend
+                    );
+                    let bound = divisor
+                        .multiply(RationalCoefficient::new(1, 10).unwrap())
+                        .unwrap();
+                    assert!(remainder.numerator() > 0);
+                    assert!(rational_less_than(remainder, bound));
+                }
+
+                let rounded_worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                    schema_version: SCHEMA_VERSION,
+                    numeric_theme_id: THEME_ID_COLUMN_DECIMAL_DIVISION_ROUNDED,
+                    seed: seed.to_owned(),
+                    difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                    timeout_ms: Some(1_000),
+                    max_attempts: Some(50_000),
+                })
+                .unwrap_or_else(|error| panic!("decimal rounded d{difficulty} {seed}: {error}"));
+
+                for problem in rounded_worksheet.problems() {
+                    let ProblemPrompt::ColumnArithmetic {
+                        operator: ArithmeticOperator::Divide,
+                        left,
+                        right,
+                    } = problem.prompt()
+                    else {
+                        panic!("decimal rounded theme returned a non-division prompt");
+                    };
+                    assert_eq!(
+                        problem.answer_schema(),
+                        &AnswerSchema::RoundedDecimal { scale: 1 }
+                    );
+                    let exact = evaluate_expression(left)
+                        .unwrap()
+                        .divide(evaluate_expression(right).unwrap())
+                        .unwrap();
+                    let exact_hundredths = exact.numerator() * 100 / exact.denominator();
+                    assert_ne!(exact_hundredths % 10, 0);
+                    let rounded_tenths =
+                        exact_hundredths / 10 + i64::from((exact_hundredths % 10) >= 5);
+                    let expected = RationalCoefficient::new(rounded_tenths, 10).unwrap();
+                    let (answer_n, answer_d) =
+                        rational_parts_from_answer(problem.canonical_answer()).unwrap();
+                    let actual = RationalCoefficient::new(
+                        i64::try_from(answer_n).unwrap(),
+                        i64::try_from(answer_d).unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(actual, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn column_arithmetic_themes_follow_curriculum_domains_and_print_layouts() {
         use crate::themes::column_arithmetic::*;
-        const IDS: [u32; 20] = [
+        const IDS: [u32; 22] = [
             THEME_ID_COLUMN_ADD_2DIGIT,
             THEME_ID_COLUMN_SUBTRACT_2DIGIT,
             THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY,
@@ -1420,6 +1673,8 @@ mod curriculum_tests {
             THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
             THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
             THEME_ID_COLUMN_DECIMAL_DIVISION,
+            THEME_ID_COLUMN_DECIMAL_DIVISION_REMAINDER,
+            THEME_ID_COLUMN_DECIMAL_DIVISION_ROUNDED,
         ];
         let seeds = ["CoA1", "CoB2", "CoC3", "CoD4", "CoE5", "CoF6"];
 
@@ -1434,6 +1689,8 @@ mod curriculum_tests {
                     | THEME_ID_COLUMN_DIVIDE_2DIGIT
                     | THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER
                     | THEME_ID_COLUMN_DECIMAL_DIVISION
+                    | THEME_ID_COLUMN_DECIMAL_DIVISION_REMAINDER
+                    | THEME_ID_COLUMN_DECIMAL_DIVISION_ROUNDED
             );
             let (expected_count, expected_columns, expected_rows) =
                 if is_division { (12, 4, 3) } else { (16, 4, 4) };
@@ -1606,7 +1863,9 @@ mod curriculum_tests {
                                 "decimal column multiplication must not reduce to one significant digit × one significant digit"
                             );
                         }
-                        THEME_ID_COLUMN_DECIMAL_DIVISION => {
+                        THEME_ID_COLUMN_DECIMAL_DIVISION
+                        | THEME_ID_COLUMN_DECIMAL_DIVISION_REMAINDER
+                        | THEME_ID_COLUMN_DECIMAL_DIVISION_ROUNDED => {
                             assert_eq!(*operator, ArithmeticOperator::Divide);
                             assert!(matches!(right, ArithmeticExpression::ExactDecimal { .. }));
                             assert!(
@@ -1619,6 +1878,9 @@ mod curriculum_tests {
                                     <= 6,
                                 "decimal column division must fit the printable long-division grid"
                             );
+                            if theme_id != THEME_ID_COLUMN_DECIMAL_DIVISION {
+                                continue;
+                            }
                         }
                         _ => unreachable!(),
                     }

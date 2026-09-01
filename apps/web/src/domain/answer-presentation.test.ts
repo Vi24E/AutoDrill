@@ -31,6 +31,15 @@ describe('answerPresentationPlan', () => {
       prompt: {
         kind: 'column_arithmetic',
         operator: 'divide',
+        left: { kind: 'exact_decimal', coefficient: 511, scale: 2 },
+        right: { kind: 'exact_decimal', coefficient: 7, scale: 1 },
+      },
+      answer_schema: { kind: 'decimal_division_remainder', quotient_scale: 1, remainder_max_scale: 3 },
+    }))).toEqual({ kind: 'column_division', hasRemainder: true, quotientSlot: 'quotient' });
+    expect(answerPresentationPlan(problem({
+      prompt: {
+        kind: 'column_arithmetic',
+        operator: 'divide',
         left: { kind: 'integer', value: 12 },
         right: { kind: 'integer', value: 4 },
       },

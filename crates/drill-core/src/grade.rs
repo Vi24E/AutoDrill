@@ -63,7 +63,9 @@ fn grade_answer_impl(
     let normalized_expected = normalize_answer(expected);
     let normalized_actual = normalize_answer(actual);
     let ordered_length = match answer_schema {
-        Some(AnswerSchema::OrderedPair) => Some(2_usize),
+        Some(AnswerSchema::OrderedPair | AnswerSchema::DecimalDivisionRemainder { .. }) => {
+            Some(2_usize)
+        }
         Some(AnswerSchema::OrderedTuple { length }) => Some(usize::from(*length)),
         _ => None,
     };
@@ -790,6 +792,38 @@ mod tests {
         assert!(!equal_result
             .warnings()
             .contains(&GradeWarning::DuplicateSolution));
+    }
+
+    #[test]
+    fn decimal_division_remainder_schema_preserves_quotient_remainder_order() {
+        let expected = AnswerNode::Tuple(vec![
+            AnswerNode::ExactDecimal {
+                coefficient: 23,
+                scale: 1,
+            },
+            AnswerNode::ExactDecimal {
+                coefficient: 28,
+                scale: 3,
+            },
+        ]);
+        let swapped = AnswerNode::Tuple(vec![
+            AnswerNode::ExactDecimal {
+                coefficient: 28,
+                scale: 3,
+            },
+            AnswerNode::ExactDecimal {
+                coefficient: 23,
+                scale: 1,
+            },
+        ]);
+        let schema = AnswerSchema::DecimalDivisionRemainder {
+            quotient_scale: 1,
+            remainder_max_scale: 3,
+        };
+        let correct = grade_answer_with_schema(&expected, &expected, Some(&schema));
+        assert_eq!(correct.status(), GradeStatus::Correct);
+        let wrong = grade_answer_with_schema(&expected, &swapped, Some(&schema));
+        assert_eq!(wrong.status(), GradeStatus::Incorrect);
     }
 
     #[test]

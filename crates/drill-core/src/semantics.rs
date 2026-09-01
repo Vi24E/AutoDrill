@@ -162,6 +162,30 @@ fn column_answer_is_correct(
         return false;
     };
 
+    if contract == ThemeAnswerContract::ColumnDecimalDivisionRemainder
+        || matches!(schema, AnswerSchema::DecimalDivisionRemainder { .. })
+    {
+        let AnswerSchema::DecimalDivisionRemainder { quotient_scale, .. } = schema else {
+            return false;
+        };
+        return decimal_division_remainder_answer_is_correct(
+            operator,
+            left,
+            right,
+            *quotient_scale,
+            answer,
+        );
+    }
+
+    if contract == ThemeAnswerContract::ColumnDecimalDivisionRounded
+        || matches!(schema, AnswerSchema::RoundedDecimal { .. })
+    {
+        let AnswerSchema::RoundedDecimal { scale } = schema else {
+            return false;
+        };
+        return rounded_decimal_division_answer_is_correct(operator, left, right, *scale, answer);
+    }
+
     if contract == ThemeAnswerContract::ColumnIntegerDivision
         || matches!(schema, AnswerSchema::OrderedPair)
     {
@@ -205,6 +229,94 @@ fn column_answer_is_correct(
     expected.is_some_and(|expected| {
         rational_from_answer(answer).is_some_and(|actual| actual == expected)
     })
+}
+
+fn decimal_division_remainder_answer_is_correct(
+    operator: ArithmeticOperator,
+    dividend: ExactRational,
+    divisor: ExactRational,
+    quotient_scale: u32,
+    answer: &AnswerNode,
+) -> bool {
+    if operator != ArithmeticOperator::Divide
+        || divisor.sign() != std::cmp::Ordering::Greater
+        || dividend.sign() == std::cmp::Ordering::Less
+    {
+        return false;
+    }
+    let AnswerNode::Tuple(values) = answer else {
+        return false;
+    };
+    if values.len() != 2 {
+        return false;
+    }
+    let (Some(quotient), Some(remainder)) = (
+        rational_from_answer(&values[0]),
+        rational_from_answer(&values[1]),
+    ) else {
+        return false;
+    };
+    if quotient.sign() == std::cmp::Ordering::Less || remainder.sign() == std::cmp::Ordering::Less {
+        return false;
+    }
+    let Some(reconstructed) = divisor
+        .multiply(quotient)
+        .and_then(|value| value.add(remainder))
+    else {
+        return false;
+    };
+    let Some(scale_factor) = 10_i128.checked_pow(quotient_scale) else {
+        return false;
+    };
+    let Some(remainder_bound) =
+        ExactRational::new(1, scale_factor).and_then(|unit| divisor.multiply(unit))
+    else {
+        return false;
+    };
+    let remainder_is_below_bound = remainder_bound
+        .subtract(remainder)
+        .is_some_and(|delta| delta.sign() == std::cmp::Ordering::Greater);
+    reconstructed == dividend && remainder_is_below_bound
+}
+
+fn rounded_decimal_division_answer_is_correct(
+    operator: ArithmeticOperator,
+    dividend: ExactRational,
+    divisor: ExactRational,
+    scale: u32,
+    answer: &AnswerNode,
+) -> bool {
+    if operator != ArithmeticOperator::Divide || divisor.is_zero() {
+        return false;
+    }
+    let Some(exact) = dividend.divide(divisor) else {
+        return false;
+    };
+    let Some(expected) = round_half_up(exact, scale) else {
+        return false;
+    };
+    rational_from_answer(answer).is_some_and(|actual| actual == expected)
+}
+
+fn round_half_up(value: ExactRational, scale: u32) -> Option<ExactRational> {
+    let factor = 10_i128.checked_pow(scale)?;
+    let scaled_abs = value
+        .numerator()
+        .unsigned_abs()
+        .checked_mul(factor as u128)?;
+    let denominator = u128::try_from(value.denominator()).ok()?;
+    let mut rounded = scaled_abs / denominator;
+    let remainder = scaled_abs % denominator;
+    if remainder.checked_mul(2)? >= denominator {
+        rounded = rounded.checked_add(1)?;
+    }
+    let rounded = i128::try_from(rounded).ok()?;
+    let signed = if value.sign() == std::cmp::Ordering::Less {
+        rounded.checked_neg()?
+    } else {
+        rounded
+    };
+    ExactRational::new(signed, factor)
 }
 
 fn linear_answer_is_correct(

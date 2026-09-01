@@ -16,7 +16,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 64 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 66 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -68,7 +68,7 @@ describe('Web curriculum registry', () => {
 
   it('keeps grade curriculum units independent from Recommended taxonomy tags', () => {
     const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.presentation.column_arithmetic);
-    expect(columnThemes).toHaveLength(20);
+    expect(columnThemes).toHaveLength(22);
     for (const theme of columnThemes) {
       expect(theme.presentation.print_recommended).toBe(true);
       expect(theme.presentation.worksheet_grid).toBe(true);
@@ -154,6 +154,31 @@ describe('Web curriculum registry', () => {
       '異分母の分数の足し算', '異分母の分数の引き算',
       '分数の足し算（まとめ）', '分数の引き算（まとめ）',
     ]);
+
+    const grade5Decimal = grade5.units.find((unit) => unit.unitKey === 'grade5-decimal')!;
+    expect(grade5Decimal.themes.map((theme) => theme.label)).toEqual([
+      '小数の掛け算の筆算',
+      '小数の割り算の筆算',
+      '余りを答える小数の割り算の筆算',
+      '商を四捨五入する小数の割り算の筆算',
+    ]);
+    const remainderTheme = grade5Decimal.themes.find((theme): theme is ImplementedCurriculumTheme => (
+      theme.implemented && theme.label === '余りを答える小数の割り算の筆算'
+    ))!;
+    expect(remainderTheme.answerSchemaKind).toBe('ordered_pair');
+    expect(remainderTheme.inputInterface).toEqual({
+      type: 'structured_math',
+      allowed_structures: ['decimal', 'tuple'],
+    });
+    const roundedTheme = grade5Decimal.themes.find((theme): theme is ImplementedCurriculumTheme => (
+      theme.implemented && theme.label === '商を四捨五入する小数の割り算の筆算'
+    ))!;
+    expect(roundedTheme.answerSchemaKind).toBe('decimal');
+    expect(roundedTheme.inputInterface).toEqual({
+      type: 'simple_numeric',
+      allow_decimal: true,
+      allow_negative: false,
+    });
 
     const integerDivision = grade4.units.find((unit) => unit.unitKey === 'grade4-integer-division')!;
     const integerDivisionThemes = integerDivision.themes

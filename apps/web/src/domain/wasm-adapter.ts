@@ -436,6 +436,15 @@ function assertAnswerSchema(value: unknown): void {
     return;
   }
   if (value.kind === 'algebraic' || value.kind === 'ordered_pair') return;
+  if (value.kind === 'decimal_division_remainder') {
+    assertU32(value.quotient_scale, 'decimal-division quotient scale');
+    assertU32(value.remainder_max_scale, 'decimal-division remainder maximum scale');
+    return;
+  }
+  if (value.kind === 'rounded_decimal') {
+    assertU32(value.scale, 'rounded-decimal scale');
+    return;
+  }
   if (value.kind === 'ordered_tuple') {
     assertU32(value.length, 'ordered-tuple length');
     return;
