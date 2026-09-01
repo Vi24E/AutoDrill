@@ -317,7 +317,7 @@ describe('AutoDrillApp', () => {
     expect(recommendedOptions.map((option) => option.getAttribute('aria-label'))).toEqual(['足し算と引き算', '掛け算と割り算', '小数', '分数', '負の数', '方程式', 'おまけ']);
     fireEvent.click(screen.getByRole('option', { name: '方程式' }));
     expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '方程式');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一次方程式(1)');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '簡単な一次方程式');
 
     fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
     expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-value', 'grade-7');
@@ -326,9 +326,11 @@ describe('AutoDrillApp', () => {
     expect(screen.queryByRole('combobox', { name: 'ジャンル' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'テーマ' })).not.toBeInTheDocument();
     const equationGroup = screen.getByRole('group', { name: '一次方程式の教材' });
-    expect(within(equationGroup).getAllByRole('button')).toHaveLength(2);
-    expect(within(equationGroup).getByRole('button', { name: /一次方程式 ?\(1\)/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(equationGroup).getByRole('button', { name: /一次方程式 ?\(2\)/ })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(equationGroup).getAllByRole('button')).toHaveLength(4);
+    expect(within(equationGroup).getByRole('button', { name: '簡単な一次方程式' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(equationGroup).getByRole('button', { name: '一次方程式(1)：基本形' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(equationGroup).getByRole('button', { name: '一次方程式(2)：括弧・整数係数中心' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(equationGroup).getByRole('button', { name: '一次方程式(3)：括弧・分数・小数係数' })).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
     expect(within(screen.getByRole('listbox', { name: '学年の選択肢' })).getAllByRole('option')).toHaveLength(9);
     fireEvent.keyDown(screen.getByRole('combobox', { name: '学年' }), { key: 'Escape' });
@@ -484,7 +486,7 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('option', { name: '方程式' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
     const expected = [
-      ['一次方程式(1)', '中1', 'grade-tag-grade-7'],
+      ['簡単な一次方程式', '中1', 'grade-tag-grade-7'],
       ['連立方程式(1)', '中2', 'grade-tag-grade-8'],
       ['二次方程式(1)', '中3', 'grade-tag-grade-9'],
     ] as const;
@@ -821,13 +823,13 @@ describe('AutoDrillApp', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    expect(await screen.findByRole('heading', { name: '一次方程式(1)' })).toBeInTheDocument();
-    expect(screen.getByLabelText('16問の一次方程式(1)ワークシート')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '一次方程式(1)：基本形' })).toBeInTheDocument();
+    expect(screen.getByLabelText('16問の一次方程式(1)：基本形ワークシート')).toBeInTheDocument();
     expect(screen.getByLabelText('次の一次方程式を解きなさい。ただし、答えが整数でない場合は約分によって最も簡単な形の仮分数で答えなさい。')).toBeInTheDocument();
 
     const firstCell = screen.getByTestId('problem-cell-0');
     expect(firstCell).toHaveClass('problem-cell-linear-equation');
-    expect(firstCell.querySelector('.problem-math-expression')).toHaveAttribute('aria-label', '2x = x + (−5)');
+    expect(firstCell.querySelector('.problem-math-expression')).toHaveAttribute('aria-label', '2x = x − 5');
     expect(within(firstCell).getByLabelText('x =')).toBeTruthy();
 
     fireEvent.click(within(firstCell).getByRole('textbox', { name: /^1番の答え/ }));
@@ -968,7 +970,7 @@ describe('AutoDrillApp', () => {
     const gradeAnswer = vi.fn(base.gradeAnswer);
     render(<AutoDrillApp engine={{ ...base, gradeAnswer }} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    await screen.findByRole('heading', { name: '一次方程式(1)' });
+    await screen.findByRole('heading', { name: '一次方程式(1)：基本形' });
     const field = screen.getByRole('textbox', { name: /^1番の答え/ }) as HTMLElement & {
       setValue(value: string): void;
     };
@@ -996,7 +998,7 @@ describe('AutoDrillApp', () => {
   it('uses MathLive for palette previews and editable fraction input', async () => {
     const { container } = render(<AutoDrillApp engine={structuredFixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    await screen.findByRole('heading', { name: '一次方程式(1)' });
+    await screen.findByRole('heading', { name: '一次方程式(1)：基本形' });
     fireEvent.click(screen.getByRole('textbox', { name: /^1番の答え/ }));
 
     const templates = screen.getByLabelText('数式キー');
@@ -1028,7 +1030,7 @@ describe('AutoDrillApp', () => {
   it('delegates square-root rendering and editing entirely to MathLive', async () => {
     const { container } = render(<AutoDrillApp engine={structuredFixtureEngine()} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    await screen.findByRole('heading', { name: '一次方程式(1)' });
+    await screen.findByRole('heading', { name: '一次方程式(1)：基本形' });
     fireEvent.click(screen.getByRole('textbox', { name: /^1番の答え/ }));
     fireEvent.click(screen.getByRole('button', { name: '平方根' }));
 
@@ -1067,7 +1069,7 @@ describe('AutoDrillApp', () => {
     const parseMathLiveAnswer = vi.fn(base.parseMathLiveAnswer);
     render(<AutoDrillApp engine={{ ...base, parseMathLiveAnswer }} />);
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    await screen.findByRole('heading', { name: '一次方程式(1)' });
+    await screen.findByRole('heading', { name: '一次方程式(1)：基本形' });
     fireEvent.click(screen.getByRole('textbox', { name: /^1番の答え/ }));
 
     fireEvent.click(screen.getByRole('button', { name: '分数' }));

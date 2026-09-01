@@ -73,25 +73,27 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
     const canonicalAnswer: AnswerNode = themeId === 2
       ? { type: 'integer', value: String(solution) }
       : { type: 'fraction', value: { numerator: { type: 'integer', value: '1' }, denominator: { type: 'integer', value: '2' } } };
-    const a = { numerator: 2, denominator: 1 };
-    const b = { numerator: 0, denominator: 1 };
-    const c = themeId === 2 ? { numerator: 1, denominator: 1 } : { numerator: 0, denominator: 1 };
-    const d = themeId === 2
-      ? { numerator: solution!, denominator: 1 }
-      : { numerator: 1, denominator: 1 };
     return {
       schema_version: DRILL_SCHEMA_VERSION,
       id: index + 1,
       problem_id: String(index + 1),
       numeric_theme_id: themeId,
-      prompt: {
+      prompt: themeId === 2 ? {
         kind: 'linear_equation',
-        a,
-        b,
-        c,
-        d,
-        left_negative_constant_as_subtraction: false,
-        right_negative_constant_as_subtraction: false,
+        left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable' } },
+        right: solution! < 0 ? {
+          kind: 'subtract',
+          left: { kind: 'variable' },
+          right: { kind: 'constant', value: { kind: 'integer', value: Math.abs(solution!) } },
+        } : {
+          kind: 'add',
+          left: { kind: 'variable' },
+          right: { kind: 'constant', value: { kind: 'integer', value: solution! } },
+        },
+      } : {
+        kind: 'linear_equation',
+        left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable' } },
+        right: { kind: 'constant', value: { kind: 'integer', value: 1 } },
       },
       input_interface: definition.inputInterface,
       column_input: null,

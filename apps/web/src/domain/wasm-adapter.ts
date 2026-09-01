@@ -351,6 +351,44 @@ function assertArithmeticExpression(value: unknown): void {
   invalidDto('WASM returned an unsupported arithmetic expression variant.', value);
 }
 
+function assertLinearScalar(value: unknown): void {
+  if (!isRecord(value) || typeof value.kind !== 'string') invalidDto('WASM returned an invalid linear scalar.', value);
+  if (value.kind === 'integer') {
+    assertInteger(value.value, 'linear integer scalar');
+    return;
+  }
+  if (value.kind === 'fraction') {
+    assertRationalCoefficient(value.value, 'linear fraction scalar');
+    return;
+  }
+  if (value.kind === 'exact_decimal') {
+    assertInteger(value.coefficient, 'linear decimal coefficient');
+    assertU32(value.scale, 'linear decimal scale');
+    return;
+  }
+  invalidDto('WASM returned an unsupported linear scalar variant.', value);
+}
+
+function assertLinearExpression(value: unknown): void {
+  if (!isRecord(value) || typeof value.kind !== 'string') invalidDto('WASM returned an invalid linear expression.', value);
+  if (value.kind === 'variable') return;
+  if (value.kind === 'constant') {
+    assertLinearScalar(value.value);
+    return;
+  }
+  if (value.kind === 'add' || value.kind === 'subtract') {
+    assertLinearExpression(value.left);
+    assertLinearExpression(value.right);
+    return;
+  }
+  if (value.kind === 'scale') {
+    assertLinearScalar(value.factor);
+    assertLinearExpression(value.expression);
+    return;
+  }
+  invalidDto('WASM returned an unsupported linear expression variant.', value);
+}
+
 function assertPrompt(value: unknown): void {
   if (!isRecord(value) || typeof value.kind !== 'string') {
     invalidDto('WASM returned an invalid problem prompt.', value);
@@ -413,14 +451,8 @@ function assertPrompt(value: unknown): void {
     return;
   }
   if (value.kind === 'linear_equation') {
-    assertRationalCoefficient(value.a, 'linear coefficient a');
-    assertRationalCoefficient(value.b, 'linear coefficient b');
-    assertRationalCoefficient(value.c, 'linear coefficient c');
-    assertRationalCoefficient(value.d, 'linear coefficient d');
-    if (typeof value.left_negative_constant_as_subtraction !== 'boolean'
-        || typeof value.right_negative_constant_as_subtraction !== 'boolean') {
-      invalidDto('WASM returned invalid linear-equation display metadata.', value);
-    }
+    assertLinearExpression(value.left);
+    assertLinearExpression(value.right);
     return;
   }
   invalidDto(`WASM returned an unsupported problem prompt: ${value.kind}.`, value);

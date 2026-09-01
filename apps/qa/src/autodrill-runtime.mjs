@@ -56,7 +56,7 @@ export function formatProblem(problem) {
     return `${expression(prompt.left)} ${operator} ${expression(prompt.right)} =`;
   }
   if (prompt.kind === 'linear_equation') {
-    return `${linearSide(prompt.a, prompt.b, prompt.left_negative_constant_as_subtraction)} = ${linearSide(prompt.c, prompt.d, prompt.right_negative_constant_as_subtraction)}`;
+    return `${linearExpression(prompt.left)} = ${linearExpression(prompt.right)}`;
   }
   if (prompt.kind === 'quadratic_equation') return quadraticEquation(prompt);
   if (prompt.kind === 'simultaneous_equation') {
@@ -107,20 +107,28 @@ export function formatCanonicalAnswer(answer, problem) {
   return formatAnswerNode(answer);
 }
 
-function linearTerm(value) {
-  if (value.numerator === 0) return '';
-  const coefficient = rational({ numerator: Math.abs(value.numerator), denominator: value.denominator });
-  return `${value.numerator < 0 ? '−' : ''}${coefficient === '1' ? '' : coefficient}x`;
+function linearScalar(value, omitOne = false) {
+  let text;
+  if (value.kind === 'integer') text = String(value.value).replace(/^-/, '−');
+  else if (value.kind === 'fraction') text = rational(value.value);
+  else if (value.kind === 'exact_decimal') text = exactDecimal(value.coefficient, value.scale);
+  else throw new Error(`Unsupported linear scalar: ${value.kind}`);
+  if (omitOne && text === '1') return '';
+  if (omitOne && text === '−1') return '−';
+  return text;
 }
 
-function linearSide(coefficient, constant, negativeAsSubtraction) {
-  const term = linearTerm(coefficient);
-  if (!term) return rational(constant);
-  if (constant.numerator === 0) return term;
-  if (constant.numerator > 0) return `${term} + ${rational(constant)}`;
-  return negativeAsSubtraction
-    ? `${term} − ${rational({ ...constant, numerator: Math.abs(constant.numerator) })}`
-    : `${term} + (${rational(constant)})`;
+function linearExpression(node) {
+  if (node.kind === 'variable') return 'x';
+  if (node.kind === 'constant') return linearScalar(node.value);
+  if (node.kind === 'add') return `${linearExpression(node.left)} + ${linearExpression(node.right)}`;
+  if (node.kind === 'subtract') return `${linearExpression(node.left)} − ${linearExpression(node.right)}`;
+  if (node.kind === 'scale') {
+    const body = linearExpression(node.expression);
+    const grouped = node.expression.kind === 'add' || node.expression.kind === 'subtract' ? `(${body})` : body;
+    return `${linearScalar(node.factor, true)}${grouped}`;
+  }
+  throw new Error(`Unsupported linear expression: ${node.kind}`);
 }
 
 function polynomialTerm(value, variable, first) {

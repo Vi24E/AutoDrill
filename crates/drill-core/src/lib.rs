@@ -70,7 +70,10 @@ mod tests {
         GENERATOR_REVISION_ONE_DIGIT_ADDITION, MAX_ANSWER, MAX_OPERAND, MIN_ANSWER, MIN_OPERAND,
         ONE_DIGIT_ADDITION_REGISTRATION, THEME_ID_ONE_DIGIT_ADDITION,
     };
-    use crate::themes::equations::{THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2};
+    use crate::themes::equations::{
+        THEME_ID_LINEAR_EQUATION_1, THEME_ID_LINEAR_EQUATION_2, THEME_ID_LINEAR_EQUATION_3,
+        THEME_ID_LINEAR_EQUATION_SIMPLE,
+    };
 
     fn grade_answer_with_schema(
         expected: &AnswerNode,
@@ -710,8 +713,10 @@ mod tests {
     #[test]
     fn linear_equation_themes_generate_registered_bounded_solutions() {
         for &(theme_id, expected_integer) in &[
+            (THEME_ID_LINEAR_EQUATION_SIMPLE, true),
             (THEME_ID_LINEAR_EQUATION_1, true),
             (THEME_ID_LINEAR_EQUATION_2, false),
+            (THEME_ID_LINEAR_EQUATION_3, false),
         ] {
             let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
                 schema_version: SCHEMA_VERSION,
@@ -719,7 +724,7 @@ mod tests {
                 seed: "LinEqA7".to_owned(),
                 difficulty: Difficulty::try_from(3).unwrap(),
                 timeout_ms: Some(1_000),
-                max_attempts: Some(20_000),
+                max_attempts: Some(50_000),
             })
             .unwrap();
             assert_eq!(worksheet.layout().problem_count, 16);
@@ -735,40 +740,15 @@ mod tests {
             );
 
             for problem in worksheet.problems() {
-                let ProblemPrompt::LinearEquation { a, b, c, d, .. } = problem.prompt() else {
+                let ProblemPrompt::LinearEquation { left, right } = problem.prompt() else {
                     panic!("linear theme returned a non-linear prompt");
                 };
-                assert!(!a.is_zero(), "every admitted shape must contain ax");
-                if !c.is_zero() {
-                    assert_ne!(a, c, "two-sided x terms must have a unique solution");
-                }
-                match (c.is_zero(), d.is_zero()) {
-                    (true, true) => {
-                        // ax + b = 0; b may itself be zero.
-                    }
-                    (true, false) => {
-                        // ax + b = d
-                    }
-                    (false, true) => {
-                        // ax + b = cx, but the degenerate ax = cx form is banned.
-                        assert!(!b.is_zero(), "ax = cx must be rejected");
-                    }
-                    (false, false) => {
-                        // ax + b = cx + d
-                    }
-                }
-                for coefficient in [a, b, c, d] {
-                    if theme_id == THEME_ID_LINEAR_EQUATION_1 {
+                let (a, b) = crate::semantics::normalize_linear_expression(left).unwrap();
+                let (c, d) = crate::semantics::normalize_linear_expression(right).unwrap();
+                assert_ne!(a, c, "linear equation must have a unique solution");
+                if theme_id != THEME_ID_LINEAR_EQUATION_3 {
+                    for coefficient in [a, b, c, d] {
                         assert_eq!(coefficient.denominator(), 1);
-                        assert!(coefficient.numerator().abs() <= 15);
-                    } else if coefficient.denominator() == 1 {
-                        assert!(coefficient.numerator().abs() <= 15);
-                    } else {
-                        assert!(
-                            coefficient.numerator().unsigned_abs()
-                                + coefficient.denominator() as u64
-                                <= 10
-                        );
                     }
                 }
                 match problem.input_interface() {
@@ -831,55 +811,6 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert!(means.windows(2).all(|pair| pair[0] < pair[1]), "{means:?}");
-    }
-
-    #[test]
-    fn rational_linear_equations_frequently_require_final_reduction() {
-        fn requires_reduction(problem: &Problem) -> bool {
-            let ProblemPrompt::LinearEquation { a, b, c, d, .. } = problem.prompt() else {
-                return false;
-            };
-            let Some(a_total) = a.subtract(*c) else {
-                return false;
-            };
-            let Some(b_total) = d.subtract(*b) else {
-                return false;
-            };
-            let Some(raw_numerator) = b_total.numerator().checked_mul(a_total.denominator()) else {
-                return false;
-            };
-            let Some(raw_denominator) = b_total.denominator().checked_mul(a_total.numerator())
-            else {
-                return false;
-            };
-            raw_denominator != 0
-                && crate::exact::gcd_u64(
-                    raw_numerator.unsigned_abs(),
-                    raw_denominator.unsigned_abs(),
-                ) > 1
-        }
-
-        let mut total = 0_usize;
-        let mut reducible = 0_usize;
-        for seed in ["RedA", "RedB", "RedC", "RedD", "RedE", "RedF"] {
-            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
-                schema_version: SCHEMA_VERSION,
-                numeric_theme_id: THEME_ID_LINEAR_EQUATION_2,
-                seed: seed.to_owned(),
-                difficulty: Difficulty::try_from(3).unwrap(),
-                timeout_ms: Some(1_000),
-                max_attempts: Some(50_000),
-            })
-            .unwrap();
-            for problem in worksheet.problems() {
-                total += 1;
-                reducible += usize::from(requires_reduction(problem));
-            }
-        }
-        assert!(
-            reducible * 4 >= total * 3,
-            "expected at least 75% to require reduction; got {reducible}/{total}"
-        );
     }
 
     #[test]

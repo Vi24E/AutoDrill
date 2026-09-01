@@ -1,7 +1,7 @@
 use crate::answer::{AnswerBinaryOperator, AnswerNode};
 use crate::effort::{
-    linear_equation_plan, quadratic_factoring_plan, quadratic_formula_plan, quadratic_square_plan,
-    simultaneous_equation_plan, EffortModel, OperationWeights,
+    linear_expression_equation_plan, quadratic_factoring_plan, quadratic_formula_plan,
+    quadratic_square_plan, simultaneous_equation_plan, EffortModel, OperationWeights,
 };
 use crate::error::GenerationError;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
@@ -9,9 +9,10 @@ use crate::generator::{
     AnswerConditionedCandidateSource, GeneratorEntry, LayeredCandidateSource, ProblemGenerator,
     RandomCandidateSource, SamplingStrategy, SelectionDedup,
 };
-use crate::generator_support::{draw_signed_integer, rational_answer};
+use crate::generator_support::{draw_signed_integer, exact_decimal_rational, rational_answer};
 use crate::model::{
-    AnswerSchema, Problem, ProblemPrompt, QuadraticEquationForm, RationalCoefficient,
+    AnswerSchema, LinearExpression, LinearScalar, Problem, ProblemPrompt, QuadraticEquationForm,
+    RationalCoefficient,
 };
 use crate::rng::DeterministicRng;
 use crate::theme::{
@@ -24,26 +25,44 @@ use std::sync::OnceLock;
 
 pub const THEME_ID_LINEAR_EQUATION_1: u32 = 2;
 pub const THEME_ID_LINEAR_EQUATION_2: u32 = 3;
+pub const THEME_ID_LINEAR_EQUATION_SIMPLE: u32 = 69;
+pub const THEME_ID_LINEAR_EQUATION_3: u32 = 70;
 pub const THEME_ID_QUADRATIC_EQUATION_1: u32 = 14;
 pub const THEME_ID_QUADRATIC_EQUATION_2: u32 = 15;
 pub const THEME_ID_QUADRATIC_EQUATION_3: u32 = 16;
 pub const THEME_ID_SIMULTANEOUS_EQUATION_1: u32 = 19;
-pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 8;
-pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 8;
+pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 9;
+pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 9;
+pub const GENERATOR_REVISION_LINEAR_EQUATION_SIMPLE: u32 = 1;
+pub const GENERATOR_REVISION_LINEAR_EQUATION_3: u32 = 1;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_1: u32 = 3;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 4;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_3: u32 = 3;
 pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_1: u32 = 3;
 pub const SKILL_ID_LINEAR_EQUATION_1: &str = "jp.grade7.equation.linear.1";
 pub const SKILL_ID_LINEAR_EQUATION_2: &str = "jp.grade7.equation.linear.2";
+pub const SKILL_ID_LINEAR_EQUATION_SIMPLE: &str = "jp.grade7.equation.linear.simple";
+pub const SKILL_ID_LINEAR_EQUATION_3: &str = "jp.grade7.equation.linear.3";
 pub const SKILL_ID_QUADRATIC_EQUATION_1: &str = "jp.grade9.equation.quadratic.1";
 pub const SKILL_ID_QUADRATIC_EQUATION_2: &str = "jp.grade9.equation.quadratic.2";
 pub const SKILL_ID_QUADRATIC_EQUATION_3: &str = "jp.grade9.equation.quadratic.3";
 pub const SKILL_ID_SIMULTANEOUS_EQUATION_1: &str = "jp.grade8.equation.simultaneous.1";
+pub const CURRICULUM_PATH_LINEAR_EQUATION_SIMPLE: [&str; 4] =
+    ["root", "中学1年生", "一次方程式", "簡単な一次方程式"];
 pub const CURRICULUM_PATH_LINEAR_EQUATION_1: [&str; 4] =
-    ["root", "中学1年生", "一次方程式", "一次方程式(1)"];
-pub const CURRICULUM_PATH_LINEAR_EQUATION_2: [&str; 4] =
-    ["root", "中学1年生", "一次方程式", "一次方程式(2)"];
+    ["root", "中学1年生", "一次方程式", "一次方程式(1)：基本形"];
+pub const CURRICULUM_PATH_LINEAR_EQUATION_2: [&str; 4] = [
+    "root",
+    "中学1年生",
+    "一次方程式",
+    "一次方程式(2)：括弧・整数係数中心",
+];
+pub const CURRICULUM_PATH_LINEAR_EQUATION_3: [&str; 4] = [
+    "root",
+    "中学1年生",
+    "一次方程式",
+    "一次方程式(3)：括弧・分数・小数係数",
+];
 pub const CURRICULUM_PATH_QUADRATIC_EQUATION_1: [&str; 4] =
     ["root", "中学3年生", "二次方程式", "二次方程式(1)"];
 pub const CURRICULUM_PATH_QUADRATIC_EQUATION_2: [&str; 4] =
@@ -78,6 +97,25 @@ pub const QUADRATIC_FACTORING_LAYERS: [SamplingLayerSpec; 3] = [
         minimum: 0,
     },
 ];
+
+pub const LINEAR_EQUATION_SIMPLE_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_LINEAR_EQUATION_SIMPLE),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_LINEAR_EQUATION_SIMPLE,
+        ),
+        skill_id: SKILL_ID_LINEAR_EQUATION_SIMPLE,
+        curriculum_path: &CURRICULUM_PATH_LINEAR_EQUATION_SIMPLE,
+        grade: Some(SchoolGrade::JuniorHigh1),
+        tags: LINEAR,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::EQUATION,
+        dedup: Dedup::PreserveOperandOrder,
+        answer_contract: AnswerContract::LinearInteger,
+        layout: COMPACT_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_LINEAR_EQUATION)
+    .with_editor_input_profile(Input::JuniorHighFull);
 
 pub const LINEAR_EQUATION_1_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -115,6 +153,25 @@ pub const LINEAR_EQUATION_2_REGISTRATION: ThemeRegistration =
     })
     .with_curriculum_unit(CURRICULUM_UNIT_LINEAR_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
+pub const LINEAR_EQUATION_3_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_LINEAR_EQUATION_3),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_LINEAR_EQUATION_3,
+        ),
+        skill_id: SKILL_ID_LINEAR_EQUATION_3,
+        curriculum_path: &CURRICULUM_PATH_LINEAR_EQUATION_3,
+        grade: Some(SchoolGrade::JuniorHigh1),
+        tags: LINEAR,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::EQUATION,
+        dedup: Dedup::PreserveOperandOrder,
+        answer_contract: AnswerContract::LinearRational,
+        layout: COMPACT_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_LINEAR_EQUATION)
+    .with_editor_input_profile(Input::JuniorHighFull);
+
 pub const QUADRATIC_EQUATION_1_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
         numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_QUADRATIC_EQUATION_1),
@@ -189,15 +246,24 @@ pub const SIMULTANEOUS_EQUATION_1_REGISTRATION: ThemeRegistration =
     .with_editor_input_profile(Input::JuniorHighFull);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum LinearEquationMode {
-    IntegerSolution,
-    RationalSolution,
+pub(crate) enum LinearSolutionDomain {
+    Integer,
+    Rational,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LinearSurfaceMode {
+    Simple,
+    Basic,
+    ParenthesizedInteger,
+    Comprehensive,
 }
 
 #[derive(Debug)]
 pub(crate) struct LinearEquationGenerator {
     registration: &'static ThemeRegistration,
-    pub(crate) mode: LinearEquationMode,
+    solution_domain: LinearSolutionDomain,
+    surface_mode: LinearSurfaceMode,
 }
 impl ProblemGenerator for LinearEquationGenerator {
     fn registration(&self) -> &'static ThemeRegistration {
@@ -211,7 +277,7 @@ impl ProblemGenerator for LinearEquationGenerator {
 
 impl AnswerConditionedCandidateSource for LinearEquationGenerator {
     fn answer_domain(&self) -> &'static [AnswerNode] {
-        linear_answer_domain(self.mode)
+        linear_answer_domain(self.solution_domain)
     }
 
     fn draw_candidate_for_answer(
@@ -224,31 +290,23 @@ impl AnswerConditionedCandidateSource for LinearEquationGenerator {
         let Some(solution) = crate::exact_value::rational_coefficient_from_answer(answer) else {
             return Ok(None);
         };
-        let shape = rng.next_bounded(4);
-        let prefer_reduction = self.mode == LinearEquationMode::RationalSolution
-            && !solution.is_zero()
-            && rng.next_bounded(4) != 0;
-        let coefficients = if prefer_reduction {
-            draw_reduction_conditioned_coefficients(rng, self.mode, shape, solution)
-                .or_else(|| draw_conditioned_coefficients(rng, self.mode, shape, solution))
-        } else {
-            draw_conditioned_coefficients(rng, self.mode, shape, solution)
+        let expressions = match self.surface_mode {
+            LinearSurfaceMode::Simple => draw_simple_linear_equation(rng, solution),
+            LinearSurfaceMode::Basic => draw_basic_linear_equation(rng, solution),
+            LinearSurfaceMode::ParenthesizedInteger => {
+                draw_parenthesized_integer_equation(rng, solution)
+            }
+            LinearSurfaceMode::Comprehensive => draw_comprehensive_linear_equation(rng, solution),
         };
-        let Some((a, b, c, d)) = coefficients else {
+        let Some((left, right)) = expressions else {
             return Ok(None);
         };
-        let left_negative_constant_as_subtraction = b.numerator() < 0 && rng.next_bounded(2) == 0;
-        let right_negative_constant_as_subtraction = d.numerator() < 0 && rng.next_bounded(2) == 0;
         linear_equation_problem(
             ordinal,
             self.registration,
-            self.mode,
-            a,
-            b,
-            c,
-            d,
-            left_negative_constant_as_subtraction,
-            right_negative_constant_as_subtraction,
+            self.solution_domain,
+            left,
+            right,
             solution,
             weights,
         )
@@ -387,13 +445,26 @@ impl LayeredCandidateSource for QuadraticEquationGenerator {
     }
 }
 
+pub(crate) static LINEAR_EQUATION_SIMPLE_GENERATOR: LinearEquationGenerator =
+    LinearEquationGenerator {
+        registration: &LINEAR_EQUATION_SIMPLE_REGISTRATION,
+        solution_domain: LinearSolutionDomain::Integer,
+        surface_mode: LinearSurfaceMode::Simple,
+    };
 pub(crate) static LINEAR_EQUATION_1_GENERATOR: LinearEquationGenerator = LinearEquationGenerator {
     registration: &LINEAR_EQUATION_1_REGISTRATION,
-    mode: LinearEquationMode::IntegerSolution,
+    solution_domain: LinearSolutionDomain::Integer,
+    surface_mode: LinearSurfaceMode::Basic,
 };
 pub(crate) static LINEAR_EQUATION_2_GENERATOR: LinearEquationGenerator = LinearEquationGenerator {
     registration: &LINEAR_EQUATION_2_REGISTRATION,
-    mode: LinearEquationMode::RationalSolution,
+    solution_domain: LinearSolutionDomain::Rational,
+    surface_mode: LinearSurfaceMode::ParenthesizedInteger,
+};
+pub(crate) static LINEAR_EQUATION_3_GENERATOR: LinearEquationGenerator = LinearEquationGenerator {
+    registration: &LINEAR_EQUATION_3_REGISTRATION,
+    solution_domain: LinearSolutionDomain::Rational,
+    surface_mode: LinearSurfaceMode::Comprehensive,
 };
 pub(crate) static SIMULTANEOUS_EQUATION_1_GENERATOR: SimultaneousEquationGenerator =
     SimultaneousEquationGenerator {
@@ -456,14 +527,14 @@ fn quadratic_one_square_value(answer: &AnswerNode) -> Option<i64> {
     }
 }
 
-pub(crate) fn linear_answer_domain(mode: LinearEquationMode) -> &'static [AnswerNode] {
+pub(crate) fn linear_answer_domain(mode: LinearSolutionDomain) -> &'static [AnswerNode] {
     static INTEGER: OnceLock<Vec<AnswerNode>> = OnceLock::new();
     static RATIONAL: OnceLock<Vec<AnswerNode>> = OnceLock::new();
     match mode {
-        LinearEquationMode::IntegerSolution => {
+        LinearSolutionDomain::Integer => {
             INTEGER.get_or_init(|| (-15_i64..=15).map(AnswerNode::Integer).collect())
         }
-        LinearEquationMode::RationalSolution => RATIONAL.get_or_init(|| {
+        LinearSolutionDomain::Rational => RATIONAL.get_or_init(|| {
             linear_solution_domain(mode)
                 .iter()
                 .copied()
@@ -473,16 +544,16 @@ pub(crate) fn linear_answer_domain(mode: LinearEquationMode) -> &'static [Answer
     }
 }
 
-pub(crate) fn linear_solution_domain(mode: LinearEquationMode) -> &'static [RationalCoefficient] {
+pub(crate) fn linear_solution_domain(mode: LinearSolutionDomain) -> &'static [RationalCoefficient] {
     static INTEGER: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     static RATIONAL: OnceLock<Vec<RationalCoefficient>> = OnceLock::new();
     match mode {
-        LinearEquationMode::IntegerSolution => INTEGER.get_or_init(|| {
+        LinearSolutionDomain::Integer => INTEGER.get_or_init(|| {
             (-15_i64..=15)
                 .map(|value| RationalCoefficient::new(value, 1).expect("integer solution"))
                 .collect()
         }),
-        LinearEquationMode::RationalSolution => RATIONAL.get_or_init(|| {
+        LinearSolutionDomain::Rational => RATIONAL.get_or_init(|| {
             let mut values = (-15_i64..=15)
                 .map(|value| RationalCoefficient::new(value, 1).expect("integer solution"))
                 .collect::<Vec<_>>();
@@ -509,21 +580,255 @@ pub(crate) fn linear_solution_domain(mode: LinearEquationMode) -> &'static [Rati
     }
 }
 
+fn integer_scalar(value: i64) -> LinearScalar {
+    LinearScalar::Integer { value }
+}
+
+fn scalar_rational(value: LinearScalar) -> Option<RationalCoefficient> {
+    match value {
+        LinearScalar::Integer { value } => RationalCoefficient::new(value, 1),
+        LinearScalar::Fraction { value } => Some(value),
+        LinearScalar::ExactDecimal { coefficient, scale } => {
+            exact_decimal_rational(coefficient, scale)
+        }
+    }
+}
+
+fn scalar_abs(value: LinearScalar) -> Option<LinearScalar> {
+    match value {
+        LinearScalar::Integer { value } => Some(integer_scalar(value.checked_abs()?)),
+        LinearScalar::Fraction { value } => Some(LinearScalar::Fraction {
+            value: RationalCoefficient::new(value.numerator().checked_abs()?, value.denominator())?,
+        }),
+        LinearScalar::ExactDecimal { coefficient, scale } => Some(LinearScalar::ExactDecimal {
+            coefficient: coefficient.checked_abs()?,
+            scale,
+        }),
+    }
+}
+
+fn scalar_from_rational(value: RationalCoefficient) -> Option<LinearScalar> {
+    if value.is_integer() {
+        return Some(integer_scalar(value.numerator()));
+    }
+    Some(LinearScalar::Fraction { value })
+}
+
+fn linear_affine_expression(
+    coefficient: LinearScalar,
+    constant: LinearScalar,
+) -> Option<LinearExpression> {
+    let coefficient_value = scalar_rational(coefficient)?;
+    let constant_value = scalar_rational(constant)?;
+    if coefficient_value.is_zero() {
+        return Some(LinearExpression::Constant { value: constant });
+    }
+    let variable = if coefficient_value == RationalCoefficient::new(1, 1)? {
+        LinearExpression::Variable
+    } else {
+        LinearExpression::Scale {
+            factor: coefficient,
+            expression: Box::new(LinearExpression::Variable),
+        }
+    };
+    if constant_value.is_zero() {
+        return Some(variable);
+    }
+    let constant_expression = LinearExpression::Constant {
+        value: scalar_abs(constant)?,
+    };
+    Some(if constant_value.numerator() < 0 {
+        LinearExpression::Subtract {
+            left: Box::new(variable),
+            right: Box::new(constant_expression),
+        }
+    } else {
+        LinearExpression::Add {
+            left: Box::new(variable),
+            right: Box::new(constant_expression),
+        }
+    })
+}
+
+fn draw_nonzero_integer(rng: &mut DeterministicRng, max_abs: i64) -> i64 {
+    let magnitude = 1 + rng.next_bounded(max_abs as u64) as i64;
+    if rng.next_bounded(2) == 0 {
+        -magnitude
+    } else {
+        magnitude
+    }
+}
+
+fn bounded_integer(value: RationalCoefficient, max_abs: i64) -> Option<i64> {
+    (value.denominator() == 1 && value.numerator().unsigned_abs() <= max_abs as u64)
+        .then_some(value.numerator())
+}
+
+fn draw_simple_linear_equation(
+    rng: &mut DeterministicRng,
+    solution: RationalCoefficient,
+) -> Option<(LinearExpression, LinearExpression)> {
+    let x = bounded_integer(solution, 15)?;
+    if rng.next_bounded(2) == 0 {
+        let addend = draw_nonzero_integer(rng, 12);
+        let right = x.checked_add(addend)?;
+        if right.unsigned_abs() > 30 {
+            return None;
+        }
+        Some((
+            linear_affine_expression(integer_scalar(1), integer_scalar(addend))?,
+            LinearExpression::Constant {
+                value: integer_scalar(right),
+            },
+        ))
+    } else {
+        let coefficient = draw_nonzero_integer(rng, 9);
+        if coefficient.unsigned_abs() == 1 {
+            return None;
+        }
+        let right = coefficient.checked_mul(x)?;
+        if right.unsigned_abs() > 90 {
+            return None;
+        }
+        Some((
+            linear_affine_expression(integer_scalar(coefficient), integer_scalar(0))?,
+            LinearExpression::Constant {
+                value: integer_scalar(right),
+            },
+        ))
+    }
+}
+
+fn draw_basic_linear_equation(
+    rng: &mut DeterministicRng,
+    solution: RationalCoefficient,
+) -> Option<(LinearExpression, LinearExpression)> {
+    let shape = rng.next_bounded(4);
+    let (a, b, c, d) =
+        draw_conditioned_coefficients(rng, LinearSolutionDomain::Integer, shape, solution)?;
+    Some((
+        linear_affine_expression(scalar_from_rational(a)?, scalar_from_rational(b)?)?,
+        linear_affine_expression(scalar_from_rational(c)?, scalar_from_rational(d)?)?,
+    ))
+}
+
+fn draw_parenthesized_integer_equation(
+    rng: &mut DeterministicRng,
+    solution: RationalCoefficient,
+) -> Option<(LinearExpression, LinearExpression)> {
+    let factor = draw_nonzero_integer(rng, 5);
+    if factor.unsigned_abs() == 1 {
+        return None;
+    }
+    let inner_coefficient = draw_nonzero_integer(rng, 5);
+    let inner_constant = draw_nonzero_integer(rng, 9);
+    let a = RationalCoefficient::new(factor.checked_mul(inner_coefficient)?, 1)?;
+    let b = RationalCoefficient::new(factor.checked_mul(inner_constant)?, 1)?;
+    let right_coefficient = if rng.next_bounded(3) == 0 {
+        0
+    } else {
+        draw_nonzero_integer(rng, 8)
+    };
+    let c = RationalCoefficient::new(right_coefficient, 1)?;
+    if a == c {
+        return None;
+    }
+    let d = a.subtract(c)?.multiply(solution)?.checked_add(b)?;
+    let d = bounded_integer(d, 40)?;
+    let inner = linear_affine_expression(
+        integer_scalar(inner_coefficient),
+        integer_scalar(inner_constant),
+    )?;
+    let left = LinearExpression::Scale {
+        factor: integer_scalar(factor),
+        expression: Box::new(inner),
+    };
+    let right = linear_affine_expression(integer_scalar(right_coefficient), integer_scalar(d))?;
+    Some((left, right))
+}
+
+fn draw_fraction_scalar(rng: &mut DeterministicRng) -> Option<LinearScalar> {
+    let denominator = 2 + rng.next_bounded(7) as i64;
+    let numerator_abs = 1 + rng.next_bounded(9) as i64;
+    let numerator = if rng.next_bounded(2) == 0 {
+        -numerator_abs
+    } else {
+        numerator_abs
+    };
+    let value = RationalCoefficient::new(numerator, denominator)?;
+    (!value.is_integer()).then_some(LinearScalar::Fraction { value })
+}
+
+fn draw_decimal_scalar(rng: &mut DeterministicRng) -> Option<LinearScalar> {
+    let scale = 1 + rng.next_bounded(2) as u32;
+    let max = if scale == 1 { 25 } else { 250 };
+    let magnitude = 1 + rng.next_bounded(max) as i64;
+    if magnitude % 10 == 0 {
+        return None;
+    }
+    let coefficient = if rng.next_bounded(2) == 0 {
+        -magnitude
+    } else {
+        magnitude
+    };
+    Some(LinearScalar::ExactDecimal { coefficient, scale })
+}
+
+fn draw_comprehensive_linear_equation(
+    rng: &mut DeterministicRng,
+    solution: RationalCoefficient,
+) -> Option<(LinearExpression, LinearExpression)> {
+    let factor = if rng.next_bounded(2) == 0 {
+        draw_fraction_scalar(rng)?
+    } else {
+        draw_decimal_scalar(rng)?
+    };
+    let factor_value = scalar_rational(factor)?;
+    let inner_coefficient = draw_nonzero_integer(rng, 5);
+    let inner_constant = draw_nonzero_integer(rng, 9);
+    let a = factor_value.multiply(RationalCoefficient::new(inner_coefficient, 1)?)?;
+    let b = factor_value.multiply(RationalCoefficient::new(inner_constant, 1)?)?;
+    let right_coefficient = if rng.next_bounded(3) == 0 {
+        0
+    } else {
+        draw_nonzero_integer(rng, 6)
+    };
+    let c = RationalCoefficient::new(right_coefficient, 1)?;
+    if a == c {
+        return None;
+    }
+    let d = a.subtract(c)?.multiply(solution)?.checked_add(b)?;
+    if d.numerator().unsigned_abs() > 80 || d.denominator() > 24 {
+        return None;
+    }
+    let inner = linear_affine_expression(
+        integer_scalar(inner_coefficient),
+        integer_scalar(inner_constant),
+    )?;
+    let left = LinearExpression::Scale {
+        factor,
+        expression: Box::new(inner),
+    };
+    let right =
+        linear_affine_expression(integer_scalar(right_coefficient), scalar_from_rational(d)?)?;
+    Some((left, right))
+}
+
 fn coefficient_domain(
-    mode: LinearEquationMode,
+    mode: LinearSolutionDomain,
     allow_zero: bool,
 ) -> &'static [RationalCoefficient] {
     match (mode, allow_zero) {
-        (LinearEquationMode::IntegerSolution, false) => linear_integer_domain(),
-        (LinearEquationMode::IntegerSolution, true) => linear_integer_domain_with_zero(),
-        (LinearEquationMode::RationalSolution, false) => linear_rational_domain(),
-        (LinearEquationMode::RationalSolution, true) => linear_rational_domain_with_zero(),
+        (LinearSolutionDomain::Integer, false) => linear_integer_domain(),
+        (LinearSolutionDomain::Integer, true) => linear_integer_domain_with_zero(),
+        (LinearSolutionDomain::Rational, false) => linear_rational_domain(),
+        (LinearSolutionDomain::Rational, true) => linear_rational_domain_with_zero(),
     }
 }
 
 fn coefficient_allowed(
     value: RationalCoefficient,
-    mode: LinearEquationMode,
+    mode: LinearSolutionDomain,
     allow_zero: bool,
 ) -> bool {
     coefficient_domain(mode, allow_zero).contains(&value)
@@ -533,7 +838,7 @@ fn coefficient_allowed(
 /// `minuend - subtrahend = difference`.
 fn draw_difference_pair(
     rng: &mut DeterministicRng,
-    mode: LinearEquationMode,
+    mode: LinearSolutionDomain,
     difference: RationalCoefficient,
     minuend_allow_zero: bool,
     subtrahend_allow_zero: bool,
@@ -555,7 +860,7 @@ fn draw_difference_pair(
 
 fn draw_conditioned_coefficients(
     rng: &mut DeterministicRng,
-    mode: LinearEquationMode,
+    mode: LinearSolutionDomain,
     shape: u64,
     solution: RationalCoefficient,
 ) -> Option<(
@@ -610,83 +915,13 @@ fn draw_conditioned_coefficients(
     }
 }
 
-fn draw_reduction_conditioned_coefficients(
-    rng: &mut DeterministicRng,
-    mode: LinearEquationMode,
-    shape: u64,
-    solution: RationalCoefficient,
-) -> Option<(
-    RationalCoefficient,
-    RationalCoefficient,
-    RationalCoefficient,
-    RationalCoefficient,
-)> {
-    if solution.is_zero() {
-        return None;
-    }
-    let zero = RationalCoefficient::zero();
-    // Try a small common factor first. A = kq and B = kp make x = B/A
-    // intentionally reducible by k after transposition.
-    let first_k = 2_i64 + rng.next_bounded(3) as i64;
-    for offset in 0_i64..3 {
-        let k = 2 + ((first_k - 2 + offset) % 3);
-        let sign = if rng.next_bounded(2) == 0 {
-            1_i64
-        } else {
-            -1_i64
-        };
-        let a_total =
-            RationalCoefficient::new(sign.checked_mul(k)?.checked_mul(solution.denominator())?, 1)?;
-        let b_total =
-            RationalCoefficient::new(sign.checked_mul(k)?.checked_mul(solution.numerator())?, 1)?;
-        let candidate = match shape {
-            0 => {
-                let a = a_total;
-                let b = zero.subtract(b_total)?;
-                (coefficient_allowed(a, mode, false) && coefficient_allowed(b, mode, true))
-                    .then_some((a, b, zero, zero))
-            }
-            1 => {
-                if !coefficient_allowed(a_total, mode, false) {
-                    None
-                } else {
-                    draw_difference_pair(rng, mode, b_total, false, true)
-                        .map(|(d, b)| (a_total, b, zero, d))
-                }
-            }
-            2 => {
-                let b = zero.subtract(b_total)?;
-                if !coefficient_allowed(b, mode, false) {
-                    None
-                } else {
-                    draw_difference_pair(rng, mode, a_total, false, false)
-                        .map(|(a, c)| (a, b, c, zero))
-                }
-            }
-            3 => {
-                let x_pair = draw_difference_pair(rng, mode, a_total, false, false);
-                let constant_pair = draw_difference_pair(rng, mode, b_total, false, true);
-                match (x_pair, constant_pair) {
-                    (Some((a, c)), Some((d, b))) => Some((a, b, c, d)),
-                    _ => None,
-                }
-            }
-            _ => None,
-        };
-        if candidate.is_some() {
-            return candidate;
-        }
-    }
-    None
-}
-
 fn draw_nonzero_linear_coefficient(
     rng: &mut DeterministicRng,
-    mode: LinearEquationMode,
+    mode: LinearSolutionDomain,
 ) -> RationalCoefficient {
     let domain = match mode {
-        LinearEquationMode::IntegerSolution => linear_integer_domain(),
-        LinearEquationMode::RationalSolution => linear_rational_domain(),
+        LinearSolutionDomain::Integer => linear_integer_domain(),
+        LinearSolutionDomain::Rational => linear_rational_domain(),
     };
     domain[rng.next_bounded(domain.len() as u64) as usize]
 }
@@ -1000,29 +1235,24 @@ fn quadratic_equation_problem(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn linear_equation_problem(
     id: u32,
     registration: &ThemeRegistration,
-    mode: LinearEquationMode,
-    a: RationalCoefficient,
-    b: RationalCoefficient,
-    c: RationalCoefficient,
-    d: RationalCoefficient,
-    left_negative_constant_as_subtraction: bool,
-    right_negative_constant_as_subtraction: bool,
+    solution_domain: LinearSolutionDomain,
+    left: LinearExpression,
+    right: LinearExpression,
     solution: RationalCoefficient,
     _weights: &OperationWeights,
 ) -> Result<Problem, GenerationError> {
     let canonical_answer = rational_answer(solution);
-    let operation_plan = linear_equation_plan(a, b, c, d, &canonical_answer).ok_or(
+    let operation_plan = linear_expression_equation_plan(&left, &right, &canonical_answer).ok_or(
         GenerationError::InvalidGeneratedProblem {
-            reason: "linear-equation effort model rejected generated coefficients",
+            reason: "linear-equation effort model rejected generated expression",
         },
     )?;
-    let answer_schema = match mode {
-        LinearEquationMode::IntegerSolution => AnswerSchema::Integer { min: -15, max: 15 },
-        LinearEquationMode::RationalSolution => AnswerSchema::Rational {
+    let answer_schema = match solution_domain {
+        LinearSolutionDomain::Integer => AnswerSchema::Integer { min: -15, max: 15 },
+        LinearSolutionDomain::Rational => AnswerSchema::Rational {
             max_abs_numerator: 20,
             max_denominator: 12,
             require_reduced_fraction_form: true,
@@ -1031,14 +1261,7 @@ fn linear_equation_problem(
     Problem::generated(
         registration,
         id,
-        ProblemPrompt::LinearEquation {
-            a,
-            b,
-            c,
-            d,
-            left_negative_constant_as_subtraction,
-            right_negative_constant_as_subtraction,
-        },
+        ProblemPrompt::LinearEquation { left, right },
         answer_schema,
         canonical_answer,
         EffortModel::operations(operation_plan),
@@ -1047,9 +1270,11 @@ fn linear_equation_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 6] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 8] = [
+    GeneratorEntry::current(&LINEAR_EQUATION_SIMPLE_GENERATOR),
     GeneratorEntry::current(&LINEAR_EQUATION_1_GENERATOR),
     GeneratorEntry::current(&LINEAR_EQUATION_2_GENERATOR),
+    GeneratorEntry::current(&LINEAR_EQUATION_3_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_1_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_2_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_3_GENERATOR),
@@ -1067,13 +1292,13 @@ mod curriculum_tests {
 
     #[test]
     fn linear_answer_support_matches_requested_domain() {
-        let integer = linear_solution_domain(LinearEquationMode::IntegerSolution);
+        let integer = linear_solution_domain(LinearSolutionDomain::Integer);
         assert_eq!(integer.len(), 31);
         assert_eq!(integer.first().unwrap().numerator(), -15);
         assert_eq!(integer.last().unwrap().numerator(), 15);
         assert!(integer.iter().all(|value| value.denominator() == 1));
 
-        let rational = linear_solution_domain(LinearEquationMode::RationalSolution);
+        let rational = linear_solution_domain(LinearSolutionDomain::Rational);
         let mut unique = rational.to_vec();
         unique.sort_unstable();
         unique.dedup();
@@ -1091,11 +1316,16 @@ mod curriculum_tests {
 
     #[test]
     fn every_linear_answer_support_value_can_generate_an_equation() {
-        for generator in [&LINEAR_EQUATION_1_GENERATOR, &LINEAR_EQUATION_2_GENERATOR] {
+        for generator in [
+            &LINEAR_EQUATION_SIMPLE_GENERATOR,
+            &LINEAR_EQUATION_1_GENERATOR,
+            &LINEAR_EQUATION_2_GENERATOR,
+            &LINEAR_EQUATION_3_GENERATOR,
+        ] {
             let mut rng = DeterministicRng::from_seed("AllAns7");
             let weights = OperationWeights::default();
-            for answer in linear_answer_domain(generator.mode) {
-                let generated = (1_u32..=2_000).find_map(|ordinal| {
+            for answer in linear_answer_domain(generator.solution_domain) {
+                let generated = (1_u32..=5_000).find_map(|ordinal| {
                     generator
                         .draw_candidate_for_answer(&mut rng, ordinal, &weights, answer)
                         .expect("candidate construction must preserve the problem contract")
@@ -1322,6 +1552,160 @@ mod curriculum_tests {
             saw_fraction_coefficient,
             "quadratic(3) should exercise clearing denominators"
         );
+    }
+
+    #[derive(Default)]
+    struct LinearSurfaceFacts {
+        parenthesized_scales: usize,
+        fraction_scalars: usize,
+        decimal_scalars: usize,
+    }
+
+    fn collect_linear_scalar(value: LinearScalar, facts: &mut LinearSurfaceFacts) {
+        match value {
+            LinearScalar::Integer { .. } => {}
+            LinearScalar::Fraction { .. } => facts.fraction_scalars += 1,
+            LinearScalar::ExactDecimal { .. } => facts.decimal_scalars += 1,
+        }
+    }
+
+    fn collect_linear_surface(expression: &LinearExpression, facts: &mut LinearSurfaceFacts) {
+        match expression {
+            LinearExpression::Variable => {}
+            LinearExpression::Constant { value } => collect_linear_scalar(*value, facts),
+            LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
+                collect_linear_surface(left, facts);
+                collect_linear_surface(right, facts);
+            }
+            LinearExpression::Scale { factor, expression } => {
+                collect_linear_scalar(*factor, facts);
+                if matches!(
+                    expression.as_ref(),
+                    LinearExpression::Add { .. } | LinearExpression::Subtract { .. }
+                ) {
+                    facts.parenthesized_scales += 1;
+                }
+                collect_linear_surface(expression, facts);
+            }
+        }
+    }
+
+    fn simple_linear_shape(
+        left: &LinearExpression,
+        right: &LinearExpression,
+    ) -> Option<&'static str> {
+        if !matches!(right, LinearExpression::Constant { .. }) {
+            return None;
+        }
+        match left {
+            LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right }
+                if matches!(left.as_ref(), LinearExpression::Variable)
+                    && matches!(right.as_ref(), LinearExpression::Constant { .. }) =>
+            {
+                Some("x+a=b")
+            }
+            LinearExpression::Scale { expression, .. }
+                if matches!(expression.as_ref(), LinearExpression::Variable) =>
+            {
+                Some("ax=b")
+            }
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn linear_equation_curriculum_modes_fix_surface_archetypes() {
+        use crate::generator::generate_worksheet_request;
+        use crate::model::GenerateWorksheetRequest;
+        use crate::schema::SCHEMA_VERSION;
+
+        let mut simple_shapes = std::collections::BTreeSet::new();
+        let mut linear_two_saw_integer_solution = false;
+        let mut linear_two_saw_fraction_solution = false;
+        let mut linear_three_saw_integer_solution = false;
+        let mut linear_three_saw_fraction_solution = false;
+        let mut linear_three_saw_fraction_surface = false;
+        let mut linear_three_saw_decimal_surface = false;
+
+        for difficulty in 1..=4 {
+            for seed in ["LnA1", "LnB2", "LnC3", "LnD4"] {
+                for theme_id in [
+                    THEME_ID_LINEAR_EQUATION_SIMPLE,
+                    THEME_ID_LINEAR_EQUATION_1,
+                    THEME_ID_LINEAR_EQUATION_2,
+                    THEME_ID_LINEAR_EQUATION_3,
+                ] {
+                    let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                        timeout_ms: Some(1_000),
+                        max_attempts: Some(50_000),
+                    })
+                    .unwrap_or_else(|error| {
+                        panic!("linear theme {theme_id} d{difficulty} failed for {seed}: {error}")
+                    });
+                    for problem in worksheet.problems() {
+                        let ProblemPrompt::LinearEquation { left, right } = problem.prompt() else {
+                            panic!("linear theme returned non-linear prompt");
+                        };
+                        let mut facts = LinearSurfaceFacts::default();
+                        collect_linear_surface(left, &mut facts);
+                        collect_linear_surface(right, &mut facts);
+                        let (a, b) = crate::semantics::normalize_linear_expression(left).unwrap();
+                        let (c, d) = crate::semantics::normalize_linear_expression(right).unwrap();
+                        assert_ne!(a, c);
+
+                        match theme_id {
+                            THEME_ID_LINEAR_EQUATION_SIMPLE => {
+                                simple_shapes.insert(
+                                    simple_linear_shape(left, right).expect("simple linear shape"),
+                                );
+                                assert_eq!(facts.parenthesized_scales, 0);
+                                assert_eq!(facts.fraction_scalars + facts.decimal_scalars, 0);
+                            }
+                            THEME_ID_LINEAR_EQUATION_1 => {
+                                assert_eq!(facts.parenthesized_scales, 0);
+                                assert_eq!(facts.fraction_scalars + facts.decimal_scalars, 0);
+                                assert!([a, b, c, d].iter().all(|value| value.is_integer()));
+                            }
+                            THEME_ID_LINEAR_EQUATION_2 => {
+                                assert!(facts.parenthesized_scales >= 1);
+                                assert_eq!(facts.fraction_scalars + facts.decimal_scalars, 0);
+                                assert!([a, b, c, d].iter().all(|value| value.is_integer()));
+                                linear_two_saw_integer_solution |=
+                                    matches!(problem.canonical_answer(), AnswerNode::Integer(_));
+                                linear_two_saw_fraction_solution |= matches!(
+                                    problem.canonical_answer(),
+                                    AnswerNode::Fraction { .. }
+                                );
+                            }
+                            THEME_ID_LINEAR_EQUATION_3 => {
+                                assert!(facts.parenthesized_scales >= 1);
+                                assert!(facts.fraction_scalars + facts.decimal_scalars >= 1);
+                                linear_three_saw_fraction_surface |= facts.fraction_scalars > 0;
+                                linear_three_saw_decimal_surface |= facts.decimal_scalars > 0;
+                                linear_three_saw_integer_solution |=
+                                    matches!(problem.canonical_answer(), AnswerNode::Integer(_));
+                                linear_three_saw_fraction_solution |= matches!(
+                                    problem.canonical_answer(),
+                                    AnswerNode::Fraction { .. }
+                                );
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            simple_shapes,
+            std::collections::BTreeSet::from(["ax=b", "x+a=b"])
+        );
+        assert!(linear_two_saw_integer_solution && linear_two_saw_fraction_solution);
+        assert!(linear_three_saw_integer_solution && linear_three_saw_fraction_solution);
+        assert!(linear_three_saw_fraction_surface && linear_three_saw_decimal_surface);
     }
 
     #[test]

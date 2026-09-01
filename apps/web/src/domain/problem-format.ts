@@ -1,4 +1,4 @@
-import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ArithmeticOperator, type LiarStatement, type ProblemDto, type RationalCoefficient } from './drill-engine';
+import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ArithmeticOperator, type LiarStatement, type LinearExpression, type LinearScalar, type ProblemDto, type RationalCoefficient } from './drill-engine';
 import { findThemeDefinitionByNumericId } from './theme-registry';
 
 
@@ -110,27 +110,53 @@ export function arithmeticLeafText(expression: ArithmeticExpression): string {
   return mathTokensText(tokens);
 }
 
-function appendCoefficientTerm(tokens: MathToken[], value: RationalCoefficient): boolean {
-  if (value.numerator === 0) return false;
-  const negative = value.numerator < 0;
-  const magnitude = Math.abs(value.numerator);
-  if (negative) appendMinus(tokens);
-  if (value.denominator === 1) {
-    if (magnitude !== 1) appendText(tokens, String(magnitude));
-  } else tokens.push({ kind: 'fraction', numerator: magnitude, denominator: value.denominator });
-  appendText(tokens, 'x');
-  return true;
-}
-function appendLinearSide(tokens: MathToken[], coefficient: RationalCoefficient, constant: RationalCoefficient, negativeAsSubtraction: boolean): void {
-  const hasX = appendCoefficientTerm(tokens, coefficient);
-  if (!hasX) {
-    if (constant.numerator === 0) appendText(tokens, '0'); else appendRational(tokens, constant);
+function appendLinearScalar(tokens: MathToken[], value: LinearScalar, omitPositiveOne = false): void {
+  if (value.kind === 'integer') {
+    if (value.value < 0) appendMinus(tokens);
+    const magnitude = Math.abs(value.value);
+    if (!(omitPositiveOne && magnitude === 1)) appendText(tokens, String(magnitude));
     return;
   }
-  if (constant.numerator === 0) return;
-  if (constant.numerator > 0) { appendText(tokens, ' + '); appendRational(tokens, constant); return; }
-  if (negativeAsSubtraction) { appendText(tokens, ' '); appendMinus(tokens); appendText(tokens, ' '); appendRational(tokens, constant, true); }
-  else { appendText(tokens, ' + ('); appendRational(tokens, constant); appendText(tokens, ')'); }
+  if (value.kind === 'fraction') {
+    const negative = value.value.numerator < 0;
+    if (negative) appendMinus(tokens);
+    const magnitude = { ...value.value, numerator: Math.abs(value.value.numerator) };
+    if (!(omitPositiveOne && magnitude.numerator === magnitude.denominator)) appendRational(tokens, magnitude);
+    return;
+  }
+  const negative = value.coefficient < 0;
+  if (negative) appendMinus(tokens);
+  const magnitude = Math.abs(value.coefficient);
+  if (!(omitPositiveOne && magnitude === 10 ** value.scale)) {
+    appendText(tokens, exactDecimalExpressionText(magnitude, value.scale));
+  }
+}
+
+function linearExpressionNeedsParentheses(expression: LinearExpression): boolean {
+  return expression.kind === 'add' || expression.kind === 'subtract';
+}
+
+function appendLinearExpression(tokens: MathToken[], expression: LinearExpression): void {
+  if (expression.kind === 'variable') {
+    appendText(tokens, 'x');
+    return;
+  }
+  if (expression.kind === 'constant') {
+    appendLinearScalar(tokens, expression.value);
+    return;
+  }
+  if (expression.kind === 'add' || expression.kind === 'subtract') {
+    appendLinearExpression(tokens, expression.left);
+    if (expression.kind === 'add') appendText(tokens, ' + ');
+    else { appendText(tokens, ' '); appendMinus(tokens); appendText(tokens, ' '); }
+    appendLinearExpression(tokens, expression.right);
+    return;
+  }
+  appendLinearScalar(tokens, expression.factor, true);
+  const parens = linearExpressionNeedsParentheses(expression.expression);
+  if (parens) appendText(tokens, '(');
+  appendLinearExpression(tokens, expression.expression);
+  if (parens) appendText(tokens, ')');
 }
 
 function appendPolynomialTerm(tokens: MathToken[], coefficient: RationalCoefficient, variable: 'x²' | 'x', first: boolean): boolean {
@@ -224,9 +250,9 @@ export function problemExpressionTokens(problem: ProblemDto, includeAnswerEquals
     return [{ kind: 'text', text: '4×4 数独' }];
   }
   const tokens: MathToken[] = [];
-  appendLinearSide(tokens, problem.prompt.a, problem.prompt.b, problem.prompt.left_negative_constant_as_subtraction);
+  appendLinearExpression(tokens, problem.prompt.left);
   appendText(tokens, ' = ');
-  appendLinearSide(tokens, problem.prompt.c, problem.prompt.d, problem.prompt.right_negative_constant_as_subtraction);
+  appendLinearExpression(tokens, problem.prompt.right);
   return tokens;
 }
 

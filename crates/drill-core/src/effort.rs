@@ -1,7 +1,8 @@
 use crate::answer::AnswerNode;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
 use crate::model::{
-    ArithmeticExpression, ArithmeticOperator, QuadraticEquationForm, RationalCoefficient,
+    ArithmeticExpression, ArithmeticOperator, LinearExpression, LinearScalar,
+    QuadraticEquationForm, RationalCoefficient,
 };
 pub const OPERATION_KIND_COUNT: usize = 29;
 
@@ -480,6 +481,53 @@ pub(crate) fn linear_equation_plan(
         operations.extend(coefficient_division_operations(constant, coefficient)?);
     }
     operations.extend(big_num_operations(answer));
+    Some(operation_plan(operations))
+}
+
+fn linear_scalar_rational(value: LinearScalar) -> Option<RationalCoefficient> {
+    match value {
+        LinearScalar::Integer { value } => RationalCoefficient::new(value, 1),
+        LinearScalar::Fraction { value } => Some(value),
+        LinearScalar::ExactDecimal { coefficient, scale } => {
+            RationalCoefficient::new(coefficient, 10_i64.checked_pow(scale)?)
+        }
+    }
+}
+
+fn linear_expression_expansion_operations(expression: &LinearExpression) -> Option<Vec<Operation>> {
+    match expression {
+        LinearExpression::Variable | LinearExpression::Constant { .. } => Some(Vec::new()),
+        LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
+            let mut operations = linear_expression_expansion_operations(left)?;
+            operations.extend(linear_expression_expansion_operations(right)?);
+            Some(operations)
+        }
+        LinearExpression::Scale { factor, expression } => {
+            let mut operations = linear_expression_expansion_operations(expression)?;
+            let factor = linear_scalar_rational(*factor)?;
+            let (coefficient, constant) =
+                crate::semantics::normalize_linear_expression(expression)?;
+            if !coefficient.is_zero() {
+                operations.extend(rational_multiplication_operations(factor, coefficient)?);
+            }
+            if !constant.is_zero() {
+                operations.extend(rational_multiplication_operations(factor, constant)?);
+            }
+            Some(operations)
+        }
+    }
+}
+
+pub(crate) fn linear_expression_equation_plan(
+    left: &LinearExpression,
+    right: &LinearExpression,
+    answer: &AnswerNode,
+) -> Option<OperationPlan> {
+    let (a, b) = crate::semantics::normalize_linear_expression(left)?;
+    let (c, d) = crate::semantics::normalize_linear_expression(right)?;
+    let mut operations = linear_expression_expansion_operations(left)?;
+    operations.extend(linear_expression_expansion_operations(right)?);
+    operations.extend(linear_equation_plan(a, b, c, d, answer)?.operations);
     Some(operation_plan(operations))
 }
 

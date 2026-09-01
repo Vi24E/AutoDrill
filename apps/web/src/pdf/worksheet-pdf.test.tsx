@@ -80,9 +80,11 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
       return {
         prompt: {
           kind: 'linear_equation',
-          a: { numerator: 2, denominator: 1 }, b: { numerator: 3, denominator: 1 },
-          c: { numerator: 1, denominator: 1 }, d: { numerator: 8, denominator: 1 },
-          left_negative_constant_as_subtraction: false, right_negative_constant_as_subtraction: false,
+          left: {
+            kind: 'scale', factor: { kind: 'integer', value: 2 },
+            expression: { kind: 'add', left: { kind: 'variable' }, right: { kind: 'constant', value: { kind: 'integer', value: 3 } } },
+          },
+          right: { kind: 'add', left: { kind: 'variable' }, right: { kind: 'constant', value: { kind: 'integer', value: 8 } } },
         },
         answer,
       };
@@ -257,7 +259,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     expect(layout.cells).toHaveLength(16);
     expect(layout.cells[7]).toMatchObject({ column: 0, row: 7 });
     expect(layout.cells[8]).toMatchObject({ column: 1, row: 0 });
-    expect(pages[0]?.cells[0]?.expression).toBe('2x = x + (−5)');
+    expect(pages[0]?.cells[0]?.expression).toBe('2x = x − 5');
     expect(pages[1]?.cells[0]?.answer).toBe('-5');
   });
 

@@ -20,6 +20,8 @@ export type { GradeStatus } from './GradeStatus';
 export type { GradeWarning } from './GradeWarning';
 export type { LayoutMetadata } from './LayoutMetadata';
 export type { LiarStatement } from './LiarStatement';
+export type { LinearExpression } from './LinearExpression';
+export type { LinearScalar } from './LinearScalar';
 export type { LongDivisionStep } from './LongDivisionStep';
 export type { Problem } from './Problem';
 export type { ProblemPrompt } from './ProblemPrompt';

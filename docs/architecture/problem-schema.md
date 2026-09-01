@@ -21,8 +21,8 @@
 | theme | numeric ID | revision | layout |
 |---|---:|---:|---|
 | 一桁の足し算 | 1 | 5 | 20問・2列10行 |
-| 一次方程式(1) | 2 | 8 | 16問・2列8行 |
-| 一次方程式(2) | 3 | 8 | 16問・2列8行 |
+| 一次方程式(1)：基本形 | 2 | 9 | 16問・2列8行 |
+| 一次方程式(2)：括弧・整数係数中心 | 3 | 9 | 16問・2列8行 |
 | 一桁の引き算 | 4 | 3 | 20問・2列10行 |
 | 二桁の足し算 | 5 | 3 | 20問・2列10行 |
 | 九九 | 6 | 3 | 20問・2列10行 |
@@ -58,6 +58,8 @@
 | 小数の掛け算の筆算 | 36 | 2 | 16問・4列4行 |
 | 小数の割り算の筆算 | 37 | 2 | 12問・4列3行 |
 | すうじはひとりぼっち（Mini Sudoku） | 38 | 1 | 4問・2列2行 |
+| 簡単な一次方程式 | 69 | 1 | 16問・2列8行 |
+| 一次方程式(3)：括弧・分数・小数係数 | 70 | 1 | 16問・2列8行 |
 
 ## Problem-set identity
 
@@ -141,16 +143,20 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 
 ## 一次方程式generator
 
-`ProblemPrompt::LinearEquation`は`a,b,c,d`をexactな`RationalCoefficient`として保持し、`ax+b=cx+d`を表す。`themes/equations.rs` の同一family generator APIを(1)/(2)で共有し、違いはtheme registrationとmodeだけに置く。現active revision 8では、**各candidateについてcanonical answerをanswer domainから一様に復元抽出し、その答えに条件づけて式を生成する**。式生成に失敗した場合は答えを引き直さず、その答えのまま式だけを再生成する。
+`ProblemPrompt::LinearEquation` は表示surfaceを保持する `left/right: LinearExpression` を持つ。`LinearExpression` は `variable / constant / add / subtract / scale` の一次式専用ASTであり、`LinearScalar` は整数・既約分数・有限小数を区別して保持する。したがって `1/2(x-3)` と `0.5(x-3)` は数学的には同じ係数でも同じwire表現へ潰さない。Rustの `semantics.rs` がASTをexactな affine form `ax+b` へ正規化し、左右を比較してcanonical answerが実際の解であることをgenerator-independentに検証する。Web/PDFはASTのsurfaceを再帰描画するだけで、係数や括弧の意味を再推論しない。
 
-- `(1)`のanswer domainは整数`-15..=15`。
-- `(2)`は上記整数に加え、既約形で分母2・`|numerator|<=20`、または分母3..12・`|numerator|<=15`の非整数有理数を含む。値として重複する分数はdomain内で1要素に正規化する。
-- 同じ答えが複数candidateまたは最終worksheetに現れることは許容する。答えの重複を避けるための再抽選は行わない。
-- 答えを固定した後、式形は`ax+b=0` / `ax+b=d` / `ax+b=cx` / `ax+b=cx+d`の4種から生成する。`ax=cx`、恒等式、解なし、0除算は棄却する。
-- `(2)`では最終的な`B/A`に共通因子を持たせ、実際の約分が必要になるcandidateを高確率で生成する。
-- 負定数は表示metadataにより`a−b`または`a+(-b)`とし、`0x`を表示せず、係数`1/-1`は`x/−x`とする。Webでは数学用minus、PDFでは線分を描画する。
+同一family generatorは **solution domain** と **教材surface** を別のtyped axisとして持つ。answer-conditioned samplingではcanonical answerをdomainから先に選び、その解を満たす式surfaceを生成する。
 
-一次方程式は全7構造を持つ`structured_math`を返す。`answer_schema`は(1)が`integer { min:-15,max:15 }`、(2)が`rational { max_abs_numerator:20,max_denominator:12,require_reduced_fraction_form:true }`である。(2)の非整数解では、未約分の通常分数は`fraction_not_reduced`、数学的に同値な帯分数・有限小数・繁分数などは`fraction_form_required`を返す。整数解を分母1の分数やexactな平方根など別表現で答えた場合は`integer_form_required`を返す。Rust coreは数学的同値性とwarningを返し、warningを○/×のどちらとして扱うかはWebの詳細設定→採点設定で決める。
+- `簡単な一次方程式` (ID 69): `x+a=b` と `ax=b` の一段階基本形だけを扱う。両形を同一themeに含め、整数解domainを使う。
+- `一次方程式(1)：基本形` (ID 2, rev9): 括弧を持たない整数係数の基本形。整数解domainを使う。
+- `一次方程式(2)：括弧・整数係数中心` (ID 3, rev9): 全問題に実際の展開を要する `scale(add/subtract(...))` を含め、surface coefficientは整数に限定する。整数解・分数解を同一themeでsupportする。
+- `一次方程式(3)：括弧・分数・小数係数` (ID 70): 全問題に括弧と非整数係数surfaceを含める。分数係数または有限小数係数を用い、sampling support全体では両surfaceを持つ。整数解・分数解を同一themeでsupportする。
+
+括弧の展開は表示上の飾りとして扱わない。`effort.rs` は各 `scale` の分配で必要なexact multiplicationを既存の整数/有理数operation builderで数えた後、正規化された `ax+b=cx+d -> Ax=B -> x=B/A` の標準planへ接続する。difficulty selectionはこの完全なOperationPlanを比較し、d4=`ランダム` の既存sampling semanticsは変更しない。
+
+有理解domainは整数 `-15..=15` に加え、既約形で分母2・`|numerator|<=20`、または分母3..12・`|numerator|<=15` の非整数有理数を含む。同じ数学値はdomain内で1要素へ正規化する。分数係数の整理と、結果として分数解になる場合は同一教材目標であり、「分数係数・整数解」と「分数解」へ分離しない。
+
+一次方程式は全7構造を持つ `structured_math` を返す。`answer_schema` は `簡単` / `(1)` が `integer { min:-15,max:15 }`、`(2)` / `(3)` が `rational { max_abs_numerator:20,max_denominator:12,require_reduced_fraction_form:true }` である。非整数解では未約分の通常分数は `fraction_not_reduced`、数学的に同値な帯分数・有限小数・繁分数などは `fraction_form_required` を返す。Rust coreが数学的同値性とwarningを返し、warningを○/×のどちらとして扱うかはWebの採点設定が決める。
 
 ## 連立方程式generator
 

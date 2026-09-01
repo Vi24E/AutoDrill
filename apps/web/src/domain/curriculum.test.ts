@@ -4,8 +4,10 @@ import {
   CURRICULUM_TREE,
   DEFAULT_WEB_DRILL_SETTINGS,
   IMPLEMENTED_THEMES,
+  LINEAR_EQUATION_SIMPLE_THEME,
   LINEAR_EQUATION_1_THEME,
   LINEAR_EQUATION_2_THEME,
+  LINEAR_EQUATION_3_THEME,
   ONE_DIGIT_ADDITION_THEME,
   RECOMMENDED_GENRES,
   findImplementedThemeByRoute,
@@ -16,7 +18,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 68 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 70 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -25,7 +27,7 @@ describe('Web curriculum registry', () => {
       problemCount: 20,
       layout: { problem_count: 20, columns: 2, rows: 10 },
     });
-    for (const theme of [LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]) {
+    for (const theme of [LINEAR_EQUATION_SIMPLE_THEME, LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME, LINEAR_EQUATION_3_THEME]) {
       expect(theme).toMatchObject({
         grade: { slug: 'grade-7', label: '中学1年生' },
         curriculumUnit: expect.objectContaining({ label: expect.any(String) }),
@@ -154,7 +156,13 @@ describe('Web curriculum registry', () => {
 
     const linearEquation = grade7.units.find((unit) => unit.unitKey === 'linear-equation')!;
     expect(linearEquation.label).toBe('一次方程式');
-    expect(linearEquation.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
+    expect(linearEquation.themes).toEqual([LINEAR_EQUATION_SIMPLE_THEME, LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME, LINEAR_EQUATION_3_THEME]);
+    expect(linearEquation.themes.map((theme) => theme.label)).toEqual([
+      '簡単な一次方程式',
+      '一次方程式(1)：基本形',
+      '一次方程式(2)：括弧・整数係数中心',
+      '一次方程式(3)：括弧・分数・小数係数',
+    ]);
 
     const grade3 = CURRICULUM_TREE[2]!;
     const grade3Themes = grade3.units

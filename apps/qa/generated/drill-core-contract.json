@@ -53,13 +53,13 @@
     },
     "2": {
       "numeric_theme_id": 2,
-      "generator_revision": 8,
+      "generator_revision": 9,
       "skill_id": "jp.grade7.equation.linear.1",
       "curriculum_path": [
         "root",
         "中学1年生",
         "一次方程式",
-        "一次方程式(1)"
+        "一次方程式(1)：基本形"
       ],
       "curriculum_unit": {
         "key": "linear-equation",
@@ -118,13 +118,13 @@
     },
     "3": {
       "numeric_theme_id": 3,
-      "generator_revision": 8,
+      "generator_revision": 9,
       "skill_id": "jp.grade7.equation.linear.2",
       "curriculum_path": [
         "root",
         "中学1年生",
         "一次方程式",
-        "一次方程式(2)"
+        "一次方程式(2)：括弧・整数係数中心"
       ],
       "curriculum_unit": {
         "key": "linear-equation",
@@ -3728,6 +3728,136 @@
         "problem_count": 20,
         "columns": 2,
         "rows": 10
+      }
+    },
+    "69": {
+      "numeric_theme_id": 69,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.equation.linear.simple",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "一次方程式",
+        "簡単な一次方程式"
+      ],
+      "curriculum_unit": {
+        "key": "linear-equation",
+        "label": "一次方程式"
+      },
+      "grade": 7,
+      "tags": [
+        "equations",
+        "linear_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "linear_equation",
+        "answer_schema_kind": "integer",
+        "input_profile": "linear_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "70": {
+      "numeric_theme_id": 70,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.equation.linear.3",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "一次方程式",
+        "一次方程式(3)：括弧・分数・小数係数"
+      ],
+      "curriculum_unit": {
+        "key": "linear-equation",
+        "label": "一次方程式"
+      },
+      "grade": 7,
+      "tags": [
+        "equations",
+        "linear_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "linear_equation",
+        "answer_schema_kind": "rational",
+        "input_profile": "linear_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
       }
     }
   },

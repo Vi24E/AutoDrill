@@ -13,6 +13,8 @@ import type {
   EditorStructure as RustEditorStructure,
   GenerateWorksheetRequest as RustGenerateWorksheetRequest,
   LiarStatement as RustLiarStatement,
+  LinearExpression as RustLinearExpression,
+  LinearScalar as RustLinearScalar,
   LongDivisionStep as RustLongDivisionStep,
   Problem as RustProblem,
   ProblemPrompt as RustProblemPrompt,
@@ -93,6 +95,8 @@ export function inputCapabilities(inputInterface: AnswerInputInterface): InputCa
 export type RationalCoefficient = RustRationalCoefficient;
 export type ArithmeticOperator = RustArithmeticOperator;
 export type ArithmeticExpression = RustArithmeticExpression;
+export type LinearExpression = RustLinearExpression;
+export type LinearScalar = RustLinearScalar;
 export type LiarStatement = RustLiarStatement;
 export type ProblemPrompt = RustProblemPrompt;
 export type AnswerSchema = RustAnswerSchema;

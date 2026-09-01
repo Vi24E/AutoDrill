@@ -9,9 +9,9 @@ use crate::answer::{AnswerBinaryOperator, AnswerNode};
 use crate::exact::ExactRational;
 use crate::exact_value::rational_from_answer;
 use crate::model::{
-    AnswerSchema, ArithmeticExpression, ArithmeticOperator, LiarStatement, MiniSudokuGrid,
-    ProblemPrompt, QuadraticEquationForm, RationalCoefficient, MINI_SUDOKU_CELL_COUNT,
-    MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
+    AnswerSchema, ArithmeticExpression, ArithmeticOperator, LiarStatement, LinearExpression,
+    LinearScalar, MiniSudokuGrid, ProblemPrompt, QuadraticEquationForm, RationalCoefficient,
+    MINI_SUDOKU_CELL_COUNT, MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
 };
 use crate::theme::ThemeAnswerContract;
 
@@ -20,6 +20,58 @@ fn rational_from_coefficient(value: RationalCoefficient) -> Option<ExactRational
         i128::from(value.numerator()),
         i128::from(value.denominator()),
     )
+}
+
+fn rational_from_linear_scalar(value: LinearScalar) -> Option<ExactRational> {
+    match value {
+        LinearScalar::Integer { value } => Some(ExactRational::from_integer(value)),
+        LinearScalar::Fraction { value } => rational_from_coefficient(value),
+        LinearScalar::ExactDecimal { coefficient, scale } => {
+            ExactRational::new(i128::from(coefficient), 10_i128.checked_pow(scale)?)
+        }
+    }
+}
+
+fn normalize_linear_expression_exact(
+    expression: &LinearExpression,
+) -> Option<(ExactRational, ExactRational)> {
+    match expression {
+        LinearExpression::Variable => Some((ExactRational::one(), ExactRational::zero())),
+        LinearExpression::Constant { value } => {
+            Some((ExactRational::zero(), rational_from_linear_scalar(*value)?))
+        }
+        LinearExpression::Add { left, right } => {
+            let (left_a, left_b) = normalize_linear_expression_exact(left)?;
+            let (right_a, right_b) = normalize_linear_expression_exact(right)?;
+            Some((left_a.add(right_a)?, left_b.add(right_b)?))
+        }
+        LinearExpression::Subtract { left, right } => {
+            let (left_a, left_b) = normalize_linear_expression_exact(left)?;
+            let (right_a, right_b) = normalize_linear_expression_exact(right)?;
+            Some((left_a.subtract(right_a)?, left_b.subtract(right_b)?))
+        }
+        LinearExpression::Scale { factor, expression } => {
+            let factor = rational_from_linear_scalar(*factor)?;
+            let (a, b) = normalize_linear_expression_exact(expression)?;
+            Some((factor.multiply(a)?, factor.multiply(b)?))
+        }
+    }
+}
+
+pub(crate) fn normalize_linear_expression(
+    expression: &LinearExpression,
+) -> Option<(RationalCoefficient, RationalCoefficient)> {
+    let (a, b) = normalize_linear_expression_exact(expression)?;
+    Some((
+        RationalCoefficient::new(
+            i64::try_from(a.numerator()).ok()?,
+            i64::try_from(a.denominator()).ok()?,
+        )?,
+        RationalCoefficient::new(
+            i64::try_from(b.numerator()).ok()?,
+            i64::try_from(b.denominator()).ok()?,
+        )?,
+    ))
 }
 
 fn rational_from_expression(expression: &ArithmeticExpression) -> Option<ExactRational> {
@@ -86,8 +138,14 @@ pub(crate) fn prompt_accepts_canonical_answer(
             left,
             right,
         } => column_answer_is_correct(contract, schema, *operator, left, right, answer),
-        ProblemPrompt::LinearEquation { a, b, c, d, .. } => {
-            linear_answer_is_correct(*a, *b, *c, *d, answer)
+        ProblemPrompt::LinearEquation { left, right } => {
+            let (Some((a, b)), Some((c, d))) = (
+                normalize_linear_expression(left),
+                normalize_linear_expression(right),
+            ) else {
+                return false;
+            };
+            linear_answer_is_correct(a, b, c, d, answer)
         }
         ProblemPrompt::QuadraticEquation { form, a, b, c } => {
             quadratic_answer_is_correct(*form, *a, *b, *c, answer)

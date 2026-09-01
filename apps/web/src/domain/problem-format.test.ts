@@ -3,30 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { liarStatementText, problemExpression, problemExpressionTokens } from './problem-format';
 import { fixtureWorksheet, linearFixtureWorksheet } from '@/test/fixtures';
 import { answerNodeLatex, answerPrefixLatex, problemExpressionLatex } from './mathlive-format';
-import type { ProblemDto, RationalCoefficient } from './drill-engine';
+import type { LinearExpression, ProblemDto, RationalCoefficient } from './drill-engine';
 
-function linearProblem(
-  a: RationalCoefficient,
-  b: RationalCoefficient,
-  c: RationalCoefficient,
-  d: RationalCoefficient,
-  leftNegativeAsSubtraction = false,
-  rightNegativeAsSubtraction = false,
-): ProblemDto {
+function linearProblem(left: LinearExpression, right: LinearExpression): ProblemDto {
   const base = linearFixtureWorksheet(2).problems[0]!;
-  return {
-    ...base,
-    prompt: {
-      kind: 'linear_equation',
-      a,
-      b,
-      c,
-      d,
-      left_negative_constant_as_subtraction: leftNegativeAsSubtraction,
-      right_negative_constant_as_subtraction: rightNegativeAsSubtraction,
-    },
-  };
+  return { ...base, prompt: { kind: 'linear_equation', left, right } };
 }
+
+const variable = (): LinearExpression => ({ kind: 'variable' });
+const integer = (value: number): LinearExpression => ({ kind: 'constant', value: { kind: 'integer', value } });
+const scale = (value: number, expression: LinearExpression): LinearExpression => ({
+  kind: 'scale', factor: { kind: 'integer', value }, expression,
+});
 
 const q = (numerator: number, denominator = 1): RationalCoefficient => ({ numerator, denominator });
 
@@ -35,39 +23,39 @@ describe('problemExpression', () => {
     expect(answerPrefixLatex('x =')).toBe(String.raw`x\,=`);
   });
 
-  it('omits zero terms and coefficient 1 while retaining coefficient -1', () => {
-    expect(problemExpression(linearProblem(q(0), q(3), q(1), q(0)))).toBe('3 = x');
-    expect(problemExpression(linearProblem(q(-1), q(0), q(2), q(0)))).toBe('−x = 2x');
-    expect(problemExpression(linearProblem(q(0), q(0), q(1), q(0)))).not.toContain('0x');
-    expect(problemExpression(linearProblem(q(1), q(0), q(2), q(0)))).not.toContain('1x');
-    expect(problemExpression(linearProblem(q(3), q(0), q(0), q(0)))).toBe('3x = 0');
-    expect(problemExpression(linearProblem(q(3), q(0), q(0), q(5)))).toBe('3x = 5');
-    expect(problemExpression(linearProblem(q(3), q(0), q(2), q(5)))).toBe('3x = 2x + 5');
+  it('omits coefficient 1 while retaining coefficient -1 in linear-expression ASTs', () => {
+    expect(problemExpression(linearProblem(variable(), scale(2, variable())))).toBe('x = 2x');
+    expect(problemExpression(linearProblem(scale(-1, variable()), scale(2, variable())))).toBe('−x = 2x');
+    expect(problemExpression(linearProblem(scale(3, variable()), integer(0)))).toBe('3x = 0');
   });
 
-  it('uses the sampled negative-constant display form exactly', () => {
-    const subtraction = linearProblem(q(2), q(-3), q(1), q(-4), true, true);
-    const signedAddition = linearProblem(q(2), q(-3), q(1), q(-4), false, false);
-    expect(problemExpression(subtraction)).toBe('2x − 3 = x − 4');
-    expect(problemExpression(signedAddition)).toBe('2x + (−3) = x + (−4)');
-  });
-
-  it('formats reduced fractional coefficients and constants deterministically', () => {
-    expect(problemExpression(linearProblem(q(1, 2), q(2, 3), q(-3, 4), q(-1, 5), false, true)))
-      .toBe('1/2x + 2/3 = −3/4x − 1/5');
-    expect(problemExpressionTokens(linearProblem(q(1, 2), q(2, 3), q(-3, 4), q(-1, 5), false, true))).toEqual([
+  it('preserves parenthesized, fractional, and decimal linear-equation surfaces', () => {
+    const left: LinearExpression = {
+      kind: 'scale',
+      factor: { kind: 'fraction', value: q(1, 2) },
+      expression: {
+        kind: 'subtract',
+        left: variable(),
+        right: integer(3),
+      },
+    };
+    const right: LinearExpression = {
+      kind: 'scale',
+      factor: { kind: 'exact_decimal', coefficient: 5, scale: 1 },
+      expression: variable(),
+    };
+    const problem = linearProblem(left, right);
+    expect(problemExpression(problem)).toBe('1/2(x − 3) = 0.5x');
+    expect(problemExpressionTokens(problem)).toEqual([
       { kind: 'fraction', numerator: 1, denominator: 2 },
-      { kind: 'text', text: 'x + ' },
-      { kind: 'fraction', numerator: 2, denominator: 3 },
-      { kind: 'text', text: ' = ' },
+      { kind: 'text', text: '(x ' },
       { kind: 'minus' },
-      { kind: 'fraction', numerator: 3, denominator: 4 },
-      { kind: 'text', text: 'x ' },
-      { kind: 'minus' },
-      { kind: 'text', text: ' ' },
-      { kind: 'fraction', numerator: 1, denominator: 5 },
+      { kind: 'text', text: ' 3) = 0.5x' },
     ]);
+    expect(problemExpressionLatex(problem)).toContain('\\frac{1}{2}');
+    expect(problemExpressionLatex(problem)).toContain('0.5x');
   });
+
   it('keeps exact decimal operands in decimal notation', () => {
     const base = fixtureWorksheet().problems[0]!;
     const problem: ProblemDto = {

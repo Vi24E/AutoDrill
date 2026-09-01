@@ -148,6 +148,46 @@ pub enum ArithmeticExpression {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LinearScalar {
+    Integer {
+        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
+        value: i64,
+    },
+    Fraction {
+        value: RationalCoefficient,
+    },
+    ExactDecimal {
+        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
+        coefficient: i64,
+        scale: u32,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LinearExpression {
+    Variable,
+    Constant {
+        value: LinearScalar,
+    },
+    Add {
+        left: Box<LinearExpression>,
+        right: Box<LinearExpression>,
+    },
+    Subtract {
+        left: Box<LinearExpression>,
+        right: Box<LinearExpression>,
+    },
+    Scale {
+        factor: LinearScalar,
+        expression: Box<LinearExpression>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
 #[serde(rename_all = "snake_case")]
 pub enum QuadraticEquationForm {
     SquareEqualsConstant,
@@ -359,12 +399,8 @@ pub enum ProblemPrompt {
         right: ArithmeticExpression,
     },
     LinearEquation {
-        a: RationalCoefficient,
-        b: RationalCoefficient,
-        c: RationalCoefficient,
-        d: RationalCoefficient,
-        left_negative_constant_as_subtraction: bool,
-        right_negative_constant_as_subtraction: bool,
+        left: LinearExpression,
+        right: LinearExpression,
     },
     QuadraticEquation {
         form: QuadraticEquationForm,
@@ -665,6 +701,54 @@ impl ArithmeticExpression {
     }
 }
 
+impl LinearScalar {
+    fn has_js_safe_wire_values(self) -> bool {
+        match self {
+            Self::Integer { value } => is_js_safe_integer(value),
+            Self::Fraction { value } => value.has_js_safe_wire_values(),
+            Self::ExactDecimal { coefficient, .. } => is_js_safe_integer(coefficient),
+        }
+    }
+
+    fn is_structurally_valid(self) -> bool {
+        match self {
+            Self::Integer { .. } => true,
+            Self::Fraction { value } => !value.is_integer(),
+            Self::ExactDecimal { coefficient, scale } => {
+                scale > 0 && coefficient != 0 && coefficient % 10 != 0
+            }
+        }
+    }
+}
+
+impl LinearExpression {
+    fn has_js_safe_wire_values(&self) -> bool {
+        match self {
+            Self::Variable => true,
+            Self::Constant { value } => value.has_js_safe_wire_values(),
+            Self::Add { left, right } | Self::Subtract { left, right } => {
+                left.has_js_safe_wire_values() && right.has_js_safe_wire_values()
+            }
+            Self::Scale { factor, expression } => {
+                factor.has_js_safe_wire_values() && expression.has_js_safe_wire_values()
+            }
+        }
+    }
+
+    fn is_structurally_valid(&self) -> bool {
+        match self {
+            Self::Variable => true,
+            Self::Constant { value } => value.is_structurally_valid(),
+            Self::Add { left, right } | Self::Subtract { left, right } => {
+                left.is_structurally_valid() && right.is_structurally_valid()
+            }
+            Self::Scale { factor, expression } => {
+                factor.is_structurally_valid() && expression.is_structurally_valid()
+            }
+        }
+    }
+}
+
 impl ProblemPrompt {
     fn has_js_safe_wire_values(&self) -> bool {
         match self {
@@ -673,9 +757,9 @@ impl ProblemPrompt {
             Self::ColumnArithmetic { left, right, .. } => {
                 left.has_js_safe_wire_values() && right.has_js_safe_wire_values()
             }
-            Self::LinearEquation { a, b, c, d, .. } => [a, b, c, d]
-                .iter()
-                .all(|value| value.has_js_safe_wire_values()),
+            Self::LinearEquation { left, right } => {
+                left.has_js_safe_wire_values() && right.has_js_safe_wire_values()
+            }
             Self::QuadraticEquation { a, b, c, .. } => [a, b, c]
                 .iter()
                 .all(|value| value.has_js_safe_wire_values()),
@@ -697,10 +781,12 @@ impl ProblemPrompt {
                         .iter()
                         .all(|statement| statement.is_valid_for(*people_count))
             }
+            Self::LinearEquation { left, right } => {
+                left.is_structurally_valid() && right.is_structurally_valid()
+            }
             Self::MiniSudoku { .. }
             | Self::Arithmetic { .. }
             | Self::ColumnArithmetic { .. }
-            | Self::LinearEquation { .. }
             | Self::QuadraticEquation { .. }
             | Self::SimultaneousEquation { .. } => true,
         }
@@ -1730,12 +1816,10 @@ mod invariant_tests {
             &LINEAR_EQUATION_1_REGISTRATION,
             1,
             ProblemPrompt::LinearEquation {
-                a: RationalCoefficient::new(1, 1).unwrap(),
-                b: RationalCoefficient::zero(),
-                c: RationalCoefficient::zero(),
-                d: RationalCoefficient::new(1, 1).unwrap(),
-                left_negative_constant_as_subtraction: false,
-                right_negative_constant_as_subtraction: false,
+                left: LinearExpression::Variable,
+                right: LinearExpression::Constant {
+                    value: LinearScalar::Integer { value: 1 },
+                },
             },
             AnswerSchema::Integer { min: -15, max: 15 },
             AnswerNode::Integer(2),

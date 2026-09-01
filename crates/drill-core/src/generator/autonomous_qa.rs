@@ -235,9 +235,14 @@ fn observe_problem(problem: &Problem, counters: &mut LargeSampleCounters) {
             observe_expression(left, counters);
             observe_expression(right, counters);
         }
-        ProblemPrompt::LinearEquation { a, b, c, d, .. } => {
-            for coefficient in [a, b, c, d] {
-                observe_coefficient(coefficient, counters);
+        ProblemPrompt::LinearEquation { left, right } => {
+            if let (Some((a, b)), Some((c, d))) = (
+                crate::semantics::normalize_linear_expression(left),
+                crate::semantics::normalize_linear_expression(right),
+            ) {
+                for coefficient in [&a, &b, &c, &d] {
+                    observe_coefficient(coefficient, counters);
+                }
             }
         }
         ProblemPrompt::QuadraticEquation { a, b, c, .. } => {

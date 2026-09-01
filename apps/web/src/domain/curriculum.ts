@@ -3,8 +3,10 @@ import {
   type DifficultyLevel,
 } from '@/domain/drill-engine';
 import { THEME_DEFINITIONS, type ThemeDefinition } from '@/domain/theme-registry';
+import { LINEAR_EQUATION_SIMPLE_DEFINITION } from '@/domain/themes/linear-equation-simple';
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
+import { LINEAR_EQUATION_3_DEFINITION } from '@/domain/themes/linear-equation-3';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
 
 export type { DifficultyLevel } from '@/domain/drill-engine';
@@ -82,12 +84,20 @@ export const ONE_DIGIT_ADDITION_THEME = IMPLEMENTED_THEMES.find(
   (theme) => theme.numeric_theme_id === ONE_DIGIT_ADDITION_DEFINITION.numeric_theme_id,
 )!;
 
+export const LINEAR_EQUATION_SIMPLE_THEME = IMPLEMENTED_THEMES.find(
+  (theme) => theme.numeric_theme_id === LINEAR_EQUATION_SIMPLE_DEFINITION.numeric_theme_id,
+)!;
+
 export const LINEAR_EQUATION_1_THEME = IMPLEMENTED_THEMES.find(
   (theme) => theme.numeric_theme_id === LINEAR_EQUATION_1_DEFINITION.numeric_theme_id,
 )!;
 
 export const LINEAR_EQUATION_2_THEME = IMPLEMENTED_THEMES.find(
   (theme) => theme.numeric_theme_id === LINEAR_EQUATION_2_DEFINITION.numeric_theme_id,
+)!;
+
+export const LINEAR_EQUATION_3_THEME = IMPLEMENTED_THEMES.find(
+  (theme) => theme.numeric_theme_id === LINEAR_EQUATION_3_DEFINITION.numeric_theme_id,
 )!;
 
 const GRADE_LABELS = [

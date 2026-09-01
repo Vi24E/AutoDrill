@@ -10,7 +10,7 @@ use crate::error::{GenerationError, SamplingError};
 use crate::identity::{validate_seed, ProblemSetIdentity};
 use crate::model::{
     AnswerInputInterface, ArithmeticExpression, ArithmeticOperator, EditorStructure,
-    GenerateWorksheetRequest, Problem, ProblemPrompt, Worksheet,
+    GenerateWorksheetRequest, LinearExpression, LinearScalar, Problem, ProblemPrompt, Worksheet,
 };
 use crate::registry::{active_registration, registration};
 use crate::rng::DeterministicRng;
@@ -961,17 +961,9 @@ fn prompt_has_no_negative_values(prompt: &ProblemPrompt) -> bool {
         ProblemPrompt::ColumnArithmetic { left, right, .. } => {
             expression_has_no_negative_values(left) && expression_has_no_negative_values(right)
         }
-        ProblemPrompt::LinearEquation {
-            a,
-            b,
-            c,
-            d,
-            left_negative_constant_as_subtraction,
-            right_negative_constant_as_subtraction,
-        } => {
-            [a, b, c, d].iter().all(|value| value.numerator() >= 0)
-                && !left_negative_constant_as_subtraction
-                && !right_negative_constant_as_subtraction
+        ProblemPrompt::LinearEquation { left, right } => {
+            linear_expression_has_no_negative_values(left)
+                && linear_expression_has_no_negative_values(right)
         }
         ProblemPrompt::QuadraticEquation { a, b, c, .. } => {
             [a, b, c].iter().all(|value| value.numerator() >= 0)
@@ -980,6 +972,29 @@ fn prompt_has_no_negative_values(prompt: &ProblemPrompt) -> bool {
             [a, b, c, d, e, f].iter().all(|value| **value >= 0)
         }
         ProblemPrompt::LiarPuzzle { .. } | ProblemPrompt::MiniSudoku { .. } => true,
+    }
+}
+
+fn linear_scalar_is_nonnegative(value: LinearScalar) -> bool {
+    match value {
+        LinearScalar::Integer { value } => value >= 0,
+        LinearScalar::Fraction { value } => value.numerator() >= 0,
+        LinearScalar::ExactDecimal { coefficient, .. } => coefficient >= 0,
+    }
+}
+
+fn linear_expression_has_no_negative_values(expression: &LinearExpression) -> bool {
+    match expression {
+        LinearExpression::Variable => true,
+        LinearExpression::Constant { value } => linear_scalar_is_nonnegative(*value),
+        LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
+            linear_expression_has_no_negative_values(left)
+                && linear_expression_has_no_negative_values(right)
+        }
+        LinearExpression::Scale { factor, expression } => {
+            linear_scalar_is_nonnegative(*factor)
+                && linear_expression_has_no_negative_values(expression)
+        }
     }
 }
 
@@ -1078,10 +1093,8 @@ enum ProblemKey {
         right: ArithmeticExpression,
     },
     LinearEquation {
-        a: crate::model::RationalCoefficient,
-        b: crate::model::RationalCoefficient,
-        c: crate::model::RationalCoefficient,
-        d: crate::model::RationalCoefficient,
+        left: LinearExpression,
+        right: LinearExpression,
     },
     QuadraticEquation {
         form: crate::model::QuadraticEquationForm,
@@ -1128,11 +1141,9 @@ impl ProblemKey {
                 left: left.clone(),
                 right: right.clone(),
             },
-            ProblemPrompt::LinearEquation { a, b, c, d, .. } => Self::LinearEquation {
-                a: *a,
-                b: *b,
-                c: *c,
-                d: *d,
+            ProblemPrompt::LinearEquation { left, right } => Self::LinearEquation {
+                left: left.clone(),
+                right: right.clone(),
             },
             ProblemPrompt::QuadraticEquation { form, a, b, c } => Self::QuadraticEquation {
                 form: *form,
