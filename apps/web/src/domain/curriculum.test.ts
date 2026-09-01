@@ -16,7 +16,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 54 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 58 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -141,6 +141,20 @@ describe('Web curriculum registry', () => {
     ))).toBe(false);
 
     const grade4 = CURRICULUM_TREE[3]!;
+    const sameDenominatorFractions = grade4.units.find((unit) => unit.unitKey === 'grade4-fraction-add-subtract')!;
+    expect(sameDenominatorFractions.label).toBe('同分母の分数の加法，減法');
+    expect(sameDenominatorFractions.themes.map((theme) => theme.label)).toEqual([
+      '同分母の分数の足し算', '同分母の分数の引き算',
+    ]);
+
+    const grade5 = CURRICULUM_TREE[4]!;
+    const fractionAddSubtract = grade5.units.find((unit) => unit.unitKey === 'grade5-fraction-add-subtract')!;
+    expect(fractionAddSubtract.label).toBe('分数の加法，減法');
+    expect(fractionAddSubtract.themes.map((theme) => theme.label)).toEqual([
+      '異分母の分数の足し算', '異分母の分数の引き算',
+      '分数の足し算（まとめ）', '分数の引き算（まとめ）',
+    ]);
+
     const integerDivision = grade4.units.find((unit) => unit.unitKey === 'grade4-integer-division')!;
     const integerDivisionThemes = integerDivision.themes
       .filter((theme): theme is ImplementedCurriculumTheme => theme.implemented);

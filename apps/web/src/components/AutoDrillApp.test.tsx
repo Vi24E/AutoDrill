@@ -410,8 +410,10 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
     fireEvent.click(screen.getByRole('option', { name: '分数' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
-    expect(screen.getByRole('option', { name: '分数の足し算' }).querySelector('.grade-tag')).toHaveTextContent('小5');
-    expect(screen.getByRole('option', { name: '分数の足し算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-5');
+    expect(screen.getByRole('option', { name: '同分母の分数の足し算' }).querySelector('.grade-tag')).toHaveTextContent('小4');
+    expect(screen.getByRole('option', { name: '同分母の分数の足し算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-4');
+    expect(screen.getByRole('option', { name: '異分母の分数の足し算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-5');
+    expect(screen.getByRole('option', { name: '分数の足し算（まとめ）' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-5');
     expect(screen.getByRole('option', { name: '分数の掛け算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-6');
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'テーマ' }), { key: 'Escape' });
 

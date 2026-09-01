@@ -21,6 +21,10 @@ import { MULTIPLICATION_TABLE_9_DEFINITION } from './themes/multiplication-table
 import { DIVISION_WITH_REMAINDER_DEFINITION } from './themes/division-with-remainder';
 import { SIMPLE_TWO_DIGIT_DIVISION_DEFINITION } from './themes/simple-two-digit-division';
 import { FRACTION_ADDITION_DEFINITION } from './themes/fraction-addition';
+import { FRACTION_ADDITION_SAME_DENOMINATOR_DEFINITION } from './themes/fraction-addition-same-denominator';
+import { FRACTION_SUBTRACTION_SAME_DENOMINATOR_DEFINITION } from './themes/fraction-subtraction-same-denominator';
+import { FRACTION_ADDITION_UNLIKE_DENOMINATOR_DEFINITION } from './themes/fraction-addition-unlike-denominator';
+import { FRACTION_SUBTRACTION_UNLIKE_DENOMINATOR_DEFINITION } from './themes/fraction-subtraction-unlike-denominator';
 import { FRACTION_SUBTRACTION_DEFINITION } from './themes/fraction-subtraction';
 import { FRACTION_MULTIPLICATION_DEFINITION } from './themes/fraction-multiplication';
 import { FRACTION_DIVISION_DEFINITION } from './themes/fraction-division';
@@ -92,6 +96,10 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION,
   COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION,
   COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION,
+  FRACTION_ADDITION_SAME_DENOMINATOR_DEFINITION,
+  FRACTION_SUBTRACTION_SAME_DENOMINATOR_DEFINITION,
+  FRACTION_ADDITION_UNLIKE_DENOMINATOR_DEFINITION,
+  FRACTION_SUBTRACTION_UNLIKE_DENOMINATOR_DEFINITION,
   FRACTION_ADDITION_DEFINITION,
   DECIMAL_MULTIPLICATION_DEFINITION,
   DECIMAL_DIVISION_DEFINITION,

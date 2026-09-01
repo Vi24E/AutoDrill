@@ -444,15 +444,16 @@
     "9": {
       "numeric_theme_id": 9,
       "generator_revision": 5,
-      "skill_id": "jp.grade5.fraction.addition",
+      "skill_id": "jp.grade5.fraction.addition.summary",
       "curriculum_path": [
         "root",
         "小学5年生",
-        "分数の足し算"
+        "分数の加法，減法",
+        "分数の足し算（まとめ）"
       ],
       "curriculum_unit": {
-        "key": "jp.grade5.fraction.addition",
-        "label": "分数の足し算"
+        "key": "grade5-fraction-add-subtract",
+        "label": "分数の加法，減法"
       },
       "grade": 5,
       "tags": [
@@ -554,15 +555,16 @@
     "11": {
       "numeric_theme_id": 11,
       "generator_revision": 5,
-      "skill_id": "jp.grade5.fraction.subtraction",
+      "skill_id": "jp.grade5.fraction.subtraction.summary",
       "curriculum_path": [
         "root",
         "小学5年生",
-        "分数の引き算"
+        "分数の加法，減法",
+        "分数の引き算（まとめ）"
       ],
       "curriculum_unit": {
-        "key": "jp.grade5.fraction.subtraction",
-        "label": "分数の引き算"
+        "key": "grade5-fraction-add-subtract",
+        "label": "分数の加法，減法"
       },
       "grade": 5,
       "tags": [
@@ -2923,6 +2925,230 @@
         "problem_count": 12,
         "columns": 4,
         "rows": 3
+      }
+    },
+    "55": {
+      "numeric_theme_id": 55,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.fraction.addition.same_denominator",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "同分母の分数の加法，減法",
+        "同分母の分数の足し算"
+      ],
+      "curriculum_unit": {
+        "key": "grade4-fraction-add-subtract",
+        "label": "同分母の分数の加法，減法"
+      },
+      "grade": 4,
+      "tags": [
+        "fractions",
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "56": {
+      "numeric_theme_id": 56,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.fraction.subtraction.same_denominator",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "同分母の分数の加法，減法",
+        "同分母の分数の引き算"
+      ],
+      "curriculum_unit": {
+        "key": "grade4-fraction-add-subtract",
+        "label": "同分母の分数の加法，減法"
+      },
+      "grade": 4,
+      "tags": [
+        "fractions",
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "57": {
+      "numeric_theme_id": 57,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.fraction.addition.unlike_denominator",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "分数の加法，減法",
+        "異分母の分数の足し算"
+      ],
+      "curriculum_unit": {
+        "key": "grade5-fraction-add-subtract",
+        "label": "分数の加法，減法"
+      },
+      "grade": 5,
+      "tags": [
+        "fractions",
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
+    },
+    "58": {
+      "numeric_theme_id": 58,
+      "generator_revision": 1,
+      "skill_id": "jp.grade5.fraction.subtraction.unlike_denominator",
+      "curriculum_path": [
+        "root",
+        "小学5年生",
+        "分数の加法，減法",
+        "異分母の分数の引き算"
+      ],
+      "curriculum_unit": {
+        "key": "grade5-fraction-add-subtract",
+        "label": "分数の加法，減法"
+      },
+      "grade": 5,
+      "tags": [
+        "fractions",
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "mixed_number_when_improper",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "fraction"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
       }
     }
   },
