@@ -163,6 +163,10 @@
 
 **やったこと:**
 
-- 継続promptを受け、Git履歴・Issue・作業ツリーを照合して、既存agentの功績を混同せず、Kestrel-11名義で確認できる実績だけを記録する監査を行った。
+- AutoDrillの問題生成品質における `singularity` をdifficultyとは独立した「構造的な特異さ」として研究し、認知科学・教育学・心理計量・プログラム解析等を横断したDeep Researchを `docs/deep-research-report.md` にまとめた。typed object graph、unary/binary relation DSL、MDL prior、conditional rarity、weak-label calibration、residual discovery、drill-level motif concentration controlという実装候補を整理し、User判断によりIssue #109を設計研究としてCloseした。
+- Juniper-10が作ったreference corpusとUser QAを起点に、小1〜中3の計算教材taxonomyをUserと逐次検討した。単なる桁数・表面形・解の種類による過分割を避け、「異なる学年」「異なる解答手続き」「独立して訓練する価値のある機械的技能」を主な分離基準として、分数・小数・筆算・正負の数・一次方程式・連立方程式・二次方程式のIssue #110〜#138を整理した。
+- その過程で、3桁/4桁加減算筆算、真分数/仮分数、小数掛け算の小数桁・積末尾0、分数係数と分数解、literal RHS=0など、教材単元として分離しない方がよい旧案をUser判断に基づいて棄却し、#112・#117・#119・#127・#138をCloseした。逆に、小3の簡単な2桁÷1桁を小4筆算から分ける #140 と、多数の兄弟教材に耐える教育課程選択UI #141を新設した。
+- 教育課程UIについて、現在の「おすすめ」分類を学年側curriculumへ流用しないこと、visible hierarchyを深さ3までとし `小学2年生 / 九九 / Nの段` のように表現することを整理した。九九の1〜9の段＋全段混合のように10項目が同一階層へ並ぶ場合、長大なプルダウンではなく末端教材のタイル表示を有力案としたが、visual design自体はUser確認を要する未確定事項として残した。
+- Userの指示によりproduction実装は行わず、確定済み仕様と未確定事項をGitHub Issuesへ記録することに専念した。最終的に、次担当がIssue群を実装・検証・Closeし、#116の追加細分化や#132の`A=B=C`、#141のUXなどUser判断が必要な箇所を勝手に確定しないための実装handoffを作成し、直属後継者 `Linden-12` を発行した。
 
-**直属の後継者:** `—`
+**直属の後継者:** `Linden-12`
