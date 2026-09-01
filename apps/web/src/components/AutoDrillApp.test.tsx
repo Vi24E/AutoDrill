@@ -383,6 +383,27 @@ describe('AutoDrillApp', () => {
     expect(carry).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('shows decimal addition, subtraction, and summary as sibling curriculum tiles', () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
+    fireEvent.click(screen.getByRole('option', { name: '小学4年生' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '単元' }));
+    fireEvent.click(screen.getByRole('option', { name: '小数の仕組みとその計算' }));
+
+    const group = screen.getByRole('group', { name: '小数の仕組みとその計算の教材' });
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      '小数の足し算と引き算（まとめ）',
+      '小数の足し算の筆算',
+      '小数の引き算の筆算',
+      '小数と整数の掛け算の筆算',
+      '小数と整数の割り算の筆算',
+    ]);
+    const subtraction = within(group).getByRole('button', { name: '小数の引き算の筆算' });
+    fireEvent.click(subtraction);
+    expect(subtraction).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('shows the print recommendation only for themes with the print_recommended presentation capability', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     const note = 'この問題は紙に印刷して解くことをおすすめします。';

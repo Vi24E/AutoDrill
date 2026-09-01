@@ -16,7 +16,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 62 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 64 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -68,7 +68,7 @@ describe('Web curriculum registry', () => {
 
   it('keeps grade curriculum units independent from Recommended taxonomy tags', () => {
     const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.presentation.column_arithmetic);
-    expect(columnThemes).toHaveLength(18);
+    expect(columnThemes).toHaveLength(20);
     for (const theme of columnThemes) {
       expect(theme.presentation.print_recommended).toBe(true);
       expect(theme.presentation.worksheet_grid).toBe(true);
@@ -163,6 +163,15 @@ describe('Web curriculum registry', () => {
       '2桁÷1桁の筆算', '3桁÷1桁の筆算', '二桁で割る割り算の筆算',
     ]);
     expect(integerDivisionThemes.slice(0, 2).map((theme) => theme.grade?.number)).toEqual([4, 4]);
+
+    const grade4Decimal = grade4.units.find((unit) => unit.unitKey === 'grade4-decimal')!;
+    expect(grade4Decimal.themes.map((theme) => theme.label)).toEqual([
+      '小数の足し算と引き算（まとめ）',
+      '小数の足し算の筆算',
+      '小数の引き算の筆算',
+      '小数と整数の掛け算の筆算',
+      '小数と整数の割り算の筆算',
+    ]);
 
     const grade2 = CURRICULUM_TREE[1]!;
     const grade2ColumnAddSubtract = grade2.units.find((unit) => unit.unitKey === 'grade2-column-add-subtract')!;

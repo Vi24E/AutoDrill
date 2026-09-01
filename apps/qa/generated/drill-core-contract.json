@@ -1791,12 +1791,12 @@
     "33": {
       "numeric_theme_id": 33,
       "generator_revision": 2,
-      "skill_id": "jp.grade4.column.decimal.add_subtract",
+      "skill_id": "jp.grade4.column.decimal.add_subtract.summary",
       "curriculum_path": [
         "root",
         "小学4年生",
         "小数の仕組みとその計算",
-        "小数の足し算と引き算の筆算"
+        "小数の足し算と引き算（まとめ）"
       ],
       "curriculum_unit": {
         "key": "grade4-decimal",
@@ -3367,6 +3367,120 @@
       "editor_input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "63": {
+      "numeric_theme_id": 63,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.decimal.addition",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "小数の仕組みとその計算",
+        "小数の足し算の筆算"
+      ],
+      "curriculum_unit": {
+        "key": "grade4-decimal",
+        "label": "小数の仕組みとその計算"
+      },
+      "grade": 4,
+      "tags": [
+        "decimals",
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "64": {
+      "numeric_theme_id": 64,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.decimal.subtraction",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "小数の仕組みとその計算",
+        "小数の引き算の筆算"
+      ],
+      "curriculum_unit": {
+        "key": "grade4-decimal",
+        "label": "小数の仕組みとその計算"
+      },
+      "grade": 4,
+      "tags": [
+        "decimals",
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "fixed_canonical_scale"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "decimal",
+        "input_profile": "simple_decimal"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": true,
         "allow_negative": false
       },
       "layout": {

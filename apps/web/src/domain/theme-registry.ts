@@ -59,6 +59,8 @@ import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from './themes/column-divid
 import { COLUMN_DIVIDE_3DIGIT_BY_1DIGIT_DEFINITION } from './themes/column-divide-three-digit-by-one-digit';
 import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from './themes/column-divide-two-digit';
 import { COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/column-decimal-add-subtract';
+import { COLUMN_DECIMAL_ADDITION_DEFINITION } from './themes/column-decimal-addition';
+import { COLUMN_DECIMAL_SUBTRACTION_DEFINITION } from './themes/column-decimal-subtraction';
 import { COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION } from './themes/column-decimal-multiply-integer';
 import { COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION } from './themes/column-decimal-divide-integer';
 import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from './themes/column-decimal-multiplication';
@@ -102,6 +104,8 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   COLUMN_DIVIDE_2DIGIT_DEFINITION,
   DECIMAL_ADD_SUBTRACT_DEFINITION,
   COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION,
+  COLUMN_DECIMAL_ADDITION_DEFINITION,
+  COLUMN_DECIMAL_SUBTRACTION_DEFINITION,
   COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION,
   COLUMN_DECIMAL_DIVIDE_INTEGER_DEFINITION,
   FRACTION_ADDITION_SAME_DENOMINATOR_DEFINITION,

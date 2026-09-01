@@ -40,6 +40,8 @@ pub const THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY: u32 = 59;
 pub const THEME_ID_COLUMN_ADD_2DIGIT_WITH_CARRY: u32 = 60;
 pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: u32 = 61;
 pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: u32 = 62;
+pub const THEME_ID_COLUMN_DECIMAL_ADDITION: u32 = 63;
+pub const THEME_ID_COLUMN_DECIMAL_SUBTRACTION: u32 = 64;
 pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT: u32 = 2;
@@ -58,6 +60,8 @@ pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT_NO_CARRY: u32 = 1;
 pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT_WITH_CARRY: u32 = 1;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: u32 = 1;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_ADDITION: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_DECIMAL_SUBTRACTION: u32 = 1;
 pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit.summary";
 pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit.summary";
 pub const SKILL_ID_COLUMN_ADD_2DIGIT_NO_CARRY: &str =
@@ -79,7 +83,10 @@ pub const SKILL_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT: &str =
 pub const SKILL_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: &str =
     "jp.grade4.column.division.three_digit_by_one_digit";
 pub const SKILL_ID_COLUMN_DIVIDE_2DIGIT: &str = "jp.grade4.column.division.two_digit_divisor";
-pub const SKILL_ID_COLUMN_DECIMAL_ADD_SUBTRACT: &str = "jp.grade4.column.decimal.add_subtract";
+pub const SKILL_ID_COLUMN_DECIMAL_ADD_SUBTRACT: &str =
+    "jp.grade4.column.decimal.add_subtract.summary";
+pub const SKILL_ID_COLUMN_DECIMAL_ADDITION: &str = "jp.grade4.column.decimal.addition";
+pub const SKILL_ID_COLUMN_DECIMAL_SUBTRACTION: &str = "jp.grade4.column.decimal.subtraction";
 pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: &str =
     "jp.grade4.column.decimal.multiply_integer";
 pub const SKILL_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: &str = "jp.grade4.column.decimal.divide_integer";
@@ -123,7 +130,19 @@ pub const CURRICULUM_PATH_COLUMN_DECIMAL_ADD_SUBTRACT: [&str; 4] = [
     "root",
     "小学4年生",
     "小数の仕組みとその計算",
-    "小数の足し算と引き算の筆算",
+    "小数の足し算と引き算（まとめ）",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_ADDITION: [&str; 4] = [
+    "root",
+    "小学4年生",
+    "小数の仕組みとその計算",
+    "小数の足し算の筆算",
+];
+pub const CURRICULUM_PATH_COLUMN_DECIMAL_SUBTRACTION: [&str; 4] = [
+    "root",
+    "小学4年生",
+    "小数の仕組みとその計算",
+    "小数の引き算の筆算",
 ];
 pub const CURRICULUM_PATH_COLUMN_DECIMAL_MULTIPLY_INTEGER: [&str; 4] = [
     "root",
@@ -172,6 +191,8 @@ const DECIMAL_ADD_SUBTRACT: &[ThemeTag] = &[
     ThemeTag::Addition,
     ThemeTag::Subtraction,
 ];
+const DECIMAL_ADDITION: &[ThemeTag] = &[ThemeTag::Decimals, ThemeTag::Addition];
+const DECIMAL_SUBTRACTION: &[ThemeTag] = &[ThemeTag::Decimals, ThemeTag::Subtraction];
 const DECIMAL_MULTIPLICATION: &[ThemeTag] = &[ThemeTag::Decimals, ThemeTag::Multiplication];
 const DECIMAL_DIVISION: &[ThemeTag] = &[ThemeTag::Decimals, ThemeTag::Division];
 
@@ -442,6 +463,42 @@ pub const COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
     })
     .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_DECIMAL);
 
+pub const COLUMN_DECIMAL_ADDITION_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_ADDITION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_ADDITION,
+        ),
+        skill_id: SKILL_ID_COLUMN_DECIMAL_ADDITION,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_ADDITION,
+        grade: Some(SchoolGrade::Elementary4),
+        tags: DECIMAL_ADDITION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_DECIMAL,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: DECIMAL_COLUMN,
+        layout: COLUMN_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_DECIMAL);
+
+pub const COLUMN_DECIMAL_SUBTRACTION_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_SUBTRACTION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DECIMAL_SUBTRACTION,
+        ),
+        skill_id: SKILL_ID_COLUMN_DECIMAL_SUBTRACTION,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_DECIMAL_SUBTRACTION,
+        grade: Some(SchoolGrade::Elementary4),
+        tags: DECIMAL_SUBTRACTION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_DECIMAL,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: DECIMAL_COLUMN,
+        layout: COLUMN_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_DECIMAL);
+
 pub const COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
         numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER),
@@ -526,6 +583,8 @@ enum Mode {
     DivideThreeDigitByOneDigit,
     DivideTwoDigitDivisor,
     DecimalAddSubtract,
+    DecimalAddition,
+    DecimalSubtraction,
     DecimalMultiplyInteger,
     DecimalDivideInteger,
     DecimalMultiplication,
@@ -718,6 +777,16 @@ generator!(
     DECIMAL_ADD_SUBTRACT_GENERATOR,
     COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION,
     DecimalAddSubtract
+);
+generator!(
+    DECIMAL_ADDITION_GENERATOR,
+    COLUMN_DECIMAL_ADDITION_REGISTRATION,
+    DecimalAddition
+);
+generator!(
+    DECIMAL_SUBTRACTION_GENERATOR,
+    COLUMN_DECIMAL_SUBTRACTION_REGISTRATION,
+    DecimalSubtraction
 );
 generator!(
     DECIMAL_MULTIPLY_INTEGER_GENERATOR,
@@ -981,15 +1050,17 @@ fn draw_problem(
                 AnswerSchema::OrderedPair,
             )
         }
-        Mode::DecimalAddSubtract => {
+        Mode::DecimalAddSubtract | Mode::DecimalAddition | Mode::DecimalSubtraction => {
             let (mut left_coefficient, mut left_scale) = draw_decimal_operand(rng, 3, 3)?;
             let (mut right_coefficient, mut right_scale) = draw_decimal_operand(rng, 3, 3)?;
             let mut left_value = exact_decimal_rational(left_coefficient, left_scale)?;
             let mut right_value = exact_decimal_rational(right_coefficient, right_scale)?;
-            let operator = if rng.next_bounded(2) == 0 {
-                ArithmeticOperator::Add
-            } else {
-                ArithmeticOperator::Subtract
+            let operator = match mode {
+                Mode::DecimalAddition => ArithmeticOperator::Add,
+                Mode::DecimalSubtraction => ArithmeticOperator::Subtract,
+                Mode::DecimalAddSubtract if rng.next_bounded(2) == 0 => ArithmeticOperator::Add,
+                Mode::DecimalAddSubtract => ArithmeticOperator::Subtract,
+                _ => unreachable!(),
             };
             if operator == ArithmeticOperator::Subtract
                 && rational_less_than(left_value, right_value)
@@ -1153,7 +1224,7 @@ fn draw_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 18] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 20] = [
     GeneratorEntry::current(&ADD_2DIGIT_GENERATOR),
     GeneratorEntry::current(&SUBTRACT_2DIGIT_GENERATOR),
     GeneratorEntry::current(&ADD_2DIGIT_NO_CARRY_GENERATOR),
@@ -1168,6 +1239,8 @@ pub(crate) static GENERATORS: [GeneratorEntry; 18] = [
     GeneratorEntry::current(&DIVIDE_3DIGIT_BY_1DIGIT_GENERATOR),
     GeneratorEntry::current(&DIVIDE_2DIGIT_GENERATOR),
     GeneratorEntry::current(&DECIMAL_ADD_SUBTRACT_GENERATOR),
+    GeneratorEntry::current(&DECIMAL_ADDITION_GENERATOR),
+    GeneratorEntry::current(&DECIMAL_SUBTRACTION_GENERATOR),
     GeneratorEntry::current(&DECIMAL_MULTIPLY_INTEGER_GENERATOR),
     GeneratorEntry::current(&DECIMAL_DIVIDE_INTEGER_GENERATOR),
     GeneratorEntry::current(&DECIMAL_MULTIPLICATION_GENERATOR),
@@ -1288,9 +1361,45 @@ mod curriculum_tests {
     }
 
     #[test]
+    fn decimal_add_subtract_dedicated_themes_fix_only_the_operator() {
+        for (theme_id, expected_operator) in [
+            (THEME_ID_COLUMN_DECIMAL_ADDITION, ArithmeticOperator::Add),
+            (
+                THEME_ID_COLUMN_DECIMAL_SUBTRACTION,
+                ArithmeticOperator::Subtract,
+            ),
+        ] {
+            for difficulty in 1..=4 {
+                for seed in ["DcA1", "DcB2", "DcC3"] {
+                    let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                        timeout_ms: Some(1_000),
+                        max_attempts: Some(50_000),
+                    })
+                    .unwrap_or_else(|error| {
+                        panic!(
+                            "decimal operator theme {theme_id} d{difficulty} failed for {seed}: {error}"
+                        )
+                    });
+                    for problem in worksheet.problems() {
+                        let ProblemPrompt::ColumnArithmetic { operator, .. } = problem.prompt()
+                        else {
+                            panic!("decimal operator theme returned a non-column prompt");
+                        };
+                        assert_eq!(*operator, expected_operator);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn column_arithmetic_themes_follow_curriculum_domains_and_print_layouts() {
         use crate::themes::column_arithmetic::*;
-        const IDS: [u32; 18] = [
+        const IDS: [u32; 20] = [
             THEME_ID_COLUMN_ADD_2DIGIT,
             THEME_ID_COLUMN_SUBTRACT_2DIGIT,
             THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY,
@@ -1305,6 +1414,8 @@ mod curriculum_tests {
             THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT,
             THEME_ID_COLUMN_DIVIDE_2DIGIT,
             THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
+            THEME_ID_COLUMN_DECIMAL_ADDITION,
+            THEME_ID_COLUMN_DECIMAL_SUBTRACTION,
             THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
             THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER,
             THEME_ID_COLUMN_DECIMAL_MULTIPLICATION,
@@ -1443,11 +1554,25 @@ mod curriculum_tests {
                             assert_eq!(problem.answer_schema(), &AnswerSchema::OrderedPair);
                             continue;
                         }
-                        THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT => {
-                            assert!(matches!(
-                                operator,
-                                ArithmeticOperator::Add | ArithmeticOperator::Subtract
-                            ));
+                        THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT
+                        | THEME_ID_COLUMN_DECIMAL_ADDITION
+                        | THEME_ID_COLUMN_DECIMAL_SUBTRACTION => {
+                            let expected_operator = match theme_id {
+                                THEME_ID_COLUMN_DECIMAL_ADDITION => Some(ArithmeticOperator::Add),
+                                THEME_ID_COLUMN_DECIMAL_SUBTRACTION => {
+                                    Some(ArithmeticOperator::Subtract)
+                                }
+                                THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT => None,
+                                _ => unreachable!(),
+                            };
+                            if let Some(expected_operator) = expected_operator {
+                                assert_eq!(*operator, expected_operator);
+                            } else {
+                                assert!(matches!(
+                                    operator,
+                                    ArithmeticOperator::Add | ArithmeticOperator::Subtract
+                                ));
+                            }
                             assert!(matches!(left, ArithmeticExpression::ExactDecimal { .. }));
                             assert!(matches!(right, ArithmeticExpression::ExactDecimal { .. }));
                             if *operator == ArithmeticOperator::Subtract {
