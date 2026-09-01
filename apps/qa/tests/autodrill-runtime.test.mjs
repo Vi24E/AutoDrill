@@ -1,20 +1,30 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { AutoDrillRuntime } from '../src/autodrill-runtime.mjs';
+
+const contract = JSON.parse(readFileSync(new URL('../generated/drill-core-contract.json', import.meta.url), 'utf8'));
+const EXCLUDED_QA_CURRICULUM_UNITS = new Set([
+  'grade1-addition',
+  'grade1-subtraction',
+  'multiplication-table',
+  'division-table',
+]);
 
 test('AutoDrill runtime exposes every non-excluded unit through the original WASM generator', async () => {
   const runtime = new AutoDrillRuntime({ selectionSeed: () => 'runtime-test-selection' });
   const units = runtime.listUnits();
-  assert.equal(units.length, 34);
-  assert.ok(units.some((unit) => unit.skill_id === 'jp.grade5.fraction.addition'));
+  const expectedThemes = Object.values(contract.themes)
+    .filter((theme) => !EXCLUDED_QA_CURRICULUM_UNITS.has(theme.curriculum_unit.key));
+  assert.deepEqual(
+    units.map((unit) => unit.skill_id).sort(),
+    expectedThemes.map((theme) => theme.skill_id).sort(),
+  );
+  assert.ok(units.some((unit) => unit.skill_id === 'jp.grade5.fraction.addition.summary'));
   assert.ok(units.some((unit) => unit.skill_id === 'jp.grade6.fraction.division'));
   assert.ok(units.some((unit) => unit.skill_id === 'jp.grade7.equation.linear.1'));
   assert.ok(units.some((unit) => unit.skill_id === 'jp.grade9.equation.quadratic.3'));
   assert.ok(units.some((unit) => unit.skill_id === 'bonus.logic.mini_sudoku'));
-  assert.ok(!units.some((unit) => unit.skill_id === 'jp.grade1.addition.one_digit'));
-  assert.ok(!units.some((unit) => unit.skill_id === 'jp.grade1.subtraction.one_digit'));
-  assert.ok(!units.some((unit) => unit.skill_id === 'jp.grade2.multiplication.table'));
-  assert.ok(!units.some((unit) => unit.skill_id === 'jp.grade3.division.table.1'));
 
   const generatedBySkill = new Map();
   for (const unit of units) {
@@ -26,11 +36,11 @@ test('AutoDrill runtime exposes every non-excluded unit through the original WAS
     generatedBySkill.set(unit.skill_id, unitProblem);
   }
 
-  const generated = generatedBySkill.get('jp.grade5.fraction.addition');
+  const generated = generatedBySkill.get('jp.grade5.fraction.addition.summary');
   const payload = generated.item.original_source_payload;
 
   assert.equal(generated.item.source, 'autodrill');
-  assert.equal(generated.item.unit_name, '分数の足し算');
+  assert.equal(generated.item.unit_name, '分数の足し算（まとめ）');
   assert.match(generated.item.problem_representation, /\//);
   assert.match(generated.item.canonical_answer, /\//);
   assert.equal(payload.integration_version, 'autodrill_qa_wasm_v1');
@@ -38,11 +48,16 @@ test('AutoDrill runtime exposes every non-excluded unit through the original WAS
   assert.equal(payload.generation_request.difficulty, 4);
   assert.equal(payload.problem, payload.worksheet.problems[payload.problem_index]);
   assert.equal(generated.selection.selection_policy, 'autodrill_unit_random_v1');
-  assert.equal(generated.selection.filters.selected_skill_id, 'jp.grade5.fraction.addition');
+  assert.equal(generated.selection.filters.selected_skill_id, 'jp.grade5.fraction.addition.summary');
+  const expectedExcludedSkillIds = Object.values(contract.themes)
+    .filter((theme) => EXCLUDED_QA_CURRICULUM_UNITS.has(theme.curriculum_unit.key))
+    .map((theme) => theme.skill_id)
+    .sort();
+  assert.deepEqual([...generated.selection.filters.excluded_skill_ids].sort(), expectedExcludedSkillIds);
   assert.equal(generated.selection.candidate_count, payload.worksheet.problems.length);
   assert.ok(generated.selection.selection_probability > 0);
 
-  const nextFraction = await runtime.generateRandomProblem({ skillId: 'jp.grade5.fraction.addition' });
+  const nextFraction = await runtime.generateRandomProblem({ skillId: 'jp.grade5.fraction.addition.summary' });
   assert.equal(nextFraction.item.original_source_payload.worksheet.identity.seed, payload.worksheet.identity.seed);
   assert.notEqual(nextFraction.item.original_source_payload.problem_index, payload.problem_index);
   assert.equal(nextFraction.selection.candidate_count, payload.worksheet.problems.length - 1);

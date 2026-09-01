@@ -4,11 +4,11 @@ import { join, resolve } from 'node:path';
 import { CUSTOM_SAMPLING_PROFILE, scoreInformationCandidates } from './custom-sampling.mjs';
 
 const CONTRACT_PATH = new URL('../generated/drill-core-contract.json', import.meta.url);
-const EXCLUDED_QA_SKILLS = new Set([
-  'jp.grade1.addition.one_digit',
-  'jp.grade1.subtraction.one_digit',
-  'jp.grade2.multiplication.table',
-  'jp.grade3.division.table.1',
+const EXCLUDED_QA_CURRICULUM_UNITS = new Set([
+  'grade1-addition',
+  'grade1-subtraction',
+  'multiplication-table',
+  'division-table',
 ]);
 const SEED_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const CUSTOM_CANDIDATE_WORKSHEETS = 4;
@@ -192,7 +192,13 @@ export class AutoDrillRuntime {
     this.runtimePromise = null;
     this.batches = new Map();
     this.diagnosticCache = new Map();
-    this.themes = Object.values(contract.themes).filter((theme) => !EXCLUDED_QA_SKILLS.has(theme.skill_id));
+    const contractThemes = Object.values(contract.themes);
+    this.excludedSkillIds = new Set(
+      contractThemes
+        .filter((theme) => EXCLUDED_QA_CURRICULUM_UNITS.has(theme.curriculum_unit.key))
+        .map((theme) => theme.skill_id),
+    );
+    this.themes = contractThemes.filter((theme) => !this.excludedSkillIds.has(theme.skill_id));
     if (!this.themes.length) throw new Error('QAで評価可能なAutoDrill themeがありません。');
   }
 
@@ -425,7 +431,7 @@ export class AutoDrillRuntime {
       selection: {
         selection_policy: skillId ? 'autodrill_unit_random_v1' : 'autodrill_random_v1',
         candidate_source: 'drill_core_worksheet_without_replacement',
-        filters: { selected_skill_id: skillId ?? null, worksheet_seed: worksheet.identity.seed, worksheet_problem_index: problemIndex, excluded_skill_ids: [...EXCLUDED_QA_SKILLS], requested_difficulty: 4 },
+        filters: { selected_skill_id: skillId ?? null, worksheet_seed: worksheet.identity.seed, worksheet_problem_index: problemIndex, excluded_skill_ids: [...this.excludedSkillIds], requested_difficulty: 4 },
         random_seed: selectionSeed,
         selection_probability: 1 / (skillId ? 1 : this.themes.length) / candidateCount,
         candidate_count: candidateCount,
