@@ -107,8 +107,25 @@ h1 { margin: 0; font-size: clamp(25px, 5vw, 34px); line-height: 1.35; font-weigh
   background: var(--lobby-cyan-dark);
   box-shadow: 0 2px 5px rgba(24, 70, 80, .24), 0 -2px 0 rgba(0, 0, 0, .12) inset;
 }
-.curriculum-fields { display: grid; grid-template-columns: .85fr 1fr 1.3fr; gap: 14px; }
+.curriculum-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .curriculum-fields-recommended { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.curriculum-theme-tiles-field { grid-column: 1 / -1; }
+.curriculum-theme-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; }
+.curriculum-theme-tile {
+  min-height: 46px;
+  padding: 8px 10px;
+  border: 1px solid #aebbc0;
+  border-radius: 7px;
+  color: #20343b;
+  background: #fbfcfc;
+  cursor: pointer;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+.curriculum-theme-tile:hover { border-color: #6f858c; background: #fff; }
+.curriculum-theme-tile[aria-pressed='true'] { border-color: var(--lobby-cyan-dark); background: #edf8fa; box-shadow: 0 0 0 2px rgba(8, 169, 196, .12); font-weight: 800; }
 .settings-options { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; }
 .field-group { display: grid; align-content: start; gap: 3px; min-width: 0; }
 .field-label { color: #40565e; font-size: 12px; font-weight: 750; letter-spacing: .045em; }
@@ -431,6 +448,10 @@ button:disabled { cursor: wait; opacity: .5; }
 .problem-cell { position: absolute; display: flex; align-items: center; min-width: 0; overflow: visible; padding: 0 2%; }
 .worksheet-instruction { position: absolute; top: 5.3%; right: 7%; left: 7%; margin: 0; font-size: 15px; line-height: 1.35; }
 .problem-answer-area { display: inline-flex; min-width: 0; align-items: center; }
+.problem-answer-area-integer-division { gap: 9px; }
+.integer-division-answer-coordinate { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.integer-division-answer-label { font-size: 11px; font-weight: 700; }
+.problem-answer-area-integer-division .answer-box { min-width: 34px; }
 .problem-answer-area-simultaneous { gap: 9px; }
 .simultaneous-answer-coordinate { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .problem-answer-area-simultaneous .answer-box { min-width: 34px; }
@@ -639,6 +660,7 @@ button:disabled { cursor: wait; opacity: .5; }
   .curriculum-fields { grid-template-columns: 1fr 1fr; }
   .field-group-theme { grid-column: 1 / -1; }
   .curriculum-fields-recommended .field-group-theme { grid-column: auto; }
+  .curriculum-theme-tiles-field { grid-column: 1 / -1; }
   .settings-options { grid-template-columns: minmax(0, 1fr) 120px; }
   .settings-actions { grid-template-columns: 1fr; padding: 0 20px 26px; }
   .settings-screen .muted-message, .settings-screen .error-message, .unavailable-message { margin-inline: 20px; }
@@ -679,6 +701,7 @@ button:disabled { cursor: wait; opacity: .5; }
 @media (max-width: 430px) {
   .curriculum-fields, .settings-options { grid-template-columns: 1fr; }
   .field-group-theme { grid-column: auto; }
+  .curriculum-theme-tiles-field { grid-column: auto; }
   .fixed-count { height: 48px; min-height: 48px; margin-top: 0; }
 }
 

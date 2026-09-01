@@ -40,6 +40,12 @@ export type UnimplementedCurriculumTheme = {
 
 export type CurriculumTheme = ImplementedCurriculumTheme | UnimplementedCurriculumTheme;
 
+export type CurriculumUnit = {
+  unitKey: string;
+  label: string;
+  themes: readonly CurriculumTheme[];
+};
+
 export type CurriculumGenre = {
   genreKey: string;
   label: string;
@@ -49,12 +55,12 @@ export type CurriculumGenre = {
 export type CurriculumGrade = {
   slug: GradeSlug;
   label: string;
-  genres: readonly CurriculumGenre[];
+  units: readonly CurriculumUnit[];
 };
 
 export type CurriculumSelection = {
   grade: CurriculumGrade;
-  genre: CurriculumGenre;
+  unit: CurriculumUnit;
   theme: CurriculumTheme;
 };
 
@@ -96,20 +102,20 @@ const GRADE_LABELS = [
   '中学3年生',
 ] as const;
 
-function implementedGenresForGrade(gradeSlug: GradeSlug): CurriculumGenre[] {
+function implementedUnitsForGrade(gradeSlug: GradeSlug): CurriculumUnit[] {
   const themes = IMPLEMENTED_THEMES.filter((theme) => theme.grade?.slug === gradeSlug);
-  const groups = new Map<string, CurriculumGenre>();
+  const units = new Map<string, CurriculumUnit>();
   for (const theme of themes) {
-    if (!theme.gradeGenre) continue;
-    const key = theme.gradeGenre.genreKey;
-    const existing = groups.get(key);
+    if (!theme.curriculumUnit) continue;
+    const { unitKey, label } = theme.curriculumUnit;
+    const existing = units.get(unitKey);
     if (existing) {
-      groups.set(key, { ...existing, themes: [...existing.themes, theme] });
+      units.set(unitKey, { ...existing, themes: [...existing.themes, theme] });
     } else {
-      groups.set(key, { genreKey: key, label: theme.gradeGenre.label, themes: [theme] });
+      units.set(unitKey, { unitKey, label, themes: [theme] });
     }
   }
-  return [...groups.values()];
+  return [...units.values()];
 }
 
 export const CURRICULUM_TREE: readonly CurriculumGrade[] = GRADE_LABELS.map((label, index) => {
@@ -118,13 +124,9 @@ export const CURRICULUM_TREE: readonly CurriculumGrade[] = GRADE_LABELS.map((lab
   return {
     slug,
     label,
-    genres: implementedGenresForGrade(slug),
+    units: implementedUnitsForGrade(slug),
   };
 });
-
-export const ADDITION_AND_SUBTRACTION_GENRE: CurriculumGenre = CURRICULUM_TREE[0]!.genres.find(
-  (genre) => genre.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre!.genreKey,
-)!;
 
 function buildRecommendedGenres(): CurriculumGenre[] {
   const groups = new Map<string, CurriculumGenre>();
@@ -141,7 +143,7 @@ function buildRecommendedGenres(): CurriculumGenre[] {
   return [...groups.values()];
 }
 
-/** Recommended is a presentation grouping that references canonical theme objects. */
+/** Recommended is a presentation grouping independent of grade curriculum units. */
 export const RECOMMENDED_GENRES: readonly CurriculumGenre[] = buildRecommendedGenres();
 
 export const DEFAULT_WEB_DRILL_SETTINGS: WebDrillSettings = {
@@ -168,9 +170,9 @@ export function createWebDrillSettings(
 
 export function findCurriculumSelection(themeKey: string): CurriculumSelection {
   for (const grade of CURRICULUM_TREE) {
-    for (const genre of grade.genres) {
-      const theme = genre.themes.find((candidate) => candidate.themeKey === themeKey);
-      if (theme) return { grade, genre, theme };
+    for (const unit of grade.units) {
+      const theme = unit.themes.find((candidate) => candidate.themeKey === themeKey);
+      if (theme) return { grade, unit, theme };
     }
   }
 
@@ -179,18 +181,15 @@ export function findCurriculumSelection(themeKey: string): CurriculumSelection {
   // Recommended mode resolves its genre directly from RECOMMENDED_GENRES.
   const bonusTheme = IMPLEMENTED_THEMES.find((theme) => theme.themeKey === themeKey && theme.grade === null);
   const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === ONE_DIGIT_ADDITION_THEME.grade!.slug)!;
-  const fallbackGenre = grade.genres.find((candidate) => candidate.genreKey === ONE_DIGIT_ADDITION_THEME.gradeGenre!.genreKey)!;
-  if (bonusTheme) {
-    const bonusGenre = RECOMMENDED_GENRES.find((candidate) => candidate.themes.some((theme) => theme.themeKey === themeKey)) ?? fallbackGenre;
-    return { grade, genre: bonusGenre, theme: bonusTheme };
-  }
-  return { grade, genre: fallbackGenre, theme: ONE_DIGIT_ADDITION_THEME };
+  const fallbackUnit = grade.units.find((candidate) => candidate.unitKey === ONE_DIGIT_ADDITION_THEME.curriculumUnit!.unitKey)!;
+  if (bonusTheme) return { grade, unit: fallbackUnit, theme: bonusTheme };
+  return { grade, unit: fallbackUnit, theme: ONE_DIGIT_ADDITION_THEME };
 }
 
 export function findTheme(themeKey: string): CurriculumTheme | undefined {
   return IMPLEMENTED_THEMES.find((theme) => theme.themeKey === themeKey)
-    ?? CURRICULUM_TREE.flatMap((grade) => grade.genres)
-      .flatMap((genre) => genre.themes)
+    ?? CURRICULUM_TREE.flatMap((grade) => grade.units)
+      .flatMap((unit) => unit.themes)
       .find((theme) => theme.themeKey === themeKey);
 }
 

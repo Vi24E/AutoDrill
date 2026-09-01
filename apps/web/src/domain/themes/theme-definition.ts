@@ -14,6 +14,7 @@ export type DerivedGradeTag =
   | 'junior_high_1' | 'junior_high_2' | 'junior_high_3';
 export type ThemeTaxonomyTag = ThemeTag | DerivedGradeTag;
 export type ThemeGenreMetadata = { genreKey: string; label: string };
+export type ThemeCurriculumUnitMetadata = { unitKey: string; label: string };
 
 /**
  * Stored theme metadata. Grade is canonical curriculum metadata; grade tags and
@@ -28,7 +29,7 @@ export type ThemeDefinition = {
   grade: { number: GradeNumber; slug: GradeSlug; label: string } | null;
   tags: readonly ThemeTag[];
   /** Derived by defineTheme; retained as a stable read-only projection for callers. */
-  gradeGenre: ThemeGenreMetadata | null;
+  curriculumUnit: ThemeCurriculumUnitMetadata | null;
   /** Derived by defineTheme; retained as a stable read-only projection for callers. */
   recommendedGenre: ThemeGenreMetadata | null;
   problemCount: number;
@@ -64,7 +65,7 @@ export type ThemeDefinition = {
  */
 export type ThemeDefinitionInput = Omit<
   ThemeDefinition,
-  'numeric_theme_id' | 'generator_revision' | 'themeKey' | 'grade' | 'tags' | 'gradeGenre' | 'recommendedGenre' | 'problemCount' | 'layout' | 'route' | 'curriculumPath' | 'safety' | 'presentation' | 'dedup' | 'promptKind' | 'answerSchemaKind' | 'inputInterface' | 'editorInputInterface'
+  'numeric_theme_id' | 'generator_revision' | 'themeKey' | 'grade' | 'tags' | 'curriculumUnit' | 'recommendedGenre' | 'problemCount' | 'layout' | 'route' | 'curriculumPath' | 'safety' | 'presentation' | 'dedup' | 'promptKind' | 'answerSchemaKind' | 'inputInterface' | 'editorInputInterface'
 > & {
   numeric_theme_id: NumericThemeId;
   route: { themeSlug: string };
@@ -72,18 +73,6 @@ export type ThemeDefinitionInput = Omit<
 
 function hasAny(tags: readonly ThemeTag[], candidates: readonly ThemeTag[]): boolean {
   return candidates.some((tag) => tags.includes(tag));
-}
-
-export function gradeGenreFromTags(tags: readonly ThemeTag[]): ThemeGenreMetadata | null {
-  if (tags.includes('fractions')) return { genreKey: 'fractions', label: '分数' };
-  if (tags.includes('decimals')) return { genreKey: 'decimals', label: '小数' };
-  if (tags.includes('negative_numbers')) return { genreKey: 'signed-numbers', label: '正の数・負の数' };
-  if (tags.includes('linear_equation')) return { genreKey: 'linear-equation', label: '一次方程式' };
-  if (tags.includes('simultaneous_equation')) return { genreKey: 'simultaneous-equation', label: '連立方程式' };
-  if (tags.includes('quadratic_equation')) return { genreKey: 'quadratic-equation', label: '二次方程式' };
-  if (hasAny(tags, ['addition', 'subtraction'])) return { genreKey: 'addition-and-subtraction', label: '足し算と引き算' };
-  if (hasAny(tags, ['multiplication', 'division'])) return { genreKey: 'multiplication-and-division', label: '掛け算と割り算' };
-  return null;
 }
 
 export function recommendedGenreFromTags(tags: readonly ThemeTag[]): ThemeGenreMetadata | null {
@@ -123,9 +112,8 @@ export function defineTheme(input: ThemeDefinitionInput): ThemeDefinition {
     : { number: core.grade as GradeNumber, slug: `grade-${core.grade}` as GradeSlug, label: core.curriculum_path[1] ?? `Grade ${core.grade}` };
   const routeGroup = grade?.slug ?? 'bonus';
   const uniqueTags = [...new Set(core.tags)] as ThemeTag[];
-  const gradeGenre = gradeGenreFromTags(uniqueTags);
+  const curriculumUnit = grade === null ? null : { unitKey: core.curriculum_unit.key, label: core.curriculum_unit.label };
   const recommendedGenre = recommendedGenreFromTags(uniqueTags);
-  if (grade && !gradeGenre) throw new Error(`Theme ${core.skill_id} has no grade taxonomy genre.`);
   if (!recommendedGenre) throw new Error(`Theme ${core.skill_id} has no recommended taxonomy genre.`);
   const curriculumPath = core.curriculum_path.map((label, index) => ({
     id: index === 0 ? 'root' : index === core.curriculum_path.length - 1 ? core.skill_id : `${core.skill_id}:path:${index}`,
@@ -142,7 +130,7 @@ export function defineTheme(input: ThemeDefinitionInput): ThemeDefinition {
     generator_revision: core.generator_revision,
     grade,
     tags: uniqueTags,
-    gradeGenre,
+    curriculumUnit,
     recommendedGenre,
     problemCount: core.layout.problem_count,
     layout: core.layout,

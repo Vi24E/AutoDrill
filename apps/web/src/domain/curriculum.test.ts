@@ -15,7 +15,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id)).toEqual([1, 4, 5, 25, 26, 27, 28, 6, 13, 29, 30, 31, 32, 17, 33, 34, 35, 9, 18, 24, 36, 37, 11, 10, 12, 21, 22, 23, 7, 8, 2, 3, 19, 14, 15, 16, 20, 38]);
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 53 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -27,7 +27,7 @@ describe('Web curriculum registry', () => {
     for (const theme of [LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]) {
       expect(theme).toMatchObject({
         grade: { slug: 'grade-7', label: '中学1年生' },
-        gradeGenre: { genreKey: 'linear-equation', label: '一次方程式' },
+        curriculumUnit: expect.objectContaining({ label: expect.any(String) }),
         recommendedGenre: { genreKey: 'equation', label: '方程式' },
         problemCount: 16,
         layout: { problem_count: 16, columns: 2, rows: 8 },
@@ -65,7 +65,7 @@ describe('Web curriculum registry', () => {
     expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes).map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b));
   });
 
-  it('derives grade and UI classification from typed taxonomy tags', () => {
+  it('keeps grade curriculum units independent from Recommended taxonomy tags', () => {
     const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.presentation.column_arithmetic);
     expect(columnThemes).toHaveLength(13);
     for (const theme of columnThemes) {
@@ -76,14 +76,14 @@ describe('Web curriculum registry', () => {
       expect(theme.layout).toEqual(isDivision
         ? { problem_count: 12, columns: 4, rows: 3 }
         : { problem_count: 16, columns: 4, rows: 4 });
-      expect(theme.gradeGenre).not.toBeNull();
+      expect(theme.curriculumUnit).not.toBeNull();
       expect(theme.recommendedGenre).not.toBeNull();
       const tags = taxonomyTags(theme);
       expect(tags.some((tag) => tag.startsWith('grade_') || tag.startsWith('junior_high_'))).toBe(true);
     }
     const grade2 = columnThemes.find((theme) => theme.numeric_theme_id === 25)!;
     expect(taxonomyTags(grade2)).toContain('grade_2');
-    expect(grade2.gradeGenre).toEqual({ genreKey: 'addition-and-subtraction', label: '足し算と引き算' });
+    expect(grade2.curriculumUnit).toEqual({ unitKey: 'grade2-column-add-subtract', label: '加法，減法' });
     const decimal = columnThemes.find((theme) => theme.numeric_theme_id === 33)!;
     expect(decimal.recommendedGenre).toEqual({ genreKey: 'decimals', label: '小数' });
 
@@ -112,7 +112,7 @@ describe('Web curriculum registry', () => {
     }
   });
 
-  it('maps grade-1 through grade-9 with at least one implemented theme in every grade', () => {
+  it('maps grade-1 through grade-9 and groups multiplication-table siblings as one curriculum unit', () => {
     expect(CURRICULUM_TREE.map((grade) => grade.slug)).toEqual([
       'grade-1', 'grade-2', 'grade-3', 'grade-4', 'grade-5',
       'grade-6', 'grade-7', 'grade-8', 'grade-9',
@@ -121,19 +121,23 @@ describe('Web curriculum registry', () => {
       '小学1年生', '小学2年生', '小学3年生', '小学4年生', '小学5年生',
       '小学6年生', '中学1年生', '中学2年生', '中学3年生',
     ]);
-    const grade7 = CURRICULUM_TREE[6]!;
-    const equations = grade7.genres.find((genre) => genre.genreKey === 'linear-equation')!;
-    expect(equations.label).toBe('一次方程式');
-    expect(equations.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
-
     for (const grade of CURRICULUM_TREE) {
-      expect(grade.genres.length, grade.label).toBeGreaterThan(0);
-      expect(grade.genres.flatMap((genre) => genre.themes).every((theme) => theme.implemented), grade.label).toBe(true);
+      expect(grade.units.length, grade.label).toBeGreaterThan(0);
+      expect(grade.units.flatMap((unit) => unit.themes).every((theme) => theme.implemented), grade.label).toBe(true);
     }
-    const grade8 = CURRICULUM_TREE[7]!;
-    const simultaneous = grade8.genres.find((genre) => genre.genreKey === 'simultaneous-equation')!;
-    expect(simultaneous.label).toBe('連立方程式');
-    expect(simultaneous.themes.map((theme) => theme.label)).toEqual(['連立方程式(1)']);
+
+    const grade7 = CURRICULUM_TREE[6]!;
+    const linearEquation = grade7.units.find((unit) => unit.unitKey === 'linear-equation')!;
+    expect(linearEquation.label).toBe('一次方程式');
+    expect(linearEquation.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
+
+    const grade2 = CURRICULUM_TREE[1]!;
+    const multiplicationTable = grade2.units.find((unit) => unit.unitKey === 'multiplication-table')!;
+    expect(multiplicationTable.label).toBe('九九');
+    expect(multiplicationTable.themes.map((theme) => theme.label)).toEqual([
+      '全段混合', '1の段', '2の段', '3の段', '4の段', '5の段',
+      '6の段', '7の段', '8の段', '9の段',
+    ]);
   });
 
   it('resolves all implemented public routes', () => {

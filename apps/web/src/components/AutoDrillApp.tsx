@@ -550,6 +550,63 @@ function WorksheetAnswerField({
     );
   }
 
+  if (presentation.kind === 'integer_division') {
+    const quotient = answerCoordinate(answer, 0);
+    const remainder = answerCoordinate(answer, 1);
+    const canonicalQuotient = answerCoordinate(problem.canonical_answer, 0);
+    const canonicalRemainder = answerCoordinate(problem.canonical_answer, 1);
+    const showCorrection = Boolean(result && !result.correct);
+    return (
+      <span className="problem-answer-area problem-answer-area-integer-division">
+        <span className="integer-division-answer-coordinate">
+          <span className="integer-division-answer-label">商</span>
+          <MathLiveAnswerInput
+            key={`${problem.problem_id}:quotient:${gradeResult ? 'graded' : 'editing'}`}
+            initialLatex={answerNodeLatex(quotient)}
+            frameClassName={commonFrameClass('quotient')}
+            ariaLabel={`${index + 1}番の商 ${answerNodeText(quotient) || '未入力'}`}
+            selected={!inputLocked && isSelected && selectedSlot === 'quotient'}
+            readOnly={inputLocked}
+            numericSansFont
+            onSelect={() => onSelect(index, 'quotient')}
+            onInputLatex={(mathfield, latex) => onMathInput(index, 'quotient', mathfield, latex, 'fixed-scalar')}
+            onCommit={() => onCommit(index, 'quotient')}
+            onRegister={(mathfield) => onRegisterMathfield(index, 'quotient', mathfield)}
+          />
+        </span>
+        <span className="integer-division-answer-coordinate">
+          <span className="integer-division-answer-label">あまり</span>
+          <MathLiveAnswerInput
+            key={`${problem.problem_id}:remainder:${gradeResult ? 'graded' : 'editing'}`}
+            initialLatex={answerNodeLatex(remainder)}
+            frameClassName={commonFrameClass('remainder')}
+            ariaLabel={`${index + 1}番のあまり ${answerNodeText(remainder) || '未入力'}`}
+            selected={!inputLocked && isSelected && selectedSlot === 'remainder'}
+            readOnly={inputLocked}
+            numericSansFont
+            onSelect={() => onSelect(index, 'remainder')}
+            onInputLatex={(mathfield, latex) => onMathInput(index, 'remainder', mathfield, latex, 'fixed-scalar')}
+            onCommit={() => onCommit(index, 'remainder')}
+            onRegister={(mathfield) => onRegisterMathfield(index, 'remainder', mathfield)}
+          />
+        </span>
+        {showCorrection ? (
+          <span className="correct-answer" aria-label={`正しい答え 商 ${answerNodeText(canonicalQuotient)}、あまり ${answerNodeText(canonicalRemainder)}`}>
+            商 {answerNodeText(canonicalQuotient)}、あまり {answerNodeText(canonicalRemainder)}
+          </span>
+        ) : null}
+        {result && result.warnings.length > 0 ? (() => {
+          const messages = warningMessages(result.warnings);
+          return (
+            <span className="grade-warnings" aria-label={`注意 ${messages.join('、')}`}>
+              {messages.map((message) => <span key={message}><RubyMessage text={message} /></span>)}
+            </span>
+          );
+        })() : null}
+      </span>
+    );
+  }
+
   if (presentation.kind === 'column_division') {
     const { hasRemainder, quotientSlot } = presentation;
     const quotientValue = hasRemainder ? answerCoordinate(answer, 0) : answer;
@@ -1164,9 +1221,11 @@ export function AutoDrillApp({
     const run = async () => {
       const previous = answersRef.current[problemId] ?? ({ type: 'empty' } satisfies AnswerNode);
       const latexKey = acceptedLatexKey(problemId, slot);
+      const presentation = answerPresentationPlan(problem);
       const isCoordinateSlot = slot !== 'single' && (
-        problem.prompt.kind === 'simultaneous_equation'
-        || (problem.prompt.kind === 'column_arithmetic' && problem.prompt.operator === 'divide' && problem.answer_schema.kind === 'ordered_pair')
+        presentation.kind === 'simultaneous_equation'
+        || presentation.kind === 'integer_division'
+        || (presentation.kind === 'column_division' && presentation.hasRemainder)
       );
       const previousPart = isCoordinateSlot
         ? answerCoordinate(previous, slot === 'x' || slot === 'quotient' ? 0 : 1)
@@ -1287,6 +1346,10 @@ export function AutoDrillApp({
       setSelectedColumnDigit(null);
       return actionQueueRef.current;
     }
+    if (answerPresentationPlan(problem).kind === 'integer_division' && slot === 'quotient' && inputEnabledRef.current) {
+      selectProblem(index, 'remainder');
+      return actionQueueRef.current;
+    }
     if (
       problem.prompt.kind === 'column_arithmetic'
       && problem.column_input?.remainder
@@ -1305,7 +1368,10 @@ export function AutoDrillApp({
         selectColumnDigit(nextIndex, nextColumnSlot, spec.initialIndex);
         return actionQueueRef.current;
       }
-      const nextSlot: MathfieldSlot = nextProblem?.prompt.kind === 'simultaneous_equation' ? 'x' : 'single';
+      const nextPresentation = nextProblem ? answerPresentationPlan(nextProblem) : null;
+      const nextSlot: MathfieldSlot = nextPresentation?.kind === 'simultaneous_equation'
+        ? 'x'
+        : nextPresentation?.kind === 'integer_division' ? 'quotient' : 'single';
       selectAnswer(nextIndex, nextSlot);
       scheduleProblemScroll(index, nextIndex);
     }
@@ -1737,10 +1803,12 @@ function SettingsScreen({
   onPrint,
 }: SettingsScreenProps) {
   const selection = findCurriculumSelection(webSettings.themeKey);
-  const genres = curriculumMode === 'recommended' ? RECOMMENDED_GENRES : selection.grade.genres;
-  const activeGenre = curriculumMode === 'recommended'
-    ? genres.find((genre) => genre.themes.some((theme) => theme.themeKey === webSettings.themeKey)) ?? genres[0]!
-    : selection.genre;
+  const activeRecommendedGenre = RECOMMENDED_GENRES.find(
+    (genre) => genre.themes.some((theme) => theme.themeKey === webSettings.themeKey),
+  ) ?? RECOMMENDED_GENRES[0]!;
+  const activeThemes = curriculumMode === 'recommended'
+    ? activeRecommendedGenre.themes
+    : selection.unit.themes;
   const unavailable = !selection.theme.implemented;
   const [advancedSettingsOpened, setAdvancedSettingsOpened] = useState(false);
   const [gradingSettingsOpen, setGradingSettingsOpen] = useState(false);
@@ -1767,17 +1835,21 @@ function SettingsScreen({
 
   const selectGrade = (gradeSlug: string) => {
     const grade = CURRICULUM_TREE.find((candidate) => candidate.slug === gradeSlug) ?? CURRICULUM_TREE[0]!;
-    onThemeChange(grade.genres[0]!.themes[0]!);
+    onThemeChange(grade.units[0]!.themes[0]!);
   };
 
   const selectGenre = (genreKey: string) => {
-    const genre = genres.find((candidate) => candidate.genreKey === genreKey) ?? genres[0]!;
+    const genre = RECOMMENDED_GENRES.find((candidate) => candidate.genreKey === genreKey) ?? RECOMMENDED_GENRES[0]!;
     onThemeChange(genre.themes[0]!);
   };
 
+  const selectUnit = (unitKey: string) => {
+    const unit = selection.grade.units.find((candidate) => candidate.unitKey === unitKey) ?? selection.grade.units[0]!;
+    onThemeChange(unit.themes[0]!);
+  };
+
   const selectTheme = (themeKey: string) => {
-    const genre = genres.find((candidate) => candidate.genreKey === activeGenre.genreKey) ?? genres[0]!;
-    const theme = genre.themes.find((candidate) => candidate.themeKey === themeKey) ?? genre.themes[0]!;
+    const theme = activeThemes.find((candidate) => candidate.themeKey === themeKey) ?? activeThemes[0]!;
     onThemeChange(theme);
   };
 
@@ -1825,46 +1897,80 @@ function SettingsScreen({
                 />
               </div>
             ) : null}
-            <div className="field-group">
-              <div className="field-label">ジャンル</div>
-              <CustomSelect
-                id="genre-select"
-                ariaLabel="ジャンル"
-                value={activeGenre.genreKey}
-                options={genres.map((genre) => ({ value: genre.genreKey, label: genre.label }))}
-                onChange={selectGenre}
-                renderLabel={(option) => <RubyMessage text={option.label} />}
-              />
-            </div>
-
-            <div className="field-group field-group-theme">
-              <div className="field-label">テーマ</div>
-              <CustomSelect
-                id="theme-select"
-                ariaLabel="テーマ"
-                value={selection.theme.themeKey}
-                options={activeGenre.themes.map((theme) => ({ value: theme.themeKey, label: theme.label }))}
-                onChange={selectTheme}
-                renderLabel={(option) => <RubyMessage text={option.label} />}
-                renderValue={(option) => {
-                  const theme = activeGenre.themes.find((candidate) => candidate.themeKey === option.value);
-                  const tag = curriculumMode === 'recommended' && theme ? gradeTagForTheme(theme) : null;
-                  return (
-                    <span className="theme-select-value-content">
-                      <RubyMessage text={option.label} />
-                      {tag ? <span className={`grade-tag ${tag.className}`}>{tag.label}</span> : null}
-                    </span>
-                  );
-                }}
-                renderOptionEnd={(option) => {
-                  if (curriculumMode !== 'recommended') return null;
-                  const theme = activeGenre.themes.find((candidate) => candidate.themeKey === option.value);
-                  if (!theme) return null;
-                  const tag = gradeTagForTheme(theme);
-                  return tag ? <span className={`grade-tag ${tag.className}`}>{tag.label}</span> : null;
-                }}
-              />
-            </div>
+            {curriculumMode === 'recommended' ? (
+              <>
+                <div className="field-group">
+                  <div className="field-label">ジャンル</div>
+                  <CustomSelect
+                    id="genre-select"
+                    ariaLabel="ジャンル"
+                    value={activeRecommendedGenre.genreKey}
+                    options={RECOMMENDED_GENRES.map((genre) => ({ value: genre.genreKey, label: genre.label }))}
+                    onChange={selectGenre}
+                    renderLabel={(option) => <RubyMessage text={option.label} />}
+                  />
+                </div>
+                <div className="field-group field-group-theme">
+                  <div className="field-label">テーマ</div>
+                  <CustomSelect
+                    id="theme-select"
+                    ariaLabel="テーマ"
+                    value={selection.theme.themeKey}
+                    options={activeRecommendedGenre.themes.map((theme) => ({ value: theme.themeKey, label: theme.label }))}
+                    onChange={selectTheme}
+                    renderLabel={(option) => <RubyMessage text={option.label} />}
+                    renderValue={(option) => {
+                      const theme = activeRecommendedGenre.themes.find((candidate) => candidate.themeKey === option.value);
+                      const tag = theme ? gradeTagForTheme(theme) : null;
+                      return (
+                        <span className="theme-select-value-content">
+                          <RubyMessage text={option.label} />
+                          {tag ? <span className={`grade-tag ${tag.className}`}>{tag.label}</span> : null}
+                        </span>
+                      );
+                    }}
+                    renderOptionEnd={(option) => {
+                      const theme = activeRecommendedGenre.themes.find((candidate) => candidate.themeKey === option.value);
+                      if (!theme) return null;
+                      const tag = gradeTagForTheme(theme);
+                      return tag ? <span className={`grade-tag ${tag.className}`}>{tag.label}</span> : null;
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="field-group">
+                  <div className="field-label"><RubyMessage text="単元" /></div>
+                  <CustomSelect
+                    id="unit-select"
+                    ariaLabel="単元"
+                    value={selection.unit.unitKey}
+                    options={selection.grade.units.map((unit) => ({ value: unit.unitKey, label: unit.label }))}
+                    onChange={selectUnit}
+                    renderLabel={(option) => <RubyMessage text={option.label} />}
+                  />
+                </div>
+                {selection.unit.themes.length > 1 ? (
+                  <div className="field-group field-group-theme curriculum-theme-tiles-field">
+                    <div className="field-label"><RubyMessage text="教材" /></div>
+                    <div className="curriculum-theme-tiles" role="group" aria-label={`${selection.unit.label}の教材`}>
+                      {selection.unit.themes.map((theme) => (
+                        <button
+                          key={theme.themeKey}
+                          type="button"
+                          className="curriculum-theme-tile"
+                          aria-pressed={theme.themeKey === selection.theme.themeKey}
+                          onClick={() => selectTheme(theme.themeKey)}
+                        >
+                          <RubyMessage text={theme.label} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
 
           <div className="settings-options">
@@ -2095,6 +2201,7 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
         (structure): structure is Exclude<AnswerInputStructure, 'decimal' | 'arithmetic'> => (
           structure !== 'decimal'
           && structure !== 'arithmetic'
+          && !(selectedProblem && answerPresentationPlan(selectedProblem).kind === 'integer_division' && structure === 'tuple')
           && !(selectedProblem?.prompt.kind === 'simultaneous_equation' && structure === 'tuple')
           && !(selectedProblem?.prompt.kind === 'column_arithmetic' && selectedProblem.column_input?.quotient && structure === 'tuple')
           && !(arithmeticOperatorsEnabled && (structure === 'negative' || structure === 'plus_minus'))

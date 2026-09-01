@@ -306,7 +306,7 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('button', { name: 'おすすめ' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('combobox', { name: '学年' })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '足し算と引き算');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算（まとめ）');
     expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', 'ふつう');
     fireEvent.click(screen.getByRole('combobox', { name: '難易度' }));
     expect(within(screen.getByRole('listbox', { name: '難易度の選択肢' })).getAllByRole('option').map((option) => option.getAttribute('aria-label'))).toEqual(['かんたん', 'ふつう', 'むずかしい', 'ランダム']);
@@ -322,6 +322,13 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
     expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-value', 'grade-7');
     expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-selected-label', '中学1年生');
+    expect(screen.getByRole('combobox', { name: '単元' })).toHaveAttribute('data-selected-label', '一次方程式');
+    expect(screen.queryByRole('combobox', { name: 'ジャンル' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'テーマ' })).not.toBeInTheDocument();
+    const equationGroup = screen.getByRole('group', { name: '一次方程式の教材' });
+    expect(within(equationGroup).getAllByRole('button')).toHaveLength(2);
+    expect(within(equationGroup).getByRole('button', { name: /一次方程式 ?\(1\)/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(equationGroup).getByRole('button', { name: /一次方程式 ?\(2\)/ })).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
     expect(within(screen.getByRole('listbox', { name: '学年の選択肢' })).getAllByRole('option')).toHaveLength(9);
     fireEvent.keyDown(screen.getByRole('combobox', { name: '学年' }), { key: 'Escape' });
@@ -329,6 +336,29 @@ describe('AutoDrillApp', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+  });
+
+  it('shows all ten multiplication-table siblings as direct curriculum tiles', () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
+    fireEvent.click(screen.getByRole('option', { name: '小学2年生' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '単元' }));
+    fireEvent.click(screen.getByRole('option', { name: '九九' }));
+
+    const group = screen.getByRole('group', { name: '九九の教材' });
+    const tiles = within(group).getAllByRole('button');
+    expect(tiles.map((button) => button.textContent)).toEqual([
+      '全段混合', '1の段', '2の段', '3の段', '4の段', '5の段',
+      '6の段', '7の段', '8の段', '9の段',
+    ]);
+    expect(screen.getByRole('button', { name: '全段混合' })).toHaveAttribute('aria-pressed', 'true');
+    const sevenTile = screen.getByRole('button', { name: '7の段' });
+    sevenTile.focus();
+    expect(sevenTile).toHaveFocus();
+    fireEvent.click(sevenTile);
+    expect(sevenTile).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '全段混合' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('shows the print recommendation only for themes with the print_recommended presentation capability', () => {
@@ -341,7 +371,7 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('note', { name: note })).toHaveClass('print-recommended-note');
 
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
-    fireEvent.click(screen.getByRole('option', { name: '一桁の足し算' }));
+    fireEvent.click(screen.getByRole('option', { name: '一桁の足し算（まとめ）' }));
     expect(screen.queryByRole('note', { name: note })).not.toBeInTheDocument();
   });
 
@@ -352,7 +382,7 @@ describe('AutoDrillApp', () => {
     expect(themeSelect.querySelector('.grade-tag')).toHaveClass('grade-tag-grade-1');
     expect(themeSelect.querySelector('.grade-tag ruby')).toBeNull();
     fireEvent.click(themeSelect);
-    const grade1 = screen.getByRole('option', { name: '一桁の足し算' });
+    const grade1 = screen.getByRole('option', { name: '一桁の足し算（まとめ）' });
     expect(grade1.querySelector('.grade-tag')).toHaveTextContent('小1');
     expect(grade1.querySelector('.grade-tag')).toHaveClass('grade-tag-grade-1');
     expect(grade1.querySelector('.grade-tag ruby')).toBeNull();
@@ -365,8 +395,8 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
     fireEvent.click(screen.getByRole('option', { name: '掛け算と割り算' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
-    expect(screen.getByRole('option', { name: '割り算(1)' }).querySelector('.grade-tag')).toHaveTextContent('小3');
-    expect(screen.getByRole('option', { name: '割り算(1)' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-3');
+    expect(screen.getByRole('option', { name: 'あまりのない割り算' }).querySelector('.grade-tag')).toHaveTextContent('小3');
+    expect(screen.getByRole('option', { name: 'あまりのない割り算' }).querySelector('.grade-tag')).toHaveClass('grade-tag-grade-3');
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'テーマ' }), { key: 'Escape' });
 
     fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
@@ -407,8 +437,8 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('option', { name: '中学2年生' }));
 
     expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-selected-label', '中学2年生');
-    expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '連立方程式');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '連立方程式(1)');
+    expect(screen.getByRole('combobox', { name: '単元' })).toHaveAttribute('data-selected-label', '連立方程式');
+    expect(screen.queryByRole('group', { name: '連立方程式の教材' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '問題生成' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '印刷 (pdfで出力)' })).toBeEnabled();
   });
@@ -677,7 +707,7 @@ describe('AutoDrillApp', () => {
       />,
     );
     expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '足し算と引き算');
-    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一桁の足し算（まとめ）');
     expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', 'むずかしい');
   });
 
