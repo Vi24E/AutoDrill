@@ -9,13 +9,14 @@ import {
   ONE_DIGIT_ADDITION_THEME,
   RECOMMENDED_GENRES,
   findImplementedThemeByRoute,
+  type ImplementedCurriculumTheme,
 } from '@/domain/curriculum';
 import { ALL_MATH_STRUCTURES, taxonomyTags } from '@/domain/theme-registry';
 import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 53 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 54 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -67,7 +68,7 @@ describe('Web curriculum registry', () => {
 
   it('keeps grade curriculum units independent from Recommended taxonomy tags', () => {
     const columnThemes = IMPLEMENTED_THEMES.filter((theme) => theme.presentation.column_arithmetic);
-    expect(columnThemes).toHaveLength(13);
+    expect(columnThemes).toHaveLength(14);
     for (const theme of columnThemes) {
       expect(theme.presentation.print_recommended).toBe(true);
       expect(theme.presentation.worksheet_grid).toBe(true);
@@ -130,6 +131,24 @@ describe('Web curriculum registry', () => {
     const linearEquation = grade7.units.find((unit) => unit.unitKey === 'linear-equation')!;
     expect(linearEquation.label).toBe('一次方程式');
     expect(linearEquation.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
+
+    const grade3 = CURRICULUM_TREE[2]!;
+    const grade3Themes = grade3.units
+      .flatMap((unit) => unit.themes)
+      .filter((theme): theme is ImplementedCurriculumTheme => theme.implemented);
+    expect(grade3Themes.some((theme) => (
+      theme.presentation.column_arithmetic && theme.tags.includes('division')
+    ))).toBe(false);
+
+    const grade4 = CURRICULUM_TREE[3]!;
+    const integerDivision = grade4.units.find((unit) => unit.unitKey === 'grade4-integer-division')!;
+    const integerDivisionThemes = integerDivision.themes
+      .filter((theme): theme is ImplementedCurriculumTheme => theme.implemented);
+    expect(integerDivision.label).toBe('整数の除法');
+    expect(integerDivisionThemes.map((theme) => theme.label)).toEqual([
+      '2桁÷1桁の筆算', '3桁÷1桁の筆算', '二桁で割る割り算の筆算',
+    ]);
+    expect(integerDivisionThemes.slice(0, 2).map((theme) => theme.grade?.number)).toEqual([4, 4]);
 
     const grade2 = CURRICULUM_TREE[1]!;
     const multiplicationTable = grade2.units.find((unit) => unit.unitKey === 'multiplication-table')!;

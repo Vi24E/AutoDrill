@@ -28,26 +28,28 @@ pub const THEME_ID_COLUMN_ADD_3_4DIGIT: u32 = 27;
 pub const THEME_ID_COLUMN_SUBTRACT_3_4DIGIT: u32 = 28;
 pub const THEME_ID_COLUMN_MULTIPLY_1DIGIT: u32 = 29;
 pub const THEME_ID_COLUMN_MULTIPLY_2DIGIT: u32 = 30;
-pub const THEME_ID_COLUMN_DIVIDE_1DIGIT: u32 = 31;
+pub const THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT: u32 = 31;
 pub const THEME_ID_COLUMN_DIVIDE_2DIGIT: u32 = 32;
 pub const THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT: u32 = 33;
 pub const THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: u32 = 34;
 pub const THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 35;
 pub const THEME_ID_COLUMN_DECIMAL_MULTIPLICATION: u32 = 36;
 pub const THEME_ID_COLUMN_DECIMAL_DIVISION: u32 = 37;
+pub const THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: u32 = 54;
 pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_3_4DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_MULTIPLY_1DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_MULTIPLY_2DIGIT: u32 = 2;
-pub const GENERATOR_REVISION_COLUMN_DIVIDE_1DIGIT: u32 = 2;
+pub const GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT: u32 = 3;
 pub const GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_ADD_SUBTRACT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLY_INTEGER: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION: u32 = 3;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION: u32 = 2;
+pub const GENERATOR_REVISION_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: u32 = 1;
 pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit";
 pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit";
 pub const SKILL_ID_COLUMN_ADD_3_4DIGIT: &str = "jp.grade3.column.addition.three_four_digit";
@@ -56,7 +58,10 @@ pub const SKILL_ID_COLUMN_MULTIPLY_1DIGIT: &str =
     "jp.grade3.column.multiplication.one_digit_multiplier";
 pub const SKILL_ID_COLUMN_MULTIPLY_2DIGIT: &str =
     "jp.grade3.column.multiplication.two_digit_multiplier";
-pub const SKILL_ID_COLUMN_DIVIDE_1DIGIT: &str = "jp.grade3.column.division.one_digit_divisor";
+pub const SKILL_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT: &str =
+    "jp.grade4.column.division.two_digit_by_one_digit";
+pub const SKILL_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: &str =
+    "jp.grade4.column.division.three_digit_by_one_digit";
 pub const SKILL_ID_COLUMN_DIVIDE_2DIGIT: &str = "jp.grade4.column.division.two_digit_divisor";
 pub const SKILL_ID_COLUMN_DECIMAL_ADD_SUBTRACT: &str = "jp.grade4.column.decimal.add_subtract";
 pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: &str =
@@ -76,8 +81,10 @@ pub const CURRICULUM_PATH_COLUMN_MULTIPLY_1DIGIT: [&str; 4] =
     ["root", "小学3年生", "乗法", "一桁をかける掛け算の筆算"];
 pub const CURRICULUM_PATH_COLUMN_MULTIPLY_2DIGIT: [&str; 4] =
     ["root", "小学3年生", "乗法", "二桁をかける掛け算の筆算"];
-pub const CURRICULUM_PATH_COLUMN_DIVIDE_1DIGIT: [&str; 4] =
-    ["root", "小学3年生", "除法", "一桁で割る割り算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT: [&str; 4] =
+    ["root", "小学4年生", "整数の除法", "2桁÷1桁の筆算"];
+pub const CURRICULUM_PATH_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: [&str; 4] =
+    ["root", "小学4年生", "整数の除法", "3桁÷1桁の筆算"];
 pub const CURRICULUM_PATH_COLUMN_DIVIDE_2DIGIT: [&str; 4] =
     ["root", "小学4年生", "整数の除法", "二桁で割る割り算の筆算"];
 pub const CURRICULUM_PATH_COLUMN_DECIMAL_ADD_SUBTRACT: [&str; 4] = [
@@ -117,8 +124,6 @@ pub const CURRICULUM_UNIT_GRADE3_COLUMN_ADD_SUBTRACT: CurriculumUnit =
     CurriculumUnit::new("grade3-column-add-subtract", "加法，減法");
 pub const CURRICULUM_UNIT_GRADE3_COLUMN_MULTIPLICATION: CurriculumUnit =
     CurriculumUnit::new("grade3-column-multiplication", "乗法");
-pub const CURRICULUM_UNIT_GRADE3_COLUMN_DIVISION: CurriculumUnit =
-    CurriculumUnit::new("grade3-column-division", "除法");
 pub const CURRICULUM_UNIT_GRADE4_INTEGER_DIVISION: CurriculumUnit =
     CurriculumUnit::new("grade4-integer-division", "整数の除法");
 pub const CURRICULUM_UNIT_GRADE4_DECIMAL: CurriculumUnit =
@@ -261,15 +266,15 @@ pub const COLUMN_MULTIPLY_2DIGIT_REGISTRATION: ThemeRegistration =
     })
     .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_MULTIPLICATION);
 
-pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration =
+pub const COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DIVIDE_1DIGIT),
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT),
         generator_revision: crate::theme::GeneratorRevision::new(
-            GENERATOR_REVISION_COLUMN_DIVIDE_1DIGIT,
+            GENERATOR_REVISION_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT,
         ),
-        skill_id: SKILL_ID_COLUMN_DIVIDE_1DIGIT,
-        curriculum_path: &CURRICULUM_PATH_COLUMN_DIVIDE_1DIGIT,
-        grade: Some(SchoolGrade::Elementary3),
+        skill_id: SKILL_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT,
+        grade: Some(SchoolGrade::Elementary4),
         tags: DIVISION,
         safety: Safety::NonNegativeOnly,
         presentation: Presentation::COLUMN_DIVISION,
@@ -277,7 +282,25 @@ pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration =
         answer_contract: INTEGER_DIVISION_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
     })
-    .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_DIVISION);
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_INTEGER_DIVISION);
+
+pub const COLUMN_DIVIDE_3DIGIT_BY_1DIGIT_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT,
+        ),
+        skill_id: SKILL_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT,
+        grade: Some(SchoolGrade::Elementary4),
+        tags: DIVISION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_DIVISION,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: INTEGER_DIVISION_COLUMN,
+        layout: COLUMN_DIVISION_12_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_INTEGER_DIVISION);
 
 pub const COLUMN_DIVIDE_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -395,8 +418,9 @@ enum Mode {
     SubtractThreeFourDigit,
     MultiplyOneDigit,
     MultiplyTwoDigit,
-    DivideOneDigit,
-    DivideTwoDigit,
+    DivideTwoDigitByOneDigit,
+    DivideThreeDigitByOneDigit,
+    DivideTwoDigitDivisor,
     DecimalAddSubtract,
     DecimalMultiplyInteger,
     DecimalDivideInteger,
@@ -510,14 +534,19 @@ generator!(
     MultiplyTwoDigit
 );
 generator!(
-    DIVIDE_1DIGIT_GENERATOR,
-    COLUMN_DIVIDE_1DIGIT_REGISTRATION,
-    DivideOneDigit
+    DIVIDE_2DIGIT_BY_1DIGIT_GENERATOR,
+    COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_REGISTRATION,
+    DivideTwoDigitByOneDigit
+);
+generator!(
+    DIVIDE_3DIGIT_BY_1DIGIT_GENERATOR,
+    COLUMN_DIVIDE_3DIGIT_BY_1DIGIT_REGISTRATION,
+    DivideThreeDigitByOneDigit
 );
 generator!(
     DIVIDE_2DIGIT_GENERATOR,
     COLUMN_DIVIDE_2DIGIT_REGISTRATION,
-    DivideTwoDigit
+    DivideTwoDigitDivisor
 );
 generator!(
     DECIMAL_ADD_SUBTRACT_GENERATOR,
@@ -724,17 +753,33 @@ fn draw_problem(
                 },
             )
         }
-        Mode::DivideOneDigit | Mode::DivideTwoDigit => {
-            let divisor = if mode == Mode::DivideOneDigit {
-                2 + rng.next_bounded(8) as i64
+        Mode::DivideTwoDigitByOneDigit | Mode::DivideThreeDigitByOneDigit => {
+            let dividend_digits = if mode == Mode::DivideTwoDigitByOneDigit {
+                2
             } else {
-                draw_integer_with_digits(rng, 2)?
+                3
             };
-            let quotient = if mode == Mode::DivideOneDigit {
-                draw_integer_with_digits(rng, 2)?
-            } else {
-                2 + rng.next_bounded(98) as i64
-            };
+            let dividend = draw_integer_with_digits(rng, dividend_digits)?;
+            let divisor = 2 + rng.next_bounded(8) as i64;
+            let quotient = dividend / divisor;
+            let remainder = dividend % divisor;
+            let answer = AnswerNode::Tuple(vec![
+                AnswerNode::Integer(quotient),
+                AnswerNode::Integer(remainder),
+            ]);
+            let plan = integer_division_with_remainder_plan(dividend, divisor, &answer)?;
+            (
+                ArithmeticOperator::Divide,
+                integer_expression(dividend),
+                integer_expression(divisor),
+                answer,
+                plan,
+                AnswerSchema::OrderedPair,
+            )
+        }
+        Mode::DivideTwoDigitDivisor => {
+            let divisor = draw_integer_with_digits(rng, 2)?;
+            let quotient = 2 + rng.next_bounded(98) as i64;
             let remainder = draw_column_remainder(rng, divisor)?;
             let dividend = divisor.checked_mul(quotient)?.checked_add(remainder)?;
             let answer = AnswerNode::Tuple(vec![
@@ -923,14 +968,15 @@ fn draw_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 13] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 14] = [
     GeneratorEntry::current(&ADD_2DIGIT_GENERATOR),
     GeneratorEntry::current(&SUBTRACT_2DIGIT_GENERATOR),
     GeneratorEntry::current(&ADD_3_4DIGIT_GENERATOR),
     GeneratorEntry::current(&SUBTRACT_3_4DIGIT_GENERATOR),
     GeneratorEntry::current(&MULTIPLY_1DIGIT_GENERATOR),
     GeneratorEntry::current(&MULTIPLY_2DIGIT_GENERATOR),
-    GeneratorEntry::current(&DIVIDE_1DIGIT_GENERATOR),
+    GeneratorEntry::current(&DIVIDE_2DIGIT_BY_1DIGIT_GENERATOR),
+    GeneratorEntry::current(&DIVIDE_3DIGIT_BY_1DIGIT_GENERATOR),
     GeneratorEntry::current(&DIVIDE_2DIGIT_GENERATOR),
     GeneratorEntry::current(&DECIMAL_ADD_SUBTRACT_GENERATOR),
     GeneratorEntry::current(&DECIMAL_MULTIPLY_INTEGER_GENERATOR),
@@ -989,14 +1035,15 @@ mod curriculum_tests {
     #[test]
     fn column_arithmetic_themes_follow_curriculum_domains_and_print_layouts() {
         use crate::themes::column_arithmetic::*;
-        const IDS: [u32; 13] = [
+        const IDS: [u32; 14] = [
             THEME_ID_COLUMN_ADD_2DIGIT,
             THEME_ID_COLUMN_SUBTRACT_2DIGIT,
             THEME_ID_COLUMN_ADD_3_4DIGIT,
             THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
             THEME_ID_COLUMN_MULTIPLY_1DIGIT,
             THEME_ID_COLUMN_MULTIPLY_2DIGIT,
-            THEME_ID_COLUMN_DIVIDE_1DIGIT,
+            THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT,
+            THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT,
             THEME_ID_COLUMN_DIVIDE_2DIGIT,
             THEME_ID_COLUMN_DECIMAL_ADD_SUBTRACT,
             THEME_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER,
@@ -1012,7 +1059,8 @@ mod curriculum_tests {
                 .unwrap();
             let is_division = matches!(
                 theme_id,
-                THEME_ID_COLUMN_DIVIDE_1DIGIT
+                THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT
+                    | THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT
                     | THEME_ID_COLUMN_DIVIDE_2DIGIT
                     | THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER
                     | THEME_ID_COLUMN_DECIMAL_DIVISION
@@ -1101,25 +1149,34 @@ mod curriculum_tests {
                             assert!((10..=999).contains(&left_value.numerator()));
                             assert!((10..=99).contains(&right_value.numerator()));
                         }
-                        THEME_ID_COLUMN_DIVIDE_1DIGIT | THEME_ID_COLUMN_DIVIDE_2DIGIT => {
+                        THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT
+                        | THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT
+                        | THEME_ID_COLUMN_DIVIDE_2DIGIT => {
                             assert_eq!(*operator, ArithmeticOperator::Divide);
                             assert_eq!(left_value.denominator(), 1);
                             assert_eq!(right_value.denominator(), 1);
+                            let dividend = left_value.numerator();
                             let divisor = right_value.numerator();
-                            if theme_id == THEME_ID_COLUMN_DIVIDE_1DIGIT {
-                                assert!((2..=9).contains(&divisor));
-                            } else {
-                                assert!((10..=99).contains(&divisor));
+                            match theme_id {
+                                THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT => {
+                                    assert!((10..=99).contains(&dividend));
+                                    assert!((2..=9).contains(&divisor));
+                                }
+                                THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT => {
+                                    assert!((100..=999).contains(&dividend));
+                                    assert!((2..=9).contains(&divisor));
+                                }
+                                THEME_ID_COLUMN_DIVIDE_2DIGIT => {
+                                    assert!((10..=99).contains(&divisor));
+                                }
+                                _ => unreachable!(),
                             }
                             let (quotient, remainder) =
                                 quotient_remainder(problem.canonical_answer());
-                            if theme_id == THEME_ID_COLUMN_DIVIDE_1DIGIT {
-                                assert!((10..=99).contains(&quotient));
-                            } else {
-                                assert!((2..=99).contains(&quotient));
-                            }
+                            assert_eq!(quotient, dividend / divisor);
+                            assert_eq!(remainder, dividend % divisor);
                             assert!((0..divisor).contains(&remainder));
-                            assert_eq!(left_value.numerator(), divisor * quotient + remainder);
+                            assert_eq!(dividend, divisor * quotient + remainder);
                             assert_eq!(problem.answer_schema(), &AnswerSchema::OrderedPair);
                             continue;
                         }

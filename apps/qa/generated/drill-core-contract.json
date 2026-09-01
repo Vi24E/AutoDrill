@@ -1666,19 +1666,19 @@
     },
     "31": {
       "numeric_theme_id": 31,
-      "generator_revision": 2,
-      "skill_id": "jp.grade3.column.division.one_digit_divisor",
+      "generator_revision": 3,
+      "skill_id": "jp.grade4.column.division.two_digit_by_one_digit",
       "curriculum_path": [
         "root",
-        "小学3年生",
-        "除法",
-        "一桁で割る割り算の筆算"
+        "小学4年生",
+        "整数の除法",
+        "2桁÷1桁の筆算"
       ],
       "curriculum_unit": {
-        "key": "grade3-column-division",
-        "label": "除法"
+        "key": "grade4-integer-division",
+        "label": "整数の除法"
       },
-      "grade": 3,
+      "grade": 4,
       "tags": [
         "division"
       ],
@@ -2862,6 +2862,67 @@
         "problem_count": 20,
         "columns": 2,
         "rows": 10
+      }
+    },
+    "54": {
+      "numeric_theme_id": 54,
+      "generator_revision": 1,
+      "skill_id": "jp.grade4.column.division.three_digit_by_one_digit",
+      "curriculum_path": [
+        "root",
+        "小学4年生",
+        "整数の除法",
+        "3桁÷1桁の筆算"
+      ],
+      "curriculum_unit": {
+        "key": "grade4-integer-division",
+        "label": "整数の除法"
+      },
+      "grade": 4,
+      "tags": [
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": null,
+          "quotient": {
+            "order": "natural_division_flow",
+            "decimal_point": "none"
+          },
+          "remainder": {
+            "order": "big_endian",
+            "decimal_point": "none"
+          }
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "tuple_only"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "layout": {
+        "problem_count": 12,
+        "columns": 4,
+        "rows": 3
       }
     }
   },

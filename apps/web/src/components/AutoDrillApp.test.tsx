@@ -6,7 +6,7 @@ import { deleteEmptyMathLiveStructureBackward, type AutoDrillMathfield } from '@
 import { createWebDrillSettings, findImplementedThemeByNumericId, LINEAR_EQUATION_1_THEME, ONE_DIGIT_ADDITION_THEME } from '@/domain/curriculum';
 import { DECIMAL_ADD_SUBTRACT_DEFINITION } from '@/domain/themes/decimal-add-subtract';
 import { MINI_SUDOKU_DEFINITION } from '@/domain/themes/mini-sudoku';
-import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-one-digit';
+import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit-by-one-digit';
 import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from '@/domain/themes/column-decimal-multiplication';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from '@/domain/themes/signed-arithmetic-1';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
@@ -450,18 +450,18 @@ describe('AutoDrillApp', () => {
     render(
       <AutoDrillApp
         engine={{ ...base, gradeAnswer }}
-        initialWebSettings={createWebDrillSettings(findImplementedThemeByNumericId(COLUMN_DIVIDE_1DIGIT_DEFINITION.numeric_theme_id)!, 3, 'fixtureSeed')}
+        initialWebSettings={createWebDrillSettings(findImplementedThemeByNumericId(COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION.numeric_theme_id)!, 3, 'fixtureSeed')}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     const firstProblem = await screen.findByTestId('problem-cell-0');
     const quotientDigits = within(firstProblem).getAllByRole('button', { name: /^1番の商 / });
-    expect(quotientDigits).toHaveLength(3);
+    expect(quotientDigits).toHaveLength(2);
 
     // All dividend-aligned quotient positions are offered so the UI does not
     // reveal that this particular quotient starts in the second cell.
-    fireEvent.click(quotientDigits[1]!);
-    fireEvent.keyDown(window, { key: '3' });
+    fireEvent.click(quotientDigits[0]!);
+    fireEvent.keyDown(window, { key: '1' });
     fireEvent.keyDown(window, { key: '2' });
 
     const emptyRemainder = await within(firstProblem).findByRole('textbox', { name: '1番のあまり 未入力' });
@@ -478,11 +478,11 @@ describe('AutoDrillApp', () => {
     const submitted = gradeAnswer.mock.calls[0]![0].answers.find((entry) => entry.problem_id === '1')?.answer;
     expect(submitted).toEqual({
       type: 'tuple',
-      value: [{ type: 'integer', value: '32' }, { type: 'integer', value: '21' }],
+      value: [{ type: 'integer', value: '12' }, { type: 'integer', value: '21' }],
     });
     const gradedRemainder = within(firstProblem).getByRole('textbox', { name: '1番のあまり 21' }) as HTMLElement & { value: string };
     expect(gradedRemainder.value).toBe('21');
-    expect(within(firstProblem).getByLabelText('1番の商 十の位 3')).toBeInTheDocument();
+    expect(within(firstProblem).getByLabelText('1番の商 十の位 1')).toBeInTheDocument();
     expect(within(firstProblem).getByLabelText('1番の商 一の位 2')).toBeInTheDocument();
   });
 

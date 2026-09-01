@@ -15,7 +15,7 @@ import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-additio
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
 import { SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/themes/simultaneous-equation-1';
-import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-one-digit';
+import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit-by-one-digit';
 import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit';
 import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from '@/domain/themes/column-decimal-multiplication';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
@@ -155,10 +155,10 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
 }
 
 export function columnDivisionFixtureWorksheet(themeId: 31 | 32 = 31): WorksheetDto {
-  const definition = themeId === 31 ? COLUMN_DIVIDE_1DIGIT_DEFINITION : COLUMN_DIVIDE_2DIGIT_DEFINITION;
+  const definition = themeId === 31 ? COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION : COLUMN_DIVIDE_2DIGIT_DEFINITION;
   const divisor = themeId === 31 ? 7 : 23;
-  const dividend = themeId === 31 ? 224 : 1245;
-  const quotient = themeId === 31 ? 32 : 54;
+  const dividend = themeId === 31 ? 84 : 1245;
+  const quotient = themeId === 31 ? 12 : 54;
   const remainder = themeId === 31 ? 0 : 3;
   const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
     schema_version: DRILL_SCHEMA_VERSION,

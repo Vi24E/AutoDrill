@@ -140,7 +140,7 @@ mod tests {
         THEME_ID_MULTIPLICATION_TABLE, THEME_ID_ONE_DIGIT_ADDITION,
     };
     use crate::themes::column_arithmetic::{
-        THEME_ID_COLUMN_DECIMAL_MULTIPLICATION, THEME_ID_COLUMN_DIVIDE_1DIGIT,
+        THEME_ID_COLUMN_DECIMAL_MULTIPLICATION, THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT,
         THEME_ID_COLUMN_MULTIPLY_1DIGIT,
     };
     use crate::Difficulty;
@@ -185,7 +185,7 @@ mod tests {
             "none"
         );
 
-        let division = problem_wire(THEME_ID_COLUMN_DIVIDE_1DIGIT);
+        let division = problem_wire(THEME_ID_COLUMN_DIVIDE_2DIGIT_BY_1DIGIT);
         assert_eq!(
             division["column_input"]["quotient"]["order"],
             "natural_division_flow"

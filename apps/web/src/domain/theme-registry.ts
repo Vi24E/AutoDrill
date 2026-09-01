@@ -47,7 +47,8 @@ import { COLUMN_ADD_3_4DIGIT_DEFINITION } from './themes/column-add-three-four-d
 import { COLUMN_SUBTRACT_3_4DIGIT_DEFINITION } from './themes/column-subtract-three-four-digit';
 import { COLUMN_MULTIPLY_1DIGIT_DEFINITION } from './themes/column-multiply-one-digit';
 import { COLUMN_MULTIPLY_2DIGIT_DEFINITION } from './themes/column-multiply-two-digit';
-import { COLUMN_DIVIDE_1DIGIT_DEFINITION } from './themes/column-divide-one-digit';
+import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from './themes/column-divide-two-digit-by-one-digit';
+import { COLUMN_DIVIDE_3DIGIT_BY_1DIGIT_DEFINITION } from './themes/column-divide-three-digit-by-one-digit';
 import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from './themes/column-divide-two-digit';
 import { COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/column-decimal-add-subtract';
 import { COLUMN_DECIMAL_MULTIPLY_INTEGER_DEFINITION } from './themes/column-decimal-multiply-integer';
@@ -84,7 +85,8 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   DIVISION_1_DEFINITION,
   COLUMN_MULTIPLY_1DIGIT_DEFINITION,
   COLUMN_MULTIPLY_2DIGIT_DEFINITION,
-  COLUMN_DIVIDE_1DIGIT_DEFINITION,
+  COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION,
+  COLUMN_DIVIDE_3DIGIT_BY_1DIGIT_DEFINITION,
   COLUMN_DIVIDE_2DIGIT_DEFINITION,
   DECIMAL_ADD_SUBTRACT_DEFINITION,
   COLUMN_DECIMAL_ADD_SUBTRACT_DEFINITION,
