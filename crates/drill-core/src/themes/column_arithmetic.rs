@@ -36,6 +36,10 @@ pub const THEME_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 35;
 pub const THEME_ID_COLUMN_DECIMAL_MULTIPLICATION: u32 = 36;
 pub const THEME_ID_COLUMN_DECIMAL_DIVISION: u32 = 37;
 pub const THEME_ID_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: u32 = 54;
+pub const THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY: u32 = 59;
+pub const THEME_ID_COLUMN_ADD_2DIGIT_WITH_CARRY: u32 = 60;
+pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: u32 = 61;
+pub const THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: u32 = 62;
 pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_ADD_3_4DIGIT: u32 = 2;
@@ -50,8 +54,20 @@ pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVIDE_INTEGER: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_MULTIPLICATION: u32 = 3;
 pub const GENERATOR_REVISION_COLUMN_DECIMAL_DIVISION: u32 = 2;
 pub const GENERATOR_REVISION_COLUMN_DIVIDE_3DIGIT_BY_1DIGIT: u32 = 1;
-pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit";
-pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit";
+pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT_NO_CARRY: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_ADD_2DIGIT_WITH_CARRY: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: u32 = 1;
+pub const GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: u32 = 1;
+pub const SKILL_ID_COLUMN_ADD_2DIGIT: &str = "jp.grade2.column.addition.two_digit.summary";
+pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT: &str = "jp.grade2.column.subtraction.two_digit.summary";
+pub const SKILL_ID_COLUMN_ADD_2DIGIT_NO_CARRY: &str =
+    "jp.grade2.column.addition.two_digit.no_carry";
+pub const SKILL_ID_COLUMN_ADD_2DIGIT_WITH_CARRY: &str =
+    "jp.grade2.column.addition.two_digit.with_carry";
+pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: &str =
+    "jp.grade2.column.subtraction.two_digit.no_borrow";
+pub const SKILL_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: &str =
+    "jp.grade2.column.subtraction.two_digit.with_borrow";
 pub const SKILL_ID_COLUMN_ADD_3_4DIGIT: &str = "jp.grade3.column.addition.three_four_digit";
 pub const SKILL_ID_COLUMN_SUBTRACT_3_4DIGIT: &str = "jp.grade3.column.subtraction.three_four_digit";
 pub const SKILL_ID_COLUMN_MULTIPLY_1DIGIT: &str =
@@ -69,10 +85,26 @@ pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLY_INTEGER: &str =
 pub const SKILL_ID_COLUMN_DECIMAL_DIVIDE_INTEGER: &str = "jp.grade4.column.decimal.divide_integer";
 pub const SKILL_ID_COLUMN_DECIMAL_MULTIPLICATION: &str = "jp.grade5.column.decimal.multiplication";
 pub const SKILL_ID_COLUMN_DECIMAL_DIVISION: &str = "jp.grade5.column.decimal.division";
-pub const CURRICULUM_PATH_COLUMN_ADD_2DIGIT: [&str; 4] =
-    ["root", "小学2年生", "加法，減法", "二桁の足し算の筆算"];
-pub const CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT: [&str; 4] =
-    ["root", "小学2年生", "加法，減法", "二桁の引き算の筆算"];
+pub const CURRICULUM_PATH_COLUMN_ADD_2DIGIT: [&str; 4] = [
+    "root",
+    "小学2年生",
+    "加法，減法",
+    "二桁の足し算の筆算（まとめ）",
+];
+pub const CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT: [&str; 4] = [
+    "root",
+    "小学2年生",
+    "加法，減法",
+    "二桁の引き算の筆算（まとめ）",
+];
+pub const CURRICULUM_PATH_COLUMN_ADD_2DIGIT_NO_CARRY: [&str; 4] =
+    ["root", "小学2年生", "加法，減法", "足し算・繰り上がりなし"];
+pub const CURRICULUM_PATH_COLUMN_ADD_2DIGIT_WITH_CARRY: [&str; 4] =
+    ["root", "小学2年生", "加法，減法", "足し算・繰り上がりあり"];
+pub const CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT_NO_BORROW: [&str; 4] =
+    ["root", "小学2年生", "加法，減法", "引き算・繰り下がりなし"];
+pub const CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW: [&str; 4] =
+    ["root", "小学2年生", "加法，減法", "引き算・繰り下がりあり"];
 pub const CURRICULUM_PATH_COLUMN_ADD_3_4DIGIT: [&str; 4] =
     ["root", "小学3年生", "加法，減法", "三・四桁の足し算の筆算"];
 pub const CURRICULUM_PATH_COLUMN_SUBTRACT_3_4DIGIT: [&str; 4] =
@@ -184,6 +216,78 @@ pub const COLUMN_SUBTRACT_2DIGIT_REGISTRATION: ThemeRegistration =
         ),
         skill_id: SKILL_ID_COLUMN_SUBTRACT_2DIGIT,
         curriculum_path: &CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT,
+        grade: Some(SchoolGrade::Elementary2),
+        tags: SUBTRACTION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_ARITHMETIC,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: INTEGER_COLUMN,
+        layout: COLUMN_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT);
+
+pub const COLUMN_ADD_2DIGIT_NO_CARRY_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_ADD_2DIGIT_NO_CARRY,
+        ),
+        skill_id: SKILL_ID_COLUMN_ADD_2DIGIT_NO_CARRY,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_ADD_2DIGIT_NO_CARRY,
+        grade: Some(SchoolGrade::Elementary2),
+        tags: ADDITION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_ARITHMETIC,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: INTEGER_COLUMN,
+        layout: COLUMN_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT);
+
+pub const COLUMN_ADD_2DIGIT_WITH_CARRY_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_ADD_2DIGIT_WITH_CARRY),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_ADD_2DIGIT_WITH_CARRY,
+        ),
+        skill_id: SKILL_ID_COLUMN_ADD_2DIGIT_WITH_CARRY,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_ADD_2DIGIT_WITH_CARRY,
+        grade: Some(SchoolGrade::Elementary2),
+        tags: ADDITION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_ARITHMETIC,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: INTEGER_COLUMN,
+        layout: COLUMN_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT);
+
+pub const COLUMN_SUBTRACT_2DIGIT_NO_BORROW_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_NO_BORROW,
+        ),
+        skill_id: SKILL_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT_NO_BORROW,
+        grade: Some(SchoolGrade::Elementary2),
+        tags: SUBTRACTION,
+        safety: Safety::NonNegativeOnly,
+        presentation: Presentation::COLUMN_ARITHMETIC,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: INTEGER_COLUMN,
+        layout: COLUMN_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT);
+
+pub const COLUMN_SUBTRACT_2DIGIT_WITH_BORROW_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW,
+        ),
+        skill_id: SKILL_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW,
+        curriculum_path: &CURRICULUM_PATH_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW,
         grade: Some(SchoolGrade::Elementary2),
         tags: SUBTRACTION,
         safety: Safety::NonNegativeOnly,
@@ -428,10 +532,28 @@ enum Mode {
     DecimalDivision,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RegroupingPolicy {
+    Any,
+    None,
+    Required,
+}
+
+impl RegroupingPolicy {
+    fn accepts(self, requires_regrouping: bool) -> bool {
+        match self {
+            Self::Any => true,
+            Self::None => !requires_regrouping,
+            Self::Required => requires_regrouping,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Generator {
     registration: &'static ThemeRegistration,
     mode: Mode,
+    regrouping: RegroupingPolicy,
 }
 
 impl ProblemGenerator for Generator {
@@ -462,7 +584,15 @@ impl RandomCandidateSource for Generator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        draw_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
+        draw_problem(
+            self.registration,
+            self.mode,
+            self.regrouping,
+            rng,
+            ordinal,
+            weights,
+        )
+        .transpose()
     }
 }
 
@@ -477,7 +607,15 @@ impl LayeredCandidateSource for Generator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        draw_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
+        draw_problem(
+            self.registration,
+            self.mode,
+            self.regrouping,
+            rng,
+            ordinal,
+            weights,
+        )
+        .transpose()
     }
 
     fn layer_of(&self, problem: &Problem) -> usize {
@@ -495,11 +633,15 @@ impl LayeredCandidateSource for Generator {
 }
 
 macro_rules! generator {
-    ($name:ident, $registration:ident, $mode:ident) => {
+    ($name:ident, $registration:ident, $mode:ident, $regrouping:ident) => {
         pub(crate) static $name: Generator = Generator {
             registration: &$registration,
             mode: Mode::$mode,
+            regrouping: RegroupingPolicy::$regrouping,
         };
+    };
+    ($name:ident, $registration:ident, $mode:ident) => {
+        generator!($name, $registration, $mode, Any);
     };
 }
 
@@ -512,6 +654,30 @@ generator!(
     SUBTRACT_2DIGIT_GENERATOR,
     COLUMN_SUBTRACT_2DIGIT_REGISTRATION,
     SubtractTwoDigit
+);
+generator!(
+    ADD_2DIGIT_NO_CARRY_GENERATOR,
+    COLUMN_ADD_2DIGIT_NO_CARRY_REGISTRATION,
+    AddTwoDigit,
+    None
+);
+generator!(
+    ADD_2DIGIT_WITH_CARRY_GENERATOR,
+    COLUMN_ADD_2DIGIT_WITH_CARRY_REGISTRATION,
+    AddTwoDigit,
+    Required
+);
+generator!(
+    SUBTRACT_2DIGIT_NO_BORROW_GENERATOR,
+    COLUMN_SUBTRACT_2DIGIT_NO_BORROW_REGISTRATION,
+    SubtractTwoDigit,
+    None
+);
+generator!(
+    SUBTRACT_2DIGIT_WITH_BORROW_GENERATOR,
+    COLUMN_SUBTRACT_2DIGIT_WITH_BORROW_REGISTRATION,
+    SubtractTwoDigit,
+    Required
 );
 generator!(
     ADD_3_4DIGIT_GENERATOR,
@@ -608,11 +774,24 @@ fn draw_column_remainder(rng: &mut DeterministicRng, divisor: i64) -> Option<i64
     }
 }
 
+fn addition_requires_regrouping(left: i64, right: i64) -> bool {
+    let ones_carry = left % 10 + right % 10 >= 10;
+    let carry = i64::from(ones_carry);
+    let tens_carry = left / 10 + right / 10 + carry >= 10;
+    ones_carry || tens_carry
+}
+
+fn subtraction_requires_regrouping(left: i64, right: i64) -> bool {
+    debug_assert!(left >= right);
+    left % 10 < right % 10
+}
+
 // Current column-arithmetic candidate rules. Pre-release history lives in Git;
 // production registers only the current generator for each theme.
 fn draw_problem(
     registration: &ThemeRegistration,
     mode: Mode,
+    regrouping: RegroupingPolicy,
     rng: &mut DeterministicRng,
     id: u32,
     _weights: &OperationWeights,
@@ -621,6 +800,9 @@ fn draw_problem(
         Mode::AddTwoDigit => {
             let left_value = draw_integer_with_digits(rng, 2)?;
             let right_value = draw_integer_with_digits(rng, 2)?;
+            if !regrouping.accepts(addition_requires_regrouping(left_value, right_value)) {
+                return None;
+            }
             let answer = AnswerNode::Integer(left_value.checked_add(right_value)?);
             let left = integer_expression(left_value);
             let right = integer_expression(right_value);
@@ -644,6 +826,9 @@ fn draw_problem(
             } else {
                 (second, first)
             };
+            if !regrouping.accepts(subtraction_requires_regrouping(left_value, right_value)) {
+                return None;
+            }
             let answer = AnswerNode::Integer(left_value - right_value);
             let left = integer_expression(left_value);
             let right = integer_expression(right_value);
@@ -968,9 +1153,13 @@ fn draw_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 14] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 18] = [
     GeneratorEntry::current(&ADD_2DIGIT_GENERATOR),
     GeneratorEntry::current(&SUBTRACT_2DIGIT_GENERATOR),
+    GeneratorEntry::current(&ADD_2DIGIT_NO_CARRY_GENERATOR),
+    GeneratorEntry::current(&ADD_2DIGIT_WITH_CARRY_GENERATOR),
+    GeneratorEntry::current(&SUBTRACT_2DIGIT_NO_BORROW_GENERATOR),
+    GeneratorEntry::current(&SUBTRACT_2DIGIT_WITH_BORROW_GENERATOR),
     GeneratorEntry::current(&ADD_3_4DIGIT_GENERATOR),
     GeneratorEntry::current(&SUBTRACT_3_4DIGIT_GENERATOR),
     GeneratorEntry::current(&MULTIPLY_1DIGIT_GENERATOR),
@@ -1033,11 +1222,81 @@ mod curriculum_tests {
     }
 
     #[test]
+    fn two_digit_dedicated_themes_fix_regrouping_presence_without_count_taxonomy() {
+        let cases = [
+            (
+                THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY,
+                ArithmeticOperator::Add,
+                false,
+            ),
+            (
+                THEME_ID_COLUMN_ADD_2DIGIT_WITH_CARRY,
+                ArithmeticOperator::Add,
+                true,
+            ),
+            (
+                THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW,
+                ArithmeticOperator::Subtract,
+                false,
+            ),
+            (
+                THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW,
+                ArithmeticOperator::Subtract,
+                true,
+            ),
+        ];
+        for (theme_id, expected_operator, expected_regrouping) in cases {
+            for difficulty in 1..=4 {
+                for seed in ["RgA1", "RgB2", "RgC3"] {
+                    let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                        timeout_ms: Some(1_000),
+                        max_attempts: Some(50_000),
+                    })
+                    .unwrap_or_else(|error| {
+                        panic!(
+                            "regrouping theme {theme_id} d{difficulty} failed for {seed}: {error}"
+                        )
+                    });
+                    for problem in worksheet.problems() {
+                        let ProblemPrompt::ColumnArithmetic {
+                            operator,
+                            left,
+                            right,
+                        } = problem.prompt()
+                        else {
+                            panic!("regrouping theme returned a non-column prompt");
+                        };
+                        assert_eq!(*operator, expected_operator);
+                        let left = column_leaf_value(left).numerator();
+                        let right = column_leaf_value(right).numerator();
+                        let actual = match operator {
+                            ArithmeticOperator::Add => addition_requires_regrouping(left, right),
+                            ArithmeticOperator::Subtract => {
+                                subtraction_requires_regrouping(left, right)
+                            }
+                            _ => unreachable!(),
+                        };
+                        assert_eq!(actual, expected_regrouping);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn column_arithmetic_themes_follow_curriculum_domains_and_print_layouts() {
         use crate::themes::column_arithmetic::*;
-        const IDS: [u32; 14] = [
+        const IDS: [u32; 18] = [
             THEME_ID_COLUMN_ADD_2DIGIT,
             THEME_ID_COLUMN_SUBTRACT_2DIGIT,
+            THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY,
+            THEME_ID_COLUMN_ADD_2DIGIT_WITH_CARRY,
+            THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW,
+            THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW,
             THEME_ID_COLUMN_ADD_3_4DIGIT,
             THEME_ID_COLUMN_SUBTRACT_3_4DIGIT,
             THEME_ID_COLUMN_MULTIPLY_1DIGIT,
@@ -1115,14 +1374,18 @@ mod curriculum_tests {
                     let expected = crate::generator_support::evaluate_expression(&expression)
                         .expect("column expression evaluates exactly");
                     match theme_id {
-                        THEME_ID_COLUMN_ADD_2DIGIT => {
+                        THEME_ID_COLUMN_ADD_2DIGIT
+                        | THEME_ID_COLUMN_ADD_2DIGIT_NO_CARRY
+                        | THEME_ID_COLUMN_ADD_2DIGIT_WITH_CARRY => {
                             assert_eq!(*operator, ArithmeticOperator::Add);
                             assert!((10..=99).contains(&left_value.numerator()));
                             assert!((10..=99).contains(&right_value.numerator()));
                             assert_eq!(left_value.denominator(), 1);
                             assert_eq!(right_value.denominator(), 1);
                         }
-                        THEME_ID_COLUMN_SUBTRACT_2DIGIT => {
+                        THEME_ID_COLUMN_SUBTRACT_2DIGIT
+                        | THEME_ID_COLUMN_SUBTRACT_2DIGIT_NO_BORROW
+                        | THEME_ID_COLUMN_SUBTRACT_2DIGIT_WITH_BORROW => {
                             assert_eq!(*operator, ArithmeticOperator::Subtract);
                             assert!((10..=99).contains(&left_value.numerator()));
                             assert!((10..=99).contains(&right_value.numerator()));

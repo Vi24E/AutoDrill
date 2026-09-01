@@ -47,6 +47,10 @@ import { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
 import { MINI_SUDOKU_DEFINITION } from './themes/mini-sudoku';
 import { COLUMN_ADD_2DIGIT_DEFINITION } from './themes/column-add-two-digit';
 import { COLUMN_SUBTRACT_2DIGIT_DEFINITION } from './themes/column-subtract-two-digit';
+import { COLUMN_ADD_2DIGIT_NO_CARRY_DEFINITION } from './themes/column-add-two-digit-no-carry';
+import { COLUMN_ADD_2DIGIT_WITH_CARRY_DEFINITION } from './themes/column-add-two-digit-with-carry';
+import { COLUMN_SUBTRACT_2DIGIT_NO_BORROW_DEFINITION } from './themes/column-subtract-two-digit-no-borrow';
+import { COLUMN_SUBTRACT_2DIGIT_WITH_BORROW_DEFINITION } from './themes/column-subtract-two-digit-with-borrow';
 import { COLUMN_ADD_3_4DIGIT_DEFINITION } from './themes/column-add-three-four-digit';
 import { COLUMN_SUBTRACT_3_4DIGIT_DEFINITION } from './themes/column-subtract-three-four-digit';
 import { COLUMN_MULTIPLY_1DIGIT_DEFINITION } from './themes/column-multiply-one-digit';
@@ -68,6 +72,10 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   TWO_DIGIT_ADDITION_DEFINITION,
   COLUMN_ADD_2DIGIT_DEFINITION,
   COLUMN_SUBTRACT_2DIGIT_DEFINITION,
+  COLUMN_ADD_2DIGIT_NO_CARRY_DEFINITION,
+  COLUMN_ADD_2DIGIT_WITH_CARRY_DEFINITION,
+  COLUMN_SUBTRACT_2DIGIT_NO_BORROW_DEFINITION,
+  COLUMN_SUBTRACT_2DIGIT_WITH_BORROW_DEFINITION,
   COLUMN_ADD_3_4DIGIT_DEFINITION,
   COLUMN_SUBTRACT_3_4DIGIT_DEFINITION,
   MULTIPLICATION_TABLE_DEFINITION,

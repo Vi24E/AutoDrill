@@ -361,13 +361,35 @@ describe('AutoDrillApp', () => {
     expect(screen.getByRole('button', { name: '全段混合' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('shows dedicated two-digit regrouping themes as sibling curriculum tiles', () => {
+    render(<AutoDrillApp engine={fixtureEngine()} />);
+    fireEvent.click(screen.getByRole('button', { name: '学年から選ぶ' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '学年' }));
+    fireEvent.click(screen.getByRole('option', { name: '小学2年生' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '単元' }));
+    fireEvent.click(screen.getByRole('option', { name: '加法，減法' }));
+
+    const group = screen.getByRole('group', { name: '加法，減法の教材' });
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      '二桁の足し算の筆算（まとめ）',
+      '二桁の引き算の筆算（まとめ）',
+      '足し算・繰り上がりなし',
+      '足し算・繰り上がりあり',
+      '引き算・繰り下がりなし',
+      '引き算・繰り下がりあり',
+    ]);
+    const carry = within(group).getByRole('button', { name: '足し算・繰り上がりあり' });
+    fireEvent.click(carry);
+    expect(carry).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('shows the print recommendation only for themes with the print_recommended presentation capability', () => {
     render(<AutoDrillApp engine={fixtureEngine()} />);
     const note = 'この問題は紙に印刷して解くことをおすすめします。';
     expect(screen.queryByRole('note', { name: note })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
-    fireEvent.click(screen.getByRole('option', { name: '二桁の足し算の筆算' }));
+    fireEvent.click(screen.getByRole('option', { name: '二桁の足し算の筆算（まとめ）' }));
     expect(screen.getByRole('note', { name: note })).toHaveClass('print-recommended-note');
 
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));

@@ -1333,12 +1333,12 @@
     "25": {
       "numeric_theme_id": 25,
       "generator_revision": 2,
-      "skill_id": "jp.grade2.column.addition.two_digit",
+      "skill_id": "jp.grade2.column.addition.two_digit.summary",
       "curriculum_path": [
         "root",
         "小学2年生",
         "加法，減法",
-        "二桁の足し算の筆算"
+        "二桁の足し算の筆算（まとめ）"
       ],
       "curriculum_unit": {
         "key": "grade2-column-add-subtract",
@@ -1389,12 +1389,12 @@
     "26": {
       "numeric_theme_id": 26,
       "generator_revision": 2,
-      "skill_id": "jp.grade2.column.subtraction.two_digit",
+      "skill_id": "jp.grade2.column.subtraction.two_digit.summary",
       "curriculum_path": [
         "root",
         "小学2年生",
         "加法，減法",
-        "二桁の引き算の筆算"
+        "二桁の引き算の筆算（まとめ）"
       ],
       "curriculum_unit": {
         "key": "grade2-column-add-subtract",
@@ -3149,6 +3149,230 @@
         "problem_count": 16,
         "columns": 2,
         "rows": 8
+      }
+    },
+    "59": {
+      "numeric_theme_id": 59,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.column.addition.two_digit.no_carry",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "加法，減法",
+        "足し算・繰り上がりなし"
+      ],
+      "curriculum_unit": {
+        "key": "grade2-column-add-subtract",
+        "label": "加法，減法"
+      },
+      "grade": 2,
+      "tags": [
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "60": {
+      "numeric_theme_id": 60,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.column.addition.two_digit.with_carry",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "加法，減法",
+        "足し算・繰り上がりあり"
+      ],
+      "curriculum_unit": {
+        "key": "grade2-column-add-subtract",
+        "label": "加法，減法"
+      },
+      "grade": 2,
+      "tags": [
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "61": {
+      "numeric_theme_id": 61,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.column.subtraction.two_digit.no_borrow",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "加法，減法",
+        "引き算・繰り下がりなし"
+      ],
+      "curriculum_unit": {
+        "key": "grade2-column-add-subtract",
+        "label": "加法，減法"
+      },
+      "grade": 2,
+      "tags": [
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
+      }
+    },
+    "62": {
+      "numeric_theme_id": 62,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.column.subtraction.two_digit.with_borrow",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "加法，減法",
+        "引き算・繰り下がりあり"
+      ],
+      "curriculum_unit": {
+        "key": "grade2-column-add-subtract",
+        "label": "加法，減法"
+      },
+      "grade": 2,
+      "tags": [
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": true,
+        "column_arithmetic": true,
+        "print_recommended": true,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": {
+          "single": {
+            "order": "least_significant_first",
+            "decimal_point": "none"
+          },
+          "quotient": null,
+          "remainder": null
+        }
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "column_arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 4,
+        "rows": 4
       }
     }
   },
