@@ -219,25 +219,21 @@ pub(crate) fn evaluate_expression(
     crate::semantics::evaluate_expression(expression)
 }
 
-pub(crate) fn draw_bounded_rational_arithmetic_ast(
+pub(crate) fn draw_bounded_arithmetic_ast(
     rng: &mut DeterministicRng,
-    values: &[i64],
+    leaves: &[ArithmeticExpression],
+    operators: &[ArithmeticOperator],
 ) -> Option<ArithmeticExpression> {
-    if values.is_empty() {
+    if leaves.is_empty() || operators.is_empty() {
         return None;
     }
-    if values.len() == 1 {
-        return Some(integer_expression(values[0]));
+    if leaves.len() == 1 {
+        return Some(leaves[0].clone());
     }
-    let split = 1 + rng.next_bounded((values.len() - 1) as u64) as usize;
-    let left = draw_bounded_rational_arithmetic_ast(rng, &values[..split])?;
-    let right = draw_bounded_rational_arithmetic_ast(rng, &values[split..])?;
-    let operator = match rng.next_bounded(4) {
-        0 => ArithmeticOperator::Add,
-        1 => ArithmeticOperator::Subtract,
-        2 => ArithmeticOperator::Multiply,
-        _ => ArithmeticOperator::Divide,
-    };
+    let split = 1 + rng.next_bounded((leaves.len() - 1) as u64) as usize;
+    let left = draw_bounded_arithmetic_ast(rng, &leaves[..split], operators)?;
+    let right = draw_bounded_arithmetic_ast(rng, &leaves[split..], operators)?;
+    let operator = operators[rng.next_bounded(operators.len() as u64) as usize];
     let expression = binary_expression(operator, left, right);
     let value = evaluate_expression(&expression)?;
     (value.numerator().unsigned_abs() <= 729 && value.denominator() <= 81).then_some(expression)
@@ -268,6 +264,7 @@ mod tests {
 
         let mut empty = [];
         assert!(ensure_negative_term(&mut rng, &mut empty).is_none());
-        assert!(draw_bounded_rational_arithmetic_ast(&mut rng, &[]).is_none());
+        assert!(draw_bounded_arithmetic_ast(&mut rng, &[], &[ArithmeticOperator::Add]).is_none());
+        assert!(draw_bounded_arithmetic_ast(&mut rng, &[integer_expression(1)], &[]).is_none());
     }
 }

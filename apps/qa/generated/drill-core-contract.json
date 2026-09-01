@@ -330,15 +330,16 @@
     "7": {
       "numeric_theme_id": 7,
       "generator_revision": 3,
-      "skill_id": "jp.grade7.signed.arithmetic.1",
+      "skill_id": "jp.grade7.signed.add_subtract",
       "curriculum_path": [
         "root",
         "中学1年生",
-        "負の数の計算(1)"
+        "正負の数",
+        "正負の数の加法・減法"
       ],
       "curriculum_unit": {
-        "key": "jp.grade7.signed.arithmetic.1",
-        "label": "負の数の計算(1)"
+        "key": "signed-numbers",
+        "label": "正負の数"
       },
       "grade": 7,
       "tags": [
@@ -386,15 +387,16 @@
     "8": {
       "numeric_theme_id": 8,
       "generator_revision": 3,
-      "skill_id": "jp.grade7.signed.arithmetic.2",
+      "skill_id": "jp.grade7.signed.summary.integer",
       "curriculum_path": [
         "root",
         "中学1年生",
-        "負の数の計算(2)"
+        "正負の数",
+        "正負の数の四則計算（まとめ(1)：整数中心）"
       ],
       "curriculum_unit": {
-        "key": "jp.grade7.signed.arithmetic.2",
-        "label": "負の数の計算(2)"
+        "key": "signed-numbers",
+        "label": "正負の数"
       },
       "grade": 7,
       "tags": [
@@ -3608,6 +3610,124 @@
         "problem_count": 12,
         "columns": 4,
         "rows": 3
+      }
+    },
+    "67": {
+      "numeric_theme_id": 67,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.signed.multiply_divide",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "正負の数",
+        "正負の数の乗法・除法"
+      ],
+      "curriculum_unit": {
+        "key": "signed-numbers",
+        "label": "正負の数"
+      },
+      "grade": 7,
+      "tags": [
+        "negative_numbers"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "signed_rational"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "negative"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "68": {
+      "numeric_theme_id": 68,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.signed.summary.mixed_operands",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "正負の数",
+        "正負の数の四則計算（まとめ(2)：小数・分数を含む）"
+      ],
+      "curriculum_unit": {
+        "key": "signed-numbers",
+        "label": "正負の数"
+      },
+      "grade": 7,
+      "tags": [
+        "negative_numbers"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "rational",
+        "input_profile": "signed_rational"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "negative"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
       }
     }
   },

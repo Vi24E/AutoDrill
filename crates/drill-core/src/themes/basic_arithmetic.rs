@@ -9,10 +9,14 @@ use crate::generator::{
     SamplingStrategy, SelectionDedup,
 };
 use crate::generator_support::{
-    binary_expression, draw_bounded_rational_arithmetic_ast, draw_signed_integer,
-    ensure_negative_term, evaluate_expression, integer_expression, rational_answer,
+    binary_expression, draw_bounded_arithmetic_ast, draw_signed_integer, ensure_negative_term,
+    evaluate_expression, exact_decimal_expression, integer_expression, rational_answer,
+    rational_expression,
 };
-use crate::model::{AnswerSchema, ArithmeticOperator, Problem, ProblemPrompt};
+use crate::model::{
+    AnswerSchema, ArithmeticExpression, ArithmeticOperator, Problem, ProblemPrompt,
+    RationalCoefficient,
+};
 use crate::rng::DeterministicRng;
 use crate::theme::{
     CurriculumSafetyPolicy as Safety, CurriculumUnit, DedupPolicy as Dedup, SchoolGrade,
@@ -32,6 +36,8 @@ pub const THEME_ID_TWO_DIGIT_ADDITION: u32 = 5;
 pub const THEME_ID_MULTIPLICATION_TABLE: u32 = 6;
 pub const THEME_ID_SIGNED_ARITHMETIC_1: u32 = 7;
 pub const THEME_ID_SIGNED_ARITHMETIC_2: u32 = 8;
+pub const THEME_ID_SIGNED_MULTIPLY_DIVIDE: u32 = 67;
+pub const THEME_ID_SIGNED_ARITHMETIC_MIXED_OPERANDS: u32 = 68;
 pub const THEME_ID_DIVISION_1: u32 = 13;
 pub const THEME_ID_ADDITION_UP_TO_10: u32 = 39;
 pub const THEME_ID_SUBTRACTION_UP_TO_10: u32 = 40;
@@ -54,6 +60,8 @@ pub const GENERATOR_REVISION_TWO_DIGIT_ADDITION: u32 = 3;
 pub const GENERATOR_REVISION_MULTIPLICATION_TABLE: u32 = 3;
 pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_1: u32 = 3;
 pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_2: u32 = 3;
+pub const GENERATOR_REVISION_SIGNED_MULTIPLY_DIVIDE: u32 = 1;
+pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_MIXED_OPERANDS: u32 = 1;
 pub const GENERATOR_REVISION_DIVISION_1: u32 = 3;
 pub const GENERATOR_REVISION_ADDITION_UP_TO_10: u32 = 1;
 pub const GENERATOR_REVISION_SUBTRACTION_UP_TO_10: u32 = 1;
@@ -66,8 +74,11 @@ pub const SKILL_ID: &str = "jp.grade1.addition.one_digit";
 pub const SKILL_ID_ONE_DIGIT_SUBTRACTION: &str = "jp.grade1.subtraction.one_digit";
 pub const SKILL_ID_TWO_DIGIT_ADDITION: &str = "jp.grade2.addition.two_digit";
 pub const SKILL_ID_MULTIPLICATION_TABLE: &str = "jp.grade2.multiplication.table";
-pub const SKILL_ID_SIGNED_ARITHMETIC_1: &str = "jp.grade7.signed.arithmetic.1";
-pub const SKILL_ID_SIGNED_ARITHMETIC_2: &str = "jp.grade7.signed.arithmetic.2";
+pub const SKILL_ID_SIGNED_ARITHMETIC_1: &str = "jp.grade7.signed.add_subtract";
+pub const SKILL_ID_SIGNED_ARITHMETIC_2: &str = "jp.grade7.signed.summary.integer";
+pub const SKILL_ID_SIGNED_MULTIPLY_DIVIDE: &str = "jp.grade7.signed.multiply_divide";
+pub const SKILL_ID_SIGNED_ARITHMETIC_MIXED_OPERANDS: &str =
+    "jp.grade7.signed.summary.mixed_operands";
 pub const SKILL_ID_DIVISION_1: &str = "jp.grade3.division.table.exact";
 pub const SKILL_ID_ADDITION_UP_TO_10: &str = "jp.grade1.addition.up_to_10";
 pub const SKILL_ID_SUBTRACTION_UP_TO_10: &str = "jp.grade1.subtraction.up_to_10";
@@ -94,14 +105,30 @@ pub const CURRICULUM_UNIT_MULTIPLICATION_TABLE: CurriculumUnit =
     CurriculumUnit::new("multiplication-table", "九九");
 pub const CURRICULUM_UNIT_DIVISION_TABLE: CurriculumUnit =
     CurriculumUnit::new("division-table", "九九を使う割り算");
+pub const CURRICULUM_UNIT_SIGNED_NUMBERS: CurriculumUnit =
+    CurriculumUnit::new("signed-numbers", "正負の数");
 pub const CURRICULUM_PATH: [&str; 4] = ["root", "小学1年生", "足し算", "一桁の足し算（まとめ）"];
 pub const CURRICULUM_PATH_ONE_DIGIT_SUBTRACTION: [&str; 4] =
     ["root", "小学1年生", "引き算", "一桁の引き算（まとめ）"];
 pub const CURRICULUM_PATH_TWO_DIGIT_ADDITION: [&str; 3] = ["root", "小学2年生", "二桁の足し算"];
 pub const CURRICULUM_PATH_MULTIPLICATION_TABLE: [&str; 4] =
     ["root", "小学2年生", "九九", "全段混合"];
-pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_1: [&str; 3] = ["root", "中学1年生", "負の数の計算(1)"];
-pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_2: [&str; 3] = ["root", "中学1年生", "負の数の計算(2)"];
+pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_1: [&str; 4] =
+    ["root", "中学1年生", "正負の数", "正負の数の加法・減法"];
+pub const CURRICULUM_PATH_SIGNED_MULTIPLY_DIVIDE: [&str; 4] =
+    ["root", "中学1年生", "正負の数", "正負の数の乗法・除法"];
+pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_2: [&str; 4] = [
+    "root",
+    "中学1年生",
+    "正負の数",
+    "正負の数の四則計算（まとめ(1)：整数中心）",
+];
+pub const CURRICULUM_PATH_SIGNED_ARITHMETIC_MIXED_OPERANDS: [&str; 4] = [
+    "root",
+    "中学1年生",
+    "正負の数",
+    "正負の数の四則計算（まとめ(2)：小数・分数を含む）",
+];
 pub const CURRICULUM_PATH_DIVISION_1: [&str; 4] = [
     "root",
     "小学3年生",
@@ -141,6 +168,16 @@ const SUBTRACTION: &[ThemeTag] = &[ThemeTag::Subtraction];
 const MULTIPLICATION: &[ThemeTag] = &[ThemeTag::Multiplication];
 const DIVISION: &[ThemeTag] = &[ThemeTag::Division];
 const NEGATIVE_NUMBERS: &[ThemeTag] = &[ThemeTag::NegativeNumbers];
+const SIGNED_ADD_SUBTRACT_OPERATORS: [ArithmeticOperator; 2] =
+    [ArithmeticOperator::Add, ArithmeticOperator::Subtract];
+const SIGNED_MULTIPLY_DIVIDE_OPERATORS: [ArithmeticOperator; 2] =
+    [ArithmeticOperator::Multiply, ArithmeticOperator::Divide];
+const SIGNED_FOUR_OPERATORS: [ArithmeticOperator; 4] = [
+    ArithmeticOperator::Add,
+    ArithmeticOperator::Subtract,
+    ArithmeticOperator::Multiply,
+    ArithmeticOperator::Divide,
+];
 
 pub const ONE_DIGIT_ADDITION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -418,6 +455,7 @@ pub const SIGNED_ARITHMETIC_1_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::ArithmeticSignedInteger,
         layout: STANDARD_20_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIGNED_NUMBERS)
     .with_editor_input_profile(Input::JuniorHighFull);
 
 pub const SIGNED_ARITHMETIC_2_REGISTRATION: ThemeRegistration =
@@ -436,6 +474,45 @@ pub const SIGNED_ARITHMETIC_2_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::ArithmeticSignedRational,
         layout: STANDARD_20_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIGNED_NUMBERS)
+    .with_editor_input_profile(Input::JuniorHighFull);
+
+pub const SIGNED_MULTIPLY_DIVIDE_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIGNED_MULTIPLY_DIVIDE),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_SIGNED_MULTIPLY_DIVIDE,
+        ),
+        skill_id: SKILL_ID_SIGNED_MULTIPLY_DIVIDE,
+        curriculum_path: &CURRICULUM_PATH_SIGNED_MULTIPLY_DIVIDE,
+        grade: Some(SchoolGrade::JuniorHigh1),
+        tags: NEGATIVE_NUMBERS,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::STANDARD,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: AnswerContract::ArithmeticSignedRational,
+        layout: STANDARD_20_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIGNED_NUMBERS)
+    .with_editor_input_profile(Input::JuniorHighFull);
+
+pub const SIGNED_ARITHMETIC_MIXED_OPERANDS_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIGNED_ARITHMETIC_MIXED_OPERANDS),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_SIGNED_ARITHMETIC_MIXED_OPERANDS,
+        ),
+        skill_id: SKILL_ID_SIGNED_ARITHMETIC_MIXED_OPERANDS,
+        curriculum_path: &CURRICULUM_PATH_SIGNED_ARITHMETIC_MIXED_OPERANDS,
+        grade: Some(SchoolGrade::JuniorHigh1),
+        tags: NEGATIVE_NUMBERS,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::STANDARD,
+        dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: AnswerContract::ArithmeticSignedRational,
+        layout: STANDARD_20_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIGNED_NUMBERS)
     .with_editor_input_profile(Input::JuniorHighFull);
 
 #[derive(Clone, Copy, Debug)]
@@ -451,8 +528,10 @@ enum Mode {
     DivisionTable,
     DivisionWithRemainder,
     SimpleTwoDigitDivision,
-    SignedArithmetic1,
-    SignedArithmetic2,
+    SignedAddSubtract,
+    SignedMultiplyDivide,
+    SignedSummaryInteger,
+    SignedSummaryMixedOperands,
 }
 
 #[derive(Debug)]
@@ -618,12 +697,22 @@ generator!(
 generator!(
     SIGNED_ARITHMETIC_1_GENERATOR,
     SIGNED_ARITHMETIC_1_REGISTRATION,
-    Mode::SignedArithmetic1
+    Mode::SignedAddSubtract
 );
 generator!(
     SIGNED_ARITHMETIC_2_GENERATOR,
     SIGNED_ARITHMETIC_2_REGISTRATION,
-    Mode::SignedArithmetic2
+    Mode::SignedSummaryInteger
+);
+generator!(
+    SIGNED_MULTIPLY_DIVIDE_GENERATOR,
+    SIGNED_MULTIPLY_DIVIDE_REGISTRATION,
+    Mode::SignedMultiplyDivide
+);
+generator!(
+    SIGNED_ARITHMETIC_MIXED_OPERANDS_GENERATOR,
+    SIGNED_ARITHMETIC_MIXED_OPERANDS_REGISTRATION,
+    Mode::SignedSummaryMixedOperands
 );
 
 fn integer_arithmetic_problem(
@@ -785,6 +874,99 @@ fn finite_basic_candidates(
             )
         })
         .collect()
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SignedNonIntegerOperandKind {
+    Decimal,
+    Fraction,
+}
+
+fn signed_integer_leaves(
+    rng: &mut DeterministicRng,
+    leaf_count: usize,
+    max_abs: i64,
+) -> Option<Vec<ArithmeticExpression>> {
+    let mut values = (0..leaf_count)
+        .map(|_| draw_signed_integer(rng, max_abs))
+        .collect::<Option<Vec<_>>>()?;
+    ensure_negative_term(rng, &mut values)?;
+    Some(values.into_iter().map(integer_expression).collect())
+}
+
+fn draw_signed_noninteger_leaf(
+    rng: &mut DeterministicRng,
+    kind: SignedNonIntegerOperandKind,
+) -> Option<ArithmeticExpression> {
+    let sign = if rng.next_bounded(2) == 0 {
+        -1_i64
+    } else {
+        1_i64
+    };
+    match kind {
+        SignedNonIntegerOperandKind::Decimal => {
+            let scale = 1 + rng.next_bounded(2) as u32;
+            let magnitude = 1 + rng.next_bounded(99) as i64;
+            if scale == 1 && magnitude % 10 == 0 {
+                return None;
+            }
+            Some(exact_decimal_expression(
+                sign.checked_mul(magnitude)?,
+                scale,
+            ))
+        }
+        SignedNonIntegerOperandKind::Fraction => {
+            let denominator = 2 + rng.next_bounded(8) as i64;
+            let numerator = sign.checked_mul(1 + rng.next_bounded(9) as i64)?;
+            let value = RationalCoefficient::new(numerator, denominator)?;
+            (!value.is_integer()).then(|| rational_expression(value))
+        }
+    }
+}
+
+fn leaf_is_negative(expression: &ArithmeticExpression) -> bool {
+    match expression {
+        ArithmeticExpression::Integer { value } => *value < 0,
+        ArithmeticExpression::Rational { value } => value.numerator() < 0,
+        ArithmeticExpression::ExactDecimal { coefficient, .. } => *coefficient < 0,
+        ArithmeticExpression::Binary { .. } => false,
+    }
+}
+
+fn negate_leaf(expression: &mut ArithmeticExpression) -> Option<()> {
+    match expression {
+        ArithmeticExpression::Integer { value } => *value = value.checked_neg()?,
+        ArithmeticExpression::Rational { value } => {
+            *value =
+                RationalCoefficient::new(value.numerator().checked_neg()?, value.denominator())?;
+        }
+        ArithmeticExpression::ExactDecimal { coefficient, .. } => {
+            *coefficient = coefficient.checked_neg()?;
+        }
+        ArithmeticExpression::Binary { .. } => return None,
+    }
+    Some(())
+}
+
+fn signed_mixed_operand_leaves(
+    rng: &mut DeterministicRng,
+    leaf_count: usize,
+    kind: SignedNonIntegerOperandKind,
+) -> Option<Vec<ArithmeticExpression>> {
+    let required_noninteger = rng.next_bounded(leaf_count as u64) as usize;
+    let mut leaves = Vec::with_capacity(leaf_count);
+    for index in 0..leaf_count {
+        if index == required_noninteger || rng.next_bounded(3) == 0 {
+            leaves.push(draw_signed_noninteger_leaf(rng, kind)?);
+        } else {
+            leaves.push(integer_expression(draw_signed_integer(rng, 9)?));
+        }
+    }
+    if !leaves.iter().any(leaf_is_negative) {
+        let index = rng.next_bounded(leaf_count as u64) as usize;
+        negate_leaf(&mut leaves[index])?;
+    }
+    Some(leaves)
 }
 
 fn draw_problem(
@@ -988,7 +1170,7 @@ fn draw_problem(
                 AnswerSchema::Integer { min: 10, max: 44 },
             )
         }
-        Mode::SignedArithmetic1 => {
+        Mode::SignedAddSubtract => {
             let term_count = 2 + rng.next_bounded(3) as usize;
             let mut terms = (0..term_count)
                 .map(|_| draw_signed_integer(rng, 15))
@@ -996,11 +1178,8 @@ fn draw_problem(
             ensure_negative_term(rng, &mut terms)?;
             let mut expression = integer_expression(terms[0]);
             for term in terms.iter().skip(1) {
-                let operator = if rng.next_bounded(2) == 0 {
-                    ArithmeticOperator::Add
-                } else {
-                    ArithmeticOperator::Subtract
-                };
+                let operator = SIGNED_ADD_SUBTRACT_OPERATORS
+                    [rng.next_bounded(SIGNED_ADD_SUBTRACT_OPERATORS.len() as u64) as usize];
                 expression = binary_expression(operator, expression, integer_expression(*term));
             }
             let value = evaluate_expression(&expression)?;
@@ -1016,13 +1195,58 @@ fn draw_problem(
                 AnswerSchema::Integer { min: -60, max: 60 },
             )
         }
-        Mode::SignedArithmetic2 => {
+        Mode::SignedMultiplyDivide => {
             let leaf_count = 2 + rng.next_bounded(3) as usize;
-            let mut values = (0..leaf_count)
-                .map(|_| draw_signed_integer(rng, 9))
-                .collect::<Option<Vec<_>>>()?;
-            ensure_negative_term(rng, &mut values)?;
-            let expression = draw_bounded_rational_arithmetic_ast(rng, &values)?;
+            let leaves = signed_integer_leaves(rng, leaf_count, 9)?;
+            let expression =
+                draw_bounded_arithmetic_ast(rng, &leaves, &SIGNED_MULTIPLY_DIVIDE_OPERATORS)?;
+            let value = evaluate_expression(&expression)?;
+            if value.numerator().unsigned_abs() > 200 || value.denominator() > 36 {
+                return None;
+            }
+            let answer = rational_answer(value);
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
+            (
+                expression,
+                answer,
+                EffortModel::operations(plan),
+                AnswerSchema::Rational {
+                    max_abs_numerator: 200,
+                    max_denominator: 36,
+                    require_reduced_fraction_form: true,
+                },
+            )
+        }
+        Mode::SignedSummaryInteger => {
+            let leaf_count = 2 + rng.next_bounded(3) as usize;
+            let leaves = signed_integer_leaves(rng, leaf_count, 9)?;
+            let expression = draw_bounded_arithmetic_ast(rng, &leaves, &SIGNED_FOUR_OPERATORS)?;
+            let value = evaluate_expression(&expression)?;
+            if value.numerator().unsigned_abs() > 200 || value.denominator() > 36 {
+                return None;
+            }
+            let answer = rational_answer(value);
+            let plan = arithmetic_expression_plan(&expression, &answer)?;
+            (
+                expression,
+                answer,
+                EffortModel::operations(plan),
+                AnswerSchema::Rational {
+                    max_abs_numerator: 200,
+                    max_denominator: 36,
+                    require_reduced_fraction_form: true,
+                },
+            )
+        }
+        Mode::SignedSummaryMixedOperands => {
+            let leaf_count = 2 + rng.next_bounded(3) as usize;
+            let kind = if rng.next_bounded(2) == 0 {
+                SignedNonIntegerOperandKind::Decimal
+            } else {
+                SignedNonIntegerOperandKind::Fraction
+            };
+            let leaves = signed_mixed_operand_leaves(rng, leaf_count, kind)?;
+            let expression = draw_bounded_arithmetic_ast(rng, &leaves, &SIGNED_FOUR_OPERATORS)?;
             let value = evaluate_expression(&expression)?;
             if value.numerator().unsigned_abs() > 200 || value.denominator() > 36 {
                 return None;
@@ -1092,13 +1316,15 @@ const fn mode_matches_addition(mode: Mode) -> bool {
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 22] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 24] = [
     GeneratorEntry::current(&ONE_DIGIT_ADDITION_GENERATOR),
     GeneratorEntry::current(&ONE_DIGIT_SUBTRACTION_GENERATOR),
     GeneratorEntry::current(&TWO_DIGIT_ADDITION_GENERATOR),
     GeneratorEntry::current(&MULTIPLICATION_TABLE_GENERATOR),
     GeneratorEntry::current(&SIGNED_ARITHMETIC_1_GENERATOR),
+    GeneratorEntry::current(&SIGNED_MULTIPLY_DIVIDE_GENERATOR),
     GeneratorEntry::current(&SIGNED_ARITHMETIC_2_GENERATOR),
+    GeneratorEntry::current(&SIGNED_ARITHMETIC_MIXED_OPERANDS_GENERATOR),
     GeneratorEntry::current(&DIVISION_1_GENERATOR),
     GeneratorEntry::current(&ADDITION_UP_TO_10_GENERATOR),
     GeneratorEntry::current(&SUBTRACTION_UP_TO_10_GENERATOR),
@@ -1297,5 +1523,137 @@ mod tests {
             assert!((10..=44).contains(&quotient));
             assert_eq!(dividend, divisor * quotient);
         }
+    }
+    #[derive(Default)]
+    struct SignedExpressionFacts {
+        operators: Vec<ArithmeticOperator>,
+        integer_leaves: usize,
+        decimal_leaves: usize,
+        fraction_leaves: usize,
+        has_negative_leaf: bool,
+    }
+
+    fn collect_signed_expression_facts(
+        expression: &ArithmeticExpression,
+        facts: &mut SignedExpressionFacts,
+    ) {
+        match expression {
+            ArithmeticExpression::Integer { value } => {
+                facts.integer_leaves += 1;
+                facts.has_negative_leaf |= *value < 0;
+            }
+            ArithmeticExpression::ExactDecimal { coefficient, .. } => {
+                facts.decimal_leaves += 1;
+                facts.has_negative_leaf |= *coefficient < 0;
+            }
+            ArithmeticExpression::Rational { value } => {
+                facts.fraction_leaves += 1;
+                facts.has_negative_leaf |= value.numerator() < 0;
+            }
+            ArithmeticExpression::Binary {
+                operator,
+                left,
+                right,
+            } => {
+                facts.operators.push(*operator);
+                collect_signed_expression_facts(left, facts);
+                collect_signed_expression_facts(right, facts);
+            }
+        }
+    }
+
+    #[test]
+    fn signed_number_themes_fix_operator_and_operand_domains() {
+        use crate::generator::generate_worksheet_request;
+        use crate::model::GenerateWorksheetRequest;
+        use crate::schema::SCHEMA_VERSION;
+
+        let cases = [
+            (
+                THEME_ID_SIGNED_ARITHMETIC_1,
+                &SIGNED_ADD_SUBTRACT_OPERATORS[..],
+                false,
+            ),
+            (
+                THEME_ID_SIGNED_MULTIPLY_DIVIDE,
+                &SIGNED_MULTIPLY_DIVIDE_OPERATORS[..],
+                false,
+            ),
+            (
+                THEME_ID_SIGNED_ARITHMETIC_2,
+                &SIGNED_FOUR_OPERATORS[..],
+                false,
+            ),
+            (
+                THEME_ID_SIGNED_ARITHMETIC_MIXED_OPERANDS,
+                &SIGNED_FOUR_OPERATORS[..],
+                true,
+            ),
+        ];
+        let mut saw_decimal_operand = false;
+        let mut saw_fraction_operand = false;
+
+        for (theme_id, allowed_operators, requires_noninteger_operand) in cases {
+            let registration = crate::registry::active_registration(theme_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                registration.curriculum_unit(),
+                CURRICULUM_UNIT_SIGNED_NUMBERS
+            );
+            for difficulty in 1..=4 {
+                for seed in ["SnA1", "SnB2", "SnC3"] {
+                    let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                        timeout_ms: Some(1_000),
+                        max_attempts: Some(50_000),
+                    })
+                    .unwrap_or_else(|error| {
+                        panic!("signed theme {theme_id} d{difficulty} failed for {seed}: {error}")
+                    });
+
+                    for problem in worksheet.problems() {
+                        let ProblemPrompt::Arithmetic { expression } = problem.prompt() else {
+                            panic!("signed-number theme returned non-arithmetic prompt");
+                        };
+                        let mut facts = SignedExpressionFacts::default();
+                        collect_signed_expression_facts(expression, &mut facts);
+                        assert!(
+                            facts.has_negative_leaf,
+                            "theme {theme_id} must contain a negative operand"
+                        );
+                        assert!(!facts.operators.is_empty());
+                        assert!(facts
+                            .operators
+                            .iter()
+                            .all(|operator| allowed_operators.contains(operator)));
+                        if requires_noninteger_operand {
+                            assert!(facts.decimal_leaves + facts.fraction_leaves > 0);
+                            // Each problem stays in one exact representation family so the existing
+                            // decimal/fraction effort semantics remain authoritative.
+                            assert!(facts.decimal_leaves == 0 || facts.fraction_leaves == 0);
+                            saw_decimal_operand |= facts.decimal_leaves > 0;
+                            saw_fraction_operand |= facts.fraction_leaves > 0;
+                        } else {
+                            assert_eq!(facts.decimal_leaves, 0);
+                            assert_eq!(facts.fraction_leaves, 0);
+                            assert!(facts.integer_leaves >= 2);
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(
+            saw_decimal_operand,
+            "summary(2) support must contain decimal literal operands"
+        );
+        assert!(
+            saw_fraction_operand,
+            "summary(2) support must contain fraction literal operands"
+        );
     }
 }

@@ -34,6 +34,8 @@ import { FRACTION_SUMMARY_IMPROPER_DEFINITION } from './themes/fraction-summary-
 import { DIVISION_1_DEFINITION } from './themes/division-1';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from './themes/signed-arithmetic-1';
 import { SIGNED_ARITHMETIC_2_DEFINITION } from './themes/signed-arithmetic-2';
+import { SIGNED_MULTIPLY_DIVIDE_DEFINITION } from './themes/signed-multiply-divide';
+import { SIGNED_ARITHMETIC_SUMMARY_2_DEFINITION } from './themes/signed-arithmetic-summary-2';
 import { LINEAR_EQUATION_1_DEFINITION } from './themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from './themes/linear-equation-2';
 import { QUADRATIC_EQUATION_1_DEFINITION } from './themes/quadratic-equation-1';
@@ -128,7 +130,9 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   FRACTION_INTEGER_DIVISION_DEFINITION,
   FRACTION_SUMMARY_IMPROPER_DEFINITION,
   SIGNED_ARITHMETIC_1_DEFINITION,
+  SIGNED_MULTIPLY_DIVIDE_DEFINITION,
   SIGNED_ARITHMETIC_2_DEFINITION,
+  SIGNED_ARITHMETIC_SUMMARY_2_DEFINITION,
   LINEAR_EQUATION_1_DEFINITION,
   LINEAR_EQUATION_2_DEFINITION,
   SIMULTANEOUS_EQUATION_1_DEFINITION,

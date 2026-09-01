@@ -282,7 +282,7 @@ describe('AutoDrillApp', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    const title = await screen.findByRole('heading', { name: '負の数の計算(1)' });
+    const title = await screen.findByRole('heading', { name: '正負の数の加法・減法' });
     const instruction = container.querySelector('.worksheet-instruction');
     expect(title.querySelector('ruby')).not.toBeNull();
     expect(instruction?.querySelector('ruby')).not.toBeNull();

@@ -16,7 +16,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 66 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 68 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -64,6 +64,13 @@ describe('Web curriculum registry', () => {
       { genreKey: 'bonus', label: 'おまけ' },
     ]);
     expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes).map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b));
+    const signedRecommended = RECOMMENDED_GENRES.find((genre) => genre.genreKey === 'negative-numbers')!;
+    expect(signedRecommended.themes.map((theme) => theme.label)).toEqual([
+      '正負の数の加法・減法',
+      '正負の数の乗法・除法',
+      '正負の数の四則計算（まとめ(1)：整数中心）',
+      '正負の数の四則計算（まとめ(2)：小数・分数を含む）',
+    ]);
   });
 
   it('keeps grade curriculum units independent from Recommended taxonomy tags', () => {
@@ -128,6 +135,23 @@ describe('Web curriculum registry', () => {
     }
 
     const grade7 = CURRICULUM_TREE[6]!;
+    const signedNumbers = grade7.units.find((unit) => unit.unitKey === 'signed-numbers')!;
+    expect(signedNumbers.label).toBe('正負の数');
+    expect(signedNumbers.themes.map((theme) => theme.label)).toEqual([
+      '正負の数の加法・減法',
+      '正負の数の乗法・除法',
+      '正負の数の四則計算（まとめ(1)：整数中心）',
+      '正負の数の四則計算（まとめ(2)：小数・分数を含む）',
+    ]);
+    const signedThemes = signedNumbers.themes
+      .filter((theme): theme is ImplementedCurriculumTheme => theme.implemented);
+    expect(signedThemes.map((theme) => theme.numeric_theme_id)).toEqual([7, 67, 8, 68]);
+    expect(signedThemes.slice(0, 3).every((theme) => theme.answerSchemaKind === 'integer' || theme.answerSchemaKind === 'rational')).toBe(true);
+    expect(signedThemes[3]!.inputInterface).toEqual({
+      type: 'structured_math',
+      allowed_structures: ['fraction', 'negative'],
+    });
+
     const linearEquation = grade7.units.find((unit) => unit.unitKey === 'linear-equation')!;
     expect(linearEquation.label).toBe('一次方程式');
     expect(linearEquation.themes).toEqual([LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME]);
