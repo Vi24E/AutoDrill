@@ -12,8 +12,13 @@ export const DRILL_CORE_CONTRACT = {
       "curriculum_path": [
         "root",
         "小学1年生",
-        "一桁の足し算"
+        "足し算",
+        "一桁の足し算（まとめ）"
       ],
+      "curriculum_unit": {
+        "key": "grade1-addition",
+        "label": "足し算"
+      },
       "grade": 1,
       "tags": [
         "addition"
@@ -59,6 +64,10 @@ export const DRILL_CORE_CONTRACT = {
         "一次方程式",
         "一次方程式(1)"
       ],
+      "curriculum_unit": {
+        "key": "linear-equation",
+        "label": "一次方程式"
+      },
       "grade": 7,
       "tags": [
         "equations",
@@ -120,6 +129,10 @@ export const DRILL_CORE_CONTRACT = {
         "一次方程式",
         "一次方程式(2)"
       ],
+      "curriculum_unit": {
+        "key": "linear-equation",
+        "label": "一次方程式"
+      },
       "grade": 7,
       "tags": [
         "equations",
@@ -178,8 +191,13 @@ export const DRILL_CORE_CONTRACT = {
       "curriculum_path": [
         "root",
         "小学1年生",
-        "一桁の引き算"
+        "引き算",
+        "一桁の引き算（まとめ）"
       ],
+      "curriculum_unit": {
+        "key": "grade1-subtraction",
+        "label": "引き算"
+      },
       "grade": 1,
       "tags": [
         "subtraction"
@@ -224,6 +242,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学2年生",
         "二桁の足し算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade2.addition.two_digit",
+        "label": "二桁の足し算"
+      },
       "grade": 2,
       "tags": [
         "addition"
@@ -266,8 +288,13 @@ export const DRILL_CORE_CONTRACT = {
       "curriculum_path": [
         "root",
         "小学2年生",
-        "九九"
+        "九九",
+        "全段混合"
       ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
       "grade": 2,
       "tags": [
         "multiplication"
@@ -312,6 +339,10 @@ export const DRILL_CORE_CONTRACT = {
         "中学1年生",
         "負の数の計算(1)"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade7.signed.arithmetic.1",
+        "label": "負の数の計算(1)"
+      },
       "grade": 7,
       "tags": [
         "negative_numbers"
@@ -364,6 +395,10 @@ export const DRILL_CORE_CONTRACT = {
         "中学1年生",
         "負の数の計算(2)"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade7.signed.arithmetic.2",
+        "label": "負の数の計算(2)"
+      },
       "grade": 7,
       "tags": [
         "negative_numbers"
@@ -418,6 +453,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学5年生",
         "分数の足し算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade5.fraction.addition",
+        "label": "分数の足し算"
+      },
       "grade": 5,
       "tags": [
         "fractions",
@@ -469,6 +508,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学6年生",
         "分数の掛け算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade6.fraction.multiplication",
+        "label": "分数の掛け算"
+      },
       "grade": 6,
       "tags": [
         "fractions",
@@ -520,6 +563,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学5年生",
         "分数の引き算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade5.fraction.subtraction",
+        "label": "分数の引き算"
+      },
       "grade": 5,
       "tags": [
         "fractions",
@@ -571,6 +618,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学6年生",
         "分数の割り算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade6.fraction.division",
+        "label": "分数の割り算"
+      },
       "grade": 6,
       "tags": [
         "fractions",
@@ -616,12 +667,17 @@ export const DRILL_CORE_CONTRACT = {
     "13": {
       "numeric_theme_id": 13,
       "generator_revision": 3,
-      "skill_id": "jp.grade3.division.table.1",
+      "skill_id": "jp.grade3.division.table.exact",
       "curriculum_path": [
         "root",
         "小学3年生",
-        "割り算(1)"
+        "九九を使う割り算",
+        "あまりのない割り算"
       ],
+      "curriculum_unit": {
+        "key": "division-table",
+        "label": "九九を使う割り算"
+      },
       "grade": 3,
       "tags": [
         "division"
@@ -667,6 +723,10 @@ export const DRILL_CORE_CONTRACT = {
         "二次方程式",
         "二次方程式(1)"
       ],
+      "curriculum_unit": {
+        "key": "quadratic-equation",
+        "label": "二次方程式"
+      },
       "grade": 9,
       "tags": [
         "equations",
@@ -727,6 +787,10 @@ export const DRILL_CORE_CONTRACT = {
         "二次方程式",
         "二次方程式(2)"
       ],
+      "curriculum_unit": {
+        "key": "quadratic-equation",
+        "label": "二次方程式"
+      },
       "grade": 9,
       "tags": [
         "equations",
@@ -787,6 +851,10 @@ export const DRILL_CORE_CONTRACT = {
         "二次方程式",
         "二次方程式(3)"
       ],
+      "curriculum_unit": {
+        "key": "quadratic-equation",
+        "label": "二次方程式"
+      },
       "grade": 9,
       "tags": [
         "equations",
@@ -846,6 +914,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学4年生",
         "小数の足し算と引き算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade4.decimal.add_subtract",
+        "label": "小数の足し算と引き算"
+      },
       "grade": 4,
       "tags": [
         "decimals",
@@ -892,6 +964,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学5年生",
         "小数の掛け算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade5.decimal.multiplication",
+        "label": "小数の掛け算"
+      },
       "grade": 5,
       "tags": [
         "decimals",
@@ -938,6 +1014,10 @@ export const DRILL_CORE_CONTRACT = {
         "連立方程式",
         "連立方程式(1)"
       ],
+      "curriculum_unit": {
+        "key": "simultaneous-equation",
+        "label": "連立方程式"
+      },
       "grade": 8,
       "tags": [
         "equations",
@@ -993,6 +1073,10 @@ export const DRILL_CORE_CONTRACT = {
         "おまけ",
         "うそつきだれだ"
       ],
+      "curriculum_unit": {
+        "key": "bonus.logic.liar_puzzle",
+        "label": "うそつきだれだ"
+      },
       "grade": null,
       "tags": [
         "bonus"
@@ -1039,6 +1123,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学6年生",
         "分数と整数の掛け算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade6.fraction.integer_multiplication",
+        "label": "分数と整数の掛け算"
+      },
       "grade": 6,
       "tags": [
         "fractions",
@@ -1090,6 +1178,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学6年生",
         "分数と整数の割り算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade6.fraction.integer_division",
+        "label": "分数と整数の割り算"
+      },
       "grade": 6,
       "tags": [
         "fractions",
@@ -1141,6 +1233,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学6年生",
         "分数総まとめ(仮分数)"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade6.fraction.summary_improper",
+        "label": "分数総まとめ(仮分数)"
+      },
       "grade": 6,
       "tags": [
         "fractions",
@@ -1195,6 +1291,10 @@ export const DRILL_CORE_CONTRACT = {
         "小学5年生",
         "小数の割り算"
       ],
+      "curriculum_unit": {
+        "key": "jp.grade5.decimal.division",
+        "label": "小数の割り算"
+      },
       "grade": 5,
       "tags": [
         "decimals",
@@ -1241,6 +1341,10 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "二桁の足し算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade2-column-add-subtract",
+        "label": "加法，減法"
+      },
       "grade": 2,
       "tags": [
         "addition"
@@ -1293,6 +1397,10 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "二桁の引き算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade2-column-add-subtract",
+        "label": "加法，減法"
+      },
       "grade": 2,
       "tags": [
         "subtraction"
@@ -1345,6 +1453,10 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "三・四桁の足し算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade3-column-add-subtract",
+        "label": "加法，減法"
+      },
       "grade": 3,
       "tags": [
         "addition"
@@ -1397,6 +1509,10 @@ export const DRILL_CORE_CONTRACT = {
         "加法，減法",
         "三・四桁の引き算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade3-column-add-subtract",
+        "label": "加法，減法"
+      },
       "grade": 3,
       "tags": [
         "subtraction"
@@ -1449,6 +1565,10 @@ export const DRILL_CORE_CONTRACT = {
         "乗法",
         "一桁をかける掛け算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade3-column-multiplication",
+        "label": "乗法"
+      },
       "grade": 3,
       "tags": [
         "multiplication"
@@ -1501,6 +1621,10 @@ export const DRILL_CORE_CONTRACT = {
         "乗法",
         "二桁をかける掛け算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade3-column-multiplication",
+        "label": "乗法"
+      },
       "grade": 3,
       "tags": [
         "multiplication"
@@ -1553,6 +1677,10 @@ export const DRILL_CORE_CONTRACT = {
         "除法",
         "一桁で割る割り算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade3-column-division",
+        "label": "除法"
+      },
       "grade": 3,
       "tags": [
         "division"
@@ -1610,6 +1738,10 @@ export const DRILL_CORE_CONTRACT = {
         "整数の除法",
         "二桁で割る割り算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade4-integer-division",
+        "label": "整数の除法"
+      },
       "grade": 4,
       "tags": [
         "division"
@@ -1667,6 +1799,10 @@ export const DRILL_CORE_CONTRACT = {
         "小数の仕組みとその計算",
         "小数の足し算と引き算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade4-decimal",
+        "label": "小数の仕組みとその計算"
+      },
       "grade": 4,
       "tags": [
         "decimals",
@@ -1721,6 +1857,10 @@ export const DRILL_CORE_CONTRACT = {
         "小数の仕組みとその計算",
         "小数と整数の掛け算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade4-decimal",
+        "label": "小数の仕組みとその計算"
+      },
       "grade": 4,
       "tags": [
         "decimals",
@@ -1774,6 +1914,10 @@ export const DRILL_CORE_CONTRACT = {
         "小数の仕組みとその計算",
         "小数と整数の割り算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade4-decimal",
+        "label": "小数の仕組みとその計算"
+      },
       "grade": 4,
       "tags": [
         "decimals",
@@ -1827,6 +1971,10 @@ export const DRILL_CORE_CONTRACT = {
         "小数の乗法，除法",
         "小数の掛け算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade5-decimal",
+        "label": "小数の乗法，除法"
+      },
       "grade": 5,
       "tags": [
         "decimals",
@@ -1880,6 +2028,10 @@ export const DRILL_CORE_CONTRACT = {
         "小数の乗法，除法",
         "小数の割り算の筆算"
       ],
+      "curriculum_unit": {
+        "key": "grade5-decimal",
+        "label": "小数の乗法，除法"
+      },
       "grade": 5,
       "tags": [
         "decimals",
@@ -1932,6 +2084,10 @@ export const DRILL_CORE_CONTRACT = {
         "おまけ",
         "すうじはひとりぼっち"
       ],
+      "curriculum_unit": {
+        "key": "bonus.logic.mini_sudoku",
+        "label": "すうじはひとりぼっち"
+      },
       "grade": null,
       "tags": [
         "bonus"
@@ -1973,6 +2129,742 @@ export const DRILL_CORE_CONTRACT = {
         "problem_count": 4,
         "columns": 2,
         "rows": 2
+      }
+    },
+    "39": {
+      "numeric_theme_id": 39,
+      "generator_revision": 1,
+      "skill_id": "jp.grade1.addition.up_to_10",
+      "curriculum_path": [
+        "root",
+        "小学1年生",
+        "足し算",
+        "10までの足し算"
+      ],
+      "curriculum_unit": {
+        "key": "grade1-addition",
+        "label": "足し算"
+      },
+      "grade": 1,
+      "tags": [
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "40": {
+      "numeric_theme_id": 40,
+      "generator_revision": 1,
+      "skill_id": "jp.grade1.subtraction.up_to_10",
+      "curriculum_path": [
+        "root",
+        "小学1年生",
+        "引き算",
+        "10までの引き算"
+      ],
+      "curriculum_unit": {
+        "key": "grade1-subtraction",
+        "label": "引き算"
+      },
+      "grade": 1,
+      "tags": [
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "41": {
+      "numeric_theme_id": 41,
+      "generator_revision": 1,
+      "skill_id": "jp.grade1.addition.with_carry",
+      "curriculum_path": [
+        "root",
+        "小学1年生",
+        "足し算",
+        "繰り上がりのある足し算"
+      ],
+      "curriculum_unit": {
+        "key": "grade1-addition",
+        "label": "足し算"
+      },
+      "grade": 1,
+      "tags": [
+        "addition"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "42": {
+      "numeric_theme_id": 42,
+      "generator_revision": 1,
+      "skill_id": "jp.grade1.subtraction.with_borrow",
+      "curriculum_path": [
+        "root",
+        "小学1年生",
+        "引き算",
+        "繰り下がりのある引き算"
+      ],
+      "curriculum_unit": {
+        "key": "grade1-subtraction",
+        "label": "引き算"
+      },
+      "grade": 1,
+      "tags": [
+        "subtraction"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "canonicalize_commutative",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "43": {
+      "numeric_theme_id": 43,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.1",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "1の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "44": {
+      "numeric_theme_id": 44,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.2",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "2の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "45": {
+      "numeric_theme_id": 45,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.3",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "3の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "46": {
+      "numeric_theme_id": 46,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.4",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "4の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "47": {
+      "numeric_theme_id": 47,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.5",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "5の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "48": {
+      "numeric_theme_id": 48,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.6",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "6の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "49": {
+      "numeric_theme_id": 49,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.7",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "7の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "50": {
+      "numeric_theme_id": 50,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.8",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "8の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "51": {
+      "numeric_theme_id": 51,
+      "generator_revision": 1,
+      "skill_id": "jp.grade2.multiplication.table.9",
+      "curriculum_path": [
+        "root",
+        "小学2年生",
+        "九九",
+        "9の段"
+      ],
+      "curriculum_unit": {
+        "key": "multiplication-table",
+        "label": "九九"
+      },
+      "grade": 2,
+      "tags": [
+        "multiplication"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 5,
+        "columns": 1,
+        "rows": 5
+      }
+    },
+    "52": {
+      "numeric_theme_id": 52,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.division.table.remainder",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "九九を使う割り算",
+        "あまりのある割り算"
+      ],
+      "curriculum_unit": {
+        "key": "division-table",
+        "label": "九九を使う割り算"
+      },
+      "grade": 3,
+      "tags": [
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "tuple_only"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "tuple"
+        ]
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
+      }
+    },
+    "53": {
+      "numeric_theme_id": 53,
+      "generator_revision": 1,
+      "skill_id": "jp.grade3.division.simple_two_digit",
+      "curriculum_path": [
+        "root",
+        "小学3年生",
+        "簡単な2桁÷1桁"
+      ],
+      "curriculum_unit": {
+        "key": "jp.grade3.division.simple_two_digit",
+        "label": "簡単な2桁÷1桁"
+      },
+      "grade": 3,
+      "tags": [
+        "division"
+      ],
+      "safety": "non_negative_only",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "arithmetic",
+        "answer_schema_kind": "integer",
+        "input_profile": "simple_positive"
+      },
+      "input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "editor_input_interface": {
+        "type": "simple_numeric",
+        "allow_decimal": false,
+        "allow_negative": false
+      },
+      "layout": {
+        "problem_count": 20,
+        "columns": 2,
+        "rows": 10
       }
     }
   },

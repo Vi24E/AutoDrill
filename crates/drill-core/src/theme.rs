@@ -384,6 +384,7 @@ pub enum ThemeInputProfile {
 pub enum ThemeAnswerContract {
     AdditionInteger,
     ArithmeticPositiveInteger,
+    ArithmeticIntegerDivision,
     ArithmeticSignedInteger,
     ArithmeticSignedRational,
     ArithmeticDecimal,
@@ -404,6 +405,7 @@ impl ThemeAnswerContract {
         match self {
             Self::AdditionInteger => ThemePromptKind::Addition,
             Self::ArithmeticPositiveInteger
+            | Self::ArithmeticIntegerDivision
             | Self::ArithmeticSignedInteger
             | Self::ArithmeticSignedRational
             | Self::ArithmeticDecimal
@@ -430,9 +432,9 @@ impl ThemeAnswerContract {
                 ThemeAnswerSchemaKind::Rational
             }
             Self::ArithmeticDecimal | Self::ColumnDecimal => ThemeAnswerSchemaKind::Decimal,
-            Self::SimultaneousPair | Self::ColumnIntegerDivision => {
-                ThemeAnswerSchemaKind::OrderedPair
-            }
+            Self::SimultaneousPair
+            | Self::ArithmeticIntegerDivision
+            | Self::ColumnIntegerDivision => ThemeAnswerSchemaKind::OrderedPair,
             Self::QuadraticAlgebraic | Self::LiarPuzzle => ThemeAnswerSchemaKind::Algebraic,
             Self::DigitGrid(_) => ThemeAnswerSchemaKind::OrderedTuple,
         }
@@ -450,7 +452,9 @@ impl ThemeAnswerContract {
             Self::LinearInteger | Self::LinearRational => ThemeInputProfile::LinearEquation,
             Self::QuadraticAlgebraic => ThemeInputProfile::QuadraticEquation,
             Self::SimultaneousPair => ThemeInputProfile::SimultaneousEquation,
-            Self::ColumnIntegerDivision | Self::LiarPuzzle => ThemeInputProfile::TupleOnly,
+            Self::ArithmeticIntegerDivision | Self::ColumnIntegerDivision | Self::LiarPuzzle => {
+                ThemeInputProfile::TupleOnly
+            }
             Self::DigitGrid(spec) => ThemeInputProfile::DigitGrid(spec),
         }
     }
@@ -530,6 +534,8 @@ impl WorksheetLayoutProfile {
 }
 
 pub const STANDARD_20_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(20, 2, 10);
+pub const MULTIPLICATION_ROW_5_LAYOUT: WorksheetLayoutProfile =
+    WorksheetLayoutProfile::new(5, 1, 5);
 pub const COMPACT_16_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(16, 2, 8);
 pub const EQUATION_PAIR_12_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(12, 2, 6);
 pub const LIAR_6_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(6, 1, 6);
@@ -541,6 +547,28 @@ pub const COLUMN_DIVISION_12_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutPro
 pub struct SamplingLayerSpec {
     pub weight: u32,
     pub minimum: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct CurriculumUnit {
+    key: &'static str,
+    label: &'static str,
+}
+
+impl CurriculumUnit {
+    pub const fn new(key: &'static str, label: &'static str) -> Self {
+        assert!(!key.is_empty(), "curriculum unit key must not be empty");
+        assert!(!label.is_empty(), "curriculum unit label must not be empty");
+        Self { key, label }
+    }
+
+    pub const fn key(self) -> &'static str {
+        self.key
+    }
+
+    pub const fn label(self) -> &'static str {
+        self.label
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -590,6 +618,7 @@ pub struct ThemeRegistration {
     revision: GeneratorRevision,
     skill_id: &'static str,
     curriculum_path: &'static [&'static str],
+    curriculum_unit: Option<CurriculumUnit>,
     grade: Option<SchoolGrade>,
     tags: &'static [ThemeTag],
     safety: CurriculumSafetyPolicy,
@@ -608,6 +637,7 @@ impl ThemeRegistration {
             revision: spec.generator_revision,
             skill_id: spec.skill_id,
             curriculum_path: spec.curriculum_path,
+            curriculum_unit: None,
             grade: spec.grade,
             tags: spec.tags,
             safety: spec.safety,
@@ -633,6 +663,13 @@ impl ThemeRegistration {
 
     pub const fn curriculum_path(self) -> &'static [&'static str] {
         self.curriculum_path
+    }
+
+    pub fn curriculum_unit(self) -> CurriculumUnit {
+        self.curriculum_unit.unwrap_or_else(|| {
+            let label = self.curriculum_path[self.curriculum_path.len() - 1];
+            CurriculumUnit::new(self.skill_id, label)
+        })
     }
 
     pub const fn grade(self) -> Option<SchoolGrade> {
@@ -665,6 +702,11 @@ impl ThemeRegistration {
 
     pub const fn layout(self) -> WorksheetLayoutProfile {
         self.layout
+    }
+
+    pub const fn with_curriculum_unit(mut self, curriculum_unit: CurriculumUnit) -> Self {
+        self.curriculum_unit = Some(curriculum_unit);
+        self
     }
 
     pub const fn with_editor_input_profile(

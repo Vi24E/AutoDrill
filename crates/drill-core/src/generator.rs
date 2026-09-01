@@ -165,6 +165,10 @@ enum SamplingStrategyKind<'a> {
         source: &'a dyn RandomCandidateSource,
         selection_dedup: SelectionDedup,
     },
+    Finite {
+        source: &'a dyn FiniteCandidateSource,
+        selection_dedup: SelectionDedup,
+    },
     AnswerConditioned {
         source: &'a dyn AnswerConditionedCandidateSource,
         domain: AnswerDomain,
@@ -193,6 +197,18 @@ impl<'a> SamplingStrategy<'a> {
     ) -> Self {
         Self {
             kind: SamplingStrategyKind::Random {
+                source,
+                selection_dedup,
+            },
+        }
+    }
+
+    pub(crate) fn finite(
+        source: &'a dyn FiniteCandidateSource,
+        selection_dedup: SelectionDedup,
+    ) -> Self {
+        Self {
+            kind: SamplingStrategyKind::Finite {
                 source,
                 selection_dedup,
             },
@@ -251,6 +267,7 @@ impl<'a> SamplingStrategy<'a> {
             SamplingStrategyKind::Layered { layers, .. }
             | SamplingStrategyKind::ConstructiveLayered { layers, .. } => Some(layers),
             SamplingStrategyKind::Random { .. }
+            | SamplingStrategyKind::Finite { .. }
             | SamplingStrategyKind::AnswerConditioned { .. } => None,
         }
     }
@@ -258,6 +275,9 @@ impl<'a> SamplingStrategy<'a> {
     fn selection_dedup(&self) -> SelectionDedup {
         match self.kind {
             SamplingStrategyKind::Random {
+                selection_dedup, ..
+            }
+            | SamplingStrategyKind::Finite {
                 selection_dedup, ..
             }
             | SamplingStrategyKind::Layered {
@@ -278,6 +298,7 @@ impl<'a> SamplingStrategy<'a> {
                 ..
             } => bootstrap_multiplier.get(),
             SamplingStrategyKind::Random { .. }
+            | SamplingStrategyKind::Finite { .. }
             | SamplingStrategyKind::AnswerConditioned { .. } => 1,
         }
     }
@@ -291,6 +312,7 @@ impl<'a> SamplingStrategy<'a> {
                 layers.index(source.layer_of(problem)).map(Some)
             }
             SamplingStrategyKind::Random { .. }
+            | SamplingStrategyKind::Finite { .. }
             | SamplingStrategyKind::AnswerConditioned { .. } => Ok(None),
         }
     }
@@ -321,10 +343,14 @@ impl<'a> SamplingStrategy<'a> {
                     });
                 }
             }
-            SamplingStrategyKind::Random { .. } => {}
+            SamplingStrategyKind::Random { .. } | SamplingStrategyKind::Finite { .. } => {}
         }
         Ok(())
     }
+}
+
+pub(crate) trait FiniteCandidateSource: Sync {
+    fn candidates(&self, weights: &OperationWeights) -> Result<Vec<Problem>, GenerationError>;
 }
 
 pub(crate) trait RandomCandidateSource: Sync {
@@ -716,6 +742,19 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
     let required_diversity = DIVERSITY_MULTIPLIER * n;
 
     let pool = match &strategy.kind {
+        SamplingStrategyKind::Finite { source, .. } => {
+            let problems = source.candidates(&weights)?;
+            let mut candidate_pool = Vec::with_capacity(problems.len());
+            for problem in problems {
+                consume_attempt(started, clock, config, &mut attempts)?;
+                strategy.validate_candidate_contract(None, None, &problem)?;
+                if problem_allowed_by_curriculum(registration, &problem) {
+                    candidate_pool.push(Candidate::new(registration, problem));
+                }
+            }
+            check_timeout(started, clock, config)?;
+            candidate_pool
+        }
         SamplingStrategyKind::ConstructiveLayered { source, layers, .. } => {
             let pool_quotas = layered_quotas(*layers, pool_size);
             let mut candidate_pool = Vec::with_capacity(pool_size);
@@ -773,7 +812,8 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
                             let answer = fixed_answer.ok_or(SamplingError::EmptyAnswerDomain)?;
                             source.draw_candidate_for_answer(&mut rng, ordinal, &weights, answer)?
                         }
-                        SamplingStrategyKind::ConstructiveLayered { .. } => unreachable!(),
+                        SamplingStrategyKind::Finite { .. }
+                        | SamplingStrategyKind::ConstructiveLayered { .. } => unreachable!(),
                     };
                     let Some(problem) = problem else {
                         continue;

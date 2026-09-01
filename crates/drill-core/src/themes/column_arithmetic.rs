@@ -16,8 +16,8 @@ use crate::generator_support::{
 use crate::model::{AnswerSchema, ArithmeticOperator, Problem, ProblemPrompt, RationalCoefficient};
 use crate::rng::DeterministicRng;
 use crate::theme::{
-    CurriculumSafetyPolicy as Safety, DedupPolicy as Dedup, SamplingLayerSpec, SchoolGrade,
-    ThemeAnswerContract as AnswerContract, ThemePresentationPolicy as Presentation,
+    CurriculumSafetyPolicy as Safety, CurriculumUnit, DedupPolicy as Dedup, SamplingLayerSpec,
+    SchoolGrade, ThemeAnswerContract as AnswerContract, ThemePresentationPolicy as Presentation,
     ThemeRegistration, ThemeRegistrationSpec, ThemeTag, COLUMN_16_LAYOUT,
     COLUMN_DIVISION_12_LAYOUT,
 };
@@ -111,6 +111,21 @@ pub const CURRICULUM_PATH_COLUMN_DECIMAL_DIVISION: [&str; 4] = [
     "小数の割り算の筆算",
 ];
 
+pub const CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT: CurriculumUnit =
+    CurriculumUnit::new("grade2-column-add-subtract", "加法，減法");
+pub const CURRICULUM_UNIT_GRADE3_COLUMN_ADD_SUBTRACT: CurriculumUnit =
+    CurriculumUnit::new("grade3-column-add-subtract", "加法，減法");
+pub const CURRICULUM_UNIT_GRADE3_COLUMN_MULTIPLICATION: CurriculumUnit =
+    CurriculumUnit::new("grade3-column-multiplication", "乗法");
+pub const CURRICULUM_UNIT_GRADE3_COLUMN_DIVISION: CurriculumUnit =
+    CurriculumUnit::new("grade3-column-division", "除法");
+pub const CURRICULUM_UNIT_GRADE4_INTEGER_DIVISION: CurriculumUnit =
+    CurriculumUnit::new("grade4-integer-division", "整数の除法");
+pub const CURRICULUM_UNIT_GRADE4_DECIMAL: CurriculumUnit =
+    CurriculumUnit::new("grade4-decimal", "小数の仕組みとその計算");
+pub const CURRICULUM_UNIT_GRADE5_DECIMAL: CurriculumUnit =
+    CurriculumUnit::new("grade5-decimal", "小数の乗法，除法");
+
 const ADDITION: &[ThemeTag] = &[ThemeTag::Addition];
 const SUBTRACTION: &[ThemeTag] = &[ThemeTag::Subtraction];
 const MULTIPLICATION: &[ThemeTag] = &[ThemeTag::Multiplication];
@@ -153,7 +168,8 @@ pub const COLUMN_ADD_2DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT);
 
 pub const COLUMN_SUBTRACT_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -170,7 +186,8 @@ pub const COLUMN_SUBTRACT_2DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE2_COLUMN_ADD_SUBTRACT);
 
 pub const COLUMN_ADD_3_4DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -187,7 +204,8 @@ pub const COLUMN_ADD_3_4DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_ADD_SUBTRACT);
 
 pub const COLUMN_SUBTRACT_3_4DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -204,7 +222,8 @@ pub const COLUMN_SUBTRACT_3_4DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_ADD_SUBTRACT);
 
 pub const COLUMN_MULTIPLY_1DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -221,7 +240,8 @@ pub const COLUMN_MULTIPLY_1DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_MULTIPLICATION);
 
 pub const COLUMN_MULTIPLY_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -238,7 +258,8 @@ pub const COLUMN_MULTIPLY_2DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_MULTIPLICATION);
 
 pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -255,7 +276,8 @@ pub const COLUMN_DIVIDE_1DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_DIVISION_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE3_COLUMN_DIVISION);
 
 pub const COLUMN_DIVIDE_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -272,7 +294,8 @@ pub const COLUMN_DIVIDE_2DIGIT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: INTEGER_DIVISION_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_INTEGER_DIVISION);
 
 pub const COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -289,7 +312,8 @@ pub const COLUMN_DECIMAL_ADD_SUBTRACT_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: DECIMAL_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_DECIMAL);
 
 pub const COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -306,7 +330,8 @@ pub const COLUMN_DECIMAL_MULTIPLY_INTEGER_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: DECIMAL_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_DECIMAL);
 
 pub const COLUMN_DECIMAL_DIVIDE_INTEGER_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -323,7 +348,8 @@ pub const COLUMN_DECIMAL_DIVIDE_INTEGER_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: DECIMAL_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE4_DECIMAL);
 
 pub const COLUMN_DECIMAL_MULTIPLICATION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -340,7 +366,8 @@ pub const COLUMN_DECIMAL_MULTIPLICATION_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: DECIMAL_COLUMN,
         layout: COLUMN_16_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
 
 pub const COLUMN_DECIMAL_DIVISION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -357,7 +384,8 @@ pub const COLUMN_DECIMAL_DIVISION_REGISTRATION: ThemeRegistration =
         dedup: Dedup::CanonicalizeCommutative,
         answer_contract: DECIMAL_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
-    });
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {

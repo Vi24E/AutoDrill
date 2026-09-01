@@ -2,6 +2,7 @@ import type { AnswerNode, ProblemDto } from './drill-engine';
 
 export type AnswerPresentationPlan =
   | { kind: 'liar_puzzle'; peopleCount: number }
+  | { kind: 'integer_division' }
   | { kind: 'column_division'; hasRemainder: boolean; quotientSlot: 'single' | 'quotient' }
   | { kind: 'column_arithmetic' }
   | { kind: 'simultaneous_equation' }
@@ -24,6 +25,9 @@ export function answerPresentationPlan(problem: ProblemDto): AnswerPresentationP
   if (problem.input_interface.type === 'digit_grid') return { kind: 'digit_grid' };
   if (problem.prompt.kind === 'liar_puzzle') {
     return { kind: 'liar_puzzle', peopleCount: problem.prompt.people_count };
+  }
+  if (problem.prompt.kind === 'arithmetic' && problem.answer_schema.kind === 'ordered_pair') {
+    return { kind: 'integer_division' };
   }
   if (problem.prompt.kind === 'column_arithmetic') {
     if (problem.prompt.operator === 'divide') {

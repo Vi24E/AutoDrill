@@ -12,6 +12,10 @@ describe('answerPresentationPlan', () => {
   it('projects answer semantics once for both Web and PDF renderers', () => {
     expect(answerPresentationPlan(problem({}))).toEqual({ kind: 'standard' });
     expect(answerPresentationPlan(problem({
+      prompt: { kind: 'arithmetic', expression: { kind: 'integer', value: 7 } },
+      answer_schema: { kind: 'ordered_pair' },
+    }))).toEqual({ kind: 'integer_division' });
+    expect(answerPresentationPlan(problem({
       prompt: { kind: 'liar_puzzle', people_count: 4, statements: [] },
     }))).toEqual({ kind: 'liar_puzzle', peopleCount: 4 });
     expect(answerPresentationPlan(problem({

@@ -7,7 +7,8 @@ use crate::model::{AnswerInputInterface, EditorStructure, GradeWarning, MAX_ANSW
 use crate::registry::{active_registrations, RegistryError};
 use crate::schema::SCHEMA_VERSION;
 use crate::theme::{
-    CurriculumSafetyPolicy, DedupPolicy, ThemeAnswerContract, ThemePresentationPolicy, ThemeTag,
+    CurriculumSafetyPolicy, CurriculumUnit, DedupPolicy, ThemeAnswerContract,
+    ThemePresentationPolicy, ThemeTag,
 };
 
 #[derive(Debug, Serialize)]
@@ -25,6 +26,7 @@ pub struct WebThemeContract<'a> {
     pub generator_revision: u32,
     pub skill_id: &'a str,
     pub curriculum_path: &'a [&'a str],
+    pub curriculum_unit: CurriculumUnit,
     pub grade: Option<u8>,
     pub tags: &'a [ThemeTag],
     pub safety: CurriculumSafetyPolicy,
@@ -59,6 +61,7 @@ pub fn web_contract() -> Result<WebContract<'static>, RegistryError> {
                     generator_revision: registration.generator_revision(),
                     skill_id: registration.skill_id(),
                     curriculum_path: registration.curriculum_path(),
+                    curriculum_unit: registration.curriculum_unit(),
                     grade: registration.grade().map(crate::theme::SchoolGrade::value),
                     tags: registration.tags(),
                     safety: registration.safety(),

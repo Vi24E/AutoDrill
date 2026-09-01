@@ -5,6 +5,21 @@ import { ONE_DIGIT_ADDITION_DEFINITION } from './themes/one-digit-addition';
 import { ONE_DIGIT_SUBTRACTION_DEFINITION } from './themes/one-digit-subtraction';
 import { TWO_DIGIT_ADDITION_DEFINITION } from './themes/two-digit-addition';
 import { MULTIPLICATION_TABLE_DEFINITION } from './themes/multiplication-table';
+import { ADDITION_UP_TO_10_DEFINITION } from './themes/addition-up-to-10';
+import { SUBTRACTION_UP_TO_10_DEFINITION } from './themes/subtraction-up-to-10';
+import { ADDITION_WITH_CARRY_DEFINITION } from './themes/addition-with-carry';
+import { SUBTRACTION_WITH_BORROW_DEFINITION } from './themes/subtraction-with-borrow';
+import { MULTIPLICATION_TABLE_1_DEFINITION } from './themes/multiplication-table-1';
+import { MULTIPLICATION_TABLE_2_DEFINITION } from './themes/multiplication-table-2';
+import { MULTIPLICATION_TABLE_3_DEFINITION } from './themes/multiplication-table-3';
+import { MULTIPLICATION_TABLE_4_DEFINITION } from './themes/multiplication-table-4';
+import { MULTIPLICATION_TABLE_5_DEFINITION } from './themes/multiplication-table-5';
+import { MULTIPLICATION_TABLE_6_DEFINITION } from './themes/multiplication-table-6';
+import { MULTIPLICATION_TABLE_7_DEFINITION } from './themes/multiplication-table-7';
+import { MULTIPLICATION_TABLE_8_DEFINITION } from './themes/multiplication-table-8';
+import { MULTIPLICATION_TABLE_9_DEFINITION } from './themes/multiplication-table-9';
+import { DIVISION_WITH_REMAINDER_DEFINITION } from './themes/division-with-remainder';
+import { SIMPLE_TWO_DIGIT_DIVISION_DEFINITION } from './themes/simple-two-digit-division';
 import { FRACTION_ADDITION_DEFINITION } from './themes/fraction-addition';
 import { FRACTION_SUBTRACTION_DEFINITION } from './themes/fraction-subtraction';
 import { FRACTION_MULTIPLICATION_DEFINITION } from './themes/fraction-multiplication';
@@ -51,6 +66,21 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   COLUMN_ADD_3_4DIGIT_DEFINITION,
   COLUMN_SUBTRACT_3_4DIGIT_DEFINITION,
   MULTIPLICATION_TABLE_DEFINITION,
+  ADDITION_UP_TO_10_DEFINITION,
+  SUBTRACTION_UP_TO_10_DEFINITION,
+  ADDITION_WITH_CARRY_DEFINITION,
+  SUBTRACTION_WITH_BORROW_DEFINITION,
+  MULTIPLICATION_TABLE_1_DEFINITION,
+  MULTIPLICATION_TABLE_2_DEFINITION,
+  MULTIPLICATION_TABLE_3_DEFINITION,
+  MULTIPLICATION_TABLE_4_DEFINITION,
+  MULTIPLICATION_TABLE_5_DEFINITION,
+  MULTIPLICATION_TABLE_6_DEFINITION,
+  MULTIPLICATION_TABLE_7_DEFINITION,
+  MULTIPLICATION_TABLE_8_DEFINITION,
+  MULTIPLICATION_TABLE_9_DEFINITION,
+  DIVISION_WITH_REMAINDER_DEFINITION,
+  SIMPLE_TWO_DIGIT_DIVISION_DEFINITION,
   DIVISION_1_DEFINITION,
   COLUMN_MULTIPLY_1DIGIT_DEFINITION,
   COLUMN_MULTIPLY_2DIGIT_DEFINITION,

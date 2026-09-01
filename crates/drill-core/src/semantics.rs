@@ -70,10 +70,17 @@ pub(crate) fn prompt_accepts_canonical_answer(
             rational_from_answer(answer)
                 == ExactRational::new(i128::from(*left) + i128::from(*right), 1)
         }
-        ProblemPrompt::Arithmetic { expression } => rational_from_expression(expression)
-            .is_some_and(|expected| {
-                rational_from_answer(answer).is_some_and(|actual| actual == expected)
-            }),
+        ProblemPrompt::Arithmetic { expression } => {
+            if contract == ThemeAnswerContract::ArithmeticIntegerDivision
+                || matches!(schema, AnswerSchema::OrderedPair)
+            {
+                arithmetic_integer_division_answer_is_correct(expression, answer)
+            } else {
+                rational_from_expression(expression).is_some_and(|expected| {
+                    rational_from_answer(answer).is_some_and(|actual| actual == expected)
+                })
+            }
+        }
         ProblemPrompt::ColumnArithmetic {
             operator,
             left,
@@ -94,6 +101,50 @@ pub(crate) fn prompt_accepts_canonical_answer(
         } => liar_answer_is_correct(*people_count, statements, answer),
         ProblemPrompt::MiniSudoku { givens } => mini_sudoku_answer_is_correct(givens, answer),
     }
+}
+
+fn arithmetic_integer_division_answer_is_correct(
+    expression: &ArithmeticExpression,
+    answer: &AnswerNode,
+) -> bool {
+    let ArithmeticExpression::Binary {
+        operator: ArithmeticOperator::Divide,
+        left,
+        right,
+    } = expression
+    else {
+        return false;
+    };
+    let (Some(dividend), Some(divisor)) = (
+        rational_from_expression(left),
+        rational_from_expression(right),
+    ) else {
+        return false;
+    };
+    if !dividend.is_integer() || !divisor.is_integer() || divisor.numerator() <= 0 {
+        return false;
+    }
+    let AnswerNode::Tuple(values) = answer else {
+        return false;
+    };
+    if values.len() != 2 {
+        return false;
+    }
+    let (Some(quotient), Some(remainder)) = (
+        rational_from_answer(&values[0]),
+        rational_from_answer(&values[1]),
+    ) else {
+        return false;
+    };
+    if !quotient.is_integer() || !remainder.is_integer() {
+        return false;
+    }
+    let divisor_value = divisor.numerator();
+    let quotient_value = quotient.numerator();
+    let remainder_value = remainder.numerator();
+    remainder_value >= 0
+        && remainder_value < divisor_value
+        && dividend.numerator() == divisor_value * quotient_value + remainder_value
 }
 
 fn column_answer_is_correct(

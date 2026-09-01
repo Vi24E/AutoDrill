@@ -15,8 +15,8 @@ use crate::model::{
 };
 use crate::rng::DeterministicRng;
 use crate::theme::{
-    CurriculumSafetyPolicy as Safety, DedupPolicy as Dedup, SamplingLayerSpec, SchoolGrade,
-    ThemeAnswerContract as AnswerContract, ThemeInputProfile as Input,
+    CurriculumSafetyPolicy as Safety, CurriculumUnit, DedupPolicy as Dedup, SamplingLayerSpec,
+    SchoolGrade, ThemeAnswerContract as AnswerContract, ThemeInputProfile as Input,
     ThemePresentationPolicy as Presentation, ThemeRegistration, ThemeRegistrationSpec, ThemeTag,
     COMPACT_16_LAYOUT, EQUATION_PAIR_12_LAYOUT,
 };
@@ -53,6 +53,13 @@ pub const CURRICULUM_PATH_QUADRATIC_EQUATION_3: [&str; 4] =
 pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_1: [&str; 4] =
     ["root", "中学2年生", "連立方程式", "連立方程式(1)"];
 
+pub const CURRICULUM_UNIT_LINEAR_EQUATION: CurriculumUnit =
+    CurriculumUnit::new("linear-equation", "一次方程式");
+pub const CURRICULUM_UNIT_QUADRATIC_EQUATION: CurriculumUnit =
+    CurriculumUnit::new("quadratic-equation", "二次方程式");
+pub const CURRICULUM_UNIT_SIMULTANEOUS_EQUATION: CurriculumUnit =
+    CurriculumUnit::new("simultaneous-equation", "連立方程式");
+
 const LINEAR: &[ThemeTag] = &[ThemeTag::Equations, ThemeTag::LinearEquation];
 const QUADRATIC: &[ThemeTag] = &[ThemeTag::Equations, ThemeTag::QuadraticEquation];
 const SIMULTANEOUS: &[ThemeTag] = &[ThemeTag::Equations, ThemeTag::SimultaneousEquation];
@@ -88,6 +95,7 @@ pub const LINEAR_EQUATION_1_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::LinearInteger,
         layout: COMPACT_16_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_LINEAR_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
 pub const LINEAR_EQUATION_2_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -105,6 +113,7 @@ pub const LINEAR_EQUATION_2_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::LinearRational,
         layout: COMPACT_16_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_LINEAR_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
 pub const QUADRATIC_EQUATION_1_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -122,6 +131,7 @@ pub const QUADRATIC_EQUATION_1_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::QuadraticAlgebraic,
         layout: COMPACT_16_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_QUADRATIC_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
 pub const QUADRATIC_EQUATION_2_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -139,6 +149,7 @@ pub const QUADRATIC_EQUATION_2_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::QuadraticAlgebraic,
         layout: COMPACT_16_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_QUADRATIC_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
 pub const QUADRATIC_EQUATION_3_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -156,6 +167,7 @@ pub const QUADRATIC_EQUATION_3_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::QuadraticAlgebraic,
         layout: COMPACT_16_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_QUADRATIC_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
 pub const SIMULTANEOUS_EQUATION_1_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -173,6 +185,7 @@ pub const SIMULTANEOUS_EQUATION_1_REGISTRATION: ThemeRegistration =
         answer_contract: AnswerContract::SimultaneousPair,
         layout: EQUATION_PAIR_12_LAYOUT,
     })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIMULTANEOUS_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

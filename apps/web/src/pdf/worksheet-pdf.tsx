@@ -101,6 +101,27 @@ function PrintAnswer({
     );
   }
 
+  if (presentation.kind === 'integer_division') {
+    const quotient = answerCoordinate(problem.canonical_answer, 0);
+    const remainder = answerCoordinate(problem.canonical_answer, 1);
+    return (
+      <span className={`problem-answer-area problem-answer-area-integer-division ${answers ? 'worksheet-print-answer-area' : 'worksheet-print-problem-answer'}`} aria-hidden={answers ? undefined : 'true'}>
+        <span className="integer-division-answer-coordinate">
+          <span className="integer-division-answer-label">商</span>
+          {answers
+            ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(quotient)} ariaLabel={answerNodeText(quotient)} />
+            : <span className="answer-box worksheet-print-empty-answer" />}
+        </span>
+        <span className="integer-division-answer-coordinate">
+          <span className="integer-division-answer-label">あまり</span>
+          {answers
+            ? <MathLiveStatic className="canonical-answer-math worksheet-print-answer-value" latex={answerNodeLatex(remainder)} ariaLabel={answerNodeText(remainder)} />
+            : <span className="answer-box worksheet-print-empty-answer" />}
+        </span>
+      </span>
+    );
+  }
+
   if (presentation.kind === 'column_division') {
     const quotient = presentation.hasRemainder
       ? answerCoordinate(problem.canonical_answer, 0)
