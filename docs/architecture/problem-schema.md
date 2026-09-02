@@ -16,54 +16,9 @@
 }
 ```
 
-`timeout_ms`と`max_attempts`は省略可能で、既定値は15,000msと10,000試行である。問題数はrequestやIDへ入れず、revision付きgenerator registryから得る。現在の登録は次の通り。
+`timeout_ms`と`max_attempts`は省略可能で、既定値は15,000msと10,000試行である。問題数はrequestやIDへ入れず、revision付きgenerator registryから得る。
 
-| theme | numeric ID | revision | layout |
-|---|---:|---:|---|
-| 一桁の足し算 | 1 | 5 | 20問・2列10行 |
-| 一次方程式(1)：基本形 | 2 | 9 | 16問・2列8行 |
-| 一次方程式(2)：括弧・整数係数中心 | 3 | 9 | 16問・2列8行 |
-| 一桁の引き算 | 4 | 3 | 20問・2列10行 |
-| 二桁の足し算 | 5 | 3 | 20問・2列10行 |
-| 九九 | 6 | 3 | 20問・2列10行 |
-| 負の数の計算(1) | 7 | 3 | 20問・2列10行 |
-| 負の数の計算(2) | 8 | 3 | 20問・2列10行 |
-| 分数の足し算 | 9 | 5 | 16問・2列8行 |
-| 分数の掛け算 | 10 | 5 | 16問・2列8行 |
-| 分数の引き算 | 11 | 5 | 16問・2列8行 |
-| 分数の割り算 | 12 | 6 | 16問・2列8行 |
-| 割り算(1) | 13 | 3 | 20問・2列10行 |
-| 二次方程式(1) | 14 | 4 | 16問・2列8行 |
-| 二次方程式(2) | 15 | 5 | 16問・2列8行 |
-| 二次方程式(3) | 16 | 4 | 16問・2列8行 |
-| 小数の足し算と引き算 | 17 | 5 | 20問・2列10行 |
-| 小数の掛け算 | 18 | 6 | 20問・2列10行 |
-| 連立方程式（加減法） | 19 | 4 | 12問・2列6行 |
-| うそつきだれだ | 20 | 4 | 6問・1列6行 |
-| 分数と整数の掛け算 | 21 | 2 | 16問・2列8行 |
-| 分数と整数の割り算 | 22 | 2 | 16問・2列8行 |
-| 分数総まとめ(仮分数) | 23 | 3 | 16問・2列8行 |
-| 小数の割り算 | 24 | 1 | 20問・2列10行 |
-| 二桁の足し算の筆算 | 25 | 2 | 16問・4列4行 |
-| 二桁の引き算の筆算 | 26 | 2 | 16問・4列4行 |
-| 三・四桁の足し算の筆算 | 27 | 2 | 16問・4列4行 |
-| 三・四桁の引き算の筆算 | 28 | 2 | 16問・4列4行 |
-| 一桁をかける掛け算の筆算 | 29 | 2 | 16問・4列4行 |
-| 二桁をかける掛け算の筆算 | 30 | 2 | 16問・4列4行 |
-| 一桁で割る割り算の筆算 | 31 | 2 | 12問・4列3行 |
-| 二桁で割る割り算の筆算 | 32 | 2 | 12問・4列3行 |
-| 小数の足し算と引き算の筆算 | 33 | 2 | 16問・4列4行 |
-| 小数と整数の掛け算の筆算 | 34 | 2 | 16問・4列4行 |
-| 小数と整数の割り算の筆算 | 35 | 2 | 12問・4列3行 |
-| 小数の掛け算の筆算 | 36 | 2 | 16問・4列4行 |
-| 小数の割り算の筆算 | 37 | 2 | 12問・4列3行 |
-| すうじはひとりぼっち（Mini Sudoku） | 38 | 1 | 4問・2列2行 |
-| 簡単な一次方程式 | 69 | 1 | 16問・2列8行 |
-| 一次方程式(3)：括弧・分数・小数係数 | 70 | 1 | 16問・2列8行 |
-| 連立方程式（代入法） | 71 | 1 | 12問・2列6行 |
-| 連立方程式（まとめ(1)） | 72 | 1 | 12問・2列6行 |
-| 連立方程式（まとめ(2)） | 73 | 1 | 12問・2列6行 |
-| 二次方程式(4) | 74 | 1 | 16問・2列8行 |
+現行theme登録の唯一のauthorityはRust `drill-core` のregistryと、そこから `web_contract()` が機械的に投影するcontractである。この文書ではnumeric theme ID / revision / curriculum path / layoutの一覧を手書きで複製しない。Webは`apps/web/src/generated/drill-core-contract.ts`、QAは`apps/qa/generated/drill-core-contract.json`をそのcontractから生成し、`pnpm contract:check`でtracked projectionとの一致を検証する。themeの追加・分割・移動ではRust registrationを更新し、consumerはgenerated metadataを読む。表示label・slug・numeric IDから数学的意味やcurriculum metadataを逆算しない。
 
 ## Problem-set identity
 
@@ -143,7 +98,7 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 - 余り0でもschemaを変えない
 - elementary registrationの共通nonnegative validationを通す
 
-`problem_set_id`はnumeric theme ID / 現行generator revision / Seed / difficulty contractで再生成される。ID 25〜37の現行revisionはworked-solutionを含むrevision 2であり、rev1 generatorはpre-release policyに従って保持しない。
+`problem_set_id`はnumeric theme ID / 現行generator revision / Seed / difficulty contractで再生成される。筆算themeの現行revisionはRust registryが所有し、worked-solutionやgenerator semanticsが変わる場合はthemeごとにrevisionを更新する。pre-release policyでは旧revision generatorを互換経路として保持しない。
 
 ## 一次方程式generator
 

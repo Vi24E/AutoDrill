@@ -1138,7 +1138,13 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
     const expression = paper.querySelector('.expression');
     const fontSize = expression ? getComputedStyle(expression).fontSize : null;
     const worksheetGridAlignment = measureWorksheetGridAlignment(paper);
-    return { crossings, columnGridMismatches, worksheetGridAlignment, count: cells.length, gradeClass, fontSize, alert: document.querySelector('[role="alert"]')?.getAttribute('aria-label') ?? null };
+    const columnDivisionQuotient = paper.querySelector('.problem-answer-area-column-division .column-digit-answer-quotient');
+    const integerColumnDivision = Boolean(
+      columnDivisionQuotient
+      && columnDivisionQuotient.getAttribute('data-column-decimal-mode') === 'none'
+      && paper.querySelector('.column-division-answer-coordinate-remainder'),
+    );
+    return { crossings, columnGridMismatches, worksheetGridAlignment, count: cells.length, gradeClass, fontSize, integerColumnDivision, alert: document.querySelector('[role=\"alert\"]')?.getAttribute('aria-label') ?? null };
   })()`;
 }
 
@@ -2215,9 +2221,8 @@ try {
         console.log(`[layout] checking ${route} seed=${seed}`);
         await navigate(cdp, `${origin}${BASE_PATH}${localRoute}`);
         let result;
-        const inputDifficulty = route.endsWith('/column-division-one-digit') || route.endsWith('/column-division-two-digit') ? 'ふつう' : 'むずかしい';
         try {
-          result = await cdp.evaluate(worksheetProbe(seed, inputDifficulty));
+          result = await cdp.evaluate(worksheetProbe(seed));
         } catch (error) {
           throw new Error(`Worksheet probe failed for ${route} seed=${seed}; console=${cdp.consoleErrors.join(' | ') || 'none'}`, { cause: error });
         }
@@ -2353,7 +2358,7 @@ try {
             failures.push({ route, seed, reason: `decimal column fixed-point digit input mismatch: ${JSON.stringify(decimalInput)}` });
           }
         }
-        if ((route.endsWith('/column-division-one-digit') || route.endsWith('/column-division-two-digit')) && seed === SEEDS[0]) {
+        if (result.integerColumnDivision && seed === SEEDS[0]) {
           const keyboardTarget = await cdp.evaluate(columnDivisionKeyboardTargetProbe());
           await mouseClick(cdp, keyboardTarget.x, keyboardTarget.y);
           const keyboardFocused = await cdp.evaluate(columnDivisionKeyboardFocusProbe());
@@ -2466,7 +2471,7 @@ try {
         }
         if (seed === SEEDS[0]) {
           await navigate(cdp, `${origin}${BASE_PATH}${localRoute}`);
-          await cdp.evaluate(worksheetProbe(seed, inputDifficulty));
+          await cdp.evaluate(worksheetProbe(seed));
           const affordanceCoverage = await cdp.evaluate(worksheetAffordanceCoverageProbe());
           answerAffordanceActionCount += affordanceCoverage.attempted;
           if (affordanceCoverage.attempted === 0 || affordanceCoverage.failures.length > 0) {
@@ -2475,7 +2480,7 @@ try {
           // Input-panel actions are one-step edges from a canonical fresh worksheet,
           // not a continuation of the preceding all-affordances mutation sweep.
           await navigate(cdp, `${origin}${BASE_PATH}${localRoute}`);
-          await cdp.evaluate(worksheetProbe(seed, inputDifficulty));
+          await cdp.evaluate(worksheetProbe(seed));
           const panelCoverage = await cdp.evaluate(openInputPanelCoverageProbe());
           if (panelCoverage.applicable && !inputPanelSignatures.has(panelCoverage.signature)) {
             inputPanelSignatures.add(panelCoverage.signature);

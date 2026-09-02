@@ -1,9 +1,9 @@
 {
   "source": "repository_worktree",
-  "head_sha": "5fb11cc2224eb7e3f1d065704c18b4b1e139c378",
-  "worktree_state": "dirty",
-  "worktree_dirty": true,
-  "status_porcelain": "M scripts/verify-browser-layout.mjs",
-  "status_sha256": "5127dd03ff1a7fadb4a95090a65b6b11d8905b647f51ae1e2389288a99fc9a41",
-  "tracked_diff_sha256": "c54ba75241c0ec2a32d971fc80ba401ad9ecc9db87d088c34fac89e2b05ad8d6"
+  "head_sha": "43a50888e789058bc13b40d6f5bf00904bdb025e",
+  "worktree_state": "clean",
+  "worktree_dirty": false,
+  "status_porcelain": null,
+  "status_sha256": null,
+  "tracked_diff_sha256": null
 }

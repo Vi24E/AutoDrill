@@ -63,7 +63,7 @@ Full JSON exportはmanifestと全raw/projection tableを含む。Analysis CSVは
 
 ## AutoDrill integration
 
-default flowはsession開始・problem登録・queue操作を自動化する。QA serverがRust `drill-core`の既存WASM boundaryを呼び、canonical web contractにある全38 themeのうち、一桁の足し算・引き算、九九、九九型の割り算だけをcanonical skill identityによるQA固有の除外集合で外す。残る34単元には分数、一次・二次・連立方程式、論理問題、4×4数独を含む。numeric theme IDや表示名から単元の性質を推測せず、数学generatorを再実装しない。
+default flowはsession開始・problem登録・queue操作を自動化する。QA serverがRust `drill-core`の既存WASM boundaryを呼び、canonical generated contractのcurrent theme集合からQA対象を組み立てる。QA固有の除外は`curriculum_unit.key`の明示集合で所有し、一桁の足し算・引き算、九九、九九型の割り算に属するthemeを除外する。theme数やnumeric ID範囲をQA側へ固定せず、新しいsibling themeも同じcurriculum unitなら自動的に同じ除外policyへ従う。残るthemeには分数、一次・二次・連立方程式、論理問題、4×4数独などを含む。numeric theme IDや表示名から単元の性質を推測せず、数学generatorを再実装しない。
 
 単元選択後はRust/WASM generatorでworksheet全体を一度に生成し、そのproblem indexをseed付きでshuffleしてmemoryへprefetchする。同じ単元の次問題はそのbatchから重複なしで取り出し、使い切ったときだけ新しいworksheetを生成する。各selection eventにはselected skill、worksheet seed、problem index、残候補数、selection policy、candidate source、filter、propensityを保存し、batch samplingの事実を後から再構成できるようにする。process restartでmemory batchが失われても、保存済みattemptとselection eventは失われない。
 
