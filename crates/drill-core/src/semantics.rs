@@ -11,8 +11,8 @@ use crate::exact_value::rational_from_answer;
 use crate::model::{
     AnswerSchema, ArithmeticExpression, ArithmeticOperator, LiarStatement, LinearEquationSurface,
     LinearExpression, LinearScalar, LinearVariable, MiniSudokuGrid, ProblemPrompt,
-    QuadraticEquationSurface, QuadraticExpression, RationalCoefficient, MINI_SUDOKU_CELL_COUNT,
-    MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
+    QuadraticEquationSurface, QuadraticExpression, QuadraticSolveMethod, RationalCoefficient,
+    SimultaneousSolveMethod, MINI_SUDOKU_CELL_COUNT, MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
 };
 use crate::theme::ThemeAnswerContract;
 
@@ -241,6 +241,148 @@ pub(crate) fn evaluate_expression(
     expression: &ArithmeticExpression,
 ) -> Option<RationalCoefficient> {
     rational_to_coefficient(rational_from_expression(expression)?)
+}
+
+pub(crate) fn prompt_has_valid_semantic_metadata(prompt: &ProblemPrompt) -> bool {
+    match prompt {
+        ProblemPrompt::QuadraticEquation {
+            equation,
+            solve_method,
+        } => quadratic_solve_method_is_applicable(equation, *solve_method),
+        ProblemPrompt::SimultaneousEquation {
+            equations,
+            solve_method,
+        } => simultaneous_solve_method_is_applicable(equations, *solve_method),
+        _ => true,
+    }
+}
+
+fn quadratic_expression_has_visible_square(expression: &QuadraticExpression) -> bool {
+    match expression {
+        QuadraticExpression::Square { .. } => true,
+        QuadraticExpression::Linear { .. } => false,
+        QuadraticExpression::Add { left, right }
+        | QuadraticExpression::Subtract { left, right } => {
+            quadratic_expression_has_visible_square(left)
+                || quadratic_expression_has_visible_square(right)
+        }
+        QuadraticExpression::Scale { expression, .. } => {
+            quadratic_expression_has_visible_square(expression)
+        }
+    }
+}
+
+fn quadratic_discriminant_is_nonnegative(equation: &QuadraticEquationSurface) -> bool {
+    let Some((a, b, c)) = normalize_quadratic_equation_exact(equation) else {
+        return false;
+    };
+    if a.is_zero() {
+        return false;
+    }
+    b.multiply(b)
+        .and_then(|b_squared| {
+            a.multiply(c)
+                .and_then(|ac| ExactRational::new(4, 1)?.multiply(ac))
+                .and_then(|four_ac| b_squared.subtract(four_ac))
+        })
+        .is_some_and(|discriminant| discriminant.sign() != std::cmp::Ordering::Less)
+}
+
+pub(crate) fn quadratic_factoring_coefficients(
+    equation: &QuadraticEquationSurface,
+) -> Option<(i64, i64)> {
+    let (a, b, c) = normalize_quadratic_equation(equation)?;
+    if a.is_zero() {
+        return None;
+    }
+    let monic_b = b.divide(a)?;
+    let monic_c = c.divide(a)?;
+    if !monic_b.is_integer() || !monic_c.is_integer() {
+        return None;
+    }
+    let b = monic_b.numerator();
+    let c = monic_c.numerator();
+    let discriminant = i128::from(b)
+        .checked_mul(i128::from(b))?
+        .checked_sub(4_i128.checked_mul(i128::from(c))?)?;
+    if discriminant < 0 {
+        return None;
+    }
+    let discriminant = u128::try_from(discriminant).ok()?;
+    let root = discriminant.isqrt();
+    if root.checked_mul(root)? != discriminant {
+        return None;
+    }
+    let root = i128::try_from(root).ok()?;
+    let neg_b = i128::from(b).checked_neg()?;
+    if neg_b.checked_add(root)? % 2 != 0 || neg_b.checked_sub(root)? % 2 != 0 {
+        return None;
+    }
+    Some((b, c))
+}
+
+pub(crate) fn quadratic_solve_method_is_applicable(
+    equation: &QuadraticEquationSurface,
+    solve_method: QuadraticSolveMethod,
+) -> bool {
+    if !quadratic_discriminant_is_nonnegative(equation) {
+        return false;
+    }
+    match solve_method {
+        QuadraticSolveMethod::SquareRoot => {
+            quadratic_expression_has_visible_square(&equation.left)
+                || quadratic_expression_has_visible_square(&equation.right)
+        }
+        QuadraticSolveMethod::Factoring => quadratic_factoring_coefficients(equation).is_some(),
+        QuadraticSolveMethod::Formula => true,
+    }
+}
+
+fn equation_supports_integer_substitution(
+    x: RationalCoefficient,
+    y: RationalCoefficient,
+    rhs: RationalCoefficient,
+) -> bool {
+    let can_isolate = |isolated: RationalCoefficient, other: RationalCoefficient| {
+        if isolated.is_zero() {
+            return false;
+        }
+        other
+            .divide(isolated)
+            .zip(rhs.divide(isolated))
+            .is_some_and(|(slope, intercept)| slope.is_integer() && intercept.is_integer())
+    };
+    can_isolate(x, y) || can_isolate(y, x)
+}
+
+pub(crate) fn simultaneous_solve_method_is_applicable(
+    equations: &[LinearEquationSurface; 2],
+    solve_method: SimultaneousSolveMethod,
+) -> bool {
+    let (Some(first), Some(second)) = (
+        normalize_linear_equation(&equations[0]),
+        normalize_linear_equation(&equations[1]),
+    ) else {
+        return false;
+    };
+    let (a, b, c) = first;
+    let (d, e, f) = second;
+    let determinant_is_nonzero = a
+        .multiply(e)
+        .and_then(|ae| b.multiply(d).and_then(|bd| ae.subtract(bd)))
+        .is_some_and(|determinant| !determinant.is_zero());
+    if !determinant_is_nonzero {
+        return false;
+    }
+    match solve_method {
+        SimultaneousSolveMethod::Elimination => {
+            (!a.is_zero() && !d.is_zero()) || (!b.is_zero() && !e.is_zero())
+        }
+        SimultaneousSolveMethod::Substitution => {
+            equation_supports_integer_substitution(a, b, c)
+                || equation_supports_integer_substitution(d, e, f)
+        }
+    }
 }
 
 pub(crate) fn prompt_accepts_canonical_answer(

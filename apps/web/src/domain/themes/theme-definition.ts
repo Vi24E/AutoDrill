@@ -102,6 +102,23 @@ export function hasThemeTag(theme: Pick<ThemeDefinition, 'tags'>, tag: ThemeTag)
   return theme.tags.includes(tag);
 }
 
+export function answerDecimalScale(numericThemeId: NumericThemeId): number {
+  const core = DRILL_CORE_CONTRACT.themes[String(numericThemeId) as keyof typeof DRILL_CORE_CONTRACT.themes];
+  if (!core || core.numeric_theme_id !== numericThemeId) {
+    throw new Error(`Theme ${numericThemeId} has no Rust theme contract.`);
+  }
+  const scale = core.answer_decimal_scale;
+  if (scale === null) {
+    throw new Error(`Theme ${numericThemeId} has no Rust-owned decimal answer scale.`);
+  }
+  return scale;
+}
+
+export function decimalPlaceLabel(scale: number): string {
+  if (!Number.isInteger(scale) || scale < 0) throw new Error(`Invalid decimal scale: ${scale}`);
+  return scale === 0 ? '一の位' : `小数第${scale}位`;
+}
+
 export function defineTheme(input: ThemeDefinitionInput): ThemeDefinition {
   const core = DRILL_CORE_CONTRACT.themes[String(input.numeric_theme_id) as keyof typeof DRILL_CORE_CONTRACT.themes];
   if (!core || core.numeric_theme_id !== input.numeric_theme_id) {

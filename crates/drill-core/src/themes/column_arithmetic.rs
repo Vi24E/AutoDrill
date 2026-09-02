@@ -235,6 +235,28 @@ const DECIMAL_DIVISION_REMAINDER_COLUMN: AnswerContract =
 const DECIMAL_DIVISION_ROUNDED_COLUMN: AnswerContract =
     AnswerContract::ColumnDecimalDivisionRounded;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DecimalDivisionResultPolicy {
+    answer_scale: u32,
+}
+
+impl DecimalDivisionResultPolicy {
+    const fn answer_scale(self) -> u32 {
+        self.answer_scale
+    }
+
+    fn calculation_scale(self) -> Option<u32> {
+        self.answer_scale.checked_add(1)
+    }
+
+    fn remainder_max_scale(self, divisor_scale: u32) -> Option<u32> {
+        self.calculation_scale()?.checked_add(divisor_scale)
+    }
+}
+
+const DECIMAL_DIVISION_RESULT_POLICY: DecimalDivisionResultPolicy =
+    DecimalDivisionResultPolicy { answer_scale: 1 };
+
 pub const COLUMN_ADD_2DIGIT_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
         numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_COLUMN_ADD_2DIGIT),
@@ -611,7 +633,8 @@ pub const COLUMN_DECIMAL_DIVISION_REMAINDER_REGISTRATION: ThemeRegistration =
         answer_contract: DECIMAL_DIVISION_REMAINDER_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
     })
-    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL)
+    .with_answer_decimal_scale(DECIMAL_DIVISION_RESULT_POLICY.answer_scale());
 
 pub const COLUMN_DECIMAL_DIVISION_ROUNDED_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -629,7 +652,8 @@ pub const COLUMN_DECIMAL_DIVISION_ROUNDED_REGISTRATION: ThemeRegistration =
         answer_contract: DECIMAL_DIVISION_ROUNDED_COLUMN,
         layout: COLUMN_DIVISION_12_LAYOUT,
     })
-    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL);
+    .with_curriculum_unit(CURRICULUM_UNIT_GRADE5_DECIMAL)
+    .with_answer_decimal_scale(DECIMAL_DIVISION_RESULT_POLICY.answer_scale());
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Mode {
@@ -1277,22 +1301,28 @@ fn draw_problem(
             )
         }
         Mode::DecimalDivisionRemainder | Mode::DecimalDivisionRounded => {
-            // Keep operand scale as ordinary variation while fixing the *answer*
-            // operation: both themes calculate the exact quotient to hundredths,
-            // then either stop at tenths and report the remainder or round to tenths.
+            // Keep operand scale as ordinary variation while the Rust-owned result
+            // policy controls answer precision. Both themes calculate one guard digit
+            // beyond that scale, then either stop and report the remainder or round.
             // A small positive decimal divisor keeps the complete long-division
             // setup inside the existing four-column worksheet lane.
             let divisor_coefficient = 2 + rng.next_bounded(18) as i64;
             let divisor_scale = 1;
             let divisor = exact_decimal_rational(divisor_coefficient, divisor_scale)?;
+            let policy = DECIMAL_DIVISION_RESULT_POLICY;
+            let answer_scale = policy.answer_scale();
+            let calculation_scale = policy.calculation_scale()?;
+            let answer_factor = 10_i64.checked_pow(answer_scale)?;
+            let calculation_factor = 10_i64.checked_pow(calculation_scale)?;
             let quotient_whole = 1 + rng.next_bounded(4) as i64;
-            let quotient_tenths = rng.next_bounded(10) as i64;
-            let quotient_hundredths = 1 + rng.next_bounded(9) as i64;
+            let quotient_fraction = rng.next_bounded(u64::try_from(answer_factor).ok()?) as i64;
+            let guard_digit = 1 + rng.next_bounded(9) as i64;
             let exact_quotient_coefficient = quotient_whole
-                .checked_mul(100)?
-                .checked_add(quotient_tenths.checked_mul(10)?)?
-                .checked_add(quotient_hundredths)?;
-            let exact_quotient = exact_decimal_rational(exact_quotient_coefficient, 2)?;
+                .checked_mul(calculation_factor)?
+                .checked_add(quotient_fraction.checked_mul(10)?)?
+                .checked_add(guard_digit)?;
+            let exact_quotient =
+                exact_decimal_rational(exact_quotient_coefficient, calculation_scale)?;
             let dividend = exact_quotient.multiply(divisor)?;
             let left = rational_to_arithmetic_expression(dividend, 4)?;
             let right = exact_decimal_expression(divisor_coefficient, divisor_scale);
@@ -1308,11 +1338,13 @@ fn draw_problem(
                 let quotient_coefficient = exact_quotient_coefficient / 10;
                 let quotient = AnswerNode::ExactDecimal {
                     coefficient: quotient_coefficient,
-                    scale: 1,
+                    scale: answer_scale,
                 };
-                let quotient_value = exact_decimal_rational(quotient_coefficient, 1)?;
+                let quotient_value = exact_decimal_rational(quotient_coefficient, answer_scale)?;
                 let remainder = dividend.subtract(divisor.multiply(quotient_value)?)?;
-                let remainder_answer = rational_to_exact_decimal_answer(remainder, 3)?;
+                let remainder_max_scale = policy.remainder_max_scale(divisor_scale)?;
+                let remainder_answer =
+                    rational_to_exact_decimal_answer(remainder, remainder_max_scale)?;
                 let answer = AnswerNode::Tuple(vec![quotient, remainder_answer]);
                 let plan = arithmetic_expression_plan(&expression, &answer)?;
                 (
@@ -1322,16 +1354,16 @@ fn draw_problem(
                     answer,
                     plan,
                     AnswerSchema::DecimalDivisionRemainder {
-                        quotient_scale: 1,
-                        remainder_max_scale: 3,
+                        quotient_scale: answer_scale,
+                        remainder_max_scale,
                     },
                 )
             } else {
                 let rounded_coefficient =
-                    exact_quotient_coefficient / 10 + i64::from(quotient_hundredths >= 5);
+                    exact_quotient_coefficient / 10 + i64::from(guard_digit >= 5);
                 let answer = AnswerNode::ExactDecimal {
                     coefficient: rounded_coefficient,
-                    scale: 1,
+                    scale: answer_scale,
                 };
                 let plan = arithmetic_expression_plan(&expression, &answer)?;
                 (
@@ -1340,7 +1372,9 @@ fn draw_problem(
                     right,
                     answer,
                     plan,
-                    AnswerSchema::RoundedDecimal { scale: 1 },
+                    AnswerSchema::RoundedDecimal {
+                        scale: answer_scale,
+                    },
                 )
             }
         }
@@ -1539,6 +1573,23 @@ mod curriculum_tests {
     }
 
     #[test]
+    fn decimal_division_result_scale_is_rust_owned_theme_metadata() {
+        let expected = Some(DECIMAL_DIVISION_RESULT_POLICY.answer_scale());
+        assert_eq!(
+            COLUMN_DECIMAL_DIVISION_REMAINDER_REGISTRATION.answer_decimal_scale(),
+            expected
+        );
+        assert_eq!(
+            COLUMN_DECIMAL_DIVISION_ROUNDED_REGISTRATION.answer_decimal_scale(),
+            expected
+        );
+        assert_eq!(
+            COLUMN_DECIMAL_DIVISION_REGISTRATION.answer_decimal_scale(),
+            None
+        );
+    }
+
+    #[test]
     fn decimal_division_result_themes_enforce_remainder_and_rounding_semantics() {
         use crate::exact_value::rational_parts_from_answer;
         use crate::semantics::evaluate_expression;
@@ -1567,8 +1618,10 @@ mod curriculum_tests {
                     assert_eq!(
                         problem.answer_schema(),
                         &AnswerSchema::DecimalDivisionRemainder {
-                            quotient_scale: 1,
-                            remainder_max_scale: 3,
+                            quotient_scale: DECIMAL_DIVISION_RESULT_POLICY.answer_scale(),
+                            remainder_max_scale: DECIMAL_DIVISION_RESULT_POLICY
+                                .remainder_max_scale(1)
+                                .unwrap(),
                         }
                     );
                     let AnswerNode::Tuple(values) = problem.canonical_answer() else {
@@ -1597,8 +1650,9 @@ mod curriculum_tests {
                             .unwrap(),
                         dividend
                     );
+                    let answer_factor = 10_i64.pow(DECIMAL_DIVISION_RESULT_POLICY.answer_scale());
                     let bound = divisor
-                        .multiply(RationalCoefficient::new(1, 10).unwrap())
+                        .multiply(RationalCoefficient::new(1, answer_factor).unwrap())
                         .unwrap();
                     assert!(remainder.numerator() > 0);
                     assert!(rational_less_than(remainder, bound));
@@ -1625,17 +1679,24 @@ mod curriculum_tests {
                     };
                     assert_eq!(
                         problem.answer_schema(),
-                        &AnswerSchema::RoundedDecimal { scale: 1 }
+                        &AnswerSchema::RoundedDecimal {
+                            scale: DECIMAL_DIVISION_RESULT_POLICY.answer_scale(),
+                        }
                     );
                     let exact = evaluate_expression(left)
                         .unwrap()
                         .divide(evaluate_expression(right).unwrap())
                         .unwrap();
-                    let exact_hundredths = exact.numerator() * 100 / exact.denominator();
-                    assert_ne!(exact_hundredths % 10, 0);
-                    let rounded_tenths =
-                        exact_hundredths / 10 + i64::from((exact_hundredths % 10) >= 5);
-                    let expected = RationalCoefficient::new(rounded_tenths, 10).unwrap();
+                    let calculation_factor =
+                        10_i64.pow(DECIMAL_DIVISION_RESULT_POLICY.calculation_scale().unwrap());
+                    let answer_factor = 10_i64.pow(DECIMAL_DIVISION_RESULT_POLICY.answer_scale());
+                    let exact_calculation_units =
+                        exact.numerator() * calculation_factor / exact.denominator();
+                    assert_ne!(exact_calculation_units % 10, 0);
+                    let rounded_answer_units = exact_calculation_units / 10
+                        + i64::from((exact_calculation_units % 10) >= 5);
+                    let expected =
+                        RationalCoefficient::new(rounded_answer_units, answer_factor).unwrap();
                     let (answer_n, answer_d) =
                         rational_parts_from_answer(problem.canonical_answer()).unwrap();
                     let actual = RationalCoefficient::new(

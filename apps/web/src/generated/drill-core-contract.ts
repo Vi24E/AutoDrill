@@ -38,6 +38,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -88,6 +89,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "linear_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -153,6 +155,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "linear_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -217,6 +220,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -265,6 +269,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -314,6 +319,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -363,6 +369,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_signed"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -420,6 +427,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "signed_rational"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -480,6 +488,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -535,6 +544,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -591,6 +601,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -646,6 +657,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -701,6 +713,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -751,6 +764,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "algebraic",
         "input_profile": "quadratic_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -815,6 +829,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "algebraic",
         "input_profile": "quadratic_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -879,6 +894,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "algebraic",
         "input_profile": "quadratic_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -943,6 +959,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -992,6 +1009,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -1042,6 +1060,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "simultaneous_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1100,6 +1119,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "algebraic",
         "input_profile": "tuple_only"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1151,6 +1171,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1206,6 +1227,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1264,6 +1286,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1319,6 +1342,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -1375,6 +1399,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -1431,6 +1456,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -1487,6 +1513,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -1543,6 +1570,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -1599,6 +1627,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -1655,6 +1684,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -1714,6 +1744,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "tuple_only"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1775,6 +1806,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "tuple_only"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -1835,6 +1867,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -1892,6 +1925,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -1949,6 +1983,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -2006,6 +2041,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -2063,6 +2099,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -2117,6 +2154,7 @@ export const DRILL_CORE_CONTRACT = {
           }
         }
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "digit_grid",
         "min_digit": 1,
@@ -2137,7 +2175,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "39": {
       "numeric_theme_id": 39,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade1.addition.up_to_10",
       "curriculum_path": [
         "root",
@@ -2168,6 +2206,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2186,7 +2225,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "40": {
       "numeric_theme_id": 40,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade1.subtraction.up_to_10",
       "curriculum_path": [
         "root",
@@ -2217,6 +2256,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2235,7 +2275,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "41": {
       "numeric_theme_id": 41,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade1.addition.with_carry",
       "curriculum_path": [
         "root",
@@ -2266,6 +2306,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2284,7 +2325,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "42": {
       "numeric_theme_id": 42,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade1.subtraction.with_borrow",
       "curriculum_path": [
         "root",
@@ -2315,6 +2356,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2333,7 +2375,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "43": {
       "numeric_theme_id": 43,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.1",
       "curriculum_path": [
         "root",
@@ -2364,6 +2406,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2382,7 +2425,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "44": {
       "numeric_theme_id": 44,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.2",
       "curriculum_path": [
         "root",
@@ -2413,6 +2456,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2431,7 +2475,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "45": {
       "numeric_theme_id": 45,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.3",
       "curriculum_path": [
         "root",
@@ -2462,6 +2506,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2480,7 +2525,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "46": {
       "numeric_theme_id": 46,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.4",
       "curriculum_path": [
         "root",
@@ -2511,6 +2556,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2529,7 +2575,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "47": {
       "numeric_theme_id": 47,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.5",
       "curriculum_path": [
         "root",
@@ -2560,6 +2606,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2578,7 +2625,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "48": {
       "numeric_theme_id": 48,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.6",
       "curriculum_path": [
         "root",
@@ -2609,6 +2656,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2627,7 +2675,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "49": {
       "numeric_theme_id": 49,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.7",
       "curriculum_path": [
         "root",
@@ -2658,6 +2706,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2676,7 +2725,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "50": {
       "numeric_theme_id": 50,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.8",
       "curriculum_path": [
         "root",
@@ -2707,6 +2756,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2725,7 +2775,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "51": {
       "numeric_theme_id": 51,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade2.multiplication.table.9",
       "curriculum_path": [
         "root",
@@ -2756,6 +2806,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2805,6 +2856,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "tuple_only"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -2825,7 +2877,7 @@ export const DRILL_CORE_CONTRACT = {
     },
     "53": {
       "numeric_theme_id": 53,
-      "generator_revision": 1,
+      "generator_revision": 2,
       "skill_id": "jp.grade3.division.simple_two_digit",
       "curriculum_path": [
         "root",
@@ -2855,6 +2907,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -2914,6 +2967,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "tuple_only"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -2966,6 +3020,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3022,6 +3077,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3078,6 +3134,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3134,6 +3191,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "fraction"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3196,6 +3254,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -3252,6 +3311,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -3308,6 +3368,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -3364,6 +3425,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "simple_positive"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": false,
@@ -3421,6 +3483,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -3478,6 +3541,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -3538,6 +3602,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "decimal_tuple"
       },
+      "answer_decimal_scale": 1,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3599,6 +3664,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "decimal",
         "input_profile": "simple_decimal"
       },
+      "answer_decimal_scale": 1,
       "input_interface": {
         "type": "simple_numeric",
         "allow_decimal": true,
@@ -3648,6 +3714,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "signed_rational"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3707,6 +3774,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "signed_rational"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3767,6 +3835,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "integer",
         "input_profile": "linear_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3832,6 +3901,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "rational",
         "input_profile": "linear_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3897,6 +3967,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "simultaneous_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -3957,6 +4028,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "simultaneous_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -4017,6 +4089,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "ordered_pair",
         "input_profile": "simultaneous_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [
@@ -4077,6 +4150,7 @@ export const DRILL_CORE_CONTRACT = {
         "answer_schema_kind": "algebraic",
         "input_profile": "quadratic_equation"
       },
+      "answer_decimal_scale": null,
       "input_interface": {
         "type": "structured_math",
         "allowed_structures": [

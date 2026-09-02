@@ -63,13 +63,13 @@ pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_2: u32 = 3;
 pub const GENERATOR_REVISION_SIGNED_MULTIPLY_DIVIDE: u32 = 1;
 pub const GENERATOR_REVISION_SIGNED_ARITHMETIC_MIXED_OPERANDS: u32 = 1;
 pub const GENERATOR_REVISION_DIVISION_1: u32 = 3;
-pub const GENERATOR_REVISION_ADDITION_UP_TO_10: u32 = 1;
-pub const GENERATOR_REVISION_SUBTRACTION_UP_TO_10: u32 = 1;
-pub const GENERATOR_REVISION_ADDITION_WITH_CARRY: u32 = 1;
-pub const GENERATOR_REVISION_SUBTRACTION_WITH_BORROW: u32 = 1;
-pub const GENERATOR_REVISION_MULTIPLICATION_TABLE_ROW: u32 = 1;
+pub const GENERATOR_REVISION_ADDITION_UP_TO_10: u32 = 2;
+pub const GENERATOR_REVISION_SUBTRACTION_UP_TO_10: u32 = 2;
+pub const GENERATOR_REVISION_ADDITION_WITH_CARRY: u32 = 2;
+pub const GENERATOR_REVISION_SUBTRACTION_WITH_BORROW: u32 = 2;
+pub const GENERATOR_REVISION_MULTIPLICATION_TABLE_ROW: u32 = 2;
 pub const GENERATOR_REVISION_DIVISION_WITH_REMAINDER: u32 = 1;
-pub const GENERATOR_REVISION_SIMPLE_TWO_DIGIT_DIVISION: u32 = 1;
+pub const GENERATOR_REVISION_SIMPLE_TWO_DIGIT_DIVISION: u32 = 2;
 pub const SKILL_ID: &str = "jp.grade1.addition.one_digit";
 pub const SKILL_ID_ONE_DIGIT_SUBTRACTION: &str = "jp.grade1.subtraction.one_digit";
 pub const SKILL_ID_TWO_DIGIT_ADDITION: &str = "jp.grade2.addition.two_digit";
@@ -546,15 +546,7 @@ impl ProblemGenerator for Generator {
     }
 
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
-        if matches!(
-            self.mode,
-            Mode::AdditionUpTo10
-                | Mode::SubtractionUpTo10
-                | Mode::AdditionWithCarry
-                | Mode::SubtractionWithBorrow
-                | Mode::MultiplicationTable(Some(_))
-                | Mode::SimpleTwoDigitDivision
-        ) {
+        if FiniteBasicDomain::for_mode(self.mode).is_some() {
             Ok(SamplingStrategy::finite(
                 self,
                 SelectionDedup::AllowDuplicates,
@@ -569,8 +561,22 @@ impl ProblemGenerator for Generator {
 }
 
 impl FiniteCandidateSource for Generator {
-    fn candidates(&self, _weights: &OperationWeights) -> Result<Vec<Problem>, GenerationError> {
-        finite_basic_candidates(self.registration, self.mode)
+    fn candidate_count(&self) -> usize {
+        FiniteBasicDomain::for_mode(self.mode)
+            .expect("finite sampling strategy is only used by finite basic-arithmetic modes")
+            .candidate_count()
+    }
+
+    fn candidate_at(
+        &self,
+        index: usize,
+        _weights: &OperationWeights,
+    ) -> Result<Problem, GenerationError> {
+        FiniteBasicDomain::for_mode(self.mode)
+            .and_then(|domain| domain.problem_at(self.registration, index))
+            .ok_or(GenerationError::InvalidGeneratedProblem {
+                reason: "finite candidate index is outside the declared domain",
+            })?
     }
 }
 
@@ -754,126 +760,195 @@ fn integer_arithmetic_problem(
     .map_err(GenerationError::from)
 }
 
-fn finite_basic_candidates(
-    registration: &ThemeRegistration,
-    mode: Mode,
-) -> Result<Vec<Problem>, GenerationError> {
-    let mut operands = Vec::new();
-    if matches!(mode, Mode::SimpleTwoDigitDivision) {
-        let mut candidates = Vec::new();
-        for divisor in 2_i64..=9 {
-            let max_digit_quotient = 9 / divisor;
-            for tens_quotient in 1_i64..=max_digit_quotient {
-                for ones_quotient in 0_i64..=max_digit_quotient {
-                    let dividend = (divisor * tens_quotient) * 10 + divisor * ones_quotient;
-                    candidates.push(integer_arithmetic_problem(
-                        registration,
-                        u32::try_from(candidates.len() + 1).unwrap_or(u32::MAX),
-                        ArithmeticOperator::Divide,
-                        dividend,
-                        divisor,
-                        AnswerSchema::Integer { min: 10, max: 44 },
-                    )?);
-                }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FiniteBasicDomain {
+    AdditionUpTo10,
+    SubtractionUpTo10,
+    AdditionWithCarry,
+    SubtractionWithBorrow,
+    MultiplicationTable(u8),
+    SimpleTwoDigitDivision,
+}
+
+impl FiniteBasicDomain {
+    fn for_mode(mode: Mode) -> Option<Self> {
+        match mode {
+            Mode::AdditionUpTo10 => Some(Self::AdditionUpTo10),
+            Mode::SubtractionUpTo10 => Some(Self::SubtractionUpTo10),
+            Mode::AdditionWithCarry => Some(Self::AdditionWithCarry),
+            Mode::SubtractionWithBorrow => Some(Self::SubtractionWithBorrow),
+            Mode::MultiplicationTable(Some(row)) if (1..=9).contains(&row) => {
+                Some(Self::MultiplicationTable(row))
             }
+            Mode::SimpleTwoDigitDivision => Some(Self::SimpleTwoDigitDivision),
+            _ => None,
         }
-        return Ok(candidates);
     }
 
-    if let Mode::MultiplicationTable(Some(row)) = mode {
-        return (1_i64..=9)
-            .enumerate()
-            .map(|(index, right)| {
+    fn candidate_count(self) -> usize {
+        match self {
+            Self::AdditionUpTo10 | Self::SubtractionUpTo10 => triangular_number(9),
+            Self::AdditionWithCarry | Self::SubtractionWithBorrow => triangular_number(8),
+            Self::MultiplicationTable(_) => 9,
+            Self::SimpleTwoDigitDivision => (2_i64..=9)
+                .map(|divisor| {
+                    let max_digit_quotient = 9 / divisor;
+                    usize::try_from(max_digit_quotient * (max_digit_quotient + 1))
+                        .expect("single-digit division domain size fits usize")
+                })
+                .sum(),
+        }
+    }
+
+    fn problem_at(
+        self,
+        registration: &ThemeRegistration,
+        index: usize,
+    ) -> Option<Result<Problem, GenerationError>> {
+        let id = u32::try_from(index.checked_add(1)?).unwrap_or(u32::MAX);
+        match self {
+            Self::MultiplicationTable(row) => {
+                let right = i64::try_from(index.checked_add(1)?).ok()?;
+                if right > 9 {
+                    return None;
+                }
                 let left = i64::from(row);
-                let answer_value = left * right;
+                let answer_value = left.checked_mul(right)?;
                 let expression = binary_expression(
                     ArithmeticOperator::Multiply,
                     integer_expression(left),
                     integer_expression(right),
                 );
-                Problem::generated(
-                    registration,
-                    u32::try_from(index + 1).unwrap_or(u32::MAX),
-                    ProblemPrompt::Arithmetic { expression },
-                    AnswerSchema::Integer { min: 1, max: 81 },
-                    AnswerNode::Integer(answer_value),
+                let Some(effort_model) =
                     EffortModel::theme_specific(multiplication_table::effort(answer_value as u8))
-                        .ok_or(GenerationError::InvalidGeneratedProblem {
+                else {
+                    return Some(Err(GenerationError::InvalidGeneratedProblem {
                         reason: "multiplication-table fact has no finite effort value",
-                    })?,
+                    }));
+                };
+                Some(
+                    Problem::generated(
+                        registration,
+                        id,
+                        ProblemPrompt::Arithmetic { expression },
+                        AnswerSchema::Integer { min: 1, max: 81 },
+                        AnswerNode::Integer(answer_value),
+                        effort_model,
+                    )
+                    .map_err(GenerationError::from),
                 )
-                .map_err(GenerationError::from)
-            })
-            .collect();
+            }
+            Self::SimpleTwoDigitDivision => {
+                let (row, offset) = row_position(
+                    index,
+                    (2_i64..=9).map(|divisor| {
+                        let max_digit_quotient = 9 / divisor;
+                        usize::try_from(max_digit_quotient * (max_digit_quotient + 1))
+                            .expect("single-digit division row size fits usize")
+                    }),
+                )?;
+                let divisor = i64::try_from(row.checked_add(2)?).ok()?;
+                let max_digit_quotient = 9 / divisor;
+                let ones_count = usize::try_from(max_digit_quotient + 1).ok()?;
+                let tens_quotient = i64::try_from(offset / ones_count + 1).ok()?;
+                let ones_quotient = i64::try_from(offset % ones_count).ok()?;
+                let dividend = (divisor * tens_quotient) * 10 + divisor * ones_quotient;
+                Some(integer_arithmetic_problem(
+                    registration,
+                    id,
+                    ArithmeticOperator::Divide,
+                    dividend,
+                    divisor,
+                    AnswerSchema::Integer { min: 10, max: 44 },
+                ))
+            }
+            domain => {
+                let (operator, answer_schema, left, right) =
+                    domain.arithmetic_operands_at(index)?;
+                Some(integer_arithmetic_problem(
+                    registration,
+                    id,
+                    operator,
+                    left,
+                    right,
+                    answer_schema,
+                ))
+            }
+        }
     }
 
-    let (operator, answer_schema) = match mode {
-        Mode::AdditionUpTo10 => {
-            for left in 1_i64..=9 {
-                for right in 1_i64..=(10 - left) {
-                    operands.push((left, right));
-                }
+    fn arithmetic_operands_at(
+        self,
+        index: usize,
+    ) -> Option<(ArithmeticOperator, AnswerSchema, i64, i64)> {
+        match self {
+            Self::AdditionUpTo10 => {
+                let (row, offset) = row_position(index, (1_usize..=9).rev())?;
+                let left = i64::try_from(row.checked_add(1)?).ok()?;
+                let right = i64::try_from(offset.checked_add(1)?).ok()?;
+                Some((
+                    ArithmeticOperator::Add,
+                    AnswerSchema::Integer { min: 2, max: 10 },
+                    left,
+                    right,
+                ))
             }
-            (
-                ArithmeticOperator::Add,
-                AnswerSchema::Integer { min: 2, max: 10 },
-            )
-        }
-        Mode::SubtractionUpTo10 => {
-            for left in 2_i64..=10 {
-                for right in 1_i64..left {
-                    operands.push((left, right));
-                }
+            Self::SubtractionUpTo10 => {
+                let (row, offset) = row_position(index, 1_usize..=9)?;
+                let left = i64::try_from(row.checked_add(2)?).ok()?;
+                let right = i64::try_from(offset.checked_add(1)?).ok()?;
+                Some((
+                    ArithmeticOperator::Subtract,
+                    AnswerSchema::Integer { min: 1, max: 9 },
+                    left,
+                    right,
+                ))
             }
-            (
-                ArithmeticOperator::Subtract,
-                AnswerSchema::Integer { min: 1, max: 9 },
-            )
-        }
-        Mode::AdditionWithCarry => {
-            for left in 1_i64..=9 {
-                for right in 1_i64..=9 {
-                    if left + right > 10 {
-                        operands.push((left, right));
-                    }
-                }
+            Self::AdditionWithCarry => {
+                let (row, offset) = row_position(index, 1_usize..=8)?;
+                let left = i64::try_from(row.checked_add(2)?).ok()?;
+                let first_right = 11_i64.checked_sub(left)?;
+                let right = first_right.checked_add(i64::try_from(offset).ok()?)?;
+                Some((
+                    ArithmeticOperator::Add,
+                    AnswerSchema::Integer { min: 11, max: 18 },
+                    left,
+                    right,
+                ))
             }
-            (
-                ArithmeticOperator::Add,
-                AnswerSchema::Integer { min: 11, max: 18 },
-            )
-        }
-        Mode::SubtractionWithBorrow => {
-            for right in 2_i64..=9 {
-                for result in 1_i64..=9 {
-                    let left = right + result;
-                    if left > 10 {
-                        operands.push((left, right));
-                    }
-                }
+            Self::SubtractionWithBorrow => {
+                let (row, offset) = row_position(index, 1_usize..=8)?;
+                let right = i64::try_from(row.checked_add(2)?).ok()?;
+                let first_result = 11_i64.checked_sub(right)?;
+                let result = first_result.checked_add(i64::try_from(offset).ok()?)?;
+                let left = right.checked_add(result)?;
+                Some((
+                    ArithmeticOperator::Subtract,
+                    AnswerSchema::Integer { min: 1, max: 9 },
+                    left,
+                    right,
+                ))
             }
-            (
-                ArithmeticOperator::Subtract,
-                AnswerSchema::Integer { min: 1, max: 9 },
-            )
+            Self::MultiplicationTable(_) | Self::SimpleTwoDigitDivision => None,
         }
-        _ => unreachable!("finite candidate enumeration is only used by grade-1 focused themes"),
-    };
+    }
+}
 
-    operands
-        .into_iter()
-        .enumerate()
-        .map(|(index, (left, right))| {
-            integer_arithmetic_problem(
-                registration,
-                u32::try_from(index + 1).unwrap_or(u32::MAX),
-                operator,
-                left,
-                right,
-                answer_schema.clone(),
-            )
-        })
-        .collect()
+const fn triangular_number(n: usize) -> usize {
+    n * (n + 1) / 2
+}
+
+fn row_position(
+    mut index: usize,
+    row_lengths: impl Iterator<Item = usize>,
+) -> Option<(usize, usize)> {
+    for (row, row_len) in row_lengths.enumerate() {
+        if index < row_len {
+            return Some((row, index));
+        }
+        index -= row_len;
+    }
+    None
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1382,6 +1457,43 @@ mod tests {
             panic!("expected integer operands");
         };
         (*operator, *left, *right)
+    }
+
+    #[test]
+    fn finite_basic_domains_are_indexable_without_materializing_problem_vectors() {
+        let cases = [
+            (&ADDITION_UP_TO_10_REGISTRATION, Mode::AdditionUpTo10),
+            (&SUBTRACTION_UP_TO_10_REGISTRATION, Mode::SubtractionUpTo10),
+            (&ADDITION_WITH_CARRY_REGISTRATION, Mode::AdditionWithCarry),
+            (
+                &SUBTRACTION_WITH_BORROW_REGISTRATION,
+                Mode::SubtractionWithBorrow,
+            ),
+            (
+                &MULTIPLICATION_TABLE_7_REGISTRATION,
+                Mode::MultiplicationTable(Some(7)),
+            ),
+            (
+                &SIMPLE_TWO_DIGIT_DIVISION_REGISTRATION,
+                Mode::SimpleTwoDigitDivision,
+            ),
+        ];
+        for (registration, mode) in cases {
+            let domain =
+                FiniteBasicDomain::for_mode(mode).expect("finite mode must declare a domain");
+            let count = domain.candidate_count();
+            assert!(count > 0);
+            let mut prompts = std::collections::BTreeSet::new();
+            for index in 0..count {
+                let problem = domain
+                    .problem_at(registration, index)
+                    .expect("declared finite index must exist")
+                    .expect("finite candidate must satisfy the problem contract");
+                assert!(prompts.insert(problem.prompt().clone()));
+            }
+            assert_eq!(prompts.len(), count);
+            assert!(domain.problem_at(registration, count).is_none());
+        }
     }
 
     #[test]

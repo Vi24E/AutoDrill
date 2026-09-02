@@ -119,7 +119,7 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 
 ## 二次方程式generator
 
-`ProblemPrompt::QuadraticEquation` は `equation: QuadraticEquationSurface` と `solve_method: QuadraticSolveMethod` を保持する。`QuadraticEquationSurface` の左右は `QuadraticExpression` で、`linear / square / add / subtract / scale` を再帰的に表す。`linear` と `square` の内部には共有 `LinearExpression` を使うため、`a(x+c)^2+b=0`、分数係数、有限小数係数、括弧によるsurface変形をtheme metadataへ依存せず表現できる。Rustの `semantics.rs` がsurfaceをexactな `ax^2+bx+c=0` へ正規化し、canonical answerが表示surface自体を満たすことを独立に検証する。Web/PDF/QAはtyped surfaceを描画するだけで、theme ID・slug・labelから係数や解法を推測しない。
+`ProblemPrompt::QuadraticEquation` は `equation: QuadraticEquationSurface` と `solve_method: QuadraticSolveMethod` を保持する。`QuadraticEquationSurface` の左右は `QuadraticExpression` で、`linear / square / add / subtract / scale` を再帰的に表す。`linear` と `square` の内部には共有 `LinearExpression` を使うため、`a(x+c)^2+b=0`、分数係数、有限小数係数、括弧によるsurface変形をtheme metadataへ依存せず表現できる。Rustの `semantics.rs` がsurfaceをexactな `ax^2+bx+c=0` へ正規化し、`solve_method` がそのsurfaceへ適用可能であることと、canonical answerが表示surface自体を満たすことを `Problem::generated` から独立に検証する。Web/PDF/QAはtyped surfaceを描画するだけで、theme ID・slug・labelから係数や解法を推測しない。
 
 現行教材は4themeである。
 
@@ -132,7 +132,7 @@ d4=`ランダム` の意味は変更せず、各themeのsemantic support内でra
 
 ## 連立方程式generator
 
-`ProblemPrompt::SimultaneousEquation` は `equations: [LinearEquationSurface; 2]` と `solve_method: SimultaneousSolveMethod` を保持する。`LinearEquationSurface` は左右に上記の共有 `LinearExpression` を持ち、Rustが各surfaceをexactに `ax+by=c` へ正規化する。2本の正規化後の式について行列式 `ae-bd != 0` を必須として一意解を保証し、generator-independent semanticsは表示surfaceそのものへcanonical answerを代入して検証する。Web/PDFは2本のsurfaceを描画するだけで、theme ID・slug・labelから解法や係数を推測しない。
+`ProblemPrompt::SimultaneousEquation` は `equations: [LinearEquationSurface; 2]` と `solve_method: SimultaneousSolveMethod` を保持する。`LinearEquationSurface` は左右に上記の共有 `LinearExpression` を持ち、Rustが各surfaceをexactに `ax+by=c` へ正規化する。2本の正規化後の式について行列式 `ae-bd != 0` を `Problem::generated` のgenerator-independent semanticsでも必須として一意解を保証し、表示surfaceそのものへcanonical answerを代入して検証する。`solve_method` はRust-owned strategy metadataとして同じsemantic validation境界を通る。Web/PDFは2本のsurfaceを描画するだけで、theme ID・slug・labelから解法や係数を推測しない。
 
 現行教材は4themeである。
 

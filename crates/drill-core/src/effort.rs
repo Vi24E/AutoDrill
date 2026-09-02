@@ -2,8 +2,8 @@ use crate::answer::AnswerNode;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
 use crate::model::{
     ArithmeticExpression, ArithmeticOperator, LinearEquationSurface, LinearExpression,
-    LinearScalar, QuadraticEquationSurface, QuadraticExpression, QuadraticSolveMethod,
-    RationalCoefficient, SimultaneousSolveMethod,
+    LinearScalar, QuadraticEquationSurface, QuadraticSolveMethod, RationalCoefficient,
+    SimultaneousSolveMethod,
 };
 pub const OPERATION_KIND_COUNT: usize = 29;
 
@@ -871,6 +871,9 @@ pub(crate) fn simultaneous_equation_plan(
     answer: &AnswerNode,
     weights: &OperationWeights,
 ) -> Option<OperationPlan> {
+    if !crate::semantics::simultaneous_solve_method_is_applicable(equations, solve_method) {
+        return None;
+    }
     let ((x, y), (normalized, mut operations)) = (
         answer_ordered_integer_pair(answer)?,
         simultaneous_surface_operations(equations)?,
@@ -1712,30 +1715,10 @@ fn clear_quadratic_denominators(
     Some((scaled_a, scaled_b, scaled_c, operations))
 }
 
-fn quadratic_expression_has_visible_square(expression: &QuadraticExpression) -> bool {
-    match expression {
-        QuadraticExpression::Square { .. } => true,
-        QuadraticExpression::Linear { .. } => false,
-        QuadraticExpression::Add { left, right }
-        | QuadraticExpression::Subtract { left, right } => {
-            quadratic_expression_has_visible_square(left)
-                || quadratic_expression_has_visible_square(right)
-        }
-        QuadraticExpression::Scale { expression, .. } => {
-            quadratic_expression_has_visible_square(expression)
-        }
-    }
-}
-
 fn quadratic_square_root_plan(
     equation: &QuadraticEquationSurface,
     answer: &AnswerNode,
 ) -> Option<OperationPlan> {
-    if !quadratic_expression_has_visible_square(&equation.left)
-        && !quadratic_expression_has_visible_square(&equation.right)
-    {
-        return None;
-    }
     let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation)?;
     if a.is_zero() {
         return None;
@@ -1930,32 +1913,28 @@ fn quadratic_factoring_equation_plan(
     equation: &QuadraticEquationSurface,
     answer: &AnswerNode,
 ) -> Option<OperationPlan> {
+    let semantic_coefficients = crate::semantics::quadratic_factoring_coefficients(equation)?;
     let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation)?;
-    let (mut a_int, mut b_int, mut c_int, mut operations) = clear_quadratic_denominators(a, b, c)?;
+    let (a_int, mut b_int, mut c_int, mut operations) = clear_quadratic_denominators(a, b, c)?;
     if a_int == 0 {
         return None;
     }
     if a_int != 1 {
-        if b_int % a_int != 0 || c_int % a_int != 0 {
-            return None;
+        operations.extend(divide_or_identity_operations(a_int, a_int));
+        if b_int != 0 {
+            operations.extend(divide_or_identity_operations(b_int, a_int));
         }
-        if a_int != 0 {
-            operations.extend(divide_or_identity_operations(a_int, a_int));
-            if b_int != 0 {
-                operations.extend(divide_or_identity_operations(b_int, a_int));
-            }
-            if c_int != 0 {
-                operations.extend(divide_or_identity_operations(c_int, a_int));
-            }
+        if c_int != 0 {
+            operations.extend(divide_or_identity_operations(c_int, a_int));
         }
-        b_int /= a_int;
-        c_int /= a_int;
-        a_int = 1;
+        b_int = b_int.checked_div(a_int)?;
+        c_int = c_int.checked_div(a_int)?;
     }
-    if a_int != 1 {
-        return None;
-    }
-    operations.extend(quadratic_factoring_plan(b_int, c_int, answer)?.operations);
+    debug_assert_eq!((b_int, c_int), semantic_coefficients);
+    operations.extend(
+        quadratic_factoring_plan(semantic_coefficients.0, semantic_coefficients.1, answer)?
+            .operations,
+    );
     Some(operation_plan(operations))
 }
 
@@ -1964,6 +1943,9 @@ pub(crate) fn quadratic_equation_plan(
     solve_method: QuadraticSolveMethod,
     answer: &AnswerNode,
 ) -> Option<OperationPlan> {
+    if !crate::semantics::quadratic_solve_method_is_applicable(equation, solve_method) {
+        return None;
+    }
     match solve_method {
         QuadraticSolveMethod::SquareRoot => quadratic_square_root_plan(equation, answer),
         QuadraticSolveMethod::Factoring => quadratic_factoring_equation_plan(equation, answer),

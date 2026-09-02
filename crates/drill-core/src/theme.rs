@@ -652,6 +652,7 @@ pub struct ThemeRegistration {
     presentation: ThemePresentationPolicy,
     dedup: DedupPolicy,
     answer_contract: ThemeAnswerContract,
+    answer_decimal_scale: Option<u32>,
     /// Theme-level interactive editor grammar used by the Web input shell.
     editor_input_profile: ThemeInputProfile,
     layout: WorksheetLayoutProfile,
@@ -671,6 +672,7 @@ impl ThemeRegistration {
             presentation: spec.presentation,
             dedup: spec.dedup,
             answer_contract: spec.answer_contract,
+            answer_decimal_scale: None,
             editor_input_profile: spec.answer_contract.input_profile(),
             layout: spec.layout,
         }
@@ -723,6 +725,10 @@ impl ThemeRegistration {
         self.answer_contract
     }
 
+    pub const fn answer_decimal_scale(self) -> Option<u32> {
+        self.answer_decimal_scale
+    }
+
     pub const fn editor_input_profile(self) -> ThemeInputProfile {
         self.editor_input_profile
     }
@@ -733,6 +739,11 @@ impl ThemeRegistration {
 
     pub const fn with_curriculum_unit(mut self, curriculum_unit: CurriculumUnit) -> Self {
         self.curriculum_unit = Some(curriculum_unit);
+        self
+    }
+
+    pub const fn with_answer_decimal_scale(mut self, scale: u32) -> Self {
+        self.answer_decimal_scale = Some(scale);
         self
     }
 

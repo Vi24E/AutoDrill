@@ -33,6 +33,7 @@ pub struct WebThemeContract<'a> {
     pub presentation: ThemePresentationPolicy,
     pub dedup: DedupPolicy,
     pub answer_contract: ThemeAnswerContract,
+    pub answer_decimal_scale: Option<u32>,
     pub input_interface: AnswerInputInterface,
     pub editor_input_interface: AnswerInputInterface,
     pub layout: WebLayoutContract,
@@ -68,6 +69,7 @@ pub fn web_contract() -> Result<WebContract<'static>, RegistryError> {
                     presentation: registration.presentation(),
                     dedup: registration.dedup(),
                     answer_contract: registration.answer_contract(),
+                    answer_decimal_scale: registration.answer_decimal_scale(),
                     input_interface: input_interface(
                         registration.answer_contract().input_profile(),
                     ),

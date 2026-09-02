@@ -676,6 +676,7 @@ pub(crate) enum ProblemInvariantError {
     PromptKind,
     WireIntegerRange,
     AnswerSchemaKind,
+    PromptSemantics,
     InvalidAnswerSchema,
     CanonicalAnswer,
     AnswerContract,
@@ -693,6 +694,7 @@ impl ProblemInvariantError {
             Self::AnswerSchemaKind => {
                 "answer schema kind does not satisfy the registered theme contract"
             }
+            Self::PromptSemantics => "prompt metadata is incompatible with the problem semantics",
             Self::InvalidAnswerSchema => "answer schema is structurally invalid",
             Self::CanonicalAnswer => "canonical answer does not satisfy the answer schema",
             Self::AnswerContract => {
@@ -1327,6 +1329,9 @@ impl Problem {
         if !prompt.has_js_safe_wire_values() {
             return Err(ProblemInvariantError::WireIntegerRange);
         }
+        if !crate::semantics::prompt_has_valid_semantic_metadata(&prompt) {
+            return Err(ProblemInvariantError::PromptSemantics);
+        }
         if answer_schema.theme_kind() != registration.answer_contract().answer_schema_kind() {
             return Err(ProblemInvariantError::AnswerSchemaKind);
         }
@@ -1869,6 +1874,54 @@ mod invariant_tests {
             ),
             Err(ProblemInvariantError::AnswerContract)
         );
+    }
+
+    #[test]
+    fn generated_problem_rejects_inapplicable_quadratic_solve_method() {
+        let equation = QuadraticEquationSurface {
+            left: QuadraticExpression::Subtract {
+                left: Box::new(QuadraticExpression::Square {
+                    expression: variable(LinearVariable::X),
+                }),
+                right: Box::new(QuadraticExpression::Linear {
+                    expression: integer_constant(2),
+                }),
+            },
+            right: QuadraticExpression::Linear {
+                expression: integer_constant(0),
+            },
+        };
+        let result = Problem::generated(
+            &QUADRATIC_EQUATION_1_REGISTRATION,
+            1,
+            ProblemPrompt::QuadraticEquation {
+                equation,
+                solve_method: QuadraticSolveMethod::Factoring,
+            },
+            AnswerSchema::Algebraic,
+            AnswerNode::PlusMinus(Box::new(AnswerNode::Root {
+                radicand: Box::new(AnswerNode::Integer(2)),
+                index: None,
+            })),
+            empty_effort(),
+        );
+        assert_eq!(result, Err(ProblemInvariantError::PromptSemantics));
+    }
+
+    #[test]
+    fn generated_problem_rejects_inapplicable_simultaneous_solve_method() {
+        let result = Problem::generated(
+            &SIMULTANEOUS_EQUATION_ELIMINATION_REGISTRATION,
+            1,
+            ProblemPrompt::SimultaneousEquation {
+                equations: [standard_equation(2, 3, 5), standard_equation(3, 2, 5)],
+                solve_method: SimultaneousSolveMethod::Substitution,
+            },
+            AnswerSchema::OrderedPair,
+            AnswerNode::Tuple(vec![AnswerNode::Integer(1), AnswerNode::Integer(1)]),
+            empty_effort(),
+        );
+        assert_eq!(result, Err(ProblemInvariantError::PromptSemantics));
     }
 
     #[test]

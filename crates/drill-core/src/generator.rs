@@ -351,7 +351,12 @@ impl<'a> SamplingStrategy<'a> {
 }
 
 pub(crate) trait FiniteCandidateSource: Sync {
-    fn candidates(&self, weights: &OperationWeights) -> Result<Vec<Problem>, GenerationError>;
+    fn candidate_count(&self) -> usize;
+    fn candidate_at(
+        &self,
+        index: usize,
+        weights: &OperationWeights,
+    ) -> Result<Problem, GenerationError>;
 }
 
 pub(crate) trait RandomCandidateSource: Sync {
@@ -726,6 +731,27 @@ fn select_candidates_from_pool<C: MonotonicClock + ?Sized>(
         .collect())
 }
 
+fn sample_unique_indices(
+    rng: &mut DeterministicRng,
+    population: usize,
+    count: usize,
+) -> Vec<usize> {
+    debug_assert!(count <= population);
+    let mut seen = HashSet::with_capacity(count);
+    let mut indices = Vec::with_capacity(count);
+    for upper in population.saturating_sub(count)..population {
+        let drawn = rng.next_bounded((upper + 1) as u64) as usize;
+        let index = if seen.insert(drawn) {
+            drawn
+        } else {
+            seen.insert(upper);
+            upper
+        };
+        indices.push(index);
+    }
+    indices
+}
+
 fn generate_with_generator<C: MonotonicClock + ?Sized>(
     identity: &ProblemSetIdentity,
     registration: &'static ThemeRegistration,
@@ -744,10 +770,13 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
 
     let pool = match &strategy.kind {
         SamplingStrategyKind::Finite { source, .. } => {
-            let problems = source.candidates(&weights)?;
-            let mut candidate_pool = Vec::with_capacity(problems.len());
-            for problem in problems {
+            let candidate_count = source.candidate_count();
+            let sample_count = pool_size.min(candidate_count);
+            let indices = sample_unique_indices(&mut rng, candidate_count, sample_count);
+            let mut candidate_pool = Vec::with_capacity(sample_count);
+            for index in indices {
                 consume_attempt(started, clock, config, &mut attempts)?;
+                let problem = source.candidate_at(index, &weights)?;
                 strategy.validate_candidate_contract(None, None, &problem)?;
                 if problem_allowed_by_curriculum(registration, &problem) {
                     candidate_pool.push(Candidate::new(registration, problem));
@@ -1210,6 +1239,15 @@ mod autonomous_qa;
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn finite_index_sampling_scales_with_requested_pool_not_domain_size() {
+        let mut rng = DeterministicRng::from_seed("FiniteIndexSampling");
+        let indices = sample_unique_indices(&mut rng, 100_000, 20);
+        assert_eq!(indices.len(), 20);
+        assert!(indices.iter().all(|index| *index < 100_000));
+        assert_eq!(indices.iter().copied().collect::<HashSet<_>>().len(), 20);
+    }
 
     struct ConstantGenerator;
 
