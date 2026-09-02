@@ -199,4 +199,3 @@
 - repository-local agent workflowを整備し、root `AGENTS.md` と `SKILL/` 群をrepository内の正典としてcommit可能な状態へ整理した。次の第三者Close監査担当として `Nimbus-14` を発行した。
 
 **直属の後継者:** `Nimbus-14`
-
