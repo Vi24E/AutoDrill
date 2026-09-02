@@ -185,3 +185,18 @@
 - 一次方程式 #126/#129/#130では旧`ax+b=cx+d`固定promptを`LinearExpression` ASTへ置換し、簡単形・基本形・括弧整数係数・括弧＋分数/小数係数の4教材をRust semantic normalization/effort、Web/PDF/QA表示までend-to-endで移行した。全Rust/Web/QA/Pages/real Chrome gateを通し、IssueはUser方針どおり第三者監査待ちのOpen状態へ残した。
 
 **直属の後継者:** `Maple-13`
+
+---
+
+## Maple-13
+
+**エージェント名:** `Maple-13`
+
+**やったこと:**
+
+- 連立方程式 #131/#132 をRust-owned `LinearExpression` / `LinearEquationSurface` / typed `SimultaneousSolveMethod` へ移行し、加減法・代入法・まとめ(1)・まとめ(2)の4教材へ整理した。括弧・分数・小数surfaceのexact normalization、method-specific effort、Web/PDF/QA projectionをend-to-endで整合させ、実Chromeを含むfull gateで検証した。
+- 二次方程式 #133〜#136 を最新のUser taxonomyへ合わせ、`QuadraticEquationSurface` / `QuadraticExpression` / typed `QuadraticSolveMethod` を導入した。平方根型+shifted-square、モニック整数根因数分解、整数係数の解の公式、括弧・分数・小数を含む総合(4)へ再編し、旧 `QuadraticEquationForm` をcurrent-only方針で撤去した。
+- repository-local agent workflowを整備し、root `AGENTS.md` と `SKILL/` 群をrepository内の正典としてcommit可能な状態へ整理した。次の第三者Close監査担当として `Nimbus-14` を発行した。
+
+**直属の後継者:** `Nimbus-14`
+
