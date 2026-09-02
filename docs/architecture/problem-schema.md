@@ -38,7 +38,7 @@
 | 二次方程式(3) | 16 | 3 | 16問・2列8行 |
 | 小数の足し算と引き算 | 17 | 5 | 20問・2列10行 |
 | 小数の掛け算 | 18 | 6 | 20問・2列10行 |
-| 連立方程式(1) | 19 | 3 | 12問・2列6行 |
+| 連立方程式（加減法） | 19 | 4 | 12問・2列6行 |
 | うそつきだれだ | 20 | 4 | 6問・1列6行 |
 | 分数と整数の掛け算 | 21 | 2 | 16問・2列8行 |
 | 分数と整数の割り算 | 22 | 2 | 16問・2列8行 |
@@ -60,6 +60,9 @@
 | すうじはひとりぼっち（Mini Sudoku） | 38 | 1 | 4問・2列2行 |
 | 簡単な一次方程式 | 69 | 1 | 16問・2列8行 |
 | 一次方程式(3)：括弧・分数・小数係数 | 70 | 1 | 16問・2列8行 |
+| 連立方程式（代入法） | 71 | 1 | 12問・2列6行 |
+| 連立方程式（まとめ(1)） | 72 | 1 | 12問・2列6行 |
+| 連立方程式（まとめ(2)） | 73 | 1 | 12問・2列6行 |
 
 ## Problem-set identity
 
@@ -143,7 +146,7 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 
 ## 一次方程式generator
 
-`ProblemPrompt::LinearEquation` は表示surfaceを保持する `left/right: LinearExpression` を持つ。`LinearExpression` は `variable / constant / add / subtract / scale` の一次式専用ASTであり、`LinearScalar` は整数・既約分数・有限小数を区別して保持する。したがって `1/2(x-3)` と `0.5(x-3)` は数学的には同じ係数でも同じwire表現へ潰さない。Rustの `semantics.rs` がASTをexactな affine form `ax+b` へ正規化し、左右を比較してcanonical answerが実際の解であることをgenerator-independentに検証する。Web/PDFはASTのsurfaceを再帰描画するだけで、係数や括弧の意味を再推論しない。
+`ProblemPrompt::LinearEquation` は表示surfaceを保持する `left/right: LinearExpression` を持つ。`LinearExpression` は `variable / constant / add / subtract / scale` の共有一次式ASTで、variableはtyped `LinearVariable::X | Y` を明示する。`LinearScalar` は整数・既約分数・有限小数を区別して保持するため、`1/2(x-3)` と `0.5(x-3)` は数学的には同じ係数でも同じwire表現へ潰さない。Rustの `semantics.rs` はASTをexactな affine form `ax+by+c` へ正規化する。通常の一元一次方程式では左右の`y`係数が0であることをsemantic invariantとして要求し、従来どおり`x`だけの方程式としてcanonical answerを検証する。Web/PDFはASTのsurfaceを再帰描画するだけで、変数・係数・括弧の意味を再推論しない。
 
 同一family generatorは **solution domain** と **教材surface** を別のtyped axisとして持つ。answer-conditioned samplingではcanonical answerをdomainから先に選び、その解を満たす式surfaceを生成する。
 
@@ -160,7 +163,16 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 
 ## 連立方程式generator
 
-`ProblemPrompt::SimultaneousEquation`は `ax+by=c`, `dx+ey=f` の6整数係数を保持する。連立方程式(1)では `a,b,d,e` を0でない整数、`c,f`を整数とし、6値すべての絶対値を15以下に制限する。まず整数解 `(x,y)` を `[-15,15]^2` から選び、その解を満たす2本の式を逆算する。行列式 `ae-bd != 0` を必須として一意解を保証する。
+`ProblemPrompt::SimultaneousEquation` は `equations: [LinearEquationSurface; 2]` と `solve_method: SimultaneousSolveMethod` を保持する。`LinearEquationSurface` は左右に上記の共有 `LinearExpression` を持ち、Rustが各surfaceをexactに `ax+by=c` へ正規化する。2本の正規化後の式について行列式 `ae-bd != 0` を必須として一意解を保証し、generator-independent semanticsは表示surfaceそのものへcanonical answerを代入して検証する。Web/PDFは2本のsurfaceを描画するだけで、theme ID・slug・labelから解法や係数を推測しない。
+
+現行教材は4themeである。
+
+- `連立方程式（加減法）` (ID 19, rev4): 整数解 `(x,y) in [-15,15]^2` から逆生成し、少なくとも一方の変数をそのまま加減消去できる係数構造を持たせる。`solve_method = elimination` を保持する。
+- `連立方程式（代入法）` (ID 71): 片方の式を実際に `x=...` または `y=...` の直接代入可能なsurfaceとして生成し、`solve_method = substitution` を保持する。
+- `連立方程式（まとめ(1)）` (ID 72): 基本的な整数surfaceのまま加減法・代入法をlayerとして混合し、解法選択そのものを練習する。
+- `連立方程式（まとめ(2)）` (ID 73): 加減法・代入法の双方に、括弧展開・分数係数・有限小数係数のsurface変形を組み合わせる。method × transform の6 layerを同一theme内で扱い、各surfaceはexactに既知のcanonical systemへ帰着する。
+
+`まとめ(1)` / `まとめ(2)` はgeneric compatibility themeではなく重要な総合練習であり、通常のequation taxonomyとしてRecommendedにも投影する。`A=B=C` の連鎖等式は現行contractには含めず、仕様決定まではIssueで追跡する。解 `(x,y)` が与えられ式中の未定定数を逆算する型も現行連立計算themeのscope外である。
 
 canonical answerは2要素`tuple`を内部表現として使うが、`answer_schema = ordered_pair` により二次方程式の解集合とは意味を分離する。したがって `(2,3)` と `(3,2)` は同値ではなく、`(2,2)`も重複解warningの対象にならない。入力UIは各問題に独立した `x = [ ]` / `y = [ ]` の2欄を表示し、Web側で2欄を順序付きtupleへ合成してRustへ渡す。
 

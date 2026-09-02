@@ -11,8 +11,8 @@ use crate::generator::{
 };
 use crate::generator_support::{draw_signed_integer, exact_decimal_rational, rational_answer};
 use crate::model::{
-    AnswerSchema, LinearExpression, LinearScalar, Problem, ProblemPrompt, QuadraticEquationForm,
-    RationalCoefficient,
+    AnswerSchema, LinearEquationSurface, LinearExpression, LinearScalar, LinearVariable, Problem,
+    ProblemPrompt, QuadraticEquationForm, RationalCoefficient, SimultaneousSolveMethod,
 };
 use crate::rng::DeterministicRng;
 use crate::theme::{
@@ -30,7 +30,10 @@ pub const THEME_ID_LINEAR_EQUATION_3: u32 = 70;
 pub const THEME_ID_QUADRATIC_EQUATION_1: u32 = 14;
 pub const THEME_ID_QUADRATIC_EQUATION_2: u32 = 15;
 pub const THEME_ID_QUADRATIC_EQUATION_3: u32 = 16;
-pub const THEME_ID_SIMULTANEOUS_EQUATION_1: u32 = 19;
+pub const THEME_ID_SIMULTANEOUS_EQUATION_ELIMINATION: u32 = 19;
+pub const THEME_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION: u32 = 71;
+pub const THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_1: u32 = 72;
+pub const THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_2: u32 = 73;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 9;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 9;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_SIMPLE: u32 = 1;
@@ -38,7 +41,10 @@ pub const GENERATOR_REVISION_LINEAR_EQUATION_3: u32 = 1;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_1: u32 = 3;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 4;
 pub const GENERATOR_REVISION_QUADRATIC_EQUATION_3: u32 = 3;
-pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_1: u32 = 3;
+pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_ELIMINATION: u32 = 4;
+pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUBSTITUTION: u32 = 1;
+pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUMMARY_1: u32 = 1;
+pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUMMARY_2: u32 = 1;
 pub const SKILL_ID_LINEAR_EQUATION_1: &str = "jp.grade7.equation.linear.1";
 pub const SKILL_ID_LINEAR_EQUATION_2: &str = "jp.grade7.equation.linear.2";
 pub const SKILL_ID_LINEAR_EQUATION_SIMPLE: &str = "jp.grade7.equation.linear.simple";
@@ -46,7 +52,14 @@ pub const SKILL_ID_LINEAR_EQUATION_3: &str = "jp.grade7.equation.linear.3";
 pub const SKILL_ID_QUADRATIC_EQUATION_1: &str = "jp.grade9.equation.quadratic.1";
 pub const SKILL_ID_QUADRATIC_EQUATION_2: &str = "jp.grade9.equation.quadratic.2";
 pub const SKILL_ID_QUADRATIC_EQUATION_3: &str = "jp.grade9.equation.quadratic.3";
-pub const SKILL_ID_SIMULTANEOUS_EQUATION_1: &str = "jp.grade8.equation.simultaneous.1";
+pub const SKILL_ID_SIMULTANEOUS_EQUATION_ELIMINATION: &str =
+    "jp.grade8.equation.simultaneous.elimination";
+pub const SKILL_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION: &str =
+    "jp.grade8.equation.simultaneous.substitution";
+pub const SKILL_ID_SIMULTANEOUS_EQUATION_SUMMARY_1: &str =
+    "jp.grade8.equation.simultaneous.summary.1";
+pub const SKILL_ID_SIMULTANEOUS_EQUATION_SUMMARY_2: &str =
+    "jp.grade8.equation.simultaneous.summary.2";
 pub const CURRICULUM_PATH_LINEAR_EQUATION_SIMPLE: [&str; 4] =
     ["root", "中学1年生", "一次方程式", "簡単な一次方程式"];
 pub const CURRICULUM_PATH_LINEAR_EQUATION_1: [&str; 4] =
@@ -69,8 +82,14 @@ pub const CURRICULUM_PATH_QUADRATIC_EQUATION_2: [&str; 4] =
     ["root", "中学3年生", "二次方程式", "二次方程式(2)"];
 pub const CURRICULUM_PATH_QUADRATIC_EQUATION_3: [&str; 4] =
     ["root", "中学3年生", "二次方程式", "二次方程式(3)"];
-pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_1: [&str; 4] =
-    ["root", "中学2年生", "連立方程式", "連立方程式(1)"];
+pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_ELIMINATION: [&str; 4] =
+    ["root", "中学2年生", "連立方程式", "連立方程式（加減法）"];
+pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUBSTITUTION: [&str; 4] =
+    ["root", "中学2年生", "連立方程式", "連立方程式（代入法）"];
+pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUMMARY_1: [&str; 4] =
+    ["root", "中学2年生", "連立方程式", "連立方程式（まとめ(1)）"];
+pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUMMARY_2: [&str; 4] =
+    ["root", "中学2年生", "連立方程式", "連立方程式（まとめ(2)）"];
 
 pub const CURRICULUM_UNIT_LINEAR_EQUATION: CurriculumUnit =
     CurriculumUnit::new("linear-equation", "一次方程式");
@@ -226,19 +245,73 @@ pub const QUADRATIC_EQUATION_3_REGISTRATION: ThemeRegistration =
     })
     .with_curriculum_unit(CURRICULUM_UNIT_QUADRATIC_EQUATION)
     .with_editor_input_profile(Input::JuniorHighFull);
-pub const SIMULTANEOUS_EQUATION_1_REGISTRATION: ThemeRegistration =
+pub const SIMULTANEOUS_EQUATION_ELIMINATION_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
-        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIMULTANEOUS_EQUATION_1),
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIMULTANEOUS_EQUATION_ELIMINATION),
         generator_revision: crate::theme::GeneratorRevision::new(
-            GENERATOR_REVISION_SIMULTANEOUS_EQUATION_1,
+            GENERATOR_REVISION_SIMULTANEOUS_EQUATION_ELIMINATION,
         ),
-        skill_id: SKILL_ID_SIMULTANEOUS_EQUATION_1,
-        curriculum_path: &CURRICULUM_PATH_SIMULTANEOUS_EQUATION_1,
+        skill_id: SKILL_ID_SIMULTANEOUS_EQUATION_ELIMINATION,
+        curriculum_path: &CURRICULUM_PATH_SIMULTANEOUS_EQUATION_ELIMINATION,
         grade: Some(SchoolGrade::JuniorHigh2),
         tags: SIMULTANEOUS,
         safety: Safety::Unrestricted,
         presentation: Presentation::EQUATION,
         dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: AnswerContract::SimultaneousPair,
+        layout: EQUATION_PAIR_12_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIMULTANEOUS_EQUATION)
+    .with_editor_input_profile(Input::JuniorHighFull);
+pub const SIMULTANEOUS_EQUATION_SUBSTITUTION_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUBSTITUTION,
+        ),
+        skill_id: SKILL_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION,
+        curriculum_path: &CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUBSTITUTION,
+        grade: Some(SchoolGrade::JuniorHigh2),
+        tags: SIMULTANEOUS,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::EQUATION,
+        dedup: Dedup::PreserveOperandOrder,
+        answer_contract: AnswerContract::SimultaneousPair,
+        layout: EQUATION_PAIR_12_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIMULTANEOUS_EQUATION)
+    .with_editor_input_profile(Input::JuniorHighFull);
+pub const SIMULTANEOUS_EQUATION_SUMMARY_1_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_1),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUMMARY_1,
+        ),
+        skill_id: SKILL_ID_SIMULTANEOUS_EQUATION_SUMMARY_1,
+        curriculum_path: &CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUMMARY_1,
+        grade: Some(SchoolGrade::JuniorHigh2),
+        tags: SIMULTANEOUS,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::EQUATION,
+        dedup: Dedup::PreserveOperandOrder,
+        answer_contract: AnswerContract::SimultaneousPair,
+        layout: EQUATION_PAIR_12_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_SIMULTANEOUS_EQUATION)
+    .with_editor_input_profile(Input::JuniorHighFull);
+pub const SIMULTANEOUS_EQUATION_SUMMARY_2_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_2),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUMMARY_2,
+        ),
+        skill_id: SKILL_ID_SIMULTANEOUS_EQUATION_SUMMARY_2,
+        curriculum_path: &CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUMMARY_2,
+        grade: Some(SchoolGrade::JuniorHigh2),
+        tags: SIMULTANEOUS,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::EQUATION,
+        dedup: Dedup::PreserveOperandOrder,
         answer_contract: AnswerContract::SimultaneousPair,
         layout: EQUATION_PAIR_12_LAYOUT,
     })
@@ -314,9 +387,63 @@ impl AnswerConditionedCandidateSource for LinearEquationGenerator {
     }
 }
 
+pub const SIMULTANEOUS_BASIC_LAYERS: [SamplingLayerSpec; 2] = [
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 2,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 2,
+    },
+];
+
+pub const SIMULTANEOUS_TRANSFORMED_LAYERS: [SamplingLayerSpec; 6] = [
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 1,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 1,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 1,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 1,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 1,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 1,
+    },
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SimultaneousEquationMode {
+    Elimination,
+    Substitution,
+    SummaryBasic,
+    SummaryTransformed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum SimultaneousSurfaceTransform {
+    Parentheses,
+    Fraction,
+    Decimal,
+}
+
 #[derive(Debug)]
 pub(crate) struct SimultaneousEquationGenerator {
     registration: &'static ThemeRegistration,
+    mode: SimultaneousEquationMode,
 }
 
 impl ProblemGenerator for SimultaneousEquationGenerator {
@@ -325,10 +452,17 @@ impl ProblemGenerator for SimultaneousEquationGenerator {
     }
 
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
-        Ok(SamplingStrategy::random(
-            self,
-            SelectionDedup::AllowDuplicates,
-        ))
+        match self.mode {
+            SimultaneousEquationMode::Elimination | SimultaneousEquationMode::Substitution => Ok(
+                SamplingStrategy::random(self, SelectionDedup::AllowDuplicates),
+            ),
+            SimultaneousEquationMode::SummaryBasic
+            | SimultaneousEquationMode::SummaryTransformed => SamplingStrategy::layered(
+                self,
+                SelectionDedup::AllowDuplicates,
+                self.registration.layout().problem_count(),
+            ),
+        }
     }
 }
 
@@ -339,7 +473,55 @@ impl RandomCandidateSource for SimultaneousEquationGenerator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        simultaneous_equation_problem(self.registration, rng, ordinal, weights).transpose()
+        simultaneous_equation_problem(self.registration, self.mode, rng, ordinal, weights)
+            .transpose()
+    }
+}
+
+impl LayeredCandidateSource for SimultaneousEquationGenerator {
+    fn layers(&self) -> &'static [SamplingLayerSpec] {
+        match self.mode {
+            SimultaneousEquationMode::SummaryBasic => &SIMULTANEOUS_BASIC_LAYERS,
+            SimultaneousEquationMode::SummaryTransformed => &SIMULTANEOUS_TRANSFORMED_LAYERS,
+            _ => &[],
+        }
+    }
+
+    fn draw_candidate(
+        &self,
+        rng: &mut DeterministicRng,
+        ordinal: u32,
+        weights: &OperationWeights,
+    ) -> Result<Option<Problem>, GenerationError> {
+        simultaneous_equation_problem(self.registration, self.mode, rng, ordinal, weights)
+            .transpose()
+    }
+
+    fn layer_of(&self, problem: &Problem) -> usize {
+        let ProblemPrompt::SimultaneousEquation {
+            equations,
+            solve_method,
+        } = problem.prompt()
+        else {
+            unreachable!("simultaneous generator always emits simultaneous prompts");
+        };
+        let method_index = match solve_method {
+            SimultaneousSolveMethod::Elimination => 0,
+            SimultaneousSolveMethod::Substitution => 1,
+        };
+        match self.mode {
+            SimultaneousEquationMode::SummaryBasic => method_index,
+            SimultaneousEquationMode::SummaryTransformed => {
+                let transform_index = match simultaneous_surface_transform(equations) {
+                    Some(SimultaneousSurfaceTransform::Parentheses) => 0,
+                    Some(SimultaneousSurfaceTransform::Fraction) => 1,
+                    Some(SimultaneousSurfaceTransform::Decimal) => 2,
+                    None => unreachable!("summary(2) always emits a transformed surface"),
+                };
+                method_index * 3 + transform_index
+            }
+            _ => unreachable!("only summary simultaneous generators use layered sampling"),
+        }
     }
 }
 
@@ -466,9 +648,25 @@ pub(crate) static LINEAR_EQUATION_3_GENERATOR: LinearEquationGenerator = LinearE
     solution_domain: LinearSolutionDomain::Rational,
     surface_mode: LinearSurfaceMode::Comprehensive,
 };
-pub(crate) static SIMULTANEOUS_EQUATION_1_GENERATOR: SimultaneousEquationGenerator =
+pub(crate) static SIMULTANEOUS_EQUATION_ELIMINATION_GENERATOR: SimultaneousEquationGenerator =
     SimultaneousEquationGenerator {
-        registration: &SIMULTANEOUS_EQUATION_1_REGISTRATION,
+        registration: &SIMULTANEOUS_EQUATION_ELIMINATION_REGISTRATION,
+        mode: SimultaneousEquationMode::Elimination,
+    };
+pub(crate) static SIMULTANEOUS_EQUATION_SUBSTITUTION_GENERATOR: SimultaneousEquationGenerator =
+    SimultaneousEquationGenerator {
+        registration: &SIMULTANEOUS_EQUATION_SUBSTITUTION_REGISTRATION,
+        mode: SimultaneousEquationMode::Substitution,
+    };
+pub(crate) static SIMULTANEOUS_EQUATION_SUMMARY_1_GENERATOR: SimultaneousEquationGenerator =
+    SimultaneousEquationGenerator {
+        registration: &SIMULTANEOUS_EQUATION_SUMMARY_1_REGISTRATION,
+        mode: SimultaneousEquationMode::SummaryBasic,
+    };
+pub(crate) static SIMULTANEOUS_EQUATION_SUMMARY_2_GENERATOR: SimultaneousEquationGenerator =
+    SimultaneousEquationGenerator {
+        registration: &SIMULTANEOUS_EQUATION_SUMMARY_2_REGISTRATION,
+        mode: SimultaneousEquationMode::SummaryTransformed,
     };
 pub(crate) static QUADRATIC_EQUATION_1_GENERATOR: QuadraticEquationGenerator =
     QuadraticEquationGenerator {
@@ -614,7 +812,8 @@ fn scalar_from_rational(value: RationalCoefficient) -> Option<LinearScalar> {
     Some(LinearScalar::Fraction { value })
 }
 
-fn linear_affine_expression(
+fn linear_affine_expression_for(
+    variable_name: LinearVariable,
     coefficient: LinearScalar,
     constant: LinearScalar,
 ) -> Option<LinearExpression> {
@@ -624,11 +823,15 @@ fn linear_affine_expression(
         return Some(LinearExpression::Constant { value: constant });
     }
     let variable = if coefficient_value == RationalCoefficient::new(1, 1)? {
-        LinearExpression::Variable
+        LinearExpression::Variable {
+            variable: variable_name,
+        }
     } else {
         LinearExpression::Scale {
             factor: coefficient,
-            expression: Box::new(LinearExpression::Variable),
+            expression: Box::new(LinearExpression::Variable {
+                variable: variable_name,
+            }),
         }
     };
     if constant_value.is_zero() {
@@ -648,6 +851,13 @@ fn linear_affine_expression(
             right: Box::new(constant_expression),
         }
     })
+}
+
+fn linear_affine_expression(
+    coefficient: LinearScalar,
+    constant: LinearScalar,
+) -> Option<LinearExpression> {
+    linear_affine_expression_for(LinearVariable::X, coefficient, constant)
 }
 
 fn draw_nonzero_integer(rng: &mut DeterministicRng, max_abs: i64) -> i64 {
@@ -1036,62 +1246,292 @@ fn quadratic_formula_answer(
     }
 }
 
+fn linear_variable_term(variable: LinearVariable, coefficient: i64) -> Option<LinearExpression> {
+    if coefficient == 0 {
+        return None;
+    }
+    if coefficient == 1 {
+        Some(LinearExpression::Variable { variable })
+    } else {
+        Some(LinearExpression::Scale {
+            factor: integer_scalar(coefficient),
+            expression: Box::new(LinearExpression::Variable { variable }),
+        })
+    }
+}
+
+fn standard_simultaneous_equation(a: i64, b: i64, c: i64) -> Option<LinearEquationSurface> {
+    if a == 0 || b == 0 {
+        return None;
+    }
+    let x_term = linear_variable_term(LinearVariable::X, a)?;
+    let y_term = linear_variable_term(LinearVariable::Y, b.checked_abs()?)?;
+    let left = if b < 0 {
+        LinearExpression::Subtract {
+            left: Box::new(x_term),
+            right: Box::new(y_term),
+        }
+    } else {
+        LinearExpression::Add {
+            left: Box::new(x_term),
+            right: Box::new(y_term),
+        }
+    };
+    Some(LinearEquationSurface {
+        left,
+        right: LinearExpression::Constant {
+            value: integer_scalar(c),
+        },
+    })
+}
+
+fn draw_elimination_system(
+    rng: &mut DeterministicRng,
+    x: i64,
+    y: i64,
+) -> Option<[LinearEquationSurface; 2]> {
+    for _ in 0..64 {
+        let eliminate_x = rng.next_bounded(2) == 0;
+        let shared = draw_nonzero_integer(rng, 5);
+        let second_shared = if rng.next_bounded(2) == 0 {
+            shared
+        } else {
+            -shared
+        };
+        let other_first = draw_nonzero_integer(rng, 5);
+        let other_second = draw_nonzero_integer(rng, 5);
+        let (a, b, d, e) = if eliminate_x {
+            (shared, other_first, second_shared, other_second)
+        } else {
+            (other_first, shared, other_second, second_shared)
+        };
+        let determinant = a.checked_mul(e)?.checked_sub(b.checked_mul(d)?)?;
+        if determinant == 0 {
+            continue;
+        }
+        let c = a.checked_mul(x)?.checked_add(b.checked_mul(y)?)?;
+        let f = d.checked_mul(x)?.checked_add(e.checked_mul(y)?)?;
+        if c.unsigned_abs() > 15 || f.unsigned_abs() > 15 {
+            continue;
+        }
+        return Some([
+            standard_simultaneous_equation(a, b, c)?,
+            standard_simultaneous_equation(d, e, f)?,
+        ]);
+    }
+    None
+}
+
+fn draw_substitution_system(
+    rng: &mut DeterministicRng,
+    x: i64,
+    y: i64,
+) -> Option<[LinearEquationSurface; 2]> {
+    for _ in 0..64 {
+        let isolate_x = rng.next_bounded(2) == 0;
+        let slope = draw_nonzero_integer(rng, 3);
+        let (isolated_value, other_value, rhs_variable) = if isolate_x {
+            (x, y, LinearVariable::Y)
+        } else {
+            (y, x, LinearVariable::X)
+        };
+        let intercept = isolated_value.checked_sub(slope.checked_mul(other_value)?)?;
+        if intercept.unsigned_abs() > 15 {
+            continue;
+        }
+        let a = draw_nonzero_integer(rng, 6);
+        let b = draw_nonzero_integer(rng, 6);
+        let c = a.checked_mul(x)?.checked_add(b.checked_mul(y)?)?;
+        if c.unsigned_abs() > 15 {
+            continue;
+        }
+        let isolated_coefficients = if isolate_x {
+            (1_i64, slope.checked_neg()?)
+        } else {
+            (slope.checked_neg()?, 1_i64)
+        };
+        if isolated_coefficients
+            .0
+            .checked_mul(b)?
+            .checked_sub(isolated_coefficients.1.checked_mul(a)?)?
+            == 0
+        {
+            continue;
+        }
+        let isolated = LinearEquationSurface {
+            left: LinearExpression::Variable {
+                variable: if isolate_x {
+                    LinearVariable::X
+                } else {
+                    LinearVariable::Y
+                },
+            },
+            right: linear_affine_expression_for(
+                rhs_variable,
+                integer_scalar(slope),
+                integer_scalar(intercept),
+            )?,
+        };
+        return Some([isolated, standard_simultaneous_equation(a, b, c)?]);
+    }
+    None
+}
+
+fn scaled_linear_constant(value: LinearScalar, factor: LinearScalar) -> Option<LinearScalar> {
+    if let (LinearScalar::Integer { value }, LinearScalar::ExactDecimal { coefficient, scale }) =
+        (value, factor)
+    {
+        let mut coefficient = coefficient.checked_mul(value)?;
+        if coefficient == 0 {
+            return Some(integer_scalar(0));
+        }
+        let mut scale = scale;
+        while scale > 0 && coefficient % 10 == 0 {
+            coefficient /= 10;
+            scale -= 1;
+        }
+        return if scale == 0 {
+            Some(integer_scalar(coefficient))
+        } else {
+            Some(LinearScalar::ExactDecimal { coefficient, scale })
+        };
+    }
+    let left = scalar_rational(value)?;
+    let right = scalar_rational(factor)?;
+    scalar_from_rational(RationalCoefficient::new(
+        left.numerator().checked_mul(right.numerator())?,
+        left.denominator().checked_mul(right.denominator())?,
+    )?)
+}
+
+fn transformed_linear_expression(
+    expression: LinearExpression,
+    factor: LinearScalar,
+) -> Option<LinearExpression> {
+    if let LinearExpression::Constant { value } = expression {
+        return Some(LinearExpression::Constant {
+            value: scaled_linear_constant(value, factor)?,
+        });
+    }
+    Some(LinearExpression::Scale {
+        factor,
+        expression: Box::new(expression),
+    })
+}
+
+fn transform_simultaneous_system(
+    equations: [LinearEquationSurface; 2],
+    transform: SimultaneousSurfaceTransform,
+    rng: &mut DeterministicRng,
+) -> Option<[LinearEquationSurface; 2]> {
+    let factor = match transform {
+        SimultaneousSurfaceTransform::Parentheses => integer_scalar(2 + rng.next_bounded(2) as i64),
+        SimultaneousSurfaceTransform::Fraction => LinearScalar::Fraction {
+            value: RationalCoefficient::new(1, 2 + rng.next_bounded(2) as i64)?,
+        },
+        SimultaneousSurfaceTransform::Decimal => LinearScalar::ExactDecimal {
+            coefficient: if rng.next_bounded(2) == 0 { 5 } else { 2 },
+            scale: 1,
+        },
+    };
+    let [first, second] = equations;
+    let transform_equation = |equation: LinearEquationSurface| -> Option<LinearEquationSurface> {
+        Some(LinearEquationSurface {
+            left: transformed_linear_expression(equation.left, factor)?,
+            right: transformed_linear_expression(equation.right, factor)?,
+        })
+    };
+    Some([transform_equation(first)?, transform_equation(second)?])
+}
+
+fn expression_surface_transform(
+    expression: &LinearExpression,
+) -> Option<SimultaneousSurfaceTransform> {
+    match expression {
+        LinearExpression::Variable { .. } | LinearExpression::Constant { .. } => None,
+        LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
+            expression_surface_transform(left).or_else(|| expression_surface_transform(right))
+        }
+        LinearExpression::Scale { factor, expression } => match factor {
+            LinearScalar::Fraction { .. } => Some(SimultaneousSurfaceTransform::Fraction),
+            LinearScalar::ExactDecimal { .. } => Some(SimultaneousSurfaceTransform::Decimal),
+            LinearScalar::Integer { .. }
+                if matches!(
+                    expression.as_ref(),
+                    LinearExpression::Add { .. } | LinearExpression::Subtract { .. }
+                ) =>
+            {
+                Some(SimultaneousSurfaceTransform::Parentheses)
+            }
+            LinearScalar::Integer { .. } => expression_surface_transform(expression),
+        },
+    }
+}
+
+fn simultaneous_surface_transform(
+    equations: &[LinearEquationSurface; 2],
+) -> Option<SimultaneousSurfaceTransform> {
+    [
+        SimultaneousSurfaceTransform::Fraction,
+        SimultaneousSurfaceTransform::Decimal,
+        SimultaneousSurfaceTransform::Parentheses,
+    ]
+    .into_iter()
+    .find(|&desired| {
+        equations.iter().any(|equation| {
+            [
+                expression_surface_transform(&equation.left),
+                expression_surface_transform(&equation.right),
+            ]
+            .contains(&Some(desired))
+        })
+    })
+}
+
 fn simultaneous_equation_problem(
     registration: &ThemeRegistration,
+    mode: SimultaneousEquationMode,
     rng: &mut DeterministicRng,
     id: u32,
     weights: &OperationWeights,
 ) -> Option<Result<Problem, GenerationError>> {
     let x = rng.next_bounded(31) as i64 - 15;
     let y = rng.next_bounded(31) as i64 - 15;
-
-    let mut first_equations = Vec::new();
-    for a in -15_i64..=15 {
-        if a == 0 {
-            continue;
-        }
-        for b in -15_i64..=15 {
-            if b == 0 {
-                continue;
-            }
-            let c = a.checked_mul(x)?.checked_add(b.checked_mul(y)?)?;
-            if c.unsigned_abs() <= 15 {
-                first_equations.push((a, b, c));
+    let solve_method = match mode {
+        SimultaneousEquationMode::Elimination => SimultaneousSolveMethod::Elimination,
+        SimultaneousEquationMode::Substitution => SimultaneousSolveMethod::Substitution,
+        SimultaneousEquationMode::SummaryBasic | SimultaneousEquationMode::SummaryTransformed => {
+            if rng.next_bounded(2) == 0 {
+                SimultaneousSolveMethod::Elimination
+            } else {
+                SimultaneousSolveMethod::Substitution
             }
         }
+    };
+    let mut equations = match solve_method {
+        SimultaneousSolveMethod::Elimination => draw_elimination_system(rng, x, y)?,
+        SimultaneousSolveMethod::Substitution => draw_substitution_system(rng, x, y)?,
+    };
+    if mode == SimultaneousEquationMode::SummaryTransformed {
+        let transform = match rng.next_bounded(3) {
+            0 => SimultaneousSurfaceTransform::Parentheses,
+            1 => SimultaneousSurfaceTransform::Fraction,
+            _ => SimultaneousSurfaceTransform::Decimal,
+        };
+        equations = transform_simultaneous_system(equations, transform, rng)?;
     }
-    if first_equations.is_empty() {
-        return None;
-    }
-    let (a, b, c) = first_equations[rng.next_bounded(first_equations.len() as u64) as usize];
-
-    let mut second_equations = Vec::new();
-    for d in -15_i64..=15 {
-        if d == 0 {
-            continue;
-        }
-        for e in -15_i64..=15 {
-            if e == 0 || a.checked_mul(e)?.checked_sub(b.checked_mul(d)?)? == 0 {
-                continue;
-            }
-            let f = d.checked_mul(x)?.checked_add(e.checked_mul(y)?)?;
-            if f.unsigned_abs() <= 15 {
-                second_equations.push((d, e, f));
-            }
-        }
-    }
-    if second_equations.is_empty() {
-        return None;
-    }
-    let (d, e, f) = second_equations[rng.next_bounded(second_equations.len() as u64) as usize];
 
     let canonical_answer = AnswerNode::Tuple(vec![AnswerNode::Integer(x), AnswerNode::Integer(y)]);
-    let operation_plan = simultaneous_equation_plan(a, b, c, d, e, f, &canonical_answer, weights)?;
+    let operation_plan =
+        simultaneous_equation_plan(&equations, solve_method, &canonical_answer, weights)?;
     Some(
         Problem::generated(
             registration,
             id,
-            ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f },
+            ProblemPrompt::SimultaneousEquation {
+                equations,
+                solve_method,
+            },
             AnswerSchema::OrderedPair,
             canonical_answer,
             EffortModel::operations(operation_plan),
@@ -1270,7 +1710,7 @@ fn linear_equation_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 8] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 11] = [
     GeneratorEntry::current(&LINEAR_EQUATION_SIMPLE_GENERATOR),
     GeneratorEntry::current(&LINEAR_EQUATION_1_GENERATOR),
     GeneratorEntry::current(&LINEAR_EQUATION_2_GENERATOR),
@@ -1278,7 +1718,10 @@ pub(crate) static GENERATORS: [GeneratorEntry; 8] = [
     GeneratorEntry::current(&QUADRATIC_EQUATION_1_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_2_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_3_GENERATOR),
-    GeneratorEntry::current(&SIMULTANEOUS_EQUATION_1_GENERATOR),
+    GeneratorEntry::current(&SIMULTANEOUS_EQUATION_ELIMINATION_GENERATOR),
+    GeneratorEntry::current(&SIMULTANEOUS_EQUATION_SUBSTITUTION_GENERATOR),
+    GeneratorEntry::current(&SIMULTANEOUS_EQUATION_SUMMARY_1_GENERATOR),
+    GeneratorEntry::current(&SIMULTANEOUS_EQUATION_SUMMARY_2_GENERATOR),
 ];
 
 #[cfg(test)]
@@ -1571,7 +2014,7 @@ mod curriculum_tests {
 
     fn collect_linear_surface(expression: &LinearExpression, facts: &mut LinearSurfaceFacts) {
         match expression {
-            LinearExpression::Variable => {}
+            LinearExpression::Variable { .. } => {}
             LinearExpression::Constant { value } => collect_linear_scalar(*value, facts),
             LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
                 collect_linear_surface(left, facts);
@@ -1599,13 +2042,13 @@ mod curriculum_tests {
         }
         match left {
             LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right }
-                if matches!(left.as_ref(), LinearExpression::Variable)
+                if matches!(left.as_ref(), LinearExpression::Variable { .. })
                     && matches!(right.as_ref(), LinearExpression::Constant { .. }) =>
             {
                 Some("x+a=b")
             }
             LinearExpression::Scale { expression, .. }
-                if matches!(expression.as_ref(), LinearExpression::Variable) =>
+                if matches!(expression.as_ref(), LinearExpression::Variable { .. }) =>
             {
                 Some("ax=b")
             }
@@ -1653,8 +2096,12 @@ mod curriculum_tests {
                         let mut facts = LinearSurfaceFacts::default();
                         collect_linear_surface(left, &mut facts);
                         collect_linear_surface(right, &mut facts);
-                        let (a, b) = crate::semantics::normalize_linear_expression(left).unwrap();
-                        let (c, d) = crate::semantics::normalize_linear_expression(right).unwrap();
+                        let (a, y_left, b) =
+                            crate::semantics::normalize_linear_expression(left).unwrap();
+                        assert!(y_left.is_zero());
+                        let (c, y_right, d) =
+                            crate::semantics::normalize_linear_expression(right).unwrap();
+                        assert!(y_right.is_zero());
                         assert_ne!(a, c);
 
                         match theme_id {
@@ -1708,52 +2155,181 @@ mod curriculum_tests {
         assert!(linear_three_saw_fraction_surface && linear_three_saw_decimal_surface);
     }
 
+    fn assert_ordered_integer_pair(problem: &Problem) {
+        let AnswerNode::Tuple(values) = problem.canonical_answer() else {
+            panic!("simultaneous answer must be an ordered pair");
+        };
+        let [AnswerNode::Integer(x), AnswerNode::Integer(y)] = values.as_slice() else {
+            panic!("simultaneous coordinates must be integers");
+        };
+        assert!(x.unsigned_abs() <= 15 && y.unsigned_abs() <= 15);
+        assert!(matches!(problem.answer_schema(), AnswerSchema::OrderedPair));
+        assert!(matches!(
+            problem.input_interface(),
+            AnswerInputInterface::StructuredMath { ref allowed_structures }
+                if allowed_structures == &[EditorStructure::Negative, EditorStructure::Tuple]
+        ));
+    }
+
+    fn assert_direct_elimination(equations: &[LinearEquationSurface; 2]) {
+        let normalized = equations.clone().map(|equation| {
+            crate::semantics::normalize_linear_equation(&equation)
+                .expect("simultaneous equation must normalize exactly")
+        });
+        let [(a, b, c), (d, e, f)] = normalized;
+        assert!([a, b, c, d, e, f].iter().all(|value| value.is_integer()));
+        assert!(a.numerator() != 0 && b.numerator() != 0);
+        assert!(d.numerator() != 0 && e.numerator() != 0);
+        assert!(
+            a.numerator().unsigned_abs() == d.numerator().unsigned_abs()
+                || b.numerator().unsigned_abs() == e.numerator().unsigned_abs()
+        );
+        assert!([a, b, c, d, e, f]
+            .iter()
+            .all(|value| value.numerator().unsigned_abs() <= 15));
+    }
+
+    fn assert_direct_substitution(equations: &[LinearEquationSurface; 2]) {
+        assert!(equations.iter().any(|equation| {
+            matches!(equation.left, LinearExpression::Variable { .. })
+                && matches!(
+                    equation.right,
+                    LinearExpression::Variable { .. }
+                        | LinearExpression::Scale { .. }
+                        | LinearExpression::Add { .. }
+                        | LinearExpression::Subtract { .. }
+                )
+        }));
+        for equation in equations {
+            let (x, y, rhs) = crate::semantics::normalize_linear_equation(equation)
+                .expect("simultaneous equation must normalize exactly");
+            assert!([x, y, rhs].iter().all(|value| value.is_integer()));
+            assert!([x, y, rhs]
+                .iter()
+                .all(|value| value.numerator().unsigned_abs() <= 15));
+        }
+    }
+
     #[test]
-    fn simultaneous_equation_one_reverse_generates_bounded_unique_integer_solutions() {
-        for seed in ["A1b2", "M7x9", "Q4r6", "Z8k3"] {
+    fn simultaneous_dedicated_themes_encode_the_requested_method_in_the_surface() {
+        for (theme_id, expected_method) in [
+            (
+                THEME_ID_SIMULTANEOUS_EQUATION_ELIMINATION,
+                SimultaneousSolveMethod::Elimination,
+            ),
+            (
+                THEME_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION,
+                SimultaneousSolveMethod::Substitution,
+            ),
+        ] {
+            for seed in ["A1b2", "M7x9", "Q4r6"] {
+                let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                    schema_version: SCHEMA_VERSION,
+                    numeric_theme_id: theme_id,
+                    seed: seed.to_owned(),
+                    difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
+                    timeout_ms: Some(1_000),
+                    max_attempts: Some(50_000),
+                })
+                .unwrap();
+                for problem in worksheet.problems() {
+                    let ProblemPrompt::SimultaneousEquation {
+                        equations,
+                        solve_method,
+                    } = problem.prompt()
+                    else {
+                        panic!("simultaneous theme returned a different prompt kind");
+                    };
+                    assert_eq!(*solve_method, expected_method);
+                    match expected_method {
+                        SimultaneousSolveMethod::Elimination => {
+                            assert_direct_elimination(equations)
+                        }
+                        SimultaneousSolveMethod::Substitution => {
+                            assert_direct_substitution(equations)
+                        }
+                    }
+                    assert_ordered_integer_pair(problem);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn simultaneous_summary_one_mixes_both_basic_methods() {
+        for seed in ["A1b2", "M7x9", "Q4r6"] {
             let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
                 schema_version: SCHEMA_VERSION,
-                numeric_theme_id: THEME_ID_SIMULTANEOUS_EQUATION_1,
+                numeric_theme_id: THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_1,
                 seed: seed.to_owned(),
                 difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
-                timeout_ms: None,
-                max_attempts: None,
+                timeout_ms: Some(1_000),
+                max_attempts: Some(50_000),
             })
             .unwrap();
-            assert_eq!(
-                worksheet.problems().len(),
-                SIMULTANEOUS_EQUATION_1_REGISTRATION
-                    .layout()
-                    .problem_count()
-            );
-            for problem in worksheet.into_problems() {
-                let ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f } = problem.prompt()
+            let mut methods = std::collections::BTreeSet::new();
+            for problem in worksheet.problems() {
+                let ProblemPrompt::SimultaneousEquation {
+                    equations,
+                    solve_method,
+                } = problem.prompt()
                 else {
-                    panic!("simultaneous-equation(1) prompt");
+                    panic!("summary(1) must emit simultaneous prompts");
                 };
-                assert!([a, b, c, d, e, f]
-                    .iter()
-                    .all(|value| value.unsigned_abs() <= 15));
-                assert!(*a != 0 && *b != 0 && *d != 0 && *e != 0);
-                assert_ne!(a * e - b * d, 0);
-                let AnswerNode::Tuple(values) = problem.canonical_answer() else {
-                    panic!("simultaneous-equation(1) answer must be an ordered pair");
-                };
-                assert_eq!(values.len(), 2);
-                let (AnswerNode::Integer(x), AnswerNode::Integer(y)) = (&values[0], &values[1])
-                else {
-                    panic!("simultaneous-equation(1) coordinates must be integers");
-                };
-                assert!(x.unsigned_abs() <= 15 && y.unsigned_abs() <= 15);
-                assert_eq!(*a * x + *b * y, *c);
-                assert_eq!(*d * x + *e * y, *f);
-                assert!(matches!(problem.answer_schema(), AnswerSchema::OrderedPair));
-                assert!(matches!(
-                    problem.input_interface(),
-                    AnswerInputInterface::StructuredMath { ref allowed_structures }
-                        if allowed_structures == &[EditorStructure::Negative, EditorStructure::Tuple]
-                ));
+                assert_eq!(simultaneous_surface_transform(equations), None);
+                methods.insert(*solve_method);
+                match solve_method {
+                    SimultaneousSolveMethod::Elimination => assert_direct_elimination(equations),
+                    SimultaneousSolveMethod::Substitution => assert_direct_substitution(equations),
+                }
+                assert_ordered_integer_pair(problem);
             }
+            assert_eq!(
+                methods.len(),
+                2,
+                "summary(1) must exercise method selection"
+            );
+        }
+    }
+
+    #[test]
+    fn simultaneous_summary_two_covers_parentheses_fraction_decimal_and_both_methods() {
+        for seed in ["A1b2", "M7x9", "Q4r6"] {
+            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+                schema_version: SCHEMA_VERSION,
+                numeric_theme_id: THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_2,
+                seed: seed.to_owned(),
+                difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
+                timeout_ms: Some(1_000),
+                max_attempts: Some(50_000),
+            })
+            .unwrap();
+            let mut methods = std::collections::BTreeSet::new();
+            let mut transforms = std::collections::BTreeSet::new();
+            for problem in worksheet.problems() {
+                let ProblemPrompt::SimultaneousEquation {
+                    equations,
+                    solve_method,
+                } = problem.prompt()
+                else {
+                    panic!("summary(2) must emit simultaneous prompts");
+                };
+                methods.insert(*solve_method);
+                transforms.insert(
+                    simultaneous_surface_transform(equations)
+                        .expect("summary(2) must carry an explicit transformed surface"),
+                );
+                assert_ordered_integer_pair(problem);
+            }
+            assert_eq!(methods.len(), 2);
+            assert_eq!(
+                transforms,
+                std::collections::BTreeSet::from([
+                    SimultaneousSurfaceTransform::Parentheses,
+                    SimultaneousSurfaceTransform::Fraction,
+                    SimultaneousSurfaceTransform::Decimal,
+                ])
+            );
         }
     }
 }

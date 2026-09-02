@@ -1,8 +1,8 @@
 use crate::answer::AnswerNode;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
 use crate::model::{
-    ArithmeticExpression, ArithmeticOperator, LinearExpression, LinearScalar,
-    QuadraticEquationForm, RationalCoefficient,
+    ArithmeticExpression, ArithmeticOperator, LinearEquationSurface, LinearExpression,
+    LinearScalar, QuadraticEquationForm, RationalCoefficient, SimultaneousSolveMethod,
 };
 pub const OPERATION_KIND_COUNT: usize = 29;
 
@@ -496,7 +496,7 @@ fn linear_scalar_rational(value: LinearScalar) -> Option<RationalCoefficient> {
 
 fn linear_expression_expansion_operations(expression: &LinearExpression) -> Option<Vec<Operation>> {
     match expression {
-        LinearExpression::Variable | LinearExpression::Constant { .. } => Some(Vec::new()),
+        LinearExpression::Variable { .. } | LinearExpression::Constant { .. } => Some(Vec::new()),
         LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
             let mut operations = linear_expression_expansion_operations(left)?;
             operations.extend(linear_expression_expansion_operations(right)?);
@@ -505,13 +505,12 @@ fn linear_expression_expansion_operations(expression: &LinearExpression) -> Opti
         LinearExpression::Scale { factor, expression } => {
             let mut operations = linear_expression_expansion_operations(expression)?;
             let factor = linear_scalar_rational(*factor)?;
-            let (coefficient, constant) =
+            let (x_coefficient, y_coefficient, constant) =
                 crate::semantics::normalize_linear_expression(expression)?;
-            if !coefficient.is_zero() {
-                operations.extend(rational_multiplication_operations(factor, coefficient)?);
-            }
-            if !constant.is_zero() {
-                operations.extend(rational_multiplication_operations(factor, constant)?);
+            for coefficient in [x_coefficient, y_coefficient, constant] {
+                if !coefficient.is_zero() {
+                    operations.extend(rational_multiplication_operations(factor, coefficient)?);
+                }
             }
             Some(operations)
         }
@@ -523,8 +522,11 @@ pub(crate) fn linear_expression_equation_plan(
     right: &LinearExpression,
     answer: &AnswerNode,
 ) -> Option<OperationPlan> {
-    let (a, b) = crate::semantics::normalize_linear_expression(left)?;
-    let (c, d) = crate::semantics::normalize_linear_expression(right)?;
+    let (a, left_y, b) = crate::semantics::normalize_linear_expression(left)?;
+    let (c, right_y, d) = crate::semantics::normalize_linear_expression(right)?;
+    if !left_y.is_zero() || !right_y.is_zero() {
+        return None;
+    }
     let mut operations = linear_expression_expansion_operations(left)?;
     operations.extend(linear_expression_expansion_operations(right)?);
     operations.extend(linear_equation_plan(a, b, c, d, answer)?.operations);
@@ -684,43 +686,227 @@ fn simultaneous_elimination_strategy_operations(
     Some(operations)
 }
 
-#[allow(clippy::too_many_arguments)]
+type IntegerLinearEquation = (i64, i64, i64);
+
+fn clear_linear_equation_denominators(
+    equation: &LinearEquationSurface,
+) -> Option<(IntegerLinearEquation, Vec<Operation>)> {
+    let (x, y, rhs) = crate::semantics::normalize_linear_equation(equation)?;
+    let xy_lcm = lcm_u64(x.denominator() as u64, y.denominator() as u64)?;
+    let common_denominator = lcm_u64(xy_lcm, rhs.denominator() as u64)?;
+    let common_denominator_i64 = i64::try_from(common_denominator).ok()?;
+    let mut operations = Vec::new();
+    if x.denominator() != y.denominator() {
+        operations.extend(lcm_search_operations(
+            x.denominator() as u64,
+            y.denominator() as u64,
+        )?);
+    }
+    if xy_lcm != rhs.denominator() as u64 {
+        operations.extend(lcm_search_operations(xy_lcm, rhs.denominator() as u64)?);
+    }
+
+    let scale = |value: RationalCoefficient, operations: &mut Vec<Operation>| -> Option<i64> {
+        if common_denominator > 1 && !value.is_zero() {
+            operations.extend(rational_multiplication_operations(
+                RationalCoefficient::new(common_denominator_i64, 1)?,
+                value,
+            )?);
+        }
+        value
+            .numerator()
+            .checked_mul(common_denominator_i64.checked_div(value.denominator())?)
+    };
+    Some((
+        (
+            scale(x, &mut operations)?,
+            scale(y, &mut operations)?,
+            scale(rhs, &mut operations)?,
+        ),
+        operations,
+    ))
+}
+
+fn simultaneous_surface_operations(
+    equations: &[LinearEquationSurface; 2],
+) -> Option<([IntegerLinearEquation; 2], Vec<Operation>)> {
+    let mut operations = Vec::new();
+    let mut normalized = [(0_i64, 0_i64, 0_i64); 2];
+    for (index, equation) in equations.iter().enumerate() {
+        operations.extend(linear_expression_expansion_operations(&equation.left)?);
+        operations.extend(linear_expression_expansion_operations(&equation.right)?);
+        let (integer_equation, denominator_operations) =
+            clear_linear_equation_denominators(equation)?;
+        normalized[index] = integer_equation;
+        operations.extend(denominator_operations);
+    }
+    Some((normalized, operations))
+}
+
+fn answer_ordered_integer_pair(answer: &AnswerNode) -> Option<(i64, i64)> {
+    let AnswerNode::Tuple(values) = answer else {
+        return None;
+    };
+    let [AnswerNode::Integer(x), AnswerNode::Integer(y)] = values.as_slice() else {
+        return None;
+    };
+    Some((*x, *y))
+}
+
+fn substitution_candidate_operations(
+    isolated: (i64, i64, i64),
+    other: (i64, i64, i64),
+    isolate_x: bool,
+    x: i64,
+    y: i64,
+) -> Option<Vec<Operation>> {
+    let (isolated_coefficient, other_isolated_coefficient, isolated_rhs) = if isolate_x {
+        (isolated.0, isolated.1, isolated.2)
+    } else {
+        (isolated.1, isolated.0, isolated.2)
+    };
+    if isolated_coefficient == 0
+        || other_isolated_coefficient % isolated_coefficient != 0
+        || isolated_rhs % isolated_coefficient != 0
+    {
+        return None;
+    }
+    let slope = other_isolated_coefficient
+        .checked_neg()?
+        .checked_div(isolated_coefficient)?;
+    let intercept = isolated_rhs.checked_div(isolated_coefficient)?;
+    let (other_substituted_coefficient, other_remaining_coefficient, other_rhs) = if isolate_x {
+        (other.0, other.1, other.2)
+    } else {
+        (other.1, other.0, other.2)
+    };
+
+    let product_coefficient = other_substituted_coefficient.checked_mul(slope)?;
+    let combined_coefficient = product_coefficient.checked_add(other_remaining_coefficient)?;
+    if combined_coefficient == 0 {
+        return None;
+    }
+    let product_constant = other_substituted_coefficient.checked_mul(intercept)?;
+    let combined_rhs = other_rhs.checked_sub(product_constant)?;
+    let remaining_value = if isolate_x { y } else { x };
+    let isolated_value = if isolate_x { x } else { y };
+    if combined_coefficient.checked_mul(remaining_value)? != combined_rhs
+        || slope.checked_mul(remaining_value)?.checked_add(intercept)? != isolated_value
+    {
+        return None;
+    }
+
+    let mut operations = vec![Operation::OverheadEqSystem];
+    if isolated_coefficient.unsigned_abs() != 1 {
+        for coefficient in [
+            isolated_coefficient,
+            other_isolated_coefficient,
+            isolated_rhs,
+        ] {
+            if coefficient != 0 {
+                operations.extend(divide_or_identity_operations(
+                    coefficient,
+                    isolated_coefficient,
+                ));
+            }
+        }
+    }
+    operations.extend(multiply_or_identity_operations(
+        other_substituted_coefficient,
+        slope,
+    ));
+    operations.extend(multiply_or_identity_operations(
+        other_substituted_coefficient,
+        intercept,
+    ));
+    operations.extend(signed_addition_operations(
+        product_coefficient,
+        other_remaining_coefficient,
+    ));
+    operations.extend(signed_subtraction_operations(other_rhs, product_constant));
+    operations.extend(divide_or_identity_operations(
+        combined_rhs,
+        combined_coefficient,
+    ));
+    operations.extend(multiply_or_identity_operations(slope, remaining_value));
+    operations.extend(signed_addition_operations(
+        slope.checked_mul(remaining_value)?,
+        intercept,
+    ));
+    Some(operations)
+}
+
+fn simultaneous_substitution_strategy_operations(
+    equations: [(i64, i64, i64); 2],
+    x: i64,
+    y: i64,
+    weights: &OperationWeights,
+) -> Option<Vec<Operation>> {
+    let mut candidates = Vec::new();
+    for (isolated_index, other_index) in [(0_usize, 1_usize), (1_usize, 0_usize)] {
+        for isolate_x in [true, false] {
+            if let Some(operations) = substitution_candidate_operations(
+                equations[isolated_index],
+                equations[other_index],
+                isolate_x,
+                x,
+                y,
+            ) {
+                let effort =
+                    weights.weighted_sum(&operation_plan(operations.clone()).operation_vector());
+                candidates.push((effort, operations));
+            }
+        }
+    }
+    candidates
+        .into_iter()
+        .min_by(|left, right| left.0.total_cmp(&right.0))
+        .map(|(_, operations)| operations)
+}
+
 pub(crate) fn simultaneous_equation_plan(
-    a: i64,
-    b: i64,
-    c: i64,
-    d: i64,
-    e: i64,
-    f: i64,
+    equations: &[LinearEquationSurface; 2],
+    solve_method: SimultaneousSolveMethod,
     answer: &AnswerNode,
     weights: &OperationWeights,
 ) -> Option<OperationPlan> {
-    if a == 0 || b == 0 || d == 0 || e == 0 {
-        return None;
-    }
+    let ((x, y), (normalized, mut operations)) = (
+        answer_ordered_integer_pair(answer)?,
+        simultaneous_surface_operations(equations)?,
+    );
+    let (a, b, c) = normalized[0];
+    let (d, e, f) = normalized[1];
     let determinant = a.checked_mul(e)?.checked_sub(b.checked_mul(d)?)?;
-    if determinant == 0 {
+    if determinant == 0
+        || a.checked_mul(x)?.checked_add(b.checked_mul(y)?)? != c
+        || d.checked_mul(x)?.checked_add(e.checked_mul(y)?)? != f
+    {
         return None;
     }
-    let x_numerator = c.checked_mul(e)?.checked_sub(b.checked_mul(f)?)?;
-    let y_numerator = a.checked_mul(f)?.checked_sub(c.checked_mul(d)?)?;
-    if x_numerator % determinant != 0 || y_numerator % determinant != 0 {
-        return None;
-    }
-    let x = x_numerator / determinant;
-    let y = y_numerator / determinant;
 
-    let x_strategy =
-        simultaneous_elimination_strategy_operations(a, b, c, d, e, f, true, x, y, weights)?;
-    let y_strategy =
-        simultaneous_elimination_strategy_operations(a, b, c, d, e, f, false, x, y, weights)?;
-    let x_effort = weights.weighted_sum(&operation_plan(x_strategy.clone()).operation_vector());
-    let y_effort = weights.weighted_sum(&operation_plan(y_strategy.clone()).operation_vector());
-    let mut operations = if x_effort <= y_effort {
-        x_strategy
-    } else {
-        y_strategy
+    let strategy_operations = match solve_method {
+        SimultaneousSolveMethod::Elimination => {
+            let x_strategy = simultaneous_elimination_strategy_operations(
+                a, b, c, d, e, f, true, x, y, weights,
+            )?;
+            let y_strategy = simultaneous_elimination_strategy_operations(
+                a, b, c, d, e, f, false, x, y, weights,
+            )?;
+            let x_effort =
+                weights.weighted_sum(&operation_plan(x_strategy.clone()).operation_vector());
+            let y_effort =
+                weights.weighted_sum(&operation_plan(y_strategy.clone()).operation_vector());
+            if x_effort <= y_effort {
+                x_strategy
+            } else {
+                y_strategy
+            }
+        }
+        SimultaneousSolveMethod::Substitution => {
+            simultaneous_substitution_strategy_operations(normalized, x, y, weights)?
+        }
     };
+    operations.extend(strategy_operations);
     operations.extend(big_num_operations(answer));
     Some(operation_plan(operations))
 }
@@ -2279,6 +2465,66 @@ mod effort_model_tests {
         assert_eq!(vector.get(OperationKind::OverheadLcm), 0.0);
         assert_eq!(vector.get(OperationKind::Count), 1.0);
         assert_eq!(vector.get(OperationKind::BasePlus), 1.0);
+    }
+
+    #[test]
+    fn simultaneous_solve_method_selects_a_method_specific_operation_plan() {
+        use crate::model::LinearVariable;
+
+        let variable = |variable| LinearExpression::Variable { variable };
+        let constant = |value| LinearExpression::Constant {
+            value: LinearScalar::Integer { value },
+        };
+        let scale = |value, expression| LinearExpression::Scale {
+            factor: LinearScalar::Integer { value },
+            expression: Box::new(expression),
+        };
+        let first = LinearEquationSurface {
+            left: variable(LinearVariable::X),
+            right: LinearExpression::Add {
+                left: Box::new(scale(2, variable(LinearVariable::Y))),
+                right: Box::new(constant(1)),
+            },
+        };
+        let second = LinearEquationSurface {
+            left: LinearExpression::Add {
+                left: Box::new(scale(3, variable(LinearVariable::X))),
+                right: Box::new(scale(4, variable(LinearVariable::Y))),
+            },
+            right: constant(13),
+        };
+        let equations = [first, second];
+        let answer = AnswerNode::Tuple(vec![AnswerNode::Integer(3), AnswerNode::Integer(1)]);
+        let weights = OperationWeights::default();
+
+        let elimination = simultaneous_equation_plan(
+            &equations,
+            SimultaneousSolveMethod::Elimination,
+            &answer,
+            &weights,
+        )
+        .expect("system supports elimination");
+        let substitution = simultaneous_equation_plan(
+            &equations,
+            SimultaneousSolveMethod::Substitution,
+            &answer,
+            &weights,
+        )
+        .expect("isolated first equation supports substitution");
+
+        assert_ne!(elimination.operations, substitution.operations);
+        assert_eq!(
+            elimination
+                .operation_vector()
+                .get(OperationKind::OverheadEqSystem),
+            1.0
+        );
+        assert_eq!(
+            substitution
+                .operation_vector()
+                .get(OperationKind::OverheadEqSystem),
+            1.0
+        );
     }
 
     #[test]

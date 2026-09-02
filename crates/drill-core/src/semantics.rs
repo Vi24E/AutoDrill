@@ -9,9 +9,10 @@ use crate::answer::{AnswerBinaryOperator, AnswerNode};
 use crate::exact::ExactRational;
 use crate::exact_value::rational_from_answer;
 use crate::model::{
-    AnswerSchema, ArithmeticExpression, ArithmeticOperator, LiarStatement, LinearExpression,
-    LinearScalar, MiniSudokuGrid, ProblemPrompt, QuadraticEquationForm, RationalCoefficient,
-    MINI_SUDOKU_CELL_COUNT, MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
+    AnswerSchema, ArithmeticExpression, ArithmeticOperator, LiarStatement, LinearEquationSurface,
+    LinearExpression, LinearScalar, LinearVariable, MiniSudokuGrid, ProblemPrompt,
+    QuadraticEquationForm, RationalCoefficient, MINI_SUDOKU_CELL_COUNT, MINI_SUDOKU_GRID_SPEC,
+    MINI_SUDOKU_SIDE,
 };
 use crate::theme::ThemeAnswerContract;
 
@@ -34,43 +35,96 @@ fn rational_from_linear_scalar(value: LinearScalar) -> Option<ExactRational> {
 
 fn normalize_linear_expression_exact(
     expression: &LinearExpression,
-) -> Option<(ExactRational, ExactRational)> {
+) -> Option<(ExactRational, ExactRational, ExactRational)> {
     match expression {
-        LinearExpression::Variable => Some((ExactRational::one(), ExactRational::zero())),
-        LinearExpression::Constant { value } => {
-            Some((ExactRational::zero(), rational_from_linear_scalar(*value)?))
-        }
+        LinearExpression::Variable { variable } => match variable {
+            LinearVariable::X => Some((
+                ExactRational::one(),
+                ExactRational::zero(),
+                ExactRational::zero(),
+            )),
+            LinearVariable::Y => Some((
+                ExactRational::zero(),
+                ExactRational::one(),
+                ExactRational::zero(),
+            )),
+        },
+        LinearExpression::Constant { value } => Some((
+            ExactRational::zero(),
+            ExactRational::zero(),
+            rational_from_linear_scalar(*value)?,
+        )),
         LinearExpression::Add { left, right } => {
-            let (left_a, left_b) = normalize_linear_expression_exact(left)?;
-            let (right_a, right_b) = normalize_linear_expression_exact(right)?;
-            Some((left_a.add(right_a)?, left_b.add(right_b)?))
+            let (left_x, left_y, left_c) = normalize_linear_expression_exact(left)?;
+            let (right_x, right_y, right_c) = normalize_linear_expression_exact(right)?;
+            Some((
+                left_x.add(right_x)?,
+                left_y.add(right_y)?,
+                left_c.add(right_c)?,
+            ))
         }
         LinearExpression::Subtract { left, right } => {
-            let (left_a, left_b) = normalize_linear_expression_exact(left)?;
-            let (right_a, right_b) = normalize_linear_expression_exact(right)?;
-            Some((left_a.subtract(right_a)?, left_b.subtract(right_b)?))
+            let (left_x, left_y, left_c) = normalize_linear_expression_exact(left)?;
+            let (right_x, right_y, right_c) = normalize_linear_expression_exact(right)?;
+            Some((
+                left_x.subtract(right_x)?,
+                left_y.subtract(right_y)?,
+                left_c.subtract(right_c)?,
+            ))
         }
         LinearExpression::Scale { factor, expression } => {
             let factor = rational_from_linear_scalar(*factor)?;
-            let (a, b) = normalize_linear_expression_exact(expression)?;
-            Some((factor.multiply(a)?, factor.multiply(b)?))
+            let (x, y, constant) = normalize_linear_expression_exact(expression)?;
+            Some((
+                factor.multiply(x)?,
+                factor.multiply(y)?,
+                factor.multiply(constant)?,
+            ))
         }
     }
 }
 
 pub(crate) fn normalize_linear_expression(
     expression: &LinearExpression,
-) -> Option<(RationalCoefficient, RationalCoefficient)> {
-    let (a, b) = normalize_linear_expression_exact(expression)?;
+) -> Option<(
+    RationalCoefficient,
+    RationalCoefficient,
+    RationalCoefficient,
+)> {
+    let (x, y, constant) = normalize_linear_expression_exact(expression)?;
+    let convert = |value: ExactRational| {
+        RationalCoefficient::new(
+            i64::try_from(value.numerator()).ok()?,
+            i64::try_from(value.denominator()).ok()?,
+        )
+    };
+    Some((convert(x)?, convert(y)?, convert(constant)?))
+}
+
+fn normalize_linear_equation_exact(
+    equation: &LinearEquationSurface,
+) -> Option<(ExactRational, ExactRational, ExactRational)> {
+    let (left_x, left_y, left_c) = normalize_linear_expression_exact(&equation.left)?;
+    let (right_x, right_y, right_c) = normalize_linear_expression_exact(&equation.right)?;
     Some((
-        RationalCoefficient::new(
-            i64::try_from(a.numerator()).ok()?,
-            i64::try_from(a.denominator()).ok()?,
-        )?,
-        RationalCoefficient::new(
-            i64::try_from(b.numerator()).ok()?,
-            i64::try_from(b.denominator()).ok()?,
-        )?,
+        left_x.subtract(right_x)?,
+        left_y.subtract(right_y)?,
+        right_c.subtract(left_c)?,
+    ))
+}
+
+pub(crate) fn normalize_linear_equation(
+    equation: &LinearEquationSurface,
+) -> Option<(
+    RationalCoefficient,
+    RationalCoefficient,
+    RationalCoefficient,
+)> {
+    let (x, y, rhs) = normalize_linear_equation_exact(equation)?;
+    Some((
+        rational_to_coefficient(x)?,
+        rational_to_coefficient(y)?,
+        rational_to_coefficient(rhs)?,
     ))
 }
 
@@ -139,19 +193,19 @@ pub(crate) fn prompt_accepts_canonical_answer(
             right,
         } => column_answer_is_correct(contract, schema, *operator, left, right, answer),
         ProblemPrompt::LinearEquation { left, right } => {
-            let (Some((a, b)), Some((c, d))) = (
+            let (Some((a, left_y, b)), Some((c, right_y, d))) = (
                 normalize_linear_expression(left),
                 normalize_linear_expression(right),
             ) else {
                 return false;
             };
-            linear_answer_is_correct(a, b, c, d, answer)
+            left_y.is_zero() && right_y.is_zero() && linear_answer_is_correct(a, b, c, d, answer)
         }
         ProblemPrompt::QuadraticEquation { form, a, b, c } => {
             quadratic_answer_is_correct(*form, *a, *b, *c, answer)
         }
-        ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f } => {
-            simultaneous_answer_is_correct(*a, *b, *c, *d, *e, *f, answer)
+        ProblemPrompt::SimultaneousEquation { equations, .. } => {
+            simultaneous_answer_is_correct(equations, answer)
         }
         ProblemPrompt::LiarPuzzle {
             people_count,
@@ -408,12 +462,7 @@ fn linear_answer_is_correct(
 }
 
 fn simultaneous_answer_is_correct(
-    a: i64,
-    b: i64,
-    c: i64,
-    d: i64,
-    e: i64,
-    f: i64,
+    equations: &[LinearEquationSurface; 2],
     answer: &AnswerNode,
 ) -> bool {
     let AnswerNode::Tuple(values) = answer else {
@@ -428,14 +477,12 @@ fn simultaneous_answer_is_correct(
     ) else {
         return false;
     };
-    let (a, b, c, d, e, f) = (
-        ExactRational::from_integer(a),
-        ExactRational::from_integer(b),
-        ExactRational::from_integer(c),
-        ExactRational::from_integer(d),
-        ExactRational::from_integer(e),
-        ExactRational::from_integer(f),
-    );
+    let (Some((a, b, c)), Some((d, e, f))) = (
+        normalize_linear_equation_exact(&equations[0]),
+        normalize_linear_equation_exact(&equations[1]),
+    ) else {
+        return false;
+    };
     let Some(determinant) = a
         .multiply(e)
         .and_then(|ae| b.multiply(d).and_then(|bd| ae.subtract(bd)))

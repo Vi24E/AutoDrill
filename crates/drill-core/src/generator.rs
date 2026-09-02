@@ -968,9 +968,10 @@ fn prompt_has_no_negative_values(prompt: &ProblemPrompt) -> bool {
         ProblemPrompt::QuadraticEquation { a, b, c, .. } => {
             [a, b, c].iter().all(|value| value.numerator() >= 0)
         }
-        ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f } => {
-            [a, b, c, d, e, f].iter().all(|value| **value >= 0)
-        }
+        ProblemPrompt::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
+            linear_expression_has_no_negative_values(&equation.left)
+                && linear_expression_has_no_negative_values(&equation.right)
+        }),
         ProblemPrompt::LiarPuzzle { .. } | ProblemPrompt::MiniSudoku { .. } => true,
     }
 }
@@ -985,7 +986,7 @@ fn linear_scalar_is_nonnegative(value: LinearScalar) -> bool {
 
 fn linear_expression_has_no_negative_values(expression: &LinearExpression) -> bool {
     match expression {
-        LinearExpression::Variable => true,
+        LinearExpression::Variable { .. } => true,
         LinearExpression::Constant { value } => linear_scalar_is_nonnegative(*value),
         LinearExpression::Add { left, right } | LinearExpression::Subtract { left, right } => {
             linear_expression_has_no_negative_values(left)
@@ -1103,12 +1104,8 @@ enum ProblemKey {
         c: crate::model::RationalCoefficient,
     },
     SimultaneousEquation {
-        a: i64,
-        b: i64,
-        c: i64,
-        d: i64,
-        e: i64,
-        f: i64,
+        equations: [crate::model::LinearEquationSurface; 2],
+        solve_method: crate::model::SimultaneousSolveMethod,
     },
     LiarPuzzle {
         people_count: crate::model::PeopleCount,
@@ -1151,16 +1148,13 @@ impl ProblemKey {
                 b: *b,
                 c: *c,
             },
-            ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f } => {
-                Self::SimultaneousEquation {
-                    a: *a,
-                    b: *b,
-                    c: *c,
-                    d: *d,
-                    e: *e,
-                    f: *f,
-                }
-            }
+            ProblemPrompt::SimultaneousEquation {
+                equations,
+                solve_method,
+            } => Self::SimultaneousEquation {
+                equations: equations.clone(),
+                solve_method: *solve_method,
+            },
             ProblemPrompt::LiarPuzzle {
                 people_count,
                 statements,

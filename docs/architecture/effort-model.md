@@ -108,11 +108,13 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 `SamplingStrategy`は自由なenum literalではなくvalidated constructorから作る。answer-conditioned strategyはnon-empty answer domain、layered strategyはnon-empty layer setと`minimum`合計がworksheet problem count以下であること、constructive layered strategyはさらにnonzero bootstrap multiplierをconstruction時に保証する。themeのclassifierが返す生の`usize`はframework内でbounded `LayerIndex`へ変換し、範囲外は`SamplingError`として明示的に失敗させる。answer-conditioned callbackの返却answerとrequested answer、constructive-layered callbackの返却layerとrequested layerもsampling直後に照合する。capability contract違反を`next_bounded(0)` panic・silent retry・`AttemptLimit`へ化かさない。
 
-現行のlayered themeは次の3つ。
+現行のlayered themeは次の5つ。
 
 - 小数の足し算と引き算: Addition / Subtraction（20問で10/10）
 - 分数総まとめ(仮分数): Addition / Subtraction / Multiplication / Division（16問で4/4/4/4）
 - 二次方程式(2): DifferenceOfSquares / PerfectSquare / General（16問で2/2/12、20問なら2/2/16）
+- 連立方程式（まとめ(1)）: Elimination / Substitution（12問で各methodを最低2問確保）
+- 連立方程式（まとめ(2)）: method × Parentheses / Fraction / Decimal の6layer（12問で各layerを最低1問確保）
 
 `うそつきだれだ`はlayered themeではない。3人/4人比率がdifficultyで変化すること自体が想定されたscalar difficulty behaviorである。
 
@@ -126,7 +128,7 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 一次方程式は`ax+b=cx+d -> Ax=B -> x=B/A`。係数整理・除算は共通整数/有理数builderへ委譲する。
 
-連立方程式はx消去・y消去の完全な加減法operation planを両方作り、weight適用後の小さい方を採用する。内部四則はすべて共通builder。
+連立方程式はまず2本の `LinearEquationSurface` に必要な括弧展開を数え、分数係数があればexactな分母払いをLCM・有理数乗算として数えて整数のcanonical systemへ正規化する。その後 `solve_method=elimination` ではx消去・y消去の完全な加減法operation planを両方作り、weight適用後の小さい方を採用する。`solve_method=substitution` では `x=...` / `y=...` へ孤立した式を他方へ代入し、係数整理・残る一次式の除算・既知値の代入までを共通builderで構成する。まとめthemeも各problemが実際に選んだmethodを保持し、surface変形costと解法costを同じOperationPlanで評価する。
 
 二次方程式(1)はformと係数を見て移項・除算・平方根modelを組み合わせる。
 

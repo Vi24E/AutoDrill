@@ -18,7 +18,7 @@ import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 70 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 73 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -66,6 +66,9 @@ describe('Web curriculum registry', () => {
       { genreKey: 'bonus', label: 'おまけ' },
     ]);
     expect(RECOMMENDED_GENRES.flatMap((genre) => genre.themes).map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b));
+    const equationRecommended = RECOMMENDED_GENRES.find((genre) => genre.genreKey === 'equation')!;
+    expect(equationRecommended.themes.map((theme) => theme.label)).toContain('連立方程式（まとめ(1)）');
+    expect(equationRecommended.themes.map((theme) => theme.label)).toContain('連立方程式（まとめ(2)）');
     const signedRecommended = RECOMMENDED_GENRES.find((genre) => genre.genreKey === 'negative-numbers')!;
     expect(signedRecommended.themes.map((theme) => theme.label)).toEqual([
       '正負の数の加法・減法',

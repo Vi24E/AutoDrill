@@ -40,10 +40,10 @@ describe('implemented unit route', () => {
     await expect(generateMetadata({ params: params('grade-7', 'linear-equation-2') })).resolves.toMatchObject({
       title: '一次方程式(2) | AutoDrill',
     });
-    const simultaneous = await UnitPage({ params: params('grade-8', 'simultaneous-equation-1') });
+    const simultaneous = await UnitPage({ params: params('grade-8', 'simultaneous-equation-elimination') });
     expect(simultaneous.props.initialWebSettings).toMatchObject({
       numeric_theme_id: 19,
-      themeKey: 'jp.grade8.equation.simultaneous.1',
+      themeKey: 'jp.grade8.equation.simultaneous.elimination',
     });
   });
 

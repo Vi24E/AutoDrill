@@ -487,7 +487,7 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'テーマ' }));
     const expected = [
       ['簡単な一次方程式', '中1', 'grade-tag-grade-7'],
-      ['連立方程式(1)', '中2', 'grade-tag-grade-8'],
+      ['連立方程式（加減法）', '中2', 'grade-tag-grade-8'],
       ['二次方程式(1)', '中3', 'grade-tag-grade-9'],
     ] as const;
     for (const [label, tagText, className] of expected) {
@@ -505,7 +505,10 @@ describe('AutoDrillApp', () => {
 
     expect(screen.getByRole('combobox', { name: '学年' })).toHaveAttribute('data-selected-label', '中学2年生');
     expect(screen.getByRole('combobox', { name: '単元' })).toHaveAttribute('data-selected-label', '連立方程式');
-    expect(screen.queryByRole('group', { name: '連立方程式の教材' })).not.toBeInTheDocument();
+    const simultaneousTiles = screen.getByRole('group', { name: '連立方程式の教材' });
+    for (const label of ['連立方程式（加減法）', '連立方程式（代入法）', '連立方程式（まとめ(1)）', '連立方程式（まとめ(2)）']) {
+      expect(within(simultaneousTiles).getByRole('button', { name: label })).toBeInTheDocument();
+    }
     expect(screen.getByRole('button', { name: '問題生成' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '印刷 (pdfで出力)' })).toBeEnabled();
   });
@@ -688,7 +691,7 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('option', { name: '中学2年生' }));
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
 
-    await screen.findByRole('heading', { name: '連立方程式(1)' });
+    await screen.findByRole('heading', { name: '連立方程式（加減法）' });
     expect(document.querySelectorAll('[data-problem-index]')).toHaveLength(12);
     expect(screen.getByRole('textbox', { name: '1番のxの答え 未入力' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: '1番のyの答え 未入力' })).toBeInTheDocument();

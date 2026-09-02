@@ -743,8 +743,10 @@ mod tests {
                 let ProblemPrompt::LinearEquation { left, right } = problem.prompt() else {
                     panic!("linear theme returned a non-linear prompt");
                 };
-                let (a, b) = crate::semantics::normalize_linear_expression(left).unwrap();
-                let (c, d) = crate::semantics::normalize_linear_expression(right).unwrap();
+                let (a, left_y, b) = crate::semantics::normalize_linear_expression(left).unwrap();
+                assert!(left_y.is_zero());
+                let (c, right_y, d) = crate::semantics::normalize_linear_expression(right).unwrap();
+                assert!(right_y.is_zero());
                 assert_ne!(a, c, "linear equation must have a unique solution");
                 if theme_id != THEME_ID_LINEAR_EQUATION_3 {
                     for coefficient in [a, b, c, d] {

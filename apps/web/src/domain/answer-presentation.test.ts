@@ -46,7 +46,7 @@ describe('answerPresentationPlan', () => {
       answer_schema: { kind: 'integer', min: '0', max: '99' },
     }))).toEqual({ kind: 'column_division', hasRemainder: false, quotientSlot: 'single' });
     expect(answerPresentationPlan(problem({
-      prompt: { kind: 'simultaneous_equation', a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 },
+      prompt: { kind: 'simultaneous_equation', equations: [{ left: { kind: 'variable', variable: 'x' }, right: { kind: 'constant', value: { kind: 'integer', value: 1 } } }, { left: { kind: 'variable', variable: 'y' }, right: { kind: 'constant', value: { kind: 'integer', value: 2 } } }], solve_method: 'substitution' },
     }))).toEqual({ kind: 'simultaneous_equation' });
     expect(answerPresentationPlan(problem({
       input_interface: { type: 'digit_grid', min_digit: 1, max_digit: 4, cell_count: 16 },

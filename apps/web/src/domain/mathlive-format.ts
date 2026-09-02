@@ -80,21 +80,20 @@ function arithmeticExpressionLatex(expression: ArithmeticExpression, parent?: Ar
 }
 
 
-function integerLinearEquationLatex(a: number, b: number, c: number): string {
-  const term = (value: number, variable: string, first: boolean) => {
-    const magnitude = Math.abs(value);
-    const body = `${magnitude === 1 ? '' : magnitude}${variable}`;
-    if (first) return value < 0 ? `-${body}` : body;
-    return value < 0 ? `\\,-\\,${body}` : `\\,+\\,${body}`;
-  };
-  return `${term(a, 'x', true)}${term(b, 'y', false)}\\,=\\,${c}`;
-}
-
 export function problemExpressionLatex(problem: ProblemDto, includeAnswerEquals = true): string {
   if (problem.prompt.kind === 'liar_puzzle') return '';
   if (problem.prompt.kind === 'simultaneous_equation') {
-    const { a, b, c, d, e, f } = problem.prompt;
-    return `\\begin{cases}${integerLinearEquationLatex(a, b, c)}\\\\${integerLinearEquationLatex(d, e, f)}\\end{cases}`;
+    const body = problemExpressionTokens(problem, false).map((token) => {
+      if (token.kind === 'text') {
+        return token.text
+          .replaceAll(' / ', '\\\\\\\\')
+          .replaceAll('²', '^2')
+          .replaceAll(' ', '\\,');
+      }
+      if (token.kind === 'minus') return '-';
+      return `\\frac{${token.numerator}}{${token.denominator}}`;
+    }).join('');
+    return `\\begin{cases}${body}\\end{cases}`;
   }
   if (problem.prompt.kind === 'arithmetic') return `${arithmeticExpressionLatex(problem.prompt.expression, undefined, false, usesMixedFractionPresentation(problem))}${includeAnswerEquals ? '\\,=' : ''}`;
   return problemExpressionTokens(problem, includeAnswerEquals).map((token) => {

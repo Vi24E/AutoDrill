@@ -46,7 +46,10 @@ import { QUADRATIC_EQUATION_3_DEFINITION } from './themes/quadratic-equation-3';
 import { DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/decimal-add-subtract';
 import { DECIMAL_MULTIPLICATION_DEFINITION } from './themes/decimal-multiplication';
 import { DECIMAL_DIVISION_DEFINITION } from './themes/decimal-division';
-import { SIMULTANEOUS_EQUATION_1_DEFINITION } from './themes/simultaneous-equation-1';
+import { SIMULTANEOUS_EQUATION_ELIMINATION_DEFINITION } from './themes/simultaneous-equation-elimination';
+import { SIMULTANEOUS_EQUATION_SUBSTITUTION_DEFINITION } from './themes/simultaneous-equation-substitution';
+import { SIMULTANEOUS_EQUATION_SUMMARY_1_DEFINITION } from './themes/simultaneous-equation-summary-1';
+import { SIMULTANEOUS_EQUATION_SUMMARY_2_DEFINITION } from './themes/simultaneous-equation-summary-2';
 import { LIAR_PUZZLE_DEFINITION } from './themes/liar-puzzle';
 import { MINI_SUDOKU_DEFINITION } from './themes/mini-sudoku';
 import { COLUMN_ADD_2DIGIT_DEFINITION } from './themes/column-add-two-digit';
@@ -139,7 +142,10 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   LINEAR_EQUATION_1_DEFINITION,
   LINEAR_EQUATION_2_DEFINITION,
   LINEAR_EQUATION_3_DEFINITION,
-  SIMULTANEOUS_EQUATION_1_DEFINITION,
+  SIMULTANEOUS_EQUATION_ELIMINATION_DEFINITION,
+  SIMULTANEOUS_EQUATION_SUBSTITUTION_DEFINITION,
+  SIMULTANEOUS_EQUATION_SUMMARY_1_DEFINITION,
+  SIMULTANEOUS_EQUATION_SUMMARY_2_DEFINITION,
   QUADRATIC_EQUATION_1_DEFINITION,
   QUADRATIC_EQUATION_2_DEFINITION,
   QUADRATIC_EQUATION_3_DEFINITION,

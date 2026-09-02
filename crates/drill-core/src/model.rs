@@ -164,11 +164,21 @@ pub enum LinearScalar {
     },
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(rename_all = "snake_case")]
+pub enum LinearVariable {
+    X,
+    Y,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LinearExpression {
-    Variable,
+    Variable {
+        variable: LinearVariable,
+    },
     Constant {
         value: LinearScalar,
     },
@@ -184,6 +194,21 @@ pub enum LinearExpression {
         factor: LinearScalar,
         expression: Box<LinearExpression>,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+pub struct LinearEquationSurface {
+    pub left: LinearExpression,
+    pub right: LinearExpression,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(rename_all = "snake_case")]
+pub enum SimultaneousSolveMethod {
+    Elimination,
+    Substitution,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -409,18 +434,8 @@ pub enum ProblemPrompt {
         c: RationalCoefficient,
     },
     SimultaneousEquation {
-        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
-        a: i64,
-        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
-        b: i64,
-        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
-        c: i64,
-        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
-        d: i64,
-        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
-        e: i64,
-        #[cfg_attr(feature = "wire-types", ts(type = "number"))]
-        f: i64,
+        equations: [LinearEquationSurface; 2],
+        solve_method: SimultaneousSolveMethod,
     },
     LiarPuzzle {
         #[cfg_attr(feature = "wire-types", ts(type = "number"))]
@@ -724,7 +739,7 @@ impl LinearScalar {
 impl LinearExpression {
     fn has_js_safe_wire_values(&self) -> bool {
         match self {
-            Self::Variable => true,
+            Self::Variable { .. } => true,
             Self::Constant { value } => value.has_js_safe_wire_values(),
             Self::Add { left, right } | Self::Subtract { left, right } => {
                 left.has_js_safe_wire_values() && right.has_js_safe_wire_values()
@@ -737,7 +752,7 @@ impl LinearExpression {
 
     fn is_structurally_valid(&self) -> bool {
         match self {
-            Self::Variable => true,
+            Self::Variable { .. } => true,
             Self::Constant { value } => value.is_structurally_valid(),
             Self::Add { left, right } | Self::Subtract { left, right } => {
                 left.is_structurally_valid() && right.is_structurally_valid()
@@ -763,9 +778,9 @@ impl ProblemPrompt {
             Self::QuadraticEquation { a, b, c, .. } => [a, b, c]
                 .iter()
                 .all(|value| value.has_js_safe_wire_values()),
-            Self::SimultaneousEquation { a, b, c, d, e, f } => [a, b, c, d, e, f]
-                .iter()
-                .all(|value| is_js_safe_integer(**value)),
+            Self::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
+                equation.left.has_js_safe_wire_values() && equation.right.has_js_safe_wire_values()
+            }),
         }
     }
 
@@ -784,11 +799,13 @@ impl ProblemPrompt {
             Self::LinearEquation { left, right } => {
                 left.is_structurally_valid() && right.is_structurally_valid()
             }
+            Self::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
+                equation.left.is_structurally_valid() && equation.right.is_structurally_valid()
+            }),
             Self::MiniSudoku { .. }
             | Self::Arithmetic { .. }
             | Self::ColumnArithmetic { .. }
-            | Self::QuadraticEquation { .. }
-            | Self::SimultaneousEquation { .. } => true,
+            | Self::QuadraticEquation { .. } => true,
         }
     }
 
@@ -1634,7 +1651,7 @@ mod invariant_tests {
     use crate::themes::column_arithmetic::COLUMN_MULTIPLY_1DIGIT_REGISTRATION;
     use crate::themes::equations::{
         LINEAR_EQUATION_1_REGISTRATION, QUADRATIC_EQUATION_1_REGISTRATION,
-        SIMULTANEOUS_EQUATION_1_REGISTRATION,
+        SIMULTANEOUS_EQUATION_ELIMINATION_REGISTRATION,
     };
     use crate::themes::liar_puzzle::LIAR_PUZZLE_REGISTRATION;
     use crate::themes::mini_sudoku::MINI_SUDOKU_REGISTRATION;
@@ -1643,20 +1660,47 @@ mod invariant_tests {
         EffortModel::operations(OperationPlan::default())
     }
 
+    fn variable(variable: LinearVariable) -> LinearExpression {
+        LinearExpression::Variable { variable }
+    }
+
+    fn integer_constant(value: i64) -> LinearExpression {
+        LinearExpression::Constant {
+            value: LinearScalar::Integer { value },
+        }
+    }
+
+    fn standard_equation(a: i64, b: i64, c: i64) -> LinearEquationSurface {
+        let x = LinearExpression::Scale {
+            factor: LinearScalar::Integer { value: a },
+            expression: Box::new(variable(LinearVariable::X)),
+        };
+        let y = LinearExpression::Scale {
+            factor: LinearScalar::Integer { value: b },
+            expression: Box::new(variable(LinearVariable::Y)),
+        };
+        LinearEquationSurface {
+            left: LinearExpression::Add {
+                left: Box::new(x),
+                right: Box::new(y),
+            },
+            right: integer_constant(c),
+        }
+    }
+
     #[test]
     fn generated_problem_rejects_integers_that_are_not_exact_in_javascript() {
         let unsafe_value = JS_SAFE_INTEGER_MAX + 1;
         assert_eq!(
             Problem::generated(
-                &SIMULTANEOUS_EQUATION_1_REGISTRATION,
+                &SIMULTANEOUS_EQUATION_ELIMINATION_REGISTRATION,
                 1,
                 ProblemPrompt::SimultaneousEquation {
-                    a: unsafe_value,
-                    b: 1,
-                    c: 1,
-                    d: 1,
-                    e: 2,
-                    f: 2,
+                    equations: [
+                        standard_equation(unsafe_value, 1, 1),
+                        standard_equation(1, 2, 2),
+                    ],
+                    solve_method: SimultaneousSolveMethod::Elimination,
                 },
                 AnswerSchema::OrderedPair,
                 AnswerNode::Tuple(vec![AnswerNode::Integer(0), AnswerNode::Integer(1)]),
@@ -1816,7 +1860,7 @@ mod invariant_tests {
             &LINEAR_EQUATION_1_REGISTRATION,
             1,
             ProblemPrompt::LinearEquation {
-                left: LinearExpression::Variable,
+                left: variable(LinearVariable::X),
                 right: LinearExpression::Constant {
                     value: LinearScalar::Integer { value: 1 },
                 },
@@ -1843,15 +1887,11 @@ mod invariant_tests {
         assert_eq!(wrong_quadratic, Err(ProblemInvariantError::AnswerSemantics));
 
         let wrong_simultaneous = Problem::generated(
-            &SIMULTANEOUS_EQUATION_1_REGISTRATION,
+            &SIMULTANEOUS_EQUATION_ELIMINATION_REGISTRATION,
             1,
             ProblemPrompt::SimultaneousEquation {
-                a: 1,
-                b: 1,
-                c: 3,
-                d: 1,
-                e: -1,
-                f: 1,
+                equations: [standard_equation(1, 1, 3), standard_equation(1, -1, 1)],
+                solve_method: SimultaneousSolveMethod::Elimination,
             },
             AnswerSchema::OrderedPair,
             AnswerNode::Tuple(vec![AnswerNode::Integer(1), AnswerNode::Integer(2)]),

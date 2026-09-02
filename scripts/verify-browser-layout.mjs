@@ -1196,9 +1196,9 @@ function recommendedGradeTagProbe() {
     theme.click();
     const rows = await waitFor(() => {
       const options = [...document.querySelectorAll('[role="option"]')];
-      return options.some((option) => option.getAttribute('aria-label') === '連立方程式(1)') ? options : null;
+      return options.some((option) => option.getAttribute('aria-label') === '連立方程式（加減法）') ? options : null;
     }, 'equation theme options');
-    const labels = ['簡単な一次方程式', '連立方程式(1)', '二次方程式(1)'];
+    const labels = ['簡単な一次方程式', '連立方程式（加減法）', '二次方程式(1)'];
     const result = labels.map((label) => {
       const row = rows.find((option) => option.getAttribute('aria-label') === label);
       const tag = row?.querySelector('.grade-tag');
@@ -2114,7 +2114,7 @@ try {
       throw new Error(`Detailed settings/grading modal has ruby, wrong defaults/examples, cannot toggle, or cannot close: ${JSON.stringify(gradingSettings)}`);
     }
     const gradeTags = await cdp.evaluate(recommendedGradeTagProbe());
-    const expectedTags = [['簡単な一次方程式', '中1', 'grade-tag-grade-7'], ['連立方程式(1)', '中2', 'grade-tag-grade-8'], ['二次方程式(1)', '中3', 'grade-tag-grade-9']];
+    const expectedTags = [['簡単な一次方程式', '中1', 'grade-tag-grade-7'], ['連立方程式（加減法）', '中2', 'grade-tag-grade-8'], ['二次方程式(1)', '中3', 'grade-tag-grade-9']];
     for (const [label, tag, className] of expectedTags) {
       const row = gradeTags.find((item) => item.label === label);
       if (!row || row.tag !== tag || !String(row.className).includes(className) || !row.sameRow || !(row.tagRight <= row.checkLeft)) {

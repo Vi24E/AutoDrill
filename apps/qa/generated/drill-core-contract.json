@@ -1007,13 +1007,13 @@
     },
     "19": {
       "numeric_theme_id": 19,
-      "generator_revision": 3,
-      "skill_id": "jp.grade8.equation.simultaneous.1",
+      "generator_revision": 4,
+      "skill_id": "jp.grade8.equation.simultaneous.elimination",
       "curriculum_path": [
         "root",
         "中学2年生",
         "連立方程式",
-        "連立方程式(1)"
+        "連立方程式（加減法）"
       ],
       "curriculum_unit": {
         "key": "simultaneous-equation",
@@ -3858,6 +3858,186 @@
         "problem_count": 16,
         "columns": 2,
         "rows": 8
+      }
+    },
+    "71": {
+      "numeric_theme_id": 71,
+      "generator_revision": 1,
+      "skill_id": "jp.grade8.equation.simultaneous.substitution",
+      "curriculum_path": [
+        "root",
+        "中学2年生",
+        "連立方程式",
+        "連立方程式（代入法）"
+      ],
+      "curriculum_unit": {
+        "key": "simultaneous-equation",
+        "label": "連立方程式"
+      },
+      "grade": 8,
+      "tags": [
+        "equations",
+        "simultaneous_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "simultaneous_equation",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "simultaneous_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "negative",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 12,
+        "columns": 2,
+        "rows": 6
+      }
+    },
+    "72": {
+      "numeric_theme_id": 72,
+      "generator_revision": 1,
+      "skill_id": "jp.grade8.equation.simultaneous.summary.1",
+      "curriculum_path": [
+        "root",
+        "中学2年生",
+        "連立方程式",
+        "連立方程式（まとめ(1)）"
+      ],
+      "curriculum_unit": {
+        "key": "simultaneous-equation",
+        "label": "連立方程式"
+      },
+      "grade": 8,
+      "tags": [
+        "equations",
+        "simultaneous_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "simultaneous_equation",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "simultaneous_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "negative",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 12,
+        "columns": 2,
+        "rows": 6
+      }
+    },
+    "73": {
+      "numeric_theme_id": 73,
+      "generator_revision": 1,
+      "skill_id": "jp.grade8.equation.simultaneous.summary.2",
+      "curriculum_path": [
+        "root",
+        "中学2年生",
+        "連立方程式",
+        "連立方程式（まとめ(2)）"
+      ],
+      "curriculum_unit": {
+        "key": "simultaneous-equation",
+        "label": "連立方程式"
+      },
+      "grade": 8,
+      "tags": [
+        "equations",
+        "simultaneous_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "simultaneous_equation",
+        "answer_schema_kind": "ordered_pair",
+        "input_profile": "simultaneous_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "negative",
+          "tuple"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 12,
+        "columns": 2,
+        "rows": 6
       }
     }
   },

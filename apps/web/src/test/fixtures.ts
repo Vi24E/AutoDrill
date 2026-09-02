@@ -14,7 +14,7 @@ import { MINI_SUDOKU_DEFINITION } from '@/domain/themes/mini-sudoku';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
-import { SIMULTANEOUS_EQUATION_1_DEFINITION } from '@/domain/themes/simultaneous-equation-1';
+import { SIMULTANEOUS_EQUATION_ELIMINATION_DEFINITION } from '@/domain/themes/simultaneous-equation-elimination';
 import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit-by-one-digit';
 import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit';
 import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from '@/domain/themes/column-decimal-multiplication';
@@ -80,19 +80,19 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
       numeric_theme_id: themeId,
       prompt: themeId === 2 ? {
         kind: 'linear_equation',
-        left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable' } },
+        left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable', variable: 'x' } },
         right: solution! < 0 ? {
           kind: 'subtract',
-          left: { kind: 'variable' },
+          left: { kind: 'variable', variable: 'x' },
           right: { kind: 'constant', value: { kind: 'integer', value: Math.abs(solution!) } },
         } : {
           kind: 'add',
-          left: { kind: 'variable' },
+          left: { kind: 'variable', variable: 'x' },
           right: { kind: 'constant', value: { kind: 'integer', value: solution! } },
         },
       } : {
         kind: 'linear_equation',
-        left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable' } },
+        left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable', variable: 'x' } },
         right: { kind: 'constant', value: { kind: 'integer', value: 1 } },
       },
       input_interface: definition.inputInterface,
@@ -120,23 +120,19 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
 }
 
 export function simultaneousFixtureWorksheet(): WorksheetDto {
-  const definition = SIMULTANEOUS_EQUATION_1_DEFINITION;
+  const definition = SIMULTANEOUS_EQUATION_ELIMINATION_DEFINITION;
   const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => {
     const x = (index % 7) - 3;
     const y = (index % 5) - 2;
-    const a = 1;
-    const b = 1;
-    const d = 1;
-    const e = -1;
     return {
       schema_version: DRILL_SCHEMA_VERSION,
       id: index + 1,
       problem_id: String(index + 1),
       numeric_theme_id: definition.numeric_theme_id,
-      prompt: { kind: 'simultaneous_equation', a, b, c: a * x + b * y, d, e, f: d * x + e * y },
+      prompt: { kind: 'simultaneous_equation', equations: [{ left: { kind: 'add', left: { kind: 'variable', variable: 'x' }, right: { kind: 'variable', variable: 'y' } }, right: { kind: 'constant', value: { kind: 'integer', value: x + y } } }, { left: { kind: 'subtract', left: { kind: 'variable', variable: 'x' }, right: { kind: 'variable', variable: 'y' } }, right: { kind: 'constant', value: { kind: 'integer', value: x - y } } }], solve_method: 'elimination' },
       input_interface: definition.inputInterface,
       column_input: null,
-      answer_schema: { kind: 'ordered_pair', min: '-15', max: '15' },
+      answer_schema: { kind: 'ordered_pair' },
       canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: String(x) }, { type: 'integer', value: String(y) }] },
       worked_solution: null,
     };

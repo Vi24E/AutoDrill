@@ -371,7 +371,10 @@ function assertLinearScalar(value: unknown): void {
 
 function assertLinearExpression(value: unknown): void {
   if (!isRecord(value) || typeof value.kind !== 'string') invalidDto('WASM returned an invalid linear expression.', value);
-  if (value.kind === 'variable') return;
+  if (value.kind === 'variable') {
+    if (value.variable !== 'x' && value.variable !== 'y') invalidDto('WASM returned an invalid linear variable.', value);
+    return;
+  }
   if (value.kind === 'constant') {
     assertLinearScalar(value.value);
     return;
@@ -411,8 +414,16 @@ function assertPrompt(value: unknown): void {
     return;
   }
   if (value.kind === 'simultaneous_equation') {
-    for (const name of ['a', 'b', 'c', 'd', 'e', 'f'] as const) {
-      assertInteger(value[name], `simultaneous coefficient ${name}`);
+    if (!Array.isArray(value.equations) || value.equations.length !== 2) {
+      invalidDto('WASM returned an invalid simultaneous-equation surface.', value);
+    }
+    for (const equation of value.equations) {
+      if (!isRecord(equation)) invalidDto('WASM returned an invalid simultaneous equation.', equation);
+      assertLinearExpression(equation.left);
+      assertLinearExpression(equation.right);
+    }
+    if (value.solve_method !== 'elimination' && value.solve_method !== 'substitution') {
+      invalidDto('WASM returned an invalid simultaneous solve method.', value);
     }
     return;
   }

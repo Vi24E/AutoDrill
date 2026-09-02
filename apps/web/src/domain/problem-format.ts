@@ -138,7 +138,7 @@ function linearExpressionNeedsParentheses(expression: LinearExpression): boolean
 
 function appendLinearExpression(tokens: MathToken[], expression: LinearExpression): void {
   if (expression.kind === 'variable') {
-    appendText(tokens, 'x');
+    appendText(tokens, expression.variable);
     return;
   }
   if (expression.kind === 'constant') {
@@ -184,15 +184,12 @@ function appendPolynomialConstant(tokens: MathToken[], value: RationalCoefficien
 }
 
 
-function integerLinearEquationText(a: number, b: number, c: number): string {
-  const coefficient = (value: number, variable: string, first: boolean) => {
-    const magnitude = Math.abs(value);
-    const body = `${magnitude === 1 ? '' : magnitude}${variable}`;
-    if (first) return value < 0 ? `−${body}` : body;
-    return value < 0 ? ` − ${body}` : ` + ${body}`;
-  };
-  return `${coefficient(a, 'x', true)}${coefficient(b, 'y', false)} = ${c < 0 ? `−${Math.abs(c)}` : c}`;
+function appendLinearEquationSurface(tokens: MathToken[], equation: { left: LinearExpression; right: LinearExpression }): void {
+  appendLinearExpression(tokens, equation.left);
+  appendText(tokens, ' = ');
+  appendLinearExpression(tokens, equation.right);
 }
+
 
 function quadraticExpressionTokens(problem: ProblemDto): readonly MathToken[] {
   if (problem.prompt.kind !== 'quadratic_equation') return [];
@@ -240,8 +237,11 @@ export function problemExpressionTokens(problem: ProblemDto, includeAnswerEquals
   }
   if (problem.prompt.kind === 'quadratic_equation') return quadraticExpressionTokens(problem);
   if (problem.prompt.kind === 'simultaneous_equation') {
-    const { a, b, c, d, e, f } = problem.prompt;
-    return [{ kind: 'text', text: `${integerLinearEquationText(a, b, c)} / ${integerLinearEquationText(d, e, f)}` }];
+    const tokens: MathToken[] = [];
+    appendLinearEquationSurface(tokens, problem.prompt.equations[0]);
+    appendText(tokens, ' / ');
+    appendLinearEquationSurface(tokens, problem.prompt.equations[1]);
+    return tokens;
   }
   if (problem.prompt.kind === 'liar_puzzle') {
     return [{ kind: 'text', text: problem.prompt.statements.map((statement, index) => `${liarPersonLabel(index + 1)}さん「${liarStatementText(statement)}」`).join(' / ') }];

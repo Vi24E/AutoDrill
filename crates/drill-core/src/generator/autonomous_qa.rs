@@ -236,10 +236,11 @@ fn observe_problem(problem: &Problem, counters: &mut LargeSampleCounters) {
             observe_expression(right, counters);
         }
         ProblemPrompt::LinearEquation { left, right } => {
-            if let (Some((a, b)), Some((c, d))) = (
+            if let (Some((a, left_y, b)), Some((c, right_y, d))) = (
                 crate::semantics::normalize_linear_expression(left),
                 crate::semantics::normalize_linear_expression(right),
             ) {
+                debug_assert!(left_y.is_zero() && right_y.is_zero());
                 for coefficient in [&a, &b, &c, &d] {
                     observe_coefficient(coefficient, counters);
                 }
@@ -250,10 +251,13 @@ fn observe_problem(problem: &Problem, counters: &mut LargeSampleCounters) {
                 observe_coefficient(coefficient, counters);
             }
         }
-        ProblemPrompt::SimultaneousEquation { a, b, c, d, e, f } => {
-            for coefficient in [a, b, c, d, e, f] {
-                counters.equation_coefficient_abs_sum += coefficient.unsigned_abs();
-                counters.equation_coefficient_count += 1;
+        ProblemPrompt::SimultaneousEquation { equations, .. } => {
+            for equation in equations {
+                if let Some((x, y, rhs)) = crate::semantics::normalize_linear_equation(equation) {
+                    for coefficient in [x, y, rhs] {
+                        observe_coefficient(&coefficient, counters);
+                    }
+                }
             }
         }
         ProblemPrompt::LiarPuzzle {

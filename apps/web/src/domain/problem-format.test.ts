@@ -10,11 +10,14 @@ function linearProblem(left: LinearExpression, right: LinearExpression): Problem
   return { ...base, prompt: { kind: 'linear_equation', left, right } };
 }
 
-const variable = (): LinearExpression => ({ kind: 'variable' });
+const variable = (variable: 'x' | 'y' = 'x'): LinearExpression => ({ kind: 'variable', variable });
 const integer = (value: number): LinearExpression => ({ kind: 'constant', value: { kind: 'integer', value } });
 const scale = (value: number, expression: LinearExpression): LinearExpression => ({
   kind: 'scale', factor: { kind: 'integer', value }, expression,
 });
+
+const add = (left: LinearExpression, right: LinearExpression): LinearExpression => ({ kind: 'add', left, right });
+const subtract = (left: LinearExpression, right: LinearExpression): LinearExpression => ({ kind: 'subtract', left, right });
 
 const q = (numerator: number, denominator = 1): RationalCoefficient => ({ numerator, denominator });
 
@@ -124,7 +127,7 @@ describe('problemExpression', () => {
     const base = fixtureWorksheet().problems[0]!;
     const problem: ProblemDto = {
       ...base,
-      prompt: { kind: 'simultaneous_equation', a: 2, b: -1, c: 7, d: -1, e: 3, f: -4 },
+      prompt: { kind: 'simultaneous_equation', equations: [{ left: subtract(scale(2, variable()), variable('y')), right: integer(7) }, { left: add(scale(-1, variable()), scale(3, variable('y'))), right: integer(-4) }], solve_method: 'elimination' },
       answer_schema: { kind: 'ordered_pair' },
       canonical_answer: { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '-3' }] },
     };

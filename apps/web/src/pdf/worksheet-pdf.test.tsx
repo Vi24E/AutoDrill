@@ -82,9 +82,9 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
           kind: 'linear_equation',
           left: {
             kind: 'scale', factor: { kind: 'integer', value: 2 },
-            expression: { kind: 'add', left: { kind: 'variable' }, right: { kind: 'constant', value: { kind: 'integer', value: 3 } } },
+            expression: { kind: 'add', left: { kind: 'variable', variable: 'x' }, right: { kind: 'constant', value: { kind: 'integer', value: 3 } } },
           },
-          right: { kind: 'add', left: { kind: 'variable' }, right: { kind: 'constant', value: { kind: 'integer', value: 8 } } },
+          right: { kind: 'add', left: { kind: 'variable', variable: 'x' }, right: { kind: 'constant', value: { kind: 'integer', value: 8 } } },
         },
         answer,
       };
@@ -97,7 +97,7 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
         answer,
       };
     case 'simultaneous_equation':
-      return { prompt: { kind: 'simultaneous_equation', a: 2, b: 1, c: 7, d: 1, e: -1, f: -1 }, answer };
+      return { prompt: { kind: 'simultaneous_equation', equations: [{ left: { kind: 'add', left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable', variable: 'x' } }, right: { kind: 'variable', variable: 'y' } }, right: { kind: 'constant', value: { kind: 'integer', value: 7 } } }, { left: { kind: 'subtract', left: { kind: 'variable', variable: 'x' }, right: { kind: 'variable', variable: 'y' } }, right: { kind: 'constant', value: { kind: 'integer', value: -1 } } }], solve_method: 'elimination' }, answer };
     case 'liar_puzzle':
       return {
         prompt: { kind: 'liar_puzzle', people_count: 4, statements: [{ kind: 'says_liar', person: 2 }] },
