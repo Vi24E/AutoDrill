@@ -2245,7 +2245,7 @@ try {
         console.log(`[layout] ${route} seed=${seed}: ${result.count} problems, ${result.gradeClass}, expression ${result.fontSize}, crossings=${result.crossings.length}, gridMismatches=${result.columnGridMismatches?.length ?? 0}`);
         if (
           seed === SEEDS[0]
-          && ['/signed-arithmetic-1', '/linear-equation-1', '/simultaneous-equation-1'].some((suffix) => route.endsWith(suffix))
+          && ['/signed-arithmetic-summary-1', '/linear-equation-1', '/simultaneous-equation-elimination'].some((suffix) => route.endsWith(suffix))
         ) {
           const keypad = await cdp.evaluate(juniorHighKeypadShapeProbe());
           const labels = keypad.structures.map((item) => item.label);
@@ -2264,13 +2264,13 @@ try {
             failures.push({ route, seed, reason: `junior-high fixed keypad shape mismatch: ${JSON.stringify(keypad)}` });
           }
         }
-        if (route.endsWith('/signed-arithmetic-1') && seed === SEEDS[0]) {
+        if (route.endsWith('/signed-arithmetic-summary-1') && seed === SEEDS[0]) {
           const clear = await cdp.evaluate(signedClearProbe());
           if (clear.before !== '1' || clear.after !== '' || clear.notice === '式が大きすぎます！') {
             failures.push({ route, seed, reason: `shared MathLive clear regression: ${JSON.stringify(clear)}` });
           }
         }
-        if (route.endsWith('/simultaneous-equation-1') && seed === SEEDS[0]) {
+        if (route.endsWith('/simultaneous-equation-elimination') && seed === SEEDS[0]) {
           const input = await cdp.evaluate(simultaneousInputProbe());
           if (
             input.fieldCount !== 24
@@ -2516,14 +2516,14 @@ try {
     }
     console.log(`[print] mini-sudoku seed=A1b2: grids=${miniSudokuPrint.miniSudokuProblemGrids}+${miniSudokuPrint.miniSudokuAnswerGrids}, cells=${miniSudokuPrint.miniSudokuProblemCells}+${miniSudokuPrint.miniSudokuAnswerCells}, crossings=${miniSudokuPrint.crossings}, actual PDF bytes=${miniSudokuPdf.length}, pages=${miniSudokuPageCount}`);
 
-    await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-7/signed-arithmetic-1/`);
+    await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-7/signed-arithmetic-summary-1/`);
     const printResult = await cdp.evaluate(printPreviewProbe('A1b2'));
     if (printResult.generationFailed) throw new Error(`Signed print probe could not generate worksheet: ${JSON.stringify(printResult)}`);
-    if (printResult.initialDisabled) failures.push({ route: 'signed-arithmetic-1', seed: 'A1b2', reason: 'print button was disabled before the user requested printing' });
-    if (printResult.stacked !== 20 || printResult.equalsCount !== 0) failures.push({ route: 'signed-arithmetic-1', seed: 'A1b2', reason: `signed layout mismatch: stacked=${printResult.stacked}, equals=${printResult.equalsCount}` });
-    if (printResult.crossings !== 0) failures.push({ route: 'signed-arithmetic-1', seed: 'A1b2', reason: `print preview has ${printResult.crossings} center-divider crossing(s)` });
-    if (printResult.ready !== printResult.total) failures.push({ route: 'signed-arithmetic-1', seed: 'A1b2', reason: `native print was called with ${printResult.ready}/${printResult.total} MathLive spans ready; missing=${printResult.missing.join(' | ')}` });
-    console.log(`[print] signed-arithmetic-1 seed=A1b2: MathLive ready ${printResult.ready}/${printResult.total}, stacked=${printResult.stacked}, equals=${printResult.equalsCount}, crossings=${printResult.crossings}`);
+    if (printResult.initialDisabled) failures.push({ route: 'signed-arithmetic-summary-1', seed: 'A1b2', reason: 'print button was disabled before the user requested printing' });
+    if (printResult.stacked !== 20 || printResult.equalsCount !== 0) failures.push({ route: 'signed-arithmetic-summary-1', seed: 'A1b2', reason: `signed layout mismatch: stacked=${printResult.stacked}, equals=${printResult.equalsCount}` });
+    if (printResult.crossings !== 0) failures.push({ route: 'signed-arithmetic-summary-1', seed: 'A1b2', reason: `print preview has ${printResult.crossings} center-divider crossing(s)` });
+    if (printResult.ready !== printResult.total) failures.push({ route: 'signed-arithmetic-summary-1', seed: 'A1b2', reason: `native print was called with ${printResult.ready}/${printResult.total} MathLive spans ready; missing=${printResult.missing.join(' | ')}` });
+    console.log(`[print] signed-arithmetic-summary-1 seed=A1b2: MathLive ready ${printResult.ready}/${printResult.total}, stacked=${printResult.stacked}, equals=${printResult.equalsCount}, crossings=${printResult.crossings}`);
 
     await navigate(cdp, `${origin}${BASE_PATH}/drills/grade-4/column-decimal-add-subtract/`);
     const columnPrint = await cdp.evaluate(printPreviewProbe('A1b2'));

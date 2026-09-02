@@ -4,11 +4,11 @@ import { join, resolve } from 'node:path';
 import { CUSTOM_SAMPLING_PROFILE, scoreInformationCandidates } from './custom-sampling.mjs';
 
 const CONTRACT_PATH = new URL('../generated/drill-core-contract.json', import.meta.url);
-const EXCLUDED_QA_SKILLS = new Set([
-  'jp.grade1.addition.one_digit',
-  'jp.grade1.subtraction.one_digit',
-  'jp.grade2.multiplication.table',
-  'jp.grade3.division.table.1',
+const EXCLUDED_QA_CURRICULUM_UNITS = new Set([
+  'grade1-addition',
+  'grade1-subtraction',
+  'multiplication-table',
+  'division-table',
 ]);
 const SEED_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const CUSTOM_CANDIDATE_WORKSHEETS = 4;
@@ -56,11 +56,11 @@ export function formatProblem(problem) {
     return `${expression(prompt.left)} ${operator} ${expression(prompt.right)} =`;
   }
   if (prompt.kind === 'linear_equation') {
-    return `${linearSide(prompt.a, prompt.b, prompt.left_negative_constant_as_subtraction)} = ${linearSide(prompt.c, prompt.d, prompt.right_negative_constant_as_subtraction)}`;
+    return `${linearExpression(prompt.left)} = ${linearExpression(prompt.right)}`;
   }
   if (prompt.kind === 'quadratic_equation') return quadraticEquation(prompt);
   if (prompt.kind === 'simultaneous_equation') {
-    return `${integerEquation(prompt.a, prompt.b, prompt.c)}\n${integerEquation(prompt.d, prompt.e, prompt.f)}`;
+    return prompt.equations.map((equation) => `${linearExpression(equation.left)} = ${linearExpression(equation.right)}`).join('\n');
   }
   if (prompt.kind === 'liar_puzzle') {
     return prompt.statements.map((statement, index) => `${personLabel(index + 1)}さん「${liarStatement(statement)}」`).join('\n');
@@ -107,56 +107,48 @@ export function formatCanonicalAnswer(answer, problem) {
   return formatAnswerNode(answer);
 }
 
-function linearTerm(value) {
-  if (value.numerator === 0) return '';
-  const coefficient = rational({ numerator: Math.abs(value.numerator), denominator: value.denominator });
-  return `${value.numerator < 0 ? '−' : ''}${coefficient === '1' ? '' : coefficient}x`;
+function linearScalar(value, omitOne = false) {
+  let text;
+  if (value.kind === 'integer') text = String(value.value).replace(/^-/, '−');
+  else if (value.kind === 'fraction') text = rational(value.value);
+  else if (value.kind === 'exact_decimal') text = exactDecimal(value.coefficient, value.scale);
+  else throw new Error(`Unsupported linear scalar: ${value.kind}`);
+  if (omitOne && text === '1') return '';
+  if (omitOne && text === '−1') return '−';
+  return text;
 }
 
-function linearSide(coefficient, constant, negativeAsSubtraction) {
-  const term = linearTerm(coefficient);
-  if (!term) return rational(constant);
-  if (constant.numerator === 0) return term;
-  if (constant.numerator > 0) return `${term} + ${rational(constant)}`;
-  return negativeAsSubtraction
-    ? `${term} − ${rational({ ...constant, numerator: Math.abs(constant.numerator) })}`
-    : `${term} + (${rational(constant)})`;
+function linearExpression(node) {
+  if (node.kind === 'variable') return node.variable;
+  if (node.kind === 'constant') return linearScalar(node.value);
+  if (node.kind === 'add') return `${linearExpression(node.left)} + ${linearExpression(node.right)}`;
+  if (node.kind === 'subtract') return `${linearExpression(node.left)} − ${linearExpression(node.right)}`;
+  if (node.kind === 'scale') {
+    const body = linearExpression(node.expression);
+    const grouped = node.expression.kind === 'add' || node.expression.kind === 'subtract' ? `(${body})` : body;
+    return `${linearScalar(node.factor, true)}${grouped}`;
+  }
+  throw new Error(`Unsupported linear expression: ${node.kind}`);
 }
 
-function polynomialTerm(value, variable, first) {
-  if (value.numerator === 0) return '';
-  const magnitude = rational({ ...value, numerator: Math.abs(value.numerator) });
-  const body = `${magnitude === '1' ? '' : magnitude}${variable}`;
-  if (first) return value.numerator < 0 ? `−${body}` : body;
-  return value.numerator < 0 ? ` − ${body}` : ` + ${body}`;
-}
-
-function polynomialConstant(value, first) {
-  if (value.numerator === 0) return '';
-  const magnitude = rational({ ...value, numerator: Math.abs(value.numerator) });
-  if (first) return value.numerator < 0 ? `−${magnitude}` : magnitude;
-  return value.numerator < 0 ? ` − ${magnitude}` : ` + ${magnitude}`;
+function quadraticExpression(node) {
+  if (node.kind === 'linear') return linearExpression(node.expression);
+  if (node.kind === 'square') {
+    const body = linearExpression(node.expression);
+    return node.expression.kind === 'variable' ? `${body}²` : `(${body})²`;
+  }
+  if (node.kind === 'add') return `${quadraticExpression(node.left)} + ${quadraticExpression(node.right)}`;
+  if (node.kind === 'subtract') return `${quadraticExpression(node.left)} − ${quadraticExpression(node.right)}`;
+  if (node.kind === 'scale') {
+    const body = quadraticExpression(node.expression);
+    const grouped = node.expression.kind === 'add' || node.expression.kind === 'subtract' ? `(${body})` : body;
+    return `${linearScalar(node.factor, true)}${grouped}`;
+  }
+  throw new Error(`Unsupported quadratic expression: ${node.kind}`);
 }
 
 function quadraticEquation(prompt) {
-  if (prompt.form === 'factored_scale') {
-    const scale = rational(prompt.a);
-    return `${scale === '1' ? '' : scale}(x²${polynomialTerm(prompt.b, 'x', false)}${polynomialConstant(prompt.c, false)}) = 0`;
-  }
-  const first = polynomialTerm(prompt.a, 'x²', true);
-  if (prompt.form === 'square_equals_constant') return `${first} = ${rational(prompt.c)}`;
-  const middle = prompt.form === 'standard' ? polynomialTerm(prompt.b, 'x', false) : '';
-  return `${first}${middle}${polynomialConstant(prompt.c, !first && !middle)} = 0`;
-}
-
-function integerEquation(a, b, c) {
-  const term = (value, variable, first) => {
-    const magnitude = Math.abs(value);
-    const body = `${magnitude === 1 ? '' : magnitude}${variable}`;
-    if (first) return value < 0 ? `−${body}` : body;
-    return value < 0 ? ` − ${body}` : ` + ${body}`;
-  };
-  return `${term(a, 'x', true)}${term(b, 'y', false)} = ${String(c).replace(/^-/, '−')}`;
+  return `${quadraticExpression(prompt.equation.left)} = ${quadraticExpression(prompt.equation.right)}`;
 }
 
 function personLabel(person) { return String.fromCharCode('A'.charCodeAt(0) + person - 1); }
@@ -192,7 +184,13 @@ export class AutoDrillRuntime {
     this.runtimePromise = null;
     this.batches = new Map();
     this.diagnosticCache = new Map();
-    this.themes = Object.values(contract.themes).filter((theme) => !EXCLUDED_QA_SKILLS.has(theme.skill_id));
+    const contractThemes = Object.values(contract.themes);
+    this.excludedSkillIds = new Set(
+      contractThemes
+        .filter((theme) => EXCLUDED_QA_CURRICULUM_UNITS.has(theme.curriculum_unit.key))
+        .map((theme) => theme.skill_id),
+    );
+    this.themes = contractThemes.filter((theme) => !this.excludedSkillIds.has(theme.skill_id));
     if (!this.themes.length) throw new Error('QAで評価可能なAutoDrill themeがありません。');
   }
 
@@ -425,7 +423,7 @@ export class AutoDrillRuntime {
       selection: {
         selection_policy: skillId ? 'autodrill_unit_random_v1' : 'autodrill_random_v1',
         candidate_source: 'drill_core_worksheet_without_replacement',
-        filters: { selected_skill_id: skillId ?? null, worksheet_seed: worksheet.identity.seed, worksheet_problem_index: problemIndex, excluded_skill_ids: [...EXCLUDED_QA_SKILLS], requested_difficulty: 4 },
+        filters: { selected_skill_id: skillId ?? null, worksheet_seed: worksheet.identity.seed, worksheet_problem_index: problemIndex, excluded_skill_ids: [...this.excludedSkillIds], requested_difficulty: 4 },
         random_seed: selectionSeed,
         selection_probability: 1 / (skillId ? 1 : this.themes.length) / candidateCount,
         candidate_count: candidateCount,
