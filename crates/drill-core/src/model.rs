@@ -214,11 +214,41 @@ pub enum SimultaneousSolveMethod {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[cfg_attr(feature = "wire-types", derive(TS))]
 #[serde(rename_all = "snake_case")]
-pub enum QuadraticEquationForm {
-    SquareEqualsConstant,
-    SquarePlusConstantZero,
-    FactoredScale,
-    Standard,
+pub enum QuadraticSolveMethod {
+    SquareRoot,
+    Factoring,
+    Formula,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum QuadraticExpression {
+    Linear {
+        expression: LinearExpression,
+    },
+    Square {
+        expression: LinearExpression,
+    },
+    Add {
+        left: Box<QuadraticExpression>,
+        right: Box<QuadraticExpression>,
+    },
+    Subtract {
+        left: Box<QuadraticExpression>,
+        right: Box<QuadraticExpression>,
+    },
+    Scale {
+        factor: LinearScalar,
+        expression: Box<QuadraticExpression>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[cfg_attr(feature = "wire-types", derive(TS))]
+pub struct QuadraticEquationSurface {
+    pub left: QuadraticExpression,
+    pub right: QuadraticExpression,
 }
 
 pub const MAX_LIAR_PUZZLE_PEOPLE: u8 = 4;
@@ -428,10 +458,8 @@ pub enum ProblemPrompt {
         right: LinearExpression,
     },
     QuadraticEquation {
-        form: QuadraticEquationForm,
-        a: RationalCoefficient,
-        b: RationalCoefficient,
-        c: RationalCoefficient,
+        equation: QuadraticEquationSurface,
+        solve_method: QuadraticSolveMethod,
     },
     SimultaneousEquation {
         equations: [LinearEquationSurface; 2],
@@ -764,6 +792,36 @@ impl LinearExpression {
     }
 }
 
+impl QuadraticExpression {
+    fn has_js_safe_wire_values(&self) -> bool {
+        match self {
+            Self::Linear { expression } | Self::Square { expression } => {
+                expression.has_js_safe_wire_values()
+            }
+            Self::Add { left, right } | Self::Subtract { left, right } => {
+                left.has_js_safe_wire_values() && right.has_js_safe_wire_values()
+            }
+            Self::Scale { factor, expression } => {
+                factor.has_js_safe_wire_values() && expression.has_js_safe_wire_values()
+            }
+        }
+    }
+
+    fn is_structurally_valid(&self) -> bool {
+        match self {
+            Self::Linear { expression } | Self::Square { expression } => {
+                expression.is_structurally_valid()
+            }
+            Self::Add { left, right } | Self::Subtract { left, right } => {
+                left.is_structurally_valid() && right.is_structurally_valid()
+            }
+            Self::Scale { factor, expression } => {
+                factor.is_structurally_valid() && expression.is_structurally_valid()
+            }
+        }
+    }
+}
+
 impl ProblemPrompt {
     fn has_js_safe_wire_values(&self) -> bool {
         match self {
@@ -775,9 +833,9 @@ impl ProblemPrompt {
             Self::LinearEquation { left, right } => {
                 left.has_js_safe_wire_values() && right.has_js_safe_wire_values()
             }
-            Self::QuadraticEquation { a, b, c, .. } => [a, b, c]
-                .iter()
-                .all(|value| value.has_js_safe_wire_values()),
+            Self::QuadraticEquation { equation, .. } => {
+                equation.left.has_js_safe_wire_values() && equation.right.has_js_safe_wire_values()
+            }
             Self::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
                 equation.left.has_js_safe_wire_values() && equation.right.has_js_safe_wire_values()
             }),
@@ -799,13 +857,15 @@ impl ProblemPrompt {
             Self::LinearEquation { left, right } => {
                 left.is_structurally_valid() && right.is_structurally_valid()
             }
+            Self::QuadraticEquation { equation, .. } => {
+                equation.left.is_structurally_valid() && equation.right.is_structurally_valid()
+            }
             Self::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
                 equation.left.is_structurally_valid() && equation.right.is_structurally_valid()
             }),
-            Self::MiniSudoku { .. }
-            | Self::Arithmetic { .. }
-            | Self::ColumnArithmetic { .. }
-            | Self::QuadraticEquation { .. } => true,
+            Self::MiniSudoku { .. } | Self::Arithmetic { .. } | Self::ColumnArithmetic { .. } => {
+                true
+            }
         }
     }
 
@@ -1875,10 +1935,24 @@ mod invariant_tests {
             &QUADRATIC_EQUATION_1_REGISTRATION,
             1,
             ProblemPrompt::QuadraticEquation {
-                form: QuadraticEquationForm::SquareEqualsConstant,
-                a: RationalCoefficient::new(1, 1).unwrap(),
-                b: RationalCoefficient::zero(),
-                c: RationalCoefficient::new(4, 1).unwrap(),
+                equation: QuadraticEquationSurface {
+                    left: QuadraticExpression::Subtract {
+                        left: Box::new(QuadraticExpression::Square {
+                            expression: variable(LinearVariable::X),
+                        }),
+                        right: Box::new(QuadraticExpression::Linear {
+                            expression: LinearExpression::Constant {
+                                value: LinearScalar::Integer { value: 4 },
+                            },
+                        }),
+                    },
+                    right: QuadraticExpression::Linear {
+                        expression: LinearExpression::Constant {
+                            value: LinearScalar::Integer { value: 0 },
+                        },
+                    },
+                },
+                solve_method: QuadraticSolveMethod::SquareRoot,
             },
             AnswerSchema::Algebraic,
             AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(3))),

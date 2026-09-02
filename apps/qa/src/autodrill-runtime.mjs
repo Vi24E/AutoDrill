@@ -60,7 +60,7 @@ export function formatProblem(problem) {
   }
   if (prompt.kind === 'quadratic_equation') return quadraticEquation(prompt);
   if (prompt.kind === 'simultaneous_equation') {
-    return `${integerEquation(prompt.a, prompt.b, prompt.c)}\n${integerEquation(prompt.d, prompt.e, prompt.f)}`;
+    return prompt.equations.map((equation) => `${linearExpression(equation.left)} = ${linearExpression(equation.right)}`).join('\n');
   }
   if (prompt.kind === 'liar_puzzle') {
     return prompt.statements.map((statement, index) => `${personLabel(index + 1)}さん「${liarStatement(statement)}」`).join('\n');
@@ -119,7 +119,7 @@ function linearScalar(value, omitOne = false) {
 }
 
 function linearExpression(node) {
-  if (node.kind === 'variable') return 'x';
+  if (node.kind === 'variable') return node.variable;
   if (node.kind === 'constant') return linearScalar(node.value);
   if (node.kind === 'add') return `${linearExpression(node.left)} + ${linearExpression(node.right)}`;
   if (node.kind === 'subtract') return `${linearExpression(node.left)} − ${linearExpression(node.right)}`;
@@ -131,40 +131,24 @@ function linearExpression(node) {
   throw new Error(`Unsupported linear expression: ${node.kind}`);
 }
 
-function polynomialTerm(value, variable, first) {
-  if (value.numerator === 0) return '';
-  const magnitude = rational({ ...value, numerator: Math.abs(value.numerator) });
-  const body = `${magnitude === '1' ? '' : magnitude}${variable}`;
-  if (first) return value.numerator < 0 ? `−${body}` : body;
-  return value.numerator < 0 ? ` − ${body}` : ` + ${body}`;
-}
-
-function polynomialConstant(value, first) {
-  if (value.numerator === 0) return '';
-  const magnitude = rational({ ...value, numerator: Math.abs(value.numerator) });
-  if (first) return value.numerator < 0 ? `−${magnitude}` : magnitude;
-  return value.numerator < 0 ? ` − ${magnitude}` : ` + ${magnitude}`;
+function quadraticExpression(node) {
+  if (node.kind === 'linear') return linearExpression(node.expression);
+  if (node.kind === 'square') {
+    const body = linearExpression(node.expression);
+    return node.expression.kind === 'variable' ? `${body}²` : `(${body})²`;
+  }
+  if (node.kind === 'add') return `${quadraticExpression(node.left)} + ${quadraticExpression(node.right)}`;
+  if (node.kind === 'subtract') return `${quadraticExpression(node.left)} − ${quadraticExpression(node.right)}`;
+  if (node.kind === 'scale') {
+    const body = quadraticExpression(node.expression);
+    const grouped = node.expression.kind === 'add' || node.expression.kind === 'subtract' ? `(${body})` : body;
+    return `${linearScalar(node.factor, true)}${grouped}`;
+  }
+  throw new Error(`Unsupported quadratic expression: ${node.kind}`);
 }
 
 function quadraticEquation(prompt) {
-  if (prompt.form === 'factored_scale') {
-    const scale = rational(prompt.a);
-    return `${scale === '1' ? '' : scale}(x²${polynomialTerm(prompt.b, 'x', false)}${polynomialConstant(prompt.c, false)}) = 0`;
-  }
-  const first = polynomialTerm(prompt.a, 'x²', true);
-  if (prompt.form === 'square_equals_constant') return `${first} = ${rational(prompt.c)}`;
-  const middle = prompt.form === 'standard' ? polynomialTerm(prompt.b, 'x', false) : '';
-  return `${first}${middle}${polynomialConstant(prompt.c, !first && !middle)} = 0`;
-}
-
-function integerEquation(a, b, c) {
-  const term = (value, variable, first) => {
-    const magnitude = Math.abs(value);
-    const body = `${magnitude === 1 ? '' : magnitude}${variable}`;
-    if (first) return value < 0 ? `−${body}` : body;
-    return value < 0 ? ` − ${body}` : ` + ${body}`;
-  };
-  return `${term(a, 'x', true)}${term(b, 'y', false)} = ${String(c).replace(/^-/, '−')}`;
+  return `${quadraticExpression(prompt.equation.left)} = ${quadraticExpression(prompt.equation.right)}`;
 }
 
 function personLabel(person) { return String.fromCharCode('A'.charCodeAt(0) + person - 1); }

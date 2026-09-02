@@ -33,9 +33,9 @@
 | 分数の引き算 | 11 | 5 | 16問・2列8行 |
 | 分数の割り算 | 12 | 6 | 16問・2列8行 |
 | 割り算(1) | 13 | 3 | 20問・2列10行 |
-| 二次方程式(1) | 14 | 3 | 16問・2列8行 |
-| 二次方程式(2) | 15 | 4 | 16問・2列8行 |
-| 二次方程式(3) | 16 | 3 | 16問・2列8行 |
+| 二次方程式(1) | 14 | 4 | 16問・2列8行 |
+| 二次方程式(2) | 15 | 5 | 16問・2列8行 |
+| 二次方程式(3) | 16 | 4 | 16問・2列8行 |
 | 小数の足し算と引き算 | 17 | 5 | 20問・2列10行 |
 | 小数の掛け算 | 18 | 6 | 20問・2列10行 |
 | 連立方程式（加減法） | 19 | 4 | 12問・2列6行 |
@@ -63,6 +63,7 @@
 | 連立方程式（代入法） | 71 | 1 | 12問・2列6行 |
 | 連立方程式（まとめ(1)） | 72 | 1 | 12問・2列6行 |
 | 連立方程式（まとめ(2)） | 73 | 1 | 12問・2列6行 |
+| 二次方程式(4) | 74 | 1 | 16問・2列8行 |
 
 ## Problem-set identity
 
@@ -160,6 +161,19 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 有理解domainは整数 `-15..=15` に加え、既約形で分母2・`|numerator|<=20`、または分母3..12・`|numerator|<=15` の非整数有理数を含む。同じ数学値はdomain内で1要素へ正規化する。分数係数の整理と、結果として分数解になる場合は同一教材目標であり、「分数係数・整数解」と「分数解」へ分離しない。
 
 一次方程式は全7構造を持つ `structured_math` を返す。`answer_schema` は `簡単` / `(1)` が `integer { min:-15,max:15 }`、`(2)` / `(3)` が `rational { max_abs_numerator:20,max_denominator:12,require_reduced_fraction_form:true }` である。非整数解では未約分の通常分数は `fraction_not_reduced`、数学的に同値な帯分数・有限小数・繁分数などは `fraction_form_required` を返す。Rust coreが数学的同値性とwarningを返し、warningを○/×のどちらとして扱うかはWebの採点設定が決める。
+
+## 二次方程式generator
+
+`ProblemPrompt::QuadraticEquation` は `equation: QuadraticEquationSurface` と `solve_method: QuadraticSolveMethod` を保持する。`QuadraticEquationSurface` の左右は `QuadraticExpression` で、`linear / square / add / subtract / scale` を再帰的に表す。`linear` と `square` の内部には共有 `LinearExpression` を使うため、`a(x+c)^2+b=0`、分数係数、有限小数係数、括弧によるsurface変形をtheme metadataへ依存せず表現できる。Rustの `semantics.rs` がsurfaceをexactな `ax^2+bx+c=0` へ正規化し、canonical answerが表示surface自体を満たすことを独立に検証する。Web/PDF/QAはtyped surfaceを描画するだけで、theme ID・slug・labelから係数や解法を推測しない。
+
+現行教材は4themeである。
+
+- `二次方程式(1)` (ID 14, rev4): `solve_method = square_root`。`ax^2+b=0` の直接平方根型と、最初から平方の形が明示された `a(x+c)^2+b=0` のshifted-square型を同一themeの2 layerとして扱う。一般式を平方完成して解く専用archetypeは持たない。
+- `二次方程式(2)` (ID 15, rev5): `solve_method = factoring`。整数解から逆生成したモニック `x^2+bx+c=0` に限定する。共通因数型・一般非モニック因数分解型はこのthemeへ拡張しない。
+- `二次方程式(3)` (ID 16, rev4): `solve_method = formula`。整数係数の一般二次方程式を扱い、判別式が非平方数の問題だけでなく、正の平方数となって整数/有理数解へ簡約される問題も正当なsupportとして保持する。平方判別式の出題集中制御はgenerator supportではなく将来のsingularity制御の責任とする。
+- `二次方程式(4)` (ID 74): 平方根法・因数分解・解の公式の3 methodに、括弧・分数係数・有限小数係数の3 transformを組み合わせる9 layerの総合theme。各surfaceはexactに既知のcanonical quadraticへ帰着し、見慣れない表面形でも既知の解法を適用する練習を目的とする。
+
+d4=`ランダム` の意味は変更せず、各themeのsemantic support内でrandom selectionを行う。`solve_method` はdifficultyやanswer surfaceからWeb側が推測する値ではなく、Rust generatorが問題ごとに保持する数学的solve strategyである。
 
 ## 連立方程式generator
 

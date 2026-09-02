@@ -1,4 +1,4 @@
-import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ArithmeticOperator, type LiarStatement, type LinearExpression, type LinearScalar, type ProblemDto, type RationalCoefficient } from './drill-engine';
+import { answerNodeText, type AnswerNode, type ArithmeticExpression, type ArithmeticOperator, type LiarStatement, type LinearExpression, type LinearScalar, type ProblemDto, type QuadraticExpression, type RationalCoefficient } from './drill-engine';
 import { findThemeDefinitionByNumericId } from './theme-registry';
 
 
@@ -159,60 +159,53 @@ function appendLinearExpression(tokens: MathToken[], expression: LinearExpressio
   if (parens) appendText(tokens, ')');
 }
 
-function appendPolynomialTerm(tokens: MathToken[], coefficient: RationalCoefficient, variable: 'x²' | 'x', first: boolean): boolean {
-  if (coefficient.numerator === 0) return false;
-  const negative = coefficient.numerator < 0;
-  if (!first) {
-    appendText(tokens, negative ? ' ' : ' + ');
-    if (negative) { appendMinus(tokens); appendText(tokens, ' '); }
-  } else if (negative) {
-    appendMinus(tokens);
-  }
-  const magnitude = { ...coefficient, numerator: Math.abs(coefficient.numerator) };
-  if (!(magnitude.numerator === magnitude.denominator)) appendRational(tokens, magnitude);
-  appendText(tokens, variable);
-  return true;
-}
-
-function appendPolynomialConstant(tokens: MathToken[], value: RationalCoefficient, first: boolean): boolean {
-  if (value.numerator === 0) return false;
-  if (!first) {
-    if (value.numerator < 0) { appendText(tokens, ' '); appendMinus(tokens); appendText(tokens, ' '); appendRational(tokens, { ...value, numerator: Math.abs(value.numerator) }); }
-    else { appendText(tokens, ' + '); appendRational(tokens, value); }
-  } else appendRational(tokens, value);
-  return true;
-}
-
-
 function appendLinearEquationSurface(tokens: MathToken[], equation: { left: LinearExpression; right: LinearExpression }): void {
   appendLinearExpression(tokens, equation.left);
   appendText(tokens, ' = ');
   appendLinearExpression(tokens, equation.right);
 }
 
+function quadraticExpressionNeedsParentheses(expression: QuadraticExpression): boolean {
+  return expression.kind === 'add' || expression.kind === 'subtract';
+}
+
+function appendQuadraticExpression(tokens: MathToken[], expression: QuadraticExpression): void {
+  if (expression.kind === 'linear') {
+    appendLinearExpression(tokens, expression.expression);
+    return;
+  }
+  if (expression.kind === 'square') {
+    const parens = !matchesBareVariable(expression.expression);
+    if (parens) appendText(tokens, '(');
+    appendLinearExpression(tokens, expression.expression);
+    if (parens) appendText(tokens, ')');
+    appendText(tokens, '²');
+    return;
+  }
+  if (expression.kind === 'add' || expression.kind === 'subtract') {
+    appendQuadraticExpression(tokens, expression.left);
+    if (expression.kind === 'add') appendText(tokens, ' + ');
+    else { appendText(tokens, ' '); appendMinus(tokens); appendText(tokens, ' '); }
+    appendQuadraticExpression(tokens, expression.right);
+    return;
+  }
+  appendLinearScalar(tokens, expression.factor, true);
+  const parens = quadraticExpressionNeedsParentheses(expression.expression);
+  if (parens) appendText(tokens, '(');
+  appendQuadraticExpression(tokens, expression.expression);
+  if (parens) appendText(tokens, ')');
+}
+
+function matchesBareVariable(expression: LinearExpression): boolean {
+  return expression.kind === 'variable';
+}
 
 function quadraticExpressionTokens(problem: ProblemDto): readonly MathToken[] {
   if (problem.prompt.kind !== 'quadratic_equation') return [];
-  const { form, a, b, c } = problem.prompt;
   const tokens: MathToken[] = [];
-  if (form === 'factored_scale') {
-    if (!(a.numerator === a.denominator)) appendRational(tokens, a);
-    appendText(tokens, '(');
-    appendText(tokens, 'x²');
-    appendPolynomialTerm(tokens, b, 'x', false);
-    appendPolynomialConstant(tokens, c, false);
-    appendText(tokens, ') = 0');
-    return tokens;
-  }
-  appendPolynomialTerm(tokens, a, 'x²', true);
-  if (form === 'square_equals_constant') {
-    appendText(tokens, ' = ');
-    appendRational(tokens, c);
-    return tokens;
-  }
-  if (form === 'standard') appendPolynomialTerm(tokens, b, 'x', false);
-  appendPolynomialConstant(tokens, c, false);
-  appendText(tokens, ' = 0');
+  appendQuadraticExpression(tokens, problem.prompt.equation.left);
+  appendText(tokens, ' = ');
+  appendQuadraticExpression(tokens, problem.prompt.equation.right);
   return tokens;
 }
 

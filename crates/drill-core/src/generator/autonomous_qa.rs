@@ -246,9 +246,11 @@ fn observe_problem(problem: &Problem, counters: &mut LargeSampleCounters) {
                 }
             }
         }
-        ProblemPrompt::QuadraticEquation { a, b, c, .. } => {
-            for coefficient in [a, b, c] {
-                observe_coefficient(coefficient, counters);
+        ProblemPrompt::QuadraticEquation { equation, .. } => {
+            if let Some((a, b, c)) = crate::semantics::normalize_quadratic_equation(equation) {
+                for coefficient in [&a, &b, &c] {
+                    observe_coefficient(coefficient, counters);
+                }
             }
         }
         ProblemPrompt::SimultaneousEquation { equations, .. } => {

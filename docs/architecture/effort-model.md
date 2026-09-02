@@ -130,11 +130,13 @@ carryが発生するたび`OverheadCarryPlus`を加える。最上位へ新し�
 
 連立方程式はまず2本の `LinearEquationSurface` に必要な括弧展開を数え、分数係数があればexactな分母払いをLCM・有理数乗算として数えて整数のcanonical systemへ正規化する。その後 `solve_method=elimination` ではx消去・y消去の完全な加減法operation planを両方作り、weight適用後の小さい方を採用する。`solve_method=substitution` では `x=...` / `y=...` へ孤立した式を他方へ代入し、係数整理・残る一次式の除算・既知値の代入までを共通builderで構成する。まとめthemeも各problemが実際に選んだmethodを保持し、surface変形costと解法costを同じOperationPlanで評価する。
 
-二次方程式(1)はformと係数を見て移項・除算・平方根modelを組み合わせる。
+二次方程式は `QuadraticEquationSurface` をexactに標準係数へ正規化し、surface変形costとtyped `solve_method` の解法costを同じOperationPlanへ接続する。括弧付きscaleは分配に必要な係数乗算を数え、分数係数はLCMによる分母払い、小数係数はexact decimalの整数化を共通builderで数える。
 
-二次方程式(2)の一般形`x^2+bx+c=0`は、`c`をPFし、そこから重複しない因数対を列挙し、各`p+q`を共通加算で計算して`b`と`Compare`する。一致した時点で探索を終了する。平方差・完全平方は専用strategy。
+二次方程式(1)の `square_root` は直接平方根型とshifted-square型を扱い、必要な移項・係数除算・平方根簡約に加えてshiftの戻しを数える。一般式を平方完成する専用planは持たない。
 
-二次方程式(3)は分母払い後、`b^2`, `ac`, `4ac`, `D`, `sqrt(D)`, `2a`, `1/(2a)`、根号/分数簡約を共通builderで構成する。
+二次方程式(2)のモニック`x^2+bx+c=0`は、`c`をPFし、そこから重複しない因数対を列挙し、各`p+q`を共通加算で計算して`b`と`Compare`する。一致した時点で探索を終了する。平方差・完全平方は専用strategy。
+
+二次方程式(3)の `formula` は整数係数を直接用い、`b^2`, `ac`, `4ac`, `D`, `sqrt(D)`, `2a`, `1/(2a)`、根号/分数簡約を共通builderで構成する。`D`が平方数でも同じformula planを使う。二次方程式(4)は括弧・分数・小数のsurface整理後、各problemが保持する `square_root / factoring / formula` の既存planへ接続する。
 
 ## 負数
 

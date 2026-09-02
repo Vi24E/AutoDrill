@@ -2,7 +2,8 @@ use crate::answer::AnswerNode;
 use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
 use crate::model::{
     ArithmeticExpression, ArithmeticOperator, LinearEquationSurface, LinearExpression,
-    LinearScalar, QuadraticEquationForm, RationalCoefficient, SimultaneousSolveMethod,
+    LinearScalar, QuadraticEquationSurface, QuadraticExpression, QuadraticSolveMethod,
+    RationalCoefficient, SimultaneousSolveMethod,
 };
 pub const OPERATION_KIND_COUNT: usize = 29;
 
@@ -1711,26 +1712,48 @@ fn clear_quadratic_denominators(
     Some((scaled_a, scaled_b, scaled_c, operations))
 }
 
-pub(crate) fn quadratic_square_plan(
-    form: QuadraticEquationForm,
-    a: RationalCoefficient,
-    c: RationalCoefficient,
+fn quadratic_expression_has_visible_square(expression: &QuadraticExpression) -> bool {
+    match expression {
+        QuadraticExpression::Square { .. } => true,
+        QuadraticExpression::Linear { .. } => false,
+        QuadraticExpression::Add { left, right }
+        | QuadraticExpression::Subtract { left, right } => {
+            quadratic_expression_has_visible_square(left)
+                || quadratic_expression_has_visible_square(right)
+        }
+        QuadraticExpression::Scale { expression, .. } => {
+            quadratic_expression_has_visible_square(expression)
+        }
+    }
+}
+
+fn quadratic_square_root_plan(
+    equation: &QuadraticEquationSurface,
     answer: &AnswerNode,
 ) -> Option<OperationPlan> {
-    if !matches!(
-        form,
-        QuadraticEquationForm::SquareEqualsConstant | QuadraticEquationForm::SquarePlusConstantZero
-    ) || a.is_zero()
+    if !quadratic_expression_has_visible_square(&equation.left)
+        && !quadratic_expression_has_visible_square(&equation.right)
     {
         return None;
     }
+    let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation)?;
+    if a.is_zero() {
+        return None;
+    }
     let mut operations = vec![Operation::OverheadQuadratic];
-    let rhs = if form == QuadraticEquationForm::SquarePlusConstantZero {
+    let (_, _, _, clearing_operations) = clear_quadratic_denominators(a, b, c)?;
+    operations.extend(clearing_operations);
+
+    let two = RationalCoefficient::new(2, 1)?;
+    let shift = b.divide(a.multiply(two)?)?;
+    let square_constant = c.subtract(a.multiply(shift.multiply(shift)?)?)?;
+    let rhs = RationalCoefficient::new(
+        square_constant.numerator().checked_neg()?,
+        square_constant.denominator(),
+    )?;
+    if !square_constant.is_zero() {
         operations.push(Operation::Transposition);
-        RationalCoefficient::new(c.numerator().checked_neg()?, c.denominator())?
-    } else {
-        c
-    };
+    }
     let square_value = rhs.divide(a)?;
     if a.numerator() != a.denominator() {
         operations.extend(coefficient_division_operations(rhs, a)?);
@@ -1741,6 +1764,9 @@ pub(crate) fn quadratic_square_plan(
         operations.extend(square_root_operations(square_value.numerator() as u64));
     } else {
         operations.push(Operation::BaseRoot);
+    }
+    if !shift.is_zero() {
+        operations.push(Operation::Transposition);
     }
     operations.extend(big_num_operations(answer));
     Some(operation_plan(operations))
@@ -1835,7 +1861,7 @@ pub(crate) fn quadratic_factoring_plan(
     Some(operation_plan(operations))
 }
 
-pub(crate) fn quadratic_formula_plan(
+fn quadratic_formula_coefficients_plan(
     a: RationalCoefficient,
     b: RationalCoefficient,
     c: RationalCoefficient,
@@ -1898,6 +1924,54 @@ pub(crate) fn quadratic_formula_plan(
 
     operations.extend(big_num_operations(answer));
     Some(operation_plan(operations))
+}
+
+fn quadratic_factoring_equation_plan(
+    equation: &QuadraticEquationSurface,
+    answer: &AnswerNode,
+) -> Option<OperationPlan> {
+    let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation)?;
+    let (mut a_int, mut b_int, mut c_int, mut operations) = clear_quadratic_denominators(a, b, c)?;
+    if a_int == 0 {
+        return None;
+    }
+    if a_int != 1 {
+        if b_int % a_int != 0 || c_int % a_int != 0 {
+            return None;
+        }
+        if a_int != 0 {
+            operations.extend(divide_or_identity_operations(a_int, a_int));
+            if b_int != 0 {
+                operations.extend(divide_or_identity_operations(b_int, a_int));
+            }
+            if c_int != 0 {
+                operations.extend(divide_or_identity_operations(c_int, a_int));
+            }
+        }
+        b_int /= a_int;
+        c_int /= a_int;
+        a_int = 1;
+    }
+    if a_int != 1 {
+        return None;
+    }
+    operations.extend(quadratic_factoring_plan(b_int, c_int, answer)?.operations);
+    Some(operation_plan(operations))
+}
+
+pub(crate) fn quadratic_equation_plan(
+    equation: &QuadraticEquationSurface,
+    solve_method: QuadraticSolveMethod,
+    answer: &AnswerNode,
+) -> Option<OperationPlan> {
+    match solve_method {
+        QuadraticSolveMethod::SquareRoot => quadratic_square_root_plan(equation, answer),
+        QuadraticSolveMethod::Factoring => quadratic_factoring_equation_plan(equation, answer),
+        QuadraticSolveMethod::Formula => {
+            let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation)?;
+            quadratic_formula_coefficients_plan(a, b, c, answer)
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -82,10 +82,19 @@ describe('problemExpression', () => {
       ...base,
       prompt: {
         kind: 'quadratic_equation',
-        form: 'standard',
-        a: q(1, 2),
-        b: q(-3),
-        c: q(1, 4),
+        equation: {
+          left: {
+            kind: 'add',
+            left: {
+              kind: 'subtract',
+              left: { kind: 'scale', factor: { kind: 'fraction', value: q(1, 2) }, expression: { kind: 'square', expression: variable() } },
+              right: { kind: 'linear', expression: scale(3, variable()) },
+            },
+            right: { kind: 'linear', expression: { kind: 'constant', value: { kind: 'fraction', value: q(1, 4) } } },
+          },
+          right: { kind: 'linear', expression: integer(0) },
+        },
+        solve_method: 'formula',
       },
       canonical_answer: {
         type: 'fraction',

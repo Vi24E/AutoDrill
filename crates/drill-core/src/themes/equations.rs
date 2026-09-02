@@ -1,10 +1,10 @@
 use crate::answer::{AnswerBinaryOperator, AnswerNode};
 use crate::effort::{
-    linear_expression_equation_plan, quadratic_factoring_plan, quadratic_formula_plan,
-    quadratic_square_plan, simultaneous_equation_plan, EffortModel, OperationWeights,
+    linear_expression_equation_plan, quadratic_equation_plan, simultaneous_equation_plan,
+    EffortModel, OperationWeights,
 };
 use crate::error::GenerationError;
-use crate::exact::{exact_square_root_u128, gcd_u64, square_free_sqrt_decomposition};
+use crate::exact::{gcd_u64, square_free_sqrt_decomposition};
 use crate::generator::{
     AnswerConditionedCandidateSource, GeneratorEntry, LayeredCandidateSource, ProblemGenerator,
     RandomCandidateSource, SamplingStrategy, SelectionDedup,
@@ -12,7 +12,8 @@ use crate::generator::{
 use crate::generator_support::{draw_signed_integer, exact_decimal_rational, rational_answer};
 use crate::model::{
     AnswerSchema, LinearEquationSurface, LinearExpression, LinearScalar, LinearVariable, Problem,
-    ProblemPrompt, QuadraticEquationForm, RationalCoefficient, SimultaneousSolveMethod,
+    ProblemPrompt, QuadraticEquationSurface, QuadraticExpression, QuadraticSolveMethod,
+    RationalCoefficient, SimultaneousSolveMethod,
 };
 use crate::rng::DeterministicRng;
 use crate::theme::{
@@ -30,6 +31,7 @@ pub const THEME_ID_LINEAR_EQUATION_3: u32 = 70;
 pub const THEME_ID_QUADRATIC_EQUATION_1: u32 = 14;
 pub const THEME_ID_QUADRATIC_EQUATION_2: u32 = 15;
 pub const THEME_ID_QUADRATIC_EQUATION_3: u32 = 16;
+pub const THEME_ID_QUADRATIC_EQUATION_4: u32 = 74;
 pub const THEME_ID_SIMULTANEOUS_EQUATION_ELIMINATION: u32 = 19;
 pub const THEME_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION: u32 = 71;
 pub const THEME_ID_SIMULTANEOUS_EQUATION_SUMMARY_1: u32 = 72;
@@ -38,9 +40,10 @@ pub const GENERATOR_REVISION_LINEAR_EQUATION_1: u32 = 9;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_2: u32 = 9;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_SIMPLE: u32 = 1;
 pub const GENERATOR_REVISION_LINEAR_EQUATION_3: u32 = 1;
-pub const GENERATOR_REVISION_QUADRATIC_EQUATION_1: u32 = 3;
-pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 4;
-pub const GENERATOR_REVISION_QUADRATIC_EQUATION_3: u32 = 3;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_1: u32 = 4;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_2: u32 = 5;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_3: u32 = 4;
+pub const GENERATOR_REVISION_QUADRATIC_EQUATION_4: u32 = 1;
 pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_ELIMINATION: u32 = 4;
 pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUBSTITUTION: u32 = 1;
 pub const GENERATOR_REVISION_SIMULTANEOUS_EQUATION_SUMMARY_1: u32 = 1;
@@ -52,6 +55,7 @@ pub const SKILL_ID_LINEAR_EQUATION_3: &str = "jp.grade7.equation.linear.3";
 pub const SKILL_ID_QUADRATIC_EQUATION_1: &str = "jp.grade9.equation.quadratic.1";
 pub const SKILL_ID_QUADRATIC_EQUATION_2: &str = "jp.grade9.equation.quadratic.2";
 pub const SKILL_ID_QUADRATIC_EQUATION_3: &str = "jp.grade9.equation.quadratic.3";
+pub const SKILL_ID_QUADRATIC_EQUATION_4: &str = "jp.grade9.equation.quadratic.4";
 pub const SKILL_ID_SIMULTANEOUS_EQUATION_ELIMINATION: &str =
     "jp.grade8.equation.simultaneous.elimination";
 pub const SKILL_ID_SIMULTANEOUS_EQUATION_SUBSTITUTION: &str =
@@ -82,6 +86,8 @@ pub const CURRICULUM_PATH_QUADRATIC_EQUATION_2: [&str; 4] =
     ["root", "中学3年生", "二次方程式", "二次方程式(2)"];
 pub const CURRICULUM_PATH_QUADRATIC_EQUATION_3: [&str; 4] =
     ["root", "中学3年生", "二次方程式", "二次方程式(3)"];
+pub const CURRICULUM_PATH_QUADRATIC_EQUATION_4: [&str; 4] =
+    ["root", "中学3年生", "二次方程式", "二次方程式(4)"];
 pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_ELIMINATION: [&str; 4] =
     ["root", "中学2年生", "連立方程式", "連立方程式（加減法）"];
 pub const CURRICULUM_PATH_SIMULTANEOUS_EQUATION_SUBSTITUTION: [&str; 4] =
@@ -102,6 +108,17 @@ const LINEAR: &[ThemeTag] = &[ThemeTag::Equations, ThemeTag::LinearEquation];
 const QUADRATIC: &[ThemeTag] = &[ThemeTag::Equations, ThemeTag::QuadraticEquation];
 const SIMULTANEOUS: &[ThemeTag] = &[ThemeTag::Equations, ThemeTag::SimultaneousEquation];
 
+pub const QUADRATIC_SQUARE_ROOT_LAYERS: [SamplingLayerSpec; 2] = [
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 4,
+    },
+    SamplingLayerSpec {
+        weight: 1,
+        minimum: 4,
+    },
+];
+
 pub const QUADRATIC_FACTORING_LAYERS: [SamplingLayerSpec; 3] = [
     SamplingLayerSpec {
         weight: 0,
@@ -116,6 +133,11 @@ pub const QUADRATIC_FACTORING_LAYERS: [SamplingLayerSpec; 3] = [
         minimum: 0,
     },
 ];
+
+pub const QUADRATIC_COMPREHENSIVE_LAYERS: [SamplingLayerSpec; 9] = [SamplingLayerSpec {
+    weight: 1,
+    minimum: 1,
+}; 9];
 
 pub const LINEAR_EQUATION_SIMPLE_REGISTRATION: ThemeRegistration =
     ThemeRegistration::new(ThemeRegistrationSpec {
@@ -240,6 +262,24 @@ pub const QUADRATIC_EQUATION_3_REGISTRATION: ThemeRegistration =
         safety: Safety::Unrestricted,
         presentation: Presentation::EQUATION,
         dedup: Dedup::CanonicalizeCommutative,
+        answer_contract: AnswerContract::QuadraticAlgebraic,
+        layout: COMPACT_16_LAYOUT,
+    })
+    .with_curriculum_unit(CURRICULUM_UNIT_QUADRATIC_EQUATION)
+    .with_editor_input_profile(Input::JuniorHighFull);
+pub const QUADRATIC_EQUATION_4_REGISTRATION: ThemeRegistration =
+    ThemeRegistration::new(ThemeRegistrationSpec {
+        numeric_theme_id: crate::theme::ThemeId::new(THEME_ID_QUADRATIC_EQUATION_4),
+        generator_revision: crate::theme::GeneratorRevision::new(
+            GENERATOR_REVISION_QUADRATIC_EQUATION_4,
+        ),
+        skill_id: SKILL_ID_QUADRATIC_EQUATION_4,
+        curriculum_path: &CURRICULUM_PATH_QUADRATIC_EQUATION_4,
+        grade: Some(SchoolGrade::JuniorHigh3),
+        tags: QUADRATIC,
+        safety: Safety::Unrestricted,
+        presentation: Presentation::EQUATION,
+        dedup: Dedup::PreserveOperandOrder,
         answer_contract: AnswerContract::QuadraticAlgebraic,
         layout: COMPACT_16_LAYOUT,
     })
@@ -527,9 +567,10 @@ impl LayeredCandidateSource for SimultaneousEquationGenerator {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum QuadraticEquationMode {
-    SquareReduction,
+    SquareRoot,
     Factoring,
     Formula,
+    Comprehensive,
 }
 
 #[derive(Debug)]
@@ -545,8 +586,9 @@ impl ProblemGenerator for QuadraticEquationGenerator {
 
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
         match self.mode {
-            QuadraticEquationMode::SquareReduction => SamplingStrategy::answer_conditioned(self),
-            QuadraticEquationMode::Factoring => SamplingStrategy::layered(
+            QuadraticEquationMode::SquareRoot
+            | QuadraticEquationMode::Factoring
+            | QuadraticEquationMode::Comprehensive => SamplingStrategy::layered(
                 self,
                 SelectionDedup::AllowDuplicates,
                 self.registration.layout().problem_count(),
@@ -559,30 +601,6 @@ impl ProblemGenerator for QuadraticEquationGenerator {
     }
 }
 
-impl AnswerConditionedCandidateSource for QuadraticEquationGenerator {
-    fn answer_domain(&self) -> &'static [AnswerNode] {
-        quadratic_one_answer_domain()
-    }
-
-    fn draw_candidate_for_answer(
-        &self,
-        rng: &mut DeterministicRng,
-        ordinal: u32,
-        weights: &OperationWeights,
-        answer: &AnswerNode,
-    ) -> Result<Option<Problem>, GenerationError> {
-        quadratic_equation_problem(
-            self.registration,
-            self.mode,
-            rng,
-            ordinal,
-            weights,
-            Some(answer),
-        )
-        .transpose()
-    }
-}
-
 impl RandomCandidateSource for QuadraticEquationGenerator {
     fn draw_candidate(
         &self,
@@ -590,14 +608,20 @@ impl RandomCandidateSource for QuadraticEquationGenerator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        quadratic_equation_problem(self.registration, self.mode, rng, ordinal, weights, None)
-            .transpose()
+        quadratic_equation_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
     }
 }
 
 impl LayeredCandidateSource for QuadraticEquationGenerator {
     fn layers(&self) -> &'static [SamplingLayerSpec] {
-        &QUADRATIC_FACTORING_LAYERS
+        match self.mode {
+            QuadraticEquationMode::SquareRoot => &QUADRATIC_SQUARE_ROOT_LAYERS,
+            QuadraticEquationMode::Factoring => &QUADRATIC_FACTORING_LAYERS,
+            QuadraticEquationMode::Comprehensive => &QUADRATIC_COMPREHENSIVE_LAYERS,
+            QuadraticEquationMode::Formula => {
+                unreachable!("formula generator does not use layered sampling")
+            }
+        }
     }
 
     fn draw_candidate(
@@ -606,23 +630,52 @@ impl LayeredCandidateSource for QuadraticEquationGenerator {
         ordinal: u32,
         weights: &OperationWeights,
     ) -> Result<Option<Problem>, GenerationError> {
-        quadratic_equation_problem(self.registration, self.mode, rng, ordinal, weights, None)
-            .transpose()
+        quadratic_equation_problem(self.registration, self.mode, rng, ordinal, weights).transpose()
     }
 
     fn layer_of(&self, problem: &Problem) -> usize {
-        let ProblemPrompt::QuadraticEquation { b, c, .. } = problem.prompt() else {
-            unreachable!("quadratic factoring generator always emits quadratic prompts");
+        let ProblemPrompt::QuadraticEquation {
+            equation,
+            solve_method,
+        } = problem.prompt()
+        else {
+            unreachable!("quadratic generator always emits quadratic prompts");
         };
-        if b.numerator() == 0 && c.numerator() < 0 {
-            return 0;
-        }
-        let b_numerator = i128::from(b.numerator());
-        let discriminant = b_numerator * b_numerator - 4 * i128::from(c.numerator());
-        if b.denominator() == 1 && c.denominator() == 1 && discriminant == 0 {
-            1
-        } else {
-            2
+        match self.mode {
+            QuadraticEquationMode::SquareRoot => {
+                usize::from(quadratic_equation_has_shifted_square(equation))
+            }
+            QuadraticEquationMode::Factoring => {
+                let (_, b, c) = crate::semantics::normalize_quadratic_equation(equation)
+                    .expect("factoring surface must normalize");
+                if b.numerator() == 0 && c.numerator() < 0 {
+                    return 0;
+                }
+                let b_numerator = i128::from(b.numerator());
+                let discriminant = b_numerator * b_numerator - 4 * i128::from(c.numerator());
+                if b.denominator() == 1 && c.denominator() == 1 && discriminant == 0 {
+                    1
+                } else {
+                    2
+                }
+            }
+            QuadraticEquationMode::Comprehensive => {
+                let method_index = match solve_method {
+                    QuadraticSolveMethod::SquareRoot => 0,
+                    QuadraticSolveMethod::Factoring => 1,
+                    QuadraticSolveMethod::Formula => 2,
+                };
+                let transform_index = match quadratic_surface_transform(equation) {
+                    Some(QuadraticSurfaceTransform::Parentheses) => 0,
+                    Some(QuadraticSurfaceTransform::Fraction) => 1,
+                    Some(QuadraticSurfaceTransform::Decimal) => 2,
+                    None => unreachable!("quadratic(4) always emits a transformed surface"),
+                };
+                method_index * 3 + transform_index
+            }
+            QuadraticEquationMode::Formula => {
+                unreachable!("formula generator does not use layered sampling")
+            }
         }
     }
 }
@@ -671,7 +724,7 @@ pub(crate) static SIMULTANEOUS_EQUATION_SUMMARY_2_GENERATOR: SimultaneousEquatio
 pub(crate) static QUADRATIC_EQUATION_1_GENERATOR: QuadraticEquationGenerator =
     QuadraticEquationGenerator {
         registration: &QUADRATIC_EQUATION_1_REGISTRATION,
-        mode: QuadraticEquationMode::SquareReduction,
+        mode: QuadraticEquationMode::SquareRoot,
     };
 pub(crate) static QUADRATIC_EQUATION_2_GENERATOR: QuadraticEquationGenerator =
     QuadraticEquationGenerator {
@@ -683,47 +736,11 @@ pub(crate) static QUADRATIC_EQUATION_3_GENERATOR: QuadraticEquationGenerator =
         registration: &QUADRATIC_EQUATION_3_REGISTRATION,
         mode: QuadraticEquationMode::Formula,
     };
-
-pub(crate) fn quadratic_one_answer_domain() -> &'static [AnswerNode] {
-    static DOMAIN: OnceLock<Vec<AnswerNode>> = OnceLock::new();
-    DOMAIN.get_or_init(|| {
-        let mut answers = Vec::new();
-        for root in 1_i64..=16 {
-            answers.push(AnswerNode::PlusMinus(Box::new(AnswerNode::Integer(root))));
-        }
-        for radicand in 2_i64..=30 {
-            if exact_square_root_u128(radicand as u128).is_some() {
-                continue;
-            }
-            answers.push(AnswerNode::PlusMinus(Box::new(AnswerNode::Root {
-                radicand: Box::new(AnswerNode::Integer(radicand)),
-                index: None,
-            })));
-        }
-        answers
-    })
-}
-
-fn quadratic_one_square_value(answer: &AnswerNode) -> Option<i64> {
-    let AnswerNode::PlusMinus(value) = answer else {
-        return None;
+pub(crate) static QUADRATIC_EQUATION_4_GENERATOR: QuadraticEquationGenerator =
+    QuadraticEquationGenerator {
+        registration: &QUADRATIC_EQUATION_4_REGISTRATION,
+        mode: QuadraticEquationMode::Comprehensive,
     };
-    match value.as_ref() {
-        AnswerNode::Integer(root @ 1..=16) => root.checked_mul(*root),
-        AnswerNode::Root {
-            radicand,
-            index: None,
-        } => {
-            let AnswerNode::Integer(value @ 2..=30) = radicand.as_ref() else {
-                return None;
-            };
-            exact_square_root_u128(*value as u128)
-                .is_none()
-                .then_some(*value)
-        }
-        _ => None,
-    }
-}
 
 pub(crate) fn linear_answer_domain(mode: LinearSolutionDomain) -> &'static [AnswerNode] {
     static INTEGER: OnceLock<Vec<AnswerNode>> = OnceLock::new();
@@ -1219,13 +1236,17 @@ fn quadratic_formula_answer(
     radicand: i64,
     denominator: i64,
 ) -> AnswerNode {
-    let radical = answer_product(
-        AnswerNode::Integer(radical_coefficient),
-        AnswerNode::Root {
-            radicand: Box::new(AnswerNode::Integer(radicand)),
-            index: None,
-        },
-    );
+    let radical = if radicand == 1 {
+        AnswerNode::Integer(radical_coefficient)
+    } else {
+        answer_product(
+            AnswerNode::Integer(radical_coefficient),
+            AnswerNode::Root {
+                radicand: Box::new(AnswerNode::Integer(radicand)),
+                index: None,
+            },
+        )
+    };
     let plus_minus = AnswerNode::PlusMinus(Box::new(radical));
     let numerator = if constant == 0 {
         plus_minus
@@ -1540,133 +1561,345 @@ fn simultaneous_equation_problem(
     )
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QuadraticSurfaceTransform {
+    Parentheses,
+    Fraction,
+    Decimal,
+}
+
+fn quadratic_linear(expression: LinearExpression) -> QuadraticExpression {
+    QuadraticExpression::Linear { expression }
+}
+
+fn quadratic_zero() -> QuadraticExpression {
+    quadratic_linear(LinearExpression::Constant {
+        value: integer_scalar(0),
+    })
+}
+
+fn quadratic_one() -> QuadraticExpression {
+    quadratic_linear(LinearExpression::Constant {
+        value: integer_scalar(1),
+    })
+}
+
+fn quadratic_x() -> QuadraticExpression {
+    quadratic_linear(LinearExpression::Variable {
+        variable: LinearVariable::X,
+    })
+}
+
+fn positive_rational(value: RationalCoefficient) -> Option<RationalCoefficient> {
+    RationalCoefficient::new(value.numerator().checked_abs()?, value.denominator())
+}
+
+fn quadratic_scaled(
+    coefficient: RationalCoefficient,
+    expression: QuadraticExpression,
+) -> Option<QuadraticExpression> {
+    if coefficient == RationalCoefficient::new(1, 1)? {
+        return Some(expression);
+    }
+    Some(QuadraticExpression::Scale {
+        factor: scalar_from_rational(coefficient)?,
+        expression: Box::new(expression),
+    })
+}
+
+fn quadratic_append_term(
+    expression: QuadraticExpression,
+    coefficient: RationalCoefficient,
+    term: QuadraticExpression,
+) -> Option<QuadraticExpression> {
+    if coefficient.is_zero() {
+        return Some(expression);
+    }
+    let term = quadratic_scaled(positive_rational(coefficient)?, term)?;
+    Some(if coefficient.numerator() < 0 {
+        QuadraticExpression::Subtract {
+            left: Box::new(expression),
+            right: Box::new(term),
+        }
+    } else {
+        QuadraticExpression::Add {
+            left: Box::new(expression),
+            right: Box::new(term),
+        }
+    })
+}
+
+fn quadratic_standard_expression(
+    a: RationalCoefficient,
+    b: RationalCoefficient,
+    c: RationalCoefficient,
+) -> Option<QuadraticExpression> {
+    if a.is_zero() {
+        return None;
+    }
+    let square = QuadraticExpression::Square {
+        expression: LinearExpression::Variable {
+            variable: LinearVariable::X,
+        },
+    };
+    let mut expression = quadratic_scaled(a, square)?;
+    expression = quadratic_append_term(expression, b, quadratic_x())?;
+    quadratic_append_term(expression, c, quadratic_one())
+}
+
+fn quadratic_square_expression(shift: i64) -> Option<QuadraticExpression> {
+    let inner =
+        linear_affine_expression_for(LinearVariable::X, integer_scalar(1), integer_scalar(shift))?;
+    Some(QuadraticExpression::Square { expression: inner })
+}
+
+fn quadratic_square_value(rng: &mut DeterministicRng) -> Option<(i64, i64, i64)> {
+    if rng.next_bounded(2) == 0 {
+        let root = 1_i64 + rng.next_bounded(16) as i64;
+        return Some((root.checked_mul(root)?, root, 1));
+    }
+    for _ in 0..32 {
+        let value = 2_i64 + rng.next_bounded(29) as i64;
+        let (coefficient, radicand) = square_free_sqrt_decomposition(u64::try_from(value).ok()?)?;
+        if radicand == 1 {
+            continue;
+        }
+        return Some((
+            value,
+            i64::try_from(coefficient).ok()?,
+            i64::try_from(radicand).ok()?,
+        ));
+    }
+    None
+}
+
+fn quadratic_square_root_candidate(
+    rng: &mut DeterministicRng,
+) -> Option<(QuadraticEquationSurface, QuadraticSolveMethod, AnswerNode)> {
+    let shifted = rng.next_bounded(2) == 1;
+    let shift = if shifted {
+        draw_signed_integer(rng, 5)?
+    } else {
+        0
+    };
+    let (square_value, radical_coefficient, radicand) = quadratic_square_value(rng)?;
+    let a_int = 1_i64 + rng.next_bounded(9) as i64;
+    let constant = a_int.checked_mul(square_value)?.checked_neg()?;
+    let square = quadratic_square_expression(shift)?;
+    let leading = quadratic_scaled(RationalCoefficient::new(a_int, 1)?, square)?;
+    let left = QuadraticExpression::Subtract {
+        left: Box::new(leading),
+        right: Box::new(quadratic_linear(LinearExpression::Constant {
+            value: integer_scalar(constant.checked_neg()?),
+        })),
+    };
+    let answer = quadratic_formula_answer(shift.checked_neg()?, radical_coefficient, radicand, 1);
+    Some((
+        QuadraticEquationSurface {
+            left,
+            right: quadratic_zero(),
+        },
+        QuadraticSolveMethod::SquareRoot,
+        answer,
+    ))
+}
+
+fn quadratic_factoring_candidate(
+    rng: &mut DeterministicRng,
+) -> Option<(QuadraticEquationSurface, QuadraticSolveMethod, AnswerNode)> {
+    let first = draw_signed_integer(rng, 9)?;
+    let second = draw_signed_integer(rng, 9)?;
+    let b = first.checked_add(second)?.checked_neg()?;
+    let c = first.checked_mul(second)?;
+    let answer = if first == second {
+        AnswerNode::Integer(first)
+    } else {
+        let mut roots = vec![AnswerNode::Integer(first), AnswerNode::Integer(second)];
+        roots.sort();
+        AnswerNode::Tuple(roots)
+    };
+    Some((
+        QuadraticEquationSurface {
+            left: quadratic_standard_expression(
+                RationalCoefficient::new(1, 1)?,
+                RationalCoefficient::new(b, 1)?,
+                RationalCoefficient::new(c, 1)?,
+            )?,
+            right: quadratic_zero(),
+        },
+        QuadraticSolveMethod::Factoring,
+        answer,
+    ))
+}
+
+fn quadratic_formula_candidate(
+    rng: &mut DeterministicRng,
+) -> Option<(QuadraticEquationSurface, QuadraticSolveMethod, AnswerNode)> {
+    let a_int = 1_i64 + rng.next_bounded(8) as i64;
+    let b_int = rng.next_bounded(37) as i64 - 18;
+    let c_int = rng.next_bounded(41) as i64 - 20;
+    if c_int == 0 {
+        return None;
+    }
+    let discriminant = b_int
+        .checked_mul(b_int)?
+        .checked_sub(4_i64.checked_mul(a_int)?.checked_mul(c_int)?)?;
+    if discriminant <= 0 {
+        return None;
+    }
+    let (sqrt_coefficient, radicand) =
+        square_free_sqrt_decomposition(u64::try_from(discriminant).ok()?)?;
+    let sqrt_coefficient = i64::try_from(sqrt_coefficient).ok()?;
+    let radicand = i64::try_from(radicand).ok()?;
+    if radicand > 99 {
+        return None;
+    }
+    let two_a = 2_i64.checked_mul(a_int)?;
+    let common = gcd_u64(
+        gcd_u64(b_int.unsigned_abs(), sqrt_coefficient.unsigned_abs()),
+        two_a.unsigned_abs(),
+    )
+    .max(1) as i64;
+    let constant = b_int.checked_neg()?.checked_div(common)?;
+    let radical_coefficient = sqrt_coefficient.checked_div(common)?;
+    let denominator = two_a.checked_div(common)?;
+    if constant.unsigned_abs() > 9 || radical_coefficient.unsigned_abs() > 9 || denominator > 15 {
+        return None;
+    }
+    let answer = quadratic_formula_answer(constant, radical_coefficient, radicand, denominator);
+    if !answer.is_within_size_limit() {
+        return None;
+    }
+    Some((
+        QuadraticEquationSurface {
+            left: quadratic_standard_expression(
+                RationalCoefficient::new(a_int, 1)?,
+                RationalCoefficient::new(b_int, 1)?,
+                RationalCoefficient::new(c_int, 1)?,
+            )?,
+            right: quadratic_zero(),
+        },
+        QuadraticSolveMethod::Formula,
+        answer,
+    ))
+}
+
+fn quadratic_surface_transform(
+    equation: &QuadraticEquationSurface,
+) -> Option<QuadraticSurfaceTransform> {
+    let QuadraticExpression::Scale { factor, expression } = &equation.left else {
+        return None;
+    };
+    match factor {
+        LinearScalar::Fraction { .. } => Some(QuadraticSurfaceTransform::Fraction),
+        LinearScalar::ExactDecimal { .. } => Some(QuadraticSurfaceTransform::Decimal),
+        LinearScalar::Integer { .. }
+            if matches!(
+                expression.as_ref(),
+                QuadraticExpression::Add { .. } | QuadraticExpression::Subtract { .. }
+            ) =>
+        {
+            Some(QuadraticSurfaceTransform::Parentheses)
+        }
+        LinearScalar::Integer { .. } => None,
+    }
+}
+
+fn quadratic_expression_has_shifted_square(expression: &QuadraticExpression) -> bool {
+    match expression {
+        QuadraticExpression::Square { expression } => {
+            crate::semantics::normalize_linear_expression(expression)
+                .is_some_and(|(x, y, constant)| !x.is_zero() && y.is_zero() && !constant.is_zero())
+        }
+        QuadraticExpression::Linear { .. } => false,
+        QuadraticExpression::Add { left, right }
+        | QuadraticExpression::Subtract { left, right } => {
+            quadratic_expression_has_shifted_square(left)
+                || quadratic_expression_has_shifted_square(right)
+        }
+        QuadraticExpression::Scale { expression, .. } => {
+            quadratic_expression_has_shifted_square(expression)
+        }
+    }
+}
+
+fn quadratic_equation_has_shifted_square(equation: &QuadraticEquationSurface) -> bool {
+    quadratic_expression_has_shifted_square(&equation.left)
+        || quadratic_expression_has_shifted_square(&equation.right)
+}
+
+fn transform_quadratic_equation(
+    equation: QuadraticEquationSurface,
+    transform: QuadraticSurfaceTransform,
+    rng: &mut DeterministicRng,
+) -> Option<QuadraticEquationSurface> {
+    let factor = match transform {
+        QuadraticSurfaceTransform::Parentheses => integer_scalar(2 + rng.next_bounded(2) as i64),
+        QuadraticSurfaceTransform::Fraction => LinearScalar::Fraction {
+            value: RationalCoefficient::new(1, 2 + rng.next_bounded(2) as i64)?,
+        },
+        QuadraticSurfaceTransform::Decimal => {
+            if rng.next_bounded(2) == 0 {
+                LinearScalar::ExactDecimal {
+                    coefficient: 5,
+                    scale: 1,
+                }
+            } else {
+                LinearScalar::ExactDecimal {
+                    coefficient: 2,
+                    scale: 1,
+                }
+            }
+        }
+    };
+    Some(QuadraticEquationSurface {
+        left: QuadraticExpression::Scale {
+            factor,
+            expression: Box::new(equation.left),
+        },
+        right: equation.right,
+    })
+}
+
 fn quadratic_equation_problem(
     registration: &ThemeRegistration,
     mode: QuadraticEquationMode,
     rng: &mut DeterministicRng,
     id: u32,
     _weights: &OperationWeights,
-    fixed_answer: Option<&AnswerNode>,
 ) -> Option<Result<Problem, GenerationError>> {
-    let (form, a, b, c, canonical_answer, operation_plan) = match mode {
-        QuadraticEquationMode::SquareReduction => {
-            let a_int = 1_i64 + rng.next_bounded(9) as i64;
-            let answer = fixed_answer?.clone();
-            let square_value = quadratic_one_square_value(&answer)?;
-            let equals_constant = rng.next_bounded(2) == 0;
-            let form = if equals_constant {
-                QuadraticEquationForm::SquareEqualsConstant
-            } else {
-                QuadraticEquationForm::SquarePlusConstantZero
+    let (equation, solve_method, canonical_answer) = match mode {
+        QuadraticEquationMode::SquareRoot => quadratic_square_root_candidate(rng)?,
+        QuadraticEquationMode::Factoring => quadratic_factoring_candidate(rng)?,
+        QuadraticEquationMode::Formula => quadratic_formula_candidate(rng)?,
+        QuadraticEquationMode::Comprehensive => {
+            let candidate = match rng.next_bounded(3) {
+                0 => quadratic_square_root_candidate(rng)?,
+                1 => quadratic_factoring_candidate(rng)?,
+                _ => quadratic_formula_candidate(rng)?,
             };
-            let constant = if equals_constant {
-                a_int.checked_mul(square_value)?
-            } else {
-                a_int.checked_mul(square_value)?.checked_neg()?
+            let transform = match rng.next_bounded(3) {
+                0 => QuadraticSurfaceTransform::Parentheses,
+                1 => QuadraticSurfaceTransform::Fraction,
+                _ => QuadraticSurfaceTransform::Decimal,
             };
-            let a = RationalCoefficient::new(a_int, 1)?;
-            let c = RationalCoefficient::new(constant, 1)?;
-            let plan = quadratic_square_plan(form, a, c, &answer)?;
-            (form, a, RationalCoefficient::zero(), c, answer, plan)
-        }
-        QuadraticEquationMode::Factoring => {
-            let first = draw_signed_integer(rng, 9)?;
-            let second = draw_signed_integer(rng, 9)?;
-            // The three pedagogical archetypes are sampled in separate layers.
-            // Repeated roots are therefore intentionally retained, and the
-            // externally redundant scale is fixed to one: multiplying the whole
-            // equation by 2..5 adds visual noise without changing the factoring
-            // strategy being measured by effort.
-            let scale = 1_i64;
-            let b_int = first.checked_add(second)?.checked_neg()?;
-            let c_int = first.checked_mul(second)?;
-            let answer = if first == second {
-                AnswerNode::Integer(first)
-            } else {
-                let mut roots = vec![AnswerNode::Integer(first), AnswerNode::Integer(second)];
-                roots.sort();
-                AnswerNode::Tuple(roots)
-            };
-            let plan = quadratic_factoring_plan(b_int, c_int, &answer)?;
+            let (base_equation, solve_method, answer) = candidate;
             (
-                QuadraticEquationForm::FactoredScale,
-                RationalCoefficient::new(scale, 1)?,
-                RationalCoefficient::new(b_int, 1)?,
-                RationalCoefficient::new(c_int, 1)?,
+                transform_quadratic_equation(base_equation, transform, rng)?,
+                solve_method,
                 answer,
-                plan,
             )
-        }
-        QuadraticEquationMode::Formula => {
-            let a_int = 1_i64 + rng.next_bounded(8) as i64;
-            let b_int = rng.next_bounded(37) as i64 - 18;
-            let c_int = rng.next_bounded(41) as i64 - 20;
-            if c_int == 0 {
-                return None;
-            }
-            let discriminant = b_int
-                .checked_mul(b_int)?
-                .checked_sub(4_i64.checked_mul(a_int)?.checked_mul(c_int)?)?;
-            if discriminant <= 0 {
-                return None;
-            }
-            let (sqrt_coefficient, radicand) =
-                square_free_sqrt_decomposition(u64::try_from(discriminant).ok()?)?;
-            let sqrt_coefficient = i64::try_from(sqrt_coefficient).ok()?;
-            let radicand = i64::try_from(radicand).ok()?;
-            if radicand == 1 || radicand > 99 {
-                return None;
-            }
-            let two_a = 2_i64.checked_mul(a_int)?;
-            let common = gcd_u64(
-                gcd_u64(b_int.unsigned_abs(), sqrt_coefficient.unsigned_abs()),
-                two_a.unsigned_abs(),
-            )
-            .max(1) as i64;
-            let constant = b_int.checked_neg()?.checked_div(common)?;
-            let radical_coefficient = sqrt_coefficient.checked_div(common)?;
-            let denominator = two_a.checked_div(common)?;
-            if constant.unsigned_abs() > 9
-                || radical_coefficient.unsigned_abs() > 9
-                || denominator > 15
-            {
-                return None;
-            }
-            let answer =
-                quadratic_formula_answer(constant, radical_coefficient, radicand, denominator);
-            if !answer.is_within_size_limit() {
-                return None;
-            }
-
-            // About half the candidates present all coefficients over a common
-            // denominator. Clearing that denominator is then the first solution step.
-            let requested_denominator = if rng.next_bounded(2) == 0 {
-                1_i64
-            } else {
-                2_i64 + rng.next_bounded(5) as i64
-            };
-            let denominator_scale = if requested_denominator > 1
-                && (a_int % requested_denominator != 0
-                    || b_int % requested_denominator != 0
-                    || c_int % requested_denominator != 0)
-            {
-                requested_denominator
-            } else {
-                1
-            };
-            let a = RationalCoefficient::new(a_int, denominator_scale)?;
-            let b = RationalCoefficient::new(b_int, denominator_scale)?;
-            let c = RationalCoefficient::new(c_int, denominator_scale)?;
-            let plan = quadratic_formula_plan(a, b, c, &answer)?;
-            (QuadraticEquationForm::Standard, a, b, c, answer, plan)
         }
     };
-
+    let operation_plan = quadratic_equation_plan(&equation, solve_method, &canonical_answer)?;
     Some(
         Problem::generated(
             registration,
             id,
-            ProblemPrompt::QuadraticEquation { form, a, b, c },
+            ProblemPrompt::QuadraticEquation {
+                equation,
+                solve_method,
+            },
             AnswerSchema::Algebraic,
             canonical_answer,
             EffortModel::operations(operation_plan),
@@ -1710,7 +1943,7 @@ fn linear_equation_problem(
 }
 
 /// Current generators owned by this theme family.
-pub(crate) static GENERATORS: [GeneratorEntry; 11] = [
+pub(crate) static GENERATORS: [GeneratorEntry; 12] = [
     GeneratorEntry::current(&LINEAR_EQUATION_SIMPLE_GENERATOR),
     GeneratorEntry::current(&LINEAR_EQUATION_1_GENERATOR),
     GeneratorEntry::current(&LINEAR_EQUATION_2_GENERATOR),
@@ -1718,6 +1951,7 @@ pub(crate) static GENERATORS: [GeneratorEntry; 11] = [
     GeneratorEntry::current(&QUADRATIC_EQUATION_1_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_2_GENERATOR),
     GeneratorEntry::current(&QUADRATIC_EQUATION_3_GENERATOR),
+    GeneratorEntry::current(&QUADRATIC_EQUATION_4_GENERATOR),
     GeneratorEntry::current(&SIMULTANEOUS_EQUATION_ELIMINATION_GENERATOR),
     GeneratorEntry::current(&SIMULTANEOUS_EQUATION_SUBSTITUTION_GENERATOR),
     GeneratorEntry::current(&SIMULTANEOUS_EQUATION_SUMMARY_1_GENERATOR),
@@ -1795,7 +2029,7 @@ mod curriculum_tests {
     }
 
     #[test]
-    fn quadratic_one_uses_only_the_two_requested_square_forms() {
+    fn quadratic_one_mixes_direct_and_shifted_square_surfaces() {
         for seed in ["A1b2", "M7x9", "Q4r6"] {
             let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
                 schema_version: SCHEMA_VERSION,
@@ -1806,71 +2040,41 @@ mod curriculum_tests {
                 max_attempts: None,
             })
             .unwrap();
+            let mut saw_direct = false;
+            let mut saw_shifted = false;
             for problem in worksheet.into_problems() {
-                let ProblemPrompt::QuadraticEquation { form, a, b, c } = problem.prompt() else {
+                let ProblemPrompt::QuadraticEquation {
+                    equation,
+                    solve_method,
+                } = problem.prompt()
+                else {
                     panic!("quadratic(1) prompt");
                 };
-                assert!(b.is_zero());
-                assert!(a.is_integer() && (1..=9).contains(&a.numerator()));
-                match form {
-                    QuadraticEquationForm::SquareEqualsConstant => assert!(c.numerator() > 0),
-                    QuadraticEquationForm::SquarePlusConstantZero => assert!(c.numerator() < 0),
-                    _ => panic!("quadratic(1) emitted an unsupported form"),
-                }
-                let square_value = c.numerator().unsigned_abs() / a.numerator().unsigned_abs();
-                let integer_root = (1_u64..=16).find(|root| root * root == square_value);
-                if let Some(root) = integer_root {
-                    assert!((1..=16).contains(&root));
-                } else {
-                    assert!((2..=30).contains(&square_value));
-                }
+                assert_eq!(*solve_method, QuadraticSolveMethod::SquareRoot);
                 assert!(matches!(
-                    problem.canonical_answer(),
-                    AnswerNode::PlusMinus(_)
+                    equation.right,
+                    QuadraticExpression::Linear {
+                        expression: LinearExpression::Constant {
+                            value: LinearScalar::Integer { value: 0 }
+                        }
+                    }
                 ));
+                let (a, _, _) = crate::semantics::normalize_quadratic_equation(equation).unwrap();
+                assert!(a.is_integer() && a.numerator() > 0);
+                let shifted = quadratic_equation_has_shifted_square(equation);
+                saw_shifted |= shifted;
+                saw_direct |= !shifted;
             }
+            assert!(saw_direct, "quadratic(1) must retain ax^2+b=0 surfaces");
+            assert!(
+                saw_shifted,
+                "quadratic(1) must include a(x+c)^2+b=0 surfaces"
+            );
         }
     }
 
     #[test]
-    fn quadratic_one_exposes_the_exact_unweighted_answer_domain() {
-        let domain = quadratic_one_answer_domain();
-        assert_eq!(domain.len(), 41);
-        assert_eq!(
-            domain.iter().filter(|answer| matches!(
-                answer,
-                AnswerNode::PlusMinus(value) if matches!(value.as_ref(), AnswerNode::Integer(1..=16))
-            )).count(),
-            16,
-        );
-        assert_eq!(
-            domain
-                .iter()
-                .filter(|answer| matches!(
-                    answer,
-                    AnswerNode::PlusMinus(value) if matches!(
-                        value.as_ref(),
-                        AnswerNode::Root { radicand, index: None }
-                            if matches!(radicand.as_ref(), AnswerNode::Integer(2..=30))
-                    )
-                ))
-                .count(),
-            25,
-        );
-
-        let mut rng = DeterministicRng::from_seed("quadratic-one-domain");
-        let weights = OperationWeights::default();
-        for (index, answer) in domain.iter().enumerate() {
-            let problem = QUADRATIC_EQUATION_1_GENERATOR
-                .draw_candidate_for_answer(&mut rng, index as u32 + 1, &weights, answer)
-                .expect("candidate construction must preserve the problem contract")
-                .expect("every declared quadratic(1) answer must construct a problem");
-            assert_eq!(problem.canonical_answer(), answer);
-        }
-    }
-
-    #[test]
-    fn quadratic_two_is_reverse_generated_from_two_integer_roots() {
+    fn quadratic_two_is_monic_and_reverse_generated_from_integer_roots() {
         let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
             schema_version: SCHEMA_VERSION,
             numeric_theme_id: THEME_ID_QUADRATIC_EQUATION_2,
@@ -1881,15 +2085,21 @@ mod curriculum_tests {
         })
         .unwrap();
         for problem in worksheet.into_problems() {
-            let ProblemPrompt::QuadraticEquation { form, a, b, c } = problem.prompt() else {
+            let ProblemPrompt::QuadraticEquation {
+                equation,
+                solve_method,
+            } = problem.prompt()
+            else {
                 panic!("quadratic(2) prompt");
             };
-            assert_eq!(*form, QuadraticEquationForm::FactoredScale);
-            assert_eq!(*a, RationalCoefficient::new(1, 1).unwrap());
+            assert_eq!(*solve_method, QuadraticSolveMethod::Factoring);
+            let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation).unwrap();
+            assert_eq!(a, RationalCoefficient::new(1, 1).unwrap());
+            assert!(b.is_integer() && c.is_integer());
             match problem.canonical_answer() {
                 AnswerNode::Integer(root) => {
-                    assert_eq!(*b, RationalCoefficient::new(-2 * root, 1).unwrap());
-                    assert_eq!(*c, RationalCoefficient::new(root * root, 1).unwrap());
+                    assert_eq!(b, RationalCoefficient::new(-2 * root, 1).unwrap());
+                    assert_eq!(c, RationalCoefficient::new(root * root, 1).unwrap());
                 }
                 AnswerNode::Tuple(roots) => {
                     assert_eq!(roots.len(), 2);
@@ -1898,8 +2108,8 @@ mod curriculum_tests {
                         panic!("quadratic(2) roots must be integers");
                     };
                     assert_ne!(r1, r2);
-                    assert_eq!(*b, RationalCoefficient::new(-(r1 + r2), 1).unwrap());
-                    assert_eq!(*c, RationalCoefficient::new(r1 * r2, 1).unwrap());
+                    assert_eq!(b, RationalCoefficient::new(-(r1 + r2), 1).unwrap());
+                    assert_eq!(c, RationalCoefficient::new(r1 * r2, 1).unwrap());
                 }
                 other => panic!("unexpected quadratic(2) answer {other:?}"),
             }
@@ -1936,7 +2146,8 @@ mod curriculum_tests {
         let AnswerNode::PlusMinus(radical) = plus_minus else {
             return None;
         };
-        let (coefficient, root) = match radical.as_ref() {
+        match radical.as_ref() {
+            AnswerNode::Integer(coefficient) => Some((constant, *coefficient, 1, denominator)),
             AnswerNode::Binary {
                 operator: AnswerBinaryOperator::Multiply,
                 left,
@@ -1945,56 +2156,108 @@ mod curriculum_tests {
                 let AnswerNode::Integer(coefficient) = left.as_ref() else {
                     return None;
                 };
-                (*coefficient, right.as_ref())
+                let AnswerNode::Root {
+                    radicand,
+                    index: None,
+                } = right.as_ref()
+                else {
+                    return None;
+                };
+                let AnswerNode::Integer(radicand) = radicand.as_ref() else {
+                    return None;
+                };
+                Some((constant, *coefficient, *radicand, denominator))
             }
-            root @ AnswerNode::Root { .. } => (1, root),
-            _ => return None,
-        };
-        let AnswerNode::Root {
-            radicand,
-            index: None,
-        } = root
-        else {
-            return None;
-        };
-        let AnswerNode::Integer(radicand) = radicand.as_ref() else {
-            return None;
-        };
-        Some((constant, coefficient, *radicand, denominator))
+            AnswerNode::Root {
+                radicand,
+                index: None,
+            } => {
+                let AnswerNode::Integer(radicand) = radicand.as_ref() else {
+                    return None;
+                };
+                Some((constant, 1, *radicand, denominator))
+            }
+            _ => None,
+        }
     }
 
     #[test]
-    fn quadratic_three_formula_answers_obey_display_bounds_and_include_fraction_coefficients() {
-        let mut saw_fraction_coefficient = false;
-        for seed in ["A1b2", "M7x9", "Q4r6", "Z8k3"] {
-            let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
-                schema_version: SCHEMA_VERSION,
-                numeric_theme_id: THEME_ID_QUADRATIC_EQUATION_3,
-                seed: seed.to_owned(),
-                difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
-                timeout_ms: None,
-                max_attempts: None,
-            })
-            .unwrap();
-            for problem in worksheet.into_problems() {
-                let ProblemPrompt::QuadraticEquation { form, a, b, c } = problem.prompt() else {
-                    panic!("quadratic(3) prompt");
-                };
-                assert_eq!(*form, QuadraticEquationForm::Standard);
-                saw_fraction_coefficient |= !a.is_integer() || !b.is_integer() || !c.is_integer();
-                let (constant, radical_coefficient, radicand, denominator) =
-                    quadratic_formula_bounds(problem.canonical_answer())
-                        .expect("quadratic(3) must use the bounded quadratic-formula AST");
-                assert!(constant.unsigned_abs() <= 9);
-                assert!(radical_coefficient.unsigned_abs() <= 9);
-                assert!((2..=99).contains(&radicand));
-                assert!((1..=15).contains(&denominator));
+    fn quadratic_three_uses_integer_coefficients_and_keeps_square_discriminants() {
+        let mut rng = DeterministicRng::from_seed("quadratic-three-support");
+        let weights = OperationWeights::default();
+        let mut saw_square_discriminant = false;
+        let mut saw_nonsquare_discriminant = false;
+        for ordinal in 1..=2_000 {
+            let Some(problem) = RandomCandidateSource::draw_candidate(
+                &QUADRATIC_EQUATION_3_GENERATOR,
+                &mut rng,
+                ordinal,
+                &weights,
+            )
+            .expect("quadratic(3) candidate construction") else {
+                continue;
+            };
+            let ProblemPrompt::QuadraticEquation {
+                equation,
+                solve_method,
+            } = problem.prompt()
+            else {
+                panic!("quadratic(3) prompt");
+            };
+            assert_eq!(*solve_method, QuadraticSolveMethod::Formula);
+            let (a, b, c) = crate::semantics::normalize_quadratic_equation(equation).unwrap();
+            assert!(a.is_integer() && b.is_integer() && c.is_integer());
+            let discriminant = b.numerator() * b.numerator() - 4 * a.numerator() * c.numerator();
+            assert!(discriminant > 0);
+            let square = crate::exact::exact_square_root_u128(discriminant as u128).is_some();
+            saw_square_discriminant |= square;
+            saw_nonsquare_discriminant |= !square;
+            let (constant, radical_coefficient, radicand, denominator) =
+                quadratic_formula_bounds(problem.canonical_answer())
+                    .expect("quadratic(3) must use the bounded quadratic-formula AST");
+            assert!(constant.unsigned_abs() <= 9);
+            assert!(radical_coefficient.unsigned_abs() <= 9);
+            assert!((1..=99).contains(&radicand));
+            assert!((1..=15).contains(&denominator));
+            if saw_square_discriminant && saw_nonsquare_discriminant {
+                break;
             }
         }
         assert!(
-            saw_fraction_coefficient,
-            "quadratic(3) should exercise clearing denominators"
+            saw_square_discriminant,
+            "quadratic(3) must support perfect-square D"
         );
+        assert!(
+            saw_nonsquare_discriminant,
+            "quadratic(3) must retain irrational roots"
+        );
+    }
+
+    #[test]
+    fn quadratic_four_covers_all_methods_and_transformed_surfaces() {
+        let worksheet = generate_worksheet_request(&GenerateWorksheetRequest {
+            schema_version: SCHEMA_VERSION,
+            numeric_theme_id: THEME_ID_QUADRATIC_EQUATION_4,
+            seed: "A1b2".to_owned(),
+            difficulty: crate::identity::Difficulty::try_from(3).unwrap(),
+            timeout_ms: None,
+            max_attempts: Some(50_000),
+        })
+        .unwrap();
+        let mut layers = [false; 9];
+        for problem in worksheet.problems() {
+            let ProblemPrompt::QuadraticEquation {
+                equation,
+                solve_method: _,
+            } = problem.prompt()
+            else {
+                panic!("quadratic(4) prompt");
+            };
+            assert!(crate::semantics::normalize_quadratic_equation(equation).is_some());
+            let layer = QUADRATIC_EQUATION_4_GENERATOR.layer_of(problem);
+            layers[layer] = true;
+        }
+        assert!(layers.into_iter().all(|covered| covered));
     }
 
     #[derive(Default)]

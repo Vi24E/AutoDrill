@@ -43,6 +43,7 @@ import { LINEAR_EQUATION_3_DEFINITION } from './themes/linear-equation-3';
 import { QUADRATIC_EQUATION_1_DEFINITION } from './themes/quadratic-equation-1';
 import { QUADRATIC_EQUATION_2_DEFINITION } from './themes/quadratic-equation-2';
 import { QUADRATIC_EQUATION_3_DEFINITION } from './themes/quadratic-equation-3';
+import { QUADRATIC_EQUATION_4_DEFINITION } from './themes/quadratic-equation-4';
 import { DECIMAL_ADD_SUBTRACT_DEFINITION } from './themes/decimal-add-subtract';
 import { DECIMAL_MULTIPLICATION_DEFINITION } from './themes/decimal-multiplication';
 import { DECIMAL_DIVISION_DEFINITION } from './themes/decimal-division';
@@ -149,6 +150,7 @@ export const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   QUADRATIC_EQUATION_1_DEFINITION,
   QUADRATIC_EQUATION_2_DEFINITION,
   QUADRATIC_EQUATION_3_DEFINITION,
+  QUADRATIC_EQUATION_4_DEFINITION,
   LIAR_PUZZLE_DEFINITION,
   MINI_SUDOKU_DEFINITION,
 ];

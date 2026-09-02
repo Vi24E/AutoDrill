@@ -11,8 +11,8 @@ use crate::exact_value::rational_from_answer;
 use crate::model::{
     AnswerSchema, ArithmeticExpression, ArithmeticOperator, LiarStatement, LinearEquationSurface,
     LinearExpression, LinearScalar, LinearVariable, MiniSudokuGrid, ProblemPrompt,
-    QuadraticEquationForm, RationalCoefficient, MINI_SUDOKU_CELL_COUNT, MINI_SUDOKU_GRID_SPEC,
-    MINI_SUDOKU_SIDE,
+    QuadraticEquationSurface, QuadraticExpression, RationalCoefficient, MINI_SUDOKU_CELL_COUNT,
+    MINI_SUDOKU_GRID_SPEC, MINI_SUDOKU_SIDE,
 };
 use crate::theme::ThemeAnswerContract;
 
@@ -128,6 +128,84 @@ pub(crate) fn normalize_linear_equation(
     ))
 }
 
+fn normalize_quadratic_expression_exact(
+    expression: &QuadraticExpression,
+) -> Option<(ExactRational, ExactRational, ExactRational)> {
+    match expression {
+        QuadraticExpression::Linear { expression } => {
+            let (x, y, constant) = normalize_linear_expression_exact(expression)?;
+            if !y.is_zero() {
+                return None;
+            }
+            Some((ExactRational::zero(), x, constant))
+        }
+        QuadraticExpression::Square { expression } => {
+            let (x, y, constant) = normalize_linear_expression_exact(expression)?;
+            if !y.is_zero() {
+                return None;
+            }
+            let leading = x.multiply(x)?;
+            let linear = ExactRational::new(2, 1)?.multiply(x)?.multiply(constant)?;
+            let constant = constant.multiply(constant)?;
+            Some((leading, linear, constant))
+        }
+        QuadraticExpression::Add { left, right } => {
+            let (left_a, left_b, left_c) = normalize_quadratic_expression_exact(left)?;
+            let (right_a, right_b, right_c) = normalize_quadratic_expression_exact(right)?;
+            Some((
+                left_a.add(right_a)?,
+                left_b.add(right_b)?,
+                left_c.add(right_c)?,
+            ))
+        }
+        QuadraticExpression::Subtract { left, right } => {
+            let (left_a, left_b, left_c) = normalize_quadratic_expression_exact(left)?;
+            let (right_a, right_b, right_c) = normalize_quadratic_expression_exact(right)?;
+            Some((
+                left_a.subtract(right_a)?,
+                left_b.subtract(right_b)?,
+                left_c.subtract(right_c)?,
+            ))
+        }
+        QuadraticExpression::Scale { factor, expression } => {
+            let factor = rational_from_linear_scalar(*factor)?;
+            let (a, b, c) = normalize_quadratic_expression_exact(expression)?;
+            Some((
+                factor.multiply(a)?,
+                factor.multiply(b)?,
+                factor.multiply(c)?,
+            ))
+        }
+    }
+}
+
+fn normalize_quadratic_equation_exact(
+    equation: &QuadraticEquationSurface,
+) -> Option<(ExactRational, ExactRational, ExactRational)> {
+    let (left_a, left_b, left_c) = normalize_quadratic_expression_exact(&equation.left)?;
+    let (right_a, right_b, right_c) = normalize_quadratic_expression_exact(&equation.right)?;
+    Some((
+        left_a.subtract(right_a)?,
+        left_b.subtract(right_b)?,
+        left_c.subtract(right_c)?,
+    ))
+}
+
+pub(crate) fn normalize_quadratic_equation(
+    equation: &QuadraticEquationSurface,
+) -> Option<(
+    RationalCoefficient,
+    RationalCoefficient,
+    RationalCoefficient,
+)> {
+    let (a, b, c) = normalize_quadratic_equation_exact(equation)?;
+    Some((
+        rational_to_coefficient(a)?,
+        rational_to_coefficient(b)?,
+        rational_to_coefficient(c)?,
+    ))
+}
+
 fn rational_from_expression(expression: &ArithmeticExpression) -> Option<ExactRational> {
     match expression {
         ArithmeticExpression::Integer { value } => Some(ExactRational::from_integer(*value)),
@@ -201,8 +279,8 @@ pub(crate) fn prompt_accepts_canonical_answer(
             };
             left_y.is_zero() && right_y.is_zero() && linear_answer_is_correct(a, b, c, d, answer)
         }
-        ProblemPrompt::QuadraticEquation { form, a, b, c } => {
-            quadratic_answer_is_correct(*form, *a, *b, *c, answer)
+        ProblemPrompt::QuadraticEquation { equation, .. } => {
+            quadratic_answer_is_correct(equation, answer)
         }
         ProblemPrompt::SimultaneousEquation { equations, .. } => {
             simultaneous_answer_is_correct(equations, answer)
@@ -670,35 +748,9 @@ impl QuadraticNumber {
     }
 }
 
-fn quadratic_answer_is_correct(
-    form: QuadraticEquationForm,
-    a: RationalCoefficient,
-    b: RationalCoefficient,
-    c: RationalCoefficient,
-    answer: &AnswerNode,
-) -> bool {
-    let (Some(a), Some(b), Some(c)) = (
-        rational_from_coefficient(a),
-        rational_from_coefficient(b),
-        rational_from_coefficient(c),
-    ) else {
+fn quadratic_answer_is_correct(equation: &QuadraticEquationSurface, answer: &AnswerNode) -> bool {
+    let Some((leading, linear, constant)) = normalize_quadratic_equation_exact(equation) else {
         return false;
-    };
-    let (leading, linear, constant) = match form {
-        QuadraticEquationForm::SquareEqualsConstant => {
-            let Some(constant) = c.negate() else {
-                return false;
-            };
-            (a, ExactRational::zero(), constant)
-        }
-        QuadraticEquationForm::SquarePlusConstantZero => (a, ExactRational::zero(), c),
-        QuadraticEquationForm::FactoredScale => {
-            if a.is_zero() {
-                return false;
-            }
-            (ExactRational::one(), b, c)
-        }
-        QuadraticEquationForm::Standard => (a, b, c),
     };
     if leading.is_zero() {
         return false;

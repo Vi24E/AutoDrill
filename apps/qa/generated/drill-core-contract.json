@@ -716,7 +716,7 @@
     },
     "14": {
       "numeric_theme_id": 14,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade9.equation.quadratic.1",
       "curriculum_path": [
         "root",
@@ -780,7 +780,7 @@
     },
     "15": {
       "numeric_theme_id": 15,
-      "generator_revision": 4,
+      "generator_revision": 5,
       "skill_id": "jp.grade9.equation.quadratic.2",
       "curriculum_path": [
         "root",
@@ -844,7 +844,7 @@
     },
     "16": {
       "numeric_theme_id": 16,
-      "generator_revision": 3,
+      "generator_revision": 4,
       "skill_id": "jp.grade9.equation.quadratic.3",
       "curriculum_path": [
         "root",
@@ -4038,6 +4038,70 @@
         "problem_count": 12,
         "columns": 2,
         "rows": 6
+      }
+    },
+    "74": {
+      "numeric_theme_id": 74,
+      "generator_revision": 1,
+      "skill_id": "jp.grade9.equation.quadratic.4",
+      "curriculum_path": [
+        "root",
+        "中学3年生",
+        "二次方程式",
+        "二次方程式(4)"
+      ],
+      "curriculum_unit": {
+        "key": "quadratic-equation",
+        "label": "二次方程式"
+      },
+      "grade": 9,
+      "tags": [
+        "equations",
+        "quadratic_equation"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": true,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "quadratic_equation",
+        "answer_schema_kind": "algebraic",
+        "input_profile": "quadratic_equation"
+      },
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "fraction",
+          "mixed_fraction",
+          "decimal",
+          "root",
+          "negative",
+          "plus_minus",
+          "tuple",
+          "arithmetic"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
       }
     }
   },

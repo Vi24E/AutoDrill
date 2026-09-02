@@ -18,6 +18,7 @@ import type {
   LongDivisionStep as RustLongDivisionStep,
   Problem as RustProblem,
   ProblemPrompt as RustProblemPrompt,
+  QuadraticExpression as RustQuadraticExpression,
   ProblemSetIdentity as RustProblemSetIdentity,
   RationalCoefficient as RustRationalCoefficient,
   WorkedSolution as RustWorkedSolution,
@@ -96,6 +97,7 @@ export type RationalCoefficient = RustRationalCoefficient;
 export type ArithmeticOperator = RustArithmeticOperator;
 export type ArithmeticExpression = RustArithmeticExpression;
 export type LinearExpression = RustLinearExpression;
+export type QuadraticExpression = RustQuadraticExpression;
 export type LinearScalar = RustLinearScalar;
 export type LiarStatement = RustLiarStatement;
 export type ProblemPrompt = RustProblemPrompt;

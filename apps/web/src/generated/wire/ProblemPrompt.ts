@@ -4,8 +4,8 @@ import type { ArithmeticOperator } from "./ArithmeticOperator";
 import type { LiarStatement } from "./LiarStatement";
 import type { LinearEquationSurface } from "./LinearEquationSurface";
 import type { LinearExpression } from "./LinearExpression";
-import type { QuadraticEquationForm } from "./QuadraticEquationForm";
-import type { RationalCoefficient } from "./RationalCoefficient";
+import type { QuadraticEquationSurface } from "./QuadraticEquationSurface";
+import type { QuadraticSolveMethod } from "./QuadraticSolveMethod";
 import type { SimultaneousSolveMethod } from "./SimultaneousSolveMethod";
 
-export type ProblemPrompt = { "kind": "addition", left: number, right: number, } | { "kind": "arithmetic", expression: ArithmeticExpression, } | { "kind": "column_arithmetic", operator: ArithmeticOperator, left: ArithmeticExpression, right: ArithmeticExpression, } | { "kind": "linear_equation", left: LinearExpression, right: LinearExpression, } | { "kind": "quadratic_equation", form: QuadraticEquationForm, a: RationalCoefficient, b: RationalCoefficient, c: RationalCoefficient, } | { "kind": "simultaneous_equation", equations: [LinearEquationSurface, LinearEquationSurface], solve_method: SimultaneousSolveMethod, } | { "kind": "liar_puzzle", people_count: number, statements: Array<LiarStatement>, } | { "kind": "mini_sudoku", givens: Array<number | null>, };
+export type ProblemPrompt = { "kind": "addition", left: number, right: number, } | { "kind": "arithmetic", expression: ArithmeticExpression, } | { "kind": "column_arithmetic", operator: ArithmeticOperator, left: ArithmeticExpression, right: ArithmeticExpression, } | { "kind": "linear_equation", left: LinearExpression, right: LinearExpression, } | { "kind": "quadratic_equation", equation: QuadraticEquationSurface, solve_method: QuadraticSolveMethod, } | { "kind": "simultaneous_equation", equations: [LinearEquationSurface, LinearEquationSurface], solve_method: SimultaneousSolveMethod, } | { "kind": "liar_puzzle", people_count: number, statements: Array<LiarStatement>, } | { "kind": "mini_sudoku", givens: Array<number | null>, };

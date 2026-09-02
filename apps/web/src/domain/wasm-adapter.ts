@@ -392,6 +392,25 @@ function assertLinearExpression(value: unknown): void {
   invalidDto('WASM returned an unsupported linear expression variant.', value);
 }
 
+function assertQuadraticExpression(value: unknown): void {
+  if (!isRecord(value) || typeof value.kind !== 'string') invalidDto('WASM returned an invalid quadratic expression.', value);
+  if (value.kind === 'linear' || value.kind === 'square') {
+    assertLinearExpression(value.expression);
+    return;
+  }
+  if (value.kind === 'add' || value.kind === 'subtract') {
+    assertQuadraticExpression(value.left);
+    assertQuadraticExpression(value.right);
+    return;
+  }
+  if (value.kind === 'scale') {
+    assertLinearScalar(value.factor);
+    assertQuadraticExpression(value.expression);
+    return;
+  }
+  invalidDto('WASM returned an unsupported quadratic expression variant.', value);
+}
+
 function assertPrompt(value: unknown): void {
   if (!isRecord(value) || typeof value.kind !== 'string') {
     invalidDto('WASM returned an invalid problem prompt.', value);
@@ -453,12 +472,12 @@ function assertPrompt(value: unknown): void {
     return;
   }
   if (value.kind === 'quadratic_equation') {
-    if (!['square_equals_constant', 'square_plus_constant_zero', 'factored_scale', 'standard'].includes(String(value.form))) {
-      invalidDto('WASM returned an invalid quadratic-equation form.', value);
+    if (!isRecord(value.equation)) invalidDto('WASM returned an invalid quadratic-equation surface.', value);
+    assertQuadraticExpression(value.equation.left);
+    assertQuadraticExpression(value.equation.right);
+    if (!['square_root', 'factoring', 'formula'].includes(String(value.solve_method))) {
+      invalidDto('WASM returned an invalid quadratic solve method.', value);
     }
-    assertRationalCoefficient(value.a, 'quadratic coefficient a');
-    assertRationalCoefficient(value.b, 'quadratic coefficient b');
-    assertRationalCoefficient(value.c, 'quadratic coefficient c');
     return;
   }
   if (value.kind === 'linear_equation') {

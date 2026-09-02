@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { AutoDrillRuntime } from '../src/autodrill-runtime.mjs';
+import { AutoDrillRuntime, formatProblem } from '../src/autodrill-runtime.mjs';
 
 const contract = JSON.parse(readFileSync(new URL('../generated/drill-core-contract.json', import.meta.url), 'utf8'));
 const EXCLUDED_QA_CURRICULUM_UNITS = new Set([
@@ -10,6 +10,54 @@ const EXCLUDED_QA_CURRICULUM_UNITS = new Set([
   'multiplication-table',
   'division-table',
 ]);
+
+
+test('QA problem formatting renders typed equation surfaces without legacy coefficient inference', () => {
+  const shiftedQuadratic = {
+    prompt: {
+      kind: 'quadratic_equation',
+      equation: {
+        left: {
+          kind: 'subtract',
+          left: {
+            kind: 'scale',
+            factor: { kind: 'integer', value: 2 },
+            expression: {
+              kind: 'square',
+              expression: {
+                kind: 'add',
+                left: { kind: 'variable', variable: 'x' },
+                right: { kind: 'constant', value: { kind: 'integer', value: 3 } },
+              },
+            },
+          },
+          right: { kind: 'linear', expression: { kind: 'constant', value: { kind: 'integer', value: 8 } } },
+        },
+        right: { kind: 'linear', expression: { kind: 'constant', value: { kind: 'integer', value: 0 } } },
+      },
+      solve_method: 'square_root',
+    },
+  };
+  assert.equal(formatProblem(shiftedQuadratic), '2(x + 3)² − 8 = 0');
+
+  const simultaneous = {
+    prompt: {
+      kind: 'simultaneous_equation',
+      equations: [
+        {
+          left: { kind: 'add', left: { kind: 'variable', variable: 'x' }, right: { kind: 'variable', variable: 'y' } },
+          right: { kind: 'constant', value: { kind: 'integer', value: 5 } },
+        },
+        {
+          left: { kind: 'subtract', left: { kind: 'variable', variable: 'x' }, right: { kind: 'variable', variable: 'y' } },
+          right: { kind: 'constant', value: { kind: 'integer', value: 1 } },
+        },
+      ],
+      solve_method: 'elimination',
+    },
+  };
+  assert.equal(formatProblem(simultaneous), 'x + y = 5\nx − y = 1');
+});
 
 test('AutoDrill runtime exposes every non-excluded unit through the original WASM generator', async () => {
   const runtime = new AutoDrillRuntime({ selectionSeed: () => 'runtime-test-selection' });
@@ -24,6 +72,7 @@ test('AutoDrill runtime exposes every non-excluded unit through the original WAS
   assert.ok(units.some((unit) => unit.skill_id === 'jp.grade6.fraction.division'));
   assert.ok(units.some((unit) => unit.skill_id === 'jp.grade7.equation.linear.1'));
   assert.ok(units.some((unit) => unit.skill_id === 'jp.grade9.equation.quadratic.3'));
+  assert.ok(units.some((unit) => unit.skill_id === 'jp.grade9.equation.quadratic.4'));
   assert.ok(units.some((unit) => unit.skill_id === 'bonus.logic.mini_sudoku'));
 
   const generatedBySkill = new Map();

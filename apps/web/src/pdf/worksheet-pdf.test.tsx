@@ -91,8 +91,16 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
     case 'quadratic_equation':
       return {
         prompt: {
-          kind: 'quadratic_equation', form: 'standard',
-          a: { numerator: 1, denominator: 1 }, b: { numerator: 0, denominator: 1 }, c: { numerator: -4, denominator: 1 },
+          kind: 'quadratic_equation',
+          equation: {
+            left: {
+              kind: 'add',
+              left: { kind: 'square', expression: { kind: 'variable', variable: 'x' } },
+              right: { kind: 'linear', expression: { kind: 'constant', value: { kind: 'integer', value: -4 } } },
+            },
+            right: { kind: 'linear', expression: { kind: 'constant', value: { kind: 'integer', value: 0 } } },
+          },
+          solve_method: 'formula',
         },
         answer,
       };
