@@ -1,20 +1,20 @@
 # AGENTS.md — AutoDrill
 
-`managed_project_contract: llm-managed-project-v1`
+このファイルはAutoDrill repository内で作業するLLM向けの正典である。親directoryの `AGENTS.md`、`ROLES.md`、中央Board、委譲・role-routing protocolはAutoDrillの契約として使用しない。
 
 ## セッション開始時の必須動線
 
-このrepositoryは`LLM/projects/`内の独立product repositoryである。作業前に必ず次を行う。
+作業前に必ず次を行う。
 
-1. `../../AGENTS.md`を読み、共通行動規範として適用する
-2. `../../ROLES.md`、`../../board/README.md`、自分のrole contract、使用engineのadapterを必要範囲で読む
-3. `../../scripts/init-project.sh --check AutoDrill`でbridgeを検証する
-4. Git rootとbranchを確認し、material taskだけ中央`../../board/`へproject名付きで記録する
-5. **`docs/principles.md` と `docs/README.md` を読む**
-6. 変更対象に対応する `docs/architecture/` 文書と [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) を必要範囲で読む
+1. **repository直下のこの `AGENTS.md` のみに従う。** `../../AGENTS.md`、`LLM/AGENTS.md`、その他の親 `AGENTS.md` は読まず、適用しない。
+2. **`docs/principles.md` を読み、最上位の設計原則として適用する。**
+3. `docs/README.md` を読み、現在のcanonical docsの入口を確認する。
+4. Git root、現在branch、worktreeを確認する。ユーザーの明示指示なしにbranchを作成せず、既存branchへも切り替えない。
+5. 変更対象に対応する `docs/architecture/` 文書と [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) を必要範囲で読む。
+6. taskに必要なSKILLがある場合、ChatGPT内蔵機能ではなくrepository直下の `SKILL/<name>/SKILL.md` を直接読む。
+7. ローカル作業にlocal-mcpを使う場合は、conversationで指定されたsessionを使い、session idを推測しない。
 
-共通の行動・権限・委譲・gate・Git・通知規則は`../../AGENTS.md`が正典である。本ファイルは
-このproduct固有の目的、command、architecture、禁止範囲だけを追加する。
+subagent、role-routing、delegation protocolなどの委譲機構は使用しない。
 
 ## LLM identity / generation management
 
@@ -31,6 +31,16 @@
 - 同一LLM instanceが通常の会話や同一taskを継続するだけでは新generationを発行しない。**新しいLLMへ実際に渡すhandoff promptを発行するとき**だけ新identityを発行する。
 - 新identityを発行するときは、handoff promptを返す前に `latest issued identity` と `generation max` を更新し、その更新をcommitする。previewだけを作る場合は更新しない。
 - identity更新後は `AGENTS.md` を再読し、handoff prompt内のidentityと一致することを確認する。
+
+## Git規則
+
+- ユーザーの明示指示なしに新しいbranchを作成しない。
+- ユーザーの明示指示なしに既存branchへ切り替えない。現在branchを維持する。
+- 既存の未コミット差分を勝手に破棄、reset、checkout、stashしない。
+- LLMが作成する**すべてのcommit message**は、末尾にそのcommitを作成した担当identityを `[Dawn-4]` の形式で付ける。
+- commitに関係のない既存差分を勝手に混ぜない。
+- pushは自動の既定動作としない。ユーザーの指示または現在の作業で明示された方針に従う。
+- backup目的でrepositoryやfileのcopyを作らない。rollback pointはGit commitで保存する。commitできない事情がある場合は、copyを作る前にユーザーへ相談する。
 
 ### GitHub Issue reporter / updater attribution
 
@@ -91,6 +101,7 @@
 | `docs/roadmap.md` | support scope / 将来計画 |
 | `scripts/build-wasm.sh` | Rust/WASM targetを変更せずに行うローカル生成パイプライン |
 | `README.md` | project概要、インストール、開発、検証コマンド |
+| `SKILL/` | AutoDrillで使用するlocal skill。必要なものだけ直接読む |
 
 ## AutoDrill固有の実装原則
 
@@ -101,7 +112,6 @@
 - 本来metadataである性質をnumeric theme ID、slug、表示文言、生成結果等から推測しない。
 - alphaはPC対象。mobile対応Issueは`priority:deferred`としてbeta移行まで凍結し、beta移行時に再開する。
 - 一次テスト・debug用に作成した一時script、fixture、screenshot、browser profile等は、正式な資産として残す理由がなければ作業終了時に削除する。
-- backup目的でrepository/file copyを作らない。backup / rollback pointはGit commitで保存する。commitできない事情がある場合は、copyを作る前にユーザーへ相談する。
 - 既存の未コミット差分を勝手に破棄しない。
 
 ## コマンド
@@ -114,18 +124,13 @@
 - web test: `pnpm test`
 - Rust test: `cargo test --workspace --all-targets`
 - WASM package: `./scripts/build-wasm.sh`（target/toolingが既にある場合だけ）
-- bridge check: `../../scripts/init-project.sh --check AutoDrill`
 
-`scripts/build-wasm.sh` は `wasm32-unknown-unknown` と `wasm-bindgen` CLIを
-自動インストールしない。初回環境でtargetが無い場合は、スクリプトのエラーを
-確認し、開発者が自分のRust toolchainへ前提を用意してから再実行する。
+`scripts/build-wasm.sh` は `wasm32-unknown-unknown` と `wasm-bindgen` CLIを自動インストールしない。初回環境でtargetが無い場合は、スクリプトのエラーを確認し、開発者が自分のRust toolchainへ前提を用意してから再実行する。
 
-ブラウザ向けWASMを生成した後は、Next.jsのdev/buildで`apps/web/public/wasm/pkg/`
-を配信し、`apps/web/src/wasm/load-generated.ts`から動的にロードできる。
+ブラウザ向けWASMを生成した後は、Next.jsのdev/buildで`apps/web/public/wasm/pkg/`を配信し、`apps/web/src/wasm/load-generated.ts`から動的にロードできる。
 
 ## 規約・注意
 
-- Board、Dashboard、Doctor、role contract、provider adapterをこのrepositoryへコピーしない
-- 中央環境は`../..`、中央Boardは`../../board/`を使う
-- product codeとproduct固有の設定だけをこのrepositoryで管理する
-- 認証情報、token、秘密鍵をcommitしない
+- product codeとproduct固有の設定だけをこのrepositoryで管理する。
+- 親LLM環境のBoard、Dashboard、Doctor、role contract、provider adapter、委譲設定をこのrepositoryへコピーしない。
+- 認証情報、token、秘密鍵をcommitしない。

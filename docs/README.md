@@ -22,6 +22,7 @@ AutoDrillの **Issue / backlog は [GitHub Issues](https://github.com/Vi24E/Auto
 
 - 新規Issueの作成、本文・label・priority・stateの更新、Close / reopenはGitHub Issues上で行う。
 - Issue本文の先頭に `報告者: <name>` を残す。LLM報告はそのidentity、ユーザー自身の報告は `User` とする。
+- 報告名`User`は、ユーザ自身のみが行う。LLMは`User`名で報告しない。
 - 既存Issueへの追記・修正・comment等は、更新部分に `更新者: <name>` を残し、元の報告者を上書きしない。identityの命名・generation管理と詳細なattribution規約は[`../AGENTS.md`](../AGENTS.md)を正とする。
 - repository内にcurrent backlogのMarkdown mirrorを作らない。`docs/issues.md`もcurrent trackerとして復活させない。
 - 2026-08-30の移行前Markdown backlogは[`archive/issues.md`](archive/issues.md)に履歴として保存するが、現行Issueの状態判断には使わない。
