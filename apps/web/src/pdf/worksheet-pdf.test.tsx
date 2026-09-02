@@ -193,6 +193,7 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
   return {
     schema_version: DRILL_SCHEMA_VERSION,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: 'PdfTest1', difficulty: 3 },
+    problem_set_id: `${DRILL_SCHEMA_VERSION}-${definition.numeric_theme_id}-${definition.generator_revision}-PdfTest1-3`,
     layout: definition.layout,
     problems,
     seed: 'PdfTest1',
@@ -200,7 +201,7 @@ function representativeWorksheet(definition: ThemeDefinition): WorksheetDto {
 }
 
 describe('shared worksheet layout and browser-native PDF printing', () => {
-  const metadata: WorksheetMetadata = { generated_date: '2026-07-30', seed: 'repeatMe' };
+  const metadata: WorksheetMetadata = { generated_date: '2026-07-30', problem_set_id: '7-1-5-repeatMe-3' };
 
   it('uses the same 2 x 10 model for web geometry and printable pages', () => {
     const worksheet = fixtureWorksheet();
@@ -219,7 +220,7 @@ describe('shared worksheet layout and browser-native PDF printing', () => {
     expect(pages[0]).toMatchObject({ kind: 'problems', rotated: false, title: '1けたのたしざん(1)' });
     expect(pages[1]).toMatchObject({ kind: 'answers', rotated: true, title: '1けたのたしざん(1) 解答' });
     expect(buildPdfPageModel(worksheet, metadata, false)[1]).toMatchObject({ kind: 'answers', rotated: false });
-    expect(pages[0]?.footer).toEqual({ text: 'date: 2026-07-30 / seed: repeatMe', physical_corner: 'bottom-right' });
+    expect(pages[0]?.footer).toEqual({ text: 'date: 2026-07-30 / seed: 7-1-5-repeatMe-3', physical_corner: 'bottom-right' });
   });
 
   it('derives a row-major 4 x 4 printable column-arithmetic model without visible vertical dividers', () => {

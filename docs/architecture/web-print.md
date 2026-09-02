@@ -10,23 +10,24 @@ Webの実装済みthemeは`apps/web/src/domain/themes/`で1テーマ1ファイ�
 
 ## Settings / Worksheet / Print flow
 
-- q1: 設定画面。おすすめまたは学年からthemeを選択し、difficulty/Seedを指定する。
+- q1: 設定画面。おすすめまたは学年からthemeを選択し、difficultyを指定する。詳細設定の`Seed`欄はraw RNG seedではなく、schema/theme/revision/raw-seed/difficultyを含むfull problem-set IDの入力・共有欄である。
 - q2: Web回答画面。通常themeはMathLive、筆算themeは方眼1桁ごとの独立digit slotで入力し、最終的なtyped AnswerNodeの採点はRust/WASMへ委譲する。
 - 採点後: `問題に戻る`で入力を保持してeditingへ戻るか、`もう一回問題を解く`で同じworksheetを初期化する。別worksheet生成のshortcutは持たず、別の問題へ進む場合は`TOPに戻る`を経由してtheme/difficultyを再確認して生成する。
 - 印刷: worksheetと同じdataからin-app print previewを開き、そこからbrowser標準の印刷/PDF保存へ進む。
 
-空Seedはbutton click時に自動生成され、q2/PDF metadataは同じresolved Seedを保持します。
+Seed欄が空ならbutton click時にraw generation seedを内部生成して通常requestを行い、Rustが返したcanonical `problem_set_id`をSeed欄・q2/PDF metadata・現在routeの`?seed=` queryへ投影します。Seed欄または`?seed=`にfull IDがある場合は、その文字列をWASM replay endpointへopaqueに渡します。Rustがidentityをparseして同じworksheetを再生成し、WebはID構文を重複実装しません。Userがtheme/difficultyを手動変更した場合は古いreplay ID/queryをclearし、次の生成を新しい設定から行います。
 
 ## WASM adapter
 
-`src/domain/wasm-adapter.ts`がproductionの数学境界です。generated Rust Web contractのcurrent schema（現行v7）JSON DTOを使い、公開WASM endpointはcurrent productが実際に消費する `generate_worksheet` / `parse_mathlive_answer` / `grade_answer` の3つだけとします。これらを通じて以下をRust/WASMへ委譲します。
+`src/domain/wasm-adapter.ts`がproductionの数学境界です。generated Rust Web contractのcurrent schema（現行v7）JSON DTOを使い、公開WASM endpointはcurrent productが実際に消費する `generate_worksheet` / `generate_problem_set` / `parse_mathlive_answer` / `grade_answer` とします。これらを通じて以下をRust/WASMへ委譲します。
 
-- worksheet generation
+- current settingsからのworksheet generation
+- full problem-set IDからのdeterministic replay
 - MathLive LaTeX → AnswerNode
 - AnswerNode/input capability validation
 - grading
 
-単一problem生成、problem-set IDからの再生成、standalone normalizationはcurrent Web consumerを持たないためWASM/public facadeへ公開しません。normalizationはgrading等から使うRust core内部primitiveとして保持します。
+単一problem生成とstandalone normalizationはcurrent Web consumerを持たないためWASM/public facadeへ公開しません。problem-set ID replayはWeb consumerが存在するため公開しますが、ID parse/validationはRust coreだけが所有します。normalizationはgrading等から使うRust core内部primitiveとして保持します。
 
 Webはnormalization、正誤判定、effort、generator条件を再実装しません。
 
@@ -76,7 +77,7 @@ Webでは通常数式を`ProblemExpression` / `MathLiveStatic`の`<math-span>`�
 - 加減算・掛け算の筆算16問theme: 4列×4行
 - 割り算の筆算12問theme: 4列×3行
 - title/instruction: Web ThemeDefinitionと同一
-- footer: date / Seed
+- footer: date / Seed（canonical full `problem_set_id`）
 - 数式: `ProblemExpression` / `MathLiveStatic`をWebと共有
 
 MathLive custom elementのrender完了と`document.fonts.ready`を待った後、`window.print()`でブラウザ標準の印刷ダイアログを開きます。PDF保存はブラウザの「PDFに保存」を利用します。この経路により、Chrome等の印刷エンジンが実際のWeb DOM/CSS/fontをPDFへ変換します。

@@ -32,6 +32,7 @@ describe('print flow integration paths', () => {
   let printSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    window.history.replaceState(null, '', '/');
     printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
   });
 

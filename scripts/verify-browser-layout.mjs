@@ -8,6 +8,15 @@ import net from 'node:net';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const OUT = join(ROOT, 'apps/web/out');
+const SEED_ALPHABET = '123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+
+function browserAutomaticSeedSetup(seed) {
+  const bytes = [...seed].map((character) => SEED_ALPHABET.indexOf(character));
+  if (bytes.length !== 4 || bytes.some((value) => value < 0)) {
+    throw new Error(`Browser verification seed must be four canonical seed characters: ${seed}`);
+  }
+  return bytes;
+}
 const BASE_PATH = '/AutoDrill';
 const SEEDS = (process.env.AUTODRILL_SEEDS ?? 'A1b2,M7x9').split(',').filter(Boolean);
 const EXTRA_SIGNED_SEEDS = ['Q4r6', 'Z8k3'];
@@ -407,6 +416,10 @@ function uiStateGraphProbe() {
     seed.dispatchEvent(new Event('change', { bubbles: true }));
     await sleep(20);
     edge('settings.seed.edit', seed.value === 'UiGraph');
+    setter.call(seed, '');
+    seed.dispatchEvent(new Event('input', { bubbles: true }));
+    seed.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(20);
     summary?.click(); await sleep(20);
     edge('settings.advanced.close', advanced?.open === false);
     summary?.click(); await sleep(20);
@@ -990,6 +1003,7 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
   return `(async () => {
     const seed = ${JSON.stringify(seed)};
     const difficultyLabel = ${JSON.stringify(difficultyLabel)};
+    const deterministicSeedBytes = ${JSON.stringify(browserAutomaticSeedSetup(seed))};
     const measureWorksheetGridAlignment = ${browserWorksheetGridAlignment.toString()};
     const measureColumnLaneSafety = ${browserColumnLaneSafety.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1011,19 +1025,20 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
       await new Promise(requestAnimationFrame);
       await new Promise(requestAnimationFrame);
     }
-    const seedInput = document.querySelector('input[aria-label="Seed"]');
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    setter.call(seedInput, seed);
-    seedInput.dispatchEvent(new Event('input', { bubbles: true }));
-    seedInput.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise(requestAnimationFrame);
-    await new Promise(requestAnimationFrame);
+    const originalGetRandomValues = Crypto.prototype.getRandomValues;
+    Crypto.prototype.getRandomValues = function deterministicGetRandomValues(array) {
+      for (let index = 0; index < array.length; index += 1) array[index] = deterministicSeedBytes[index % deterministicSeedBytes.length];
+      return array;
+    };
     document.querySelector('button[aria-label="問題生成"]').click();
+    Crypto.prototype.getRandomValues = originalGetRandomValues;
     const outcome = await waitFor(() => document.querySelector('.worksheet-screen .paper') || document.querySelector('[role="alert"]'), 'worksheet or generation error');
     if (outcome.getAttribute('role') === 'alert') throw new Error('Generation failed: ' + (outcome.getAttribute('aria-label') || outcome.textContent || 'unknown error'));
     const paper = outcome;
     const footerText = document.querySelector('[data-testid="worksheet-footer"]')?.textContent ?? '';
-    if (!footerText.includes(seed)) throw new Error('Generated worksheet does not use requested Seed ' + seed + ': ' + footerText);
+    const problemSetId = new URL(location.href).searchParams.get('seed');
+    if (!problemSetId || !problemSetId.includes('-' + seed + '-')) throw new Error('Generated worksheet URL does not contain requested raw Seed ' + seed + ': ' + problemSetId + ' href=' + location.href + ' footer=' + footerText);
+    if (!footerText.includes(problemSetId)) throw new Error('Generated worksheet footer does not use canonical full Seed ' + problemSetId + ': ' + footerText);
     await document.fonts.ready;
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
@@ -1144,7 +1159,41 @@ function worksheetProbe(seed, difficultyLabel = 'むずかしい') {
       && columnDivisionQuotient.getAttribute('data-column-decimal-mode') === 'none'
       && paper.querySelector('.column-division-answer-coordinate-remainder'),
     );
-    return { crossings, columnGridMismatches, worksheetGridAlignment, count: cells.length, gradeClass, fontSize, integerColumnDivision, alert: document.querySelector('[role=\"alert\"]')?.getAttribute('aria-label') ?? null };
+    return { problemSetId, crossings, columnGridMismatches, worksheetGridAlignment, count: cells.length, gradeClass, fontSize, integerColumnDivision, alert: document.querySelector('[role=\"alert\"]')?.getAttribute('aria-label') ?? null };
+  })()`;
+}
+
+
+function permalinkReplayProbe(expectedProblemSetId) {
+  return `(async () => {
+    const expectedProblemSetId = ${JSON.stringify(expectedProblemSetId)};
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (fn, label) => {
+      for (let i = 0; i < 800; i += 1) { const value = fn(); if (value) return value; await sleep(25); }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    let outcome = null;
+    for (let index = 0; index < 800 && !outcome; index += 1) {
+      outcome = document.querySelector('.worksheet-screen .paper') || document.querySelector('[role=\"alert\"]');
+      if (!outcome) await sleep(25);
+    }
+    if (!outcome) {
+      throw new Error('Permalink replay stalled: ' + JSON.stringify({
+        href: location.href,
+        readyState: document.readyState,
+        settings: Boolean(document.querySelector('.settings-screen')),
+        seedInput: document.querySelector('input[aria-label=\"Seed\"]')?.value ?? null,
+        busy: document.querySelector('[aria-busy=\"true\"]')?.className ?? null,
+        generateLabel: document.querySelector('button.primary-button')?.getAttribute('aria-label') ?? null,
+        wasm: Boolean(window.__AUTODRILL_WASM__),
+      }));
+    }
+    if (outcome.getAttribute('role') === 'alert') throw new Error('Permalink replay failed: ' + (outcome.getAttribute('aria-label') || outcome.textContent || 'unknown error'));
+    const actualProblemSetId = new URL(location.href).searchParams.get('seed');
+    const footerText = document.querySelector('[data-testid=\"worksheet-footer\"]')?.textContent ?? '';
+    if (actualProblemSetId !== expectedProblemSetId) throw new Error('Permalink replay changed the canonical full Seed: ' + actualProblemSetId);
+    if (!footerText.includes(expectedProblemSetId)) throw new Error('Permalink replay footer does not contain the canonical full Seed.');
+    return { problemSetId: actualProblemSetId, problemCount: outcome.querySelectorAll('.problem-cell').length };
   })()`;
 }
 
@@ -1883,6 +1932,7 @@ function directGenerationProbe(themeId, seed) {
 function printPreviewProbe(seed) {
   return `(async () => {
     const seed = ${JSON.stringify(seed)};
+    const deterministicSeedBytes = ${JSON.stringify(browserAutomaticSeedSetup(seed))};
     const measureColumnLaneSafety = ${browserColumnLaneSafety.toString()};
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const waitFor = async (fn, label, attempts = 800) => {
@@ -1900,16 +1950,15 @@ function printPreviewProbe(seed) {
       await new Promise(requestAnimationFrame);
       await new Promise(requestAnimationFrame);
     }
-    const seedInput = document.querySelector('input[aria-label="Seed"]');
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    setter.call(seedInput, seed);
-    seedInput.dispatchEvent(new Event('input', { bubbles: true }));
-    seedInput.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise(requestAnimationFrame);
-    await new Promise(requestAnimationFrame);
     const generateButton = document.querySelector('button[aria-label="問題生成"]');
+    const originalGetRandomValues = Crypto.prototype.getRandomValues;
+    Crypto.prototype.getRandomValues = function deterministicGetRandomValues(array) {
+      for (let index = 0; index < array.length; index += 1) array[index] = deterministicSeedBytes[index % deterministicSeedBytes.length];
+      return array;
+    };
     const beforeGenerate = { disabled: generateButton?.disabled ?? null, label: generateButton?.getAttribute('aria-label') ?? null };
     generateButton?.click();
+    Crypto.prototype.getRandomValues = originalGetRandomValues;
     let worksheetPaper = null;
     for (let i = 0; i < 800 && !worksheetPaper; i += 1) {
       worksheetPaper = document.querySelector('.worksheet-screen .paper');
@@ -1926,7 +1975,9 @@ function printPreviewProbe(seed) {
       };
     }
     const worksheetFooter = document.querySelector('[data-testid="worksheet-footer"]')?.textContent ?? '';
-    if (!worksheetFooter.includes(seed)) throw new Error('Print worksheet does not use requested Seed ' + seed + ': ' + worksheetFooter);
+    const problemSetId = new URL(location.href).searchParams.get('seed');
+    if (!problemSetId || !problemSetId.includes('-' + seed + '-')) throw new Error('Print worksheet URL does not contain requested raw Seed ' + seed + ': ' + problemSetId);
+    if (!worksheetFooter.includes(problemSetId)) throw new Error('Print worksheet does not use canonical full Seed ' + problemSetId + ': ' + worksheetFooter);
 
     window.__AUTODRILL_PRINT_PROBE__ = null;
     window.print = () => {
@@ -2227,6 +2278,14 @@ try {
           throw new Error(`Worksheet probe failed for ${route} seed=${seed}; console=${cdp.consoleErrors.join(' | ') || 'none'}`, { cause: error });
         }
         if (result.alert) failures.push({ route, seed, reason: `UI alert: ${result.alert}` });
+        if (routeIndex === 0 && seed === routeSeeds[0]) {
+          await navigate(cdp, `${origin}${BASE_PATH}${localRoute}?seed=${encodeURIComponent(result.problemSetId)}`);
+          const replay = await cdp.evaluate(permalinkReplayProbe(result.problemSetId));
+          if (replay.problemSetId !== result.problemSetId || replay.problemCount !== result.count) {
+            failures.push({ route, seed, reason: `permalink replay did not restore the generated worksheet identity: ${JSON.stringify(replay)}` });
+          }
+          console.log(`[identity] permalink replay verified: ${result.problemSetId}`);
+        }
         for (const crossing of result.crossings) {
           console.warn(`[layout] divider crossing: ${route} seed=${seed} problem=${crossing.problem} overflow=${crossing.overflow}px expression=${crossing.expression}`);
           failures.push({ route, seed, ...crossing });

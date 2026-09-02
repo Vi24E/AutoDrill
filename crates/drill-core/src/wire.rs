@@ -116,6 +116,7 @@ impl From<&Problem> for ProblemWire {
 pub struct WorksheetWire {
     schema_version: u16,
     identity: ProblemSetIdentity,
+    problem_set_id: String,
     layout: LayoutMetadata,
     problems: Vec<ProblemWire>,
 }
@@ -125,6 +126,7 @@ impl From<&Worksheet> for WorksheetWire {
         Self {
             schema_version: worksheet.schema_version(),
             identity: worksheet.identity().clone(),
+            problem_set_id: worksheet.problem_set_id(),
             layout: worksheet.layout().clone(),
             problems: worksheet.problems().iter().map(ProblemWire::from).collect(),
         }
@@ -165,12 +167,19 @@ mod tests {
         .unwrap();
         let wire = serde_json::to_value(WorksheetWire::from(&worksheet)).unwrap();
 
-        for internal_or_redundant_field in ["problem_set_id", "skill_id", "curriculum_path"] {
-            assert!(wire.get(internal_or_redundant_field).is_none());
+        for internal_field in ["skill_id", "curriculum_path"] {
+            assert!(wire.get(internal_field).is_none());
         }
-        for required_field in ["schema_version", "identity", "layout", "problems"] {
+        for required_field in [
+            "schema_version",
+            "identity",
+            "problem_set_id",
+            "layout",
+            "problems",
+        ] {
             assert!(wire.get(required_field).is_some());
         }
+        assert_eq!(wire["problem_set_id"], worksheet.problem_set_id());
     }
 
     #[test]

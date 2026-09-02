@@ -18,6 +18,7 @@ import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 /** Generated wasm-pack exports. New requests use the current generated schema. */
 export type DrillWasmRuntime = {
   generate_worksheet?: (request: string) => unknown | Promise<unknown>;
+  generate_problem_set?: (request: string) => unknown | Promise<unknown>;
   parse_mathlive_answer?: (request: string) => unknown | Promise<unknown>;
   grade_answer?: (request: string) => unknown | Promise<unknown>;
 };
@@ -572,6 +573,9 @@ function assertWorksheet(value: unknown): WorksheetDto {
   }
   assertIdentity(unwrapped.identity);
   const identity = unwrapped.identity;
+  if (typeof unwrapped.problem_set_id !== 'string' || unwrapped.problem_set_id.length === 0) {
+    invalidDto('WASM returned an invalid problem-set ID.', value);
+  }
   if (!isRecord(unwrapped.layout)) invalidDto('WASM returned an invalid worksheet layout.', value);
   assertU32(unwrapped.layout.problem_count, 'worksheet problem count');
   assertU32(unwrapped.layout.columns, 'worksheet column count');
@@ -645,6 +649,16 @@ export function createWasmDrillEngine(runtime?: DrillWasmRuntime): DrillEngine {
         const generate = resolveRuntime(runtime).generate_worksheet;
         if (!generate) throw new DrillEngineError('wasm_unavailable', 'drill-wasm does not expose generate_worksheet.');
         return assertWorksheet(await invokeBoundary(generate, settings));
+      } catch (error) {
+        throw mapBoundaryError(error);
+      }
+    },
+
+    async generateWorksheetById(problemSetId) {
+      try {
+        const generate = resolveRuntime(runtime).generate_problem_set;
+        if (!generate) throw new DrillEngineError('wasm_unavailable', 'drill-wasm does not expose generate_problem_set.');
+        return assertWorksheet(await invokeBoundary(generate, { problem_set_id: problemSetId }));
       } catch (error) {
         throw mapBoundaryError(error);
       }

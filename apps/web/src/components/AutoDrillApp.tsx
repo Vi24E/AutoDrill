@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import {
   DRILL_SCHEMA_VERSION,
@@ -59,6 +59,7 @@ import { loadGeneratedWasmRuntime } from '@/wasm/load-generated';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { worksheetGradeBandClass } from '@/domain/grade-band';
 import { generateAutomaticSeed } from '@/domain/seed';
+import { problemSetIdFromSearch, urlWithProblemSetId, urlWithoutProblemSetId } from '@/domain/problem-set-url';
 import { AUTODRILL_VERSION_LABEL } from '@/domain/version';
 import {
   createWorksheetMetadata,
@@ -66,6 +67,8 @@ import {
   type WorksheetDateGenerator,
   type WorksheetMetadata,
 } from '@/domain/worksheet-metadata';
+
+const defaultWorksheetDateGenerator: WorksheetDateGenerator = () => new Date();
 
 type WorksheetUiComponents = {
   MathLiveAnswerInput: typeof import('@/components/MathLiveMath').MathLiveAnswerInput;
@@ -219,9 +222,6 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '問': [["問", "もん"]],
   '任意': [["任意", "にんい"]],
   '詳細設定': [["詳細設定", "しょうさいせってい"]],
-  '同じSeedでは同じ問題が生成されます。': [["同", "おな"], 'じSeedでは', ["同", "おな"], 'じ', ["問題", "もんだい"], 'が', ["生成", "せいせい"], 'されます。'],
-  '空欄なら毎回自動生成': [["空欄", "くうらん"], 'なら', ["毎回", "まいかい"], ["自動生成", "じどうせいせい"]],
-  '同じSeedで同じ問題を再現できます。空欄なら毎回新しく生成します。': [["同", "おな"], 'じSeedで', ["同", "おな"], 'じ', ["問題", "もんだい"], 'を', ["再現", "さいげん"], 'できます。', ["空欄", "くうらん"], 'なら', ["毎回", "まいかい"], ["新", "あたら"], 'しく', ["生成", "せいせい"], 'します。'],
   '前回': [["前回", "ぜんかい"]],
   '問題生成': [["問題生成", "もんだいせいせい"]],
   '問題を生成中…': [["問題", "もんだい"], 'を', ["生成中", "せいせいちゅう"], '…'],
@@ -889,9 +889,9 @@ export function AutoDrillApp({
   initialWebSettings = DEFAULT_WEB_DRILL_SETTINGS,
   onWebSettingsChange,
   seedGenerator = generateAutomaticSeed,
-  dateGenerator = () => new Date(),
+  dateGenerator = defaultWorksheetDateGenerator,
 }: AutoDrillAppProps) {
-  const engine = injectedEngine ?? createWasmDrillEngine();
+  const engine = useMemo(() => injectedEngine ?? createWasmDrillEngine(), [injectedEngine]);
   const [screen, setScreen] = useState<Screen>('settings');
   const [worksheetUi, setWorksheetUi] = useState<WorksheetUiComponents | null>(null);
   const [settings, setSettings] = useState<DrillSettings>(() => ({
@@ -905,6 +905,7 @@ export function AutoDrillApp({
   }));
   const [worksheet, setWorksheet] = useState<WorksheetDto | null>(null);
   const [worksheetMetadata, setWorksheetMetadata] = useState<WorksheetMetadata | null>(null);
+  const [problemSetIdInput, setProblemSetIdInput] = useState('');
   const {
     answers,
     selectedIndex,
@@ -964,6 +965,7 @@ export function AutoDrillApp({
   const [gradingSettings, setGradingSettings] = useState<GradingSettings>(DEFAULT_GRADING_SETTINGS);
   const worksheetPhaseRef = useRef<WorksheetPhase>('editing');
   const noticeTimerRef = useRef<number | null>(null);
+  const urlReplayStartedRef = useRef(false);
   const selectedTheme = findTheme(webSettings.themeKey) ?? ONE_DIGIT_ADDITION_THEME;
 
   const transitionWorksheetPhase = useCallback((next: WorksheetPhase) => {
@@ -1066,6 +1068,13 @@ export function AutoDrillApp({
     if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
   }, []);
 
+  const clearProblemSetReplay = useCallback(() => {
+    setProblemSetIdInput('');
+    if (typeof window !== 'undefined' && problemSetIdFromSearch(window.location.search) !== null) {
+      window.history.replaceState(window.history.state, '', urlWithoutProblemSetId(window.location.href));
+    }
+  }, []);
+
   const changeTheme = useCallback((theme: CurriculumTheme) => {
     setWebSettings((current) => createWebDrillSettings(theme, current.difficulty, current.seed));
     if (theme.implemented) {
@@ -1074,8 +1083,9 @@ export function AutoDrillApp({
         numeric_theme_id: theme.numeric_theme_id,
       }));
     }
+    clearProblemSetReplay();
     setError(null);
-  }, []);
+  }, [clearProblemSetReplay]);
 
   const changeCurriculumMode = useCallback((mode: CurriculumMode) => {
     setCurriculumMode(mode);
@@ -1090,12 +1100,8 @@ export function AutoDrillApp({
   const changeDifficulty = useCallback((difficulty: DifficultyLevel) => {
     setWebSettings((current) => ({ ...current, difficulty }));
     setSettings((current) => ({ ...current, difficulty }));
-  }, []);
-
-  const changeSettings = useCallback((next: DrillSettings) => {
-    setSettings(next);
-    setWebSettings((current) => ({ ...current, seed: next.seed }));
-  }, []);
+    clearProblemSetReplay();
+  }, [clearProblemSetReplay]);
 
   const installWorksheet = useCallback((nextWorksheet: WorksheetDto, metadata: WorksheetMetadata) => {
     resetForWorksheet(nextWorksheet);
@@ -1129,8 +1135,9 @@ export function AutoDrillApp({
     setError(value instanceof Error ? value.message : '処理に失敗しました。');
   }, [showNotice]);
 
-  const generate = useCallback(async (printAfterGeneration: boolean, useExplicitSeed: boolean) => {
-    if (!selectedTheme.implemented) {
+  const generate = useCallback(async (printAfterGeneration: boolean, requestedProblemSetId: string | null) => {
+    const problemSetId = requestedProblemSetId?.trim() || null;
+    if (problemSetId === null && !selectedTheme.implemented) {
       setError('このテーマはまだ利用できません');
       return;
     }
@@ -1141,23 +1148,47 @@ export function AutoDrillApp({
     setSettingsBusyAction(printAfterGeneration ? 'print' : 'generate');
     const worksheetUiReady = printAfterGeneration ? null : preloadWorksheetUi();
     try {
-      const seed = useExplicitSeed && settings.seed !== '' ? settings.seed : seedGenerator();
-      const metadata = createWorksheetMetadata(seed, dateGenerator());
-      const generatedWorksheet = await engine.generateWorksheet({ ...settings, seed });
+      const generatedWorksheet = problemSetId === null
+        ? await engine.generateWorksheet({ ...settings, seed: seedGenerator() })
+        : await engine.generateWorksheetById(problemSetId);
       const loadedWorksheetUi = worksheetUiReady ? await worksheetUiReady : null;
-      // The Rust DTO remains the source of the problems. The spread adds the
-      // exact seed used by this UI invocation when a fixture/runtime returns a
-      // stale or normalized seed string.
-      const nextWorksheet = { ...generatedWorksheet, seed };
-      if (printAfterGeneration) await openWorksheetPdfLazy(nextWorksheet, metadata);
+      const metadata = createWorksheetMetadata(generatedWorksheet.problem_set_id, dateGenerator());
+      setProblemSetIdInput(problemSetId === null ? '' : generatedWorksheet.problem_set_id);
+
+      if (problemSetId !== null) {
+        const replayTheme = findImplementedThemeByNumericId(generatedWorksheet.identity.numeric_theme_id);
+        if (!replayTheme) throw new Error('Seedが参照する単元は現在のWeb版では利用できません。');
+        setSettings({
+          schema_version: DRILL_SCHEMA_VERSION,
+          numeric_theme_id: replayTheme.numeric_theme_id,
+          difficulty: generatedWorksheet.identity.difficulty,
+          seed: generatedWorksheet.identity.seed,
+        });
+        setWebSettings(createWebDrillSettings(
+          replayTheme,
+          generatedWorksheet.identity.difficulty,
+          generatedWorksheet.identity.seed,
+        ));
+        setCurriculumMode(replayTheme.recommendedGenre ? 'recommended' : 'grade');
+      }
+
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          urlWithProblemSetId(window.location.href, generatedWorksheet.problem_set_id),
+        );
+      }
+
+      if (printAfterGeneration) await openWorksheetPdfLazy(generatedWorksheet, metadata);
       if (printAfterGeneration) {
-        setWorksheet(nextWorksheet);
+        setWorksheet(generatedWorksheet);
         setWorksheetMetadata(metadata);
         setScreen('settings');
       } else {
         if (!loadedWorksheetUi) throw new Error('Worksheet UI failed to load.');
         setWorksheetUi(loadedWorksheetUi);
-        installWorksheet(nextWorksheet, metadata);
+        installWorksheet(generatedWorksheet, metadata);
         setScreen('worksheet');
       }
     } catch (value) {
@@ -1167,6 +1198,31 @@ export function AutoDrillApp({
       setSettingsBusyAction(null);
     }
   }, [dateGenerator, dismissNotice, engine, installWorksheet, seedGenerator, selectedTheme, settings, showEngineError]);
+
+  useEffect(() => {
+    if (urlReplayStartedRef.current || typeof window === 'undefined') return undefined;
+    urlReplayStartedRef.current = true;
+    const problemSetId = problemSetIdFromSearch(window.location.search);
+    if (problemSetId === null) return undefined;
+
+    setProblemSetIdInput(problemSetId);
+    let active = true;
+    const replay = async () => {
+      if (!injectedEngine && !window.__AUTODRILL_WASM__) {
+        const runtime = await loadGeneratedWasmRuntime();
+        if (!active) return;
+        window.__AUTODRILL_WASM__ = runtime;
+        window.__AUTODRILL_SCHEMA_VERSION__ = DRILL_SCHEMA_VERSION;
+      }
+      if (active) await generate(false, problemSetId);
+    };
+    void replay().catch((value: unknown) => {
+      if (active) showEngineError(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [generate, injectedEngine, showEngineError]);
 
   const selectProblem = useCallback((index: number, slot: MathfieldSlot = 'single') => {
     if (worksheetPhaseRef.current !== 'editing') return;
@@ -1713,24 +1769,24 @@ export function AutoDrillApp({
       <main className="app-shell">
         {screen === 'settings' ? (
           <SettingsScreen
-            settings={settings}
             busy={busy}
             busyAction={settingsBusyAction}
             error={error}
             hasWorksheet={Boolean(worksheet)}
             worksheetMetadata={worksheetMetadata}
+            problemSetIdInput={problemSetIdInput}
             curriculumMode={curriculumMode}
             webSettings={webSettings}
             furiganaEnabled={furiganaEnabled}
             gradingSettings={gradingSettings}
-            onSettingsChange={changeSettings}
+            onProblemSetIdInputChange={setProblemSetIdInput}
             onCurriculumModeChange={changeCurriculumMode}
             onThemeChange={changeTheme}
             onDifficultyChange={changeDifficulty}
             onFuriganaChange={changeFurigana}
             onGradingSettingsChange={setGradingSettings}
-            onGenerate={(useExplicitSeed) => void generate(false, useExplicitSeed)}
-            onPrint={(useExplicitSeed) => void generate(true, useExplicitSeed)}
+            onGenerate={() => void generate(false, problemSetIdInput)}
+            onPrint={() => void generate(true, problemSetIdInput)}
           />
         ) : worksheet && worksheetUi ? (
           <WorksheetScreen
@@ -1782,38 +1838,38 @@ function gradeTagForTheme(theme: CurriculumTheme): { label: string; className: s
 }
 
 type SettingsScreenProps = {
-  settings: DrillSettings;
   busy: boolean;
   busyAction: SettingsBusyAction;
   error: string | null;
   hasWorksheet: boolean;
   worksheetMetadata: WorksheetMetadata | null;
+  problemSetIdInput: string;
   curriculumMode: CurriculumMode;
   webSettings: WebDrillSettings;
   furiganaEnabled: boolean;
   gradingSettings: GradingSettings;
-  onSettingsChange: (settings: DrillSettings) => void;
+  onProblemSetIdInputChange: (problemSetId: string) => void;
   onCurriculumModeChange: (mode: CurriculumMode) => void;
   onThemeChange: (theme: CurriculumTheme) => void;
   onDifficultyChange: (difficulty: DifficultyLevel) => void;
   onFuriganaChange: (enabled: boolean) => void;
   onGradingSettingsChange: (settings: GradingSettings) => void;
-  onGenerate: (useExplicitSeed: boolean) => void;
-  onPrint: (useExplicitSeed: boolean) => void;
+  onGenerate: () => void;
+  onPrint: () => void;
 };
 
 function SettingsScreen({
-  settings,
   busy,
   busyAction,
   error,
   hasWorksheet,
   worksheetMetadata,
+  problemSetIdInput,
   curriculumMode,
   webSettings,
   furiganaEnabled,
   gradingSettings,
-  onSettingsChange,
+  onProblemSetIdInputChange,
   onCurriculumModeChange,
   onThemeChange,
   onDifficultyChange,
@@ -1830,7 +1886,6 @@ function SettingsScreen({
     ? activeRecommendedGenre.themes
     : selection.unit.themes;
   const unavailable = !selection.theme.implemented;
-  const [advancedSettingsOpened, setAdvancedSettingsOpened] = useState(false);
   const [gradingSettingsOpen, setGradingSettingsOpen] = useState(false);
   const [gradingWorksheetUi, setGradingWorksheetUi] = useState<WorksheetUiComponents | null>(null);
   const GradingMathLiveStatic = gradingWorksheetUi?.MathLiveStatic ?? null;
@@ -2024,27 +2079,27 @@ function SettingsScreen({
 
           <FuriganaContext.Provider value={false}>
           <details className="advanced-settings">
-            <summary onClick={() => setAdvancedSettingsOpened(true)}>
+            <summary>
               <RubyMessage text="詳細設定" />
               <svg className="advanced-settings-chevron" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" /></svg>
             </summary>
             <div className="advanced-settings-body">
               <div className="seed-field">
                 <label className="field-label seed-label" htmlFor="seed-input">
-                  Seed <span>(<RubyMessage text="同じSeedでは同じ問題が生成されます。" />)</span>
+                  Seed <span>(単元・難易度を含む問題ID)</span>
                 </label>
                 <div className="ruby-input">
                   <input
                     id="seed-input"
                     className="text-field"
                     aria-label="Seed"
-                    aria-placeholder="空欄なら毎回自動生成"
-                    value={settings.seed}
-                    onChange={(event) => onSettingsChange({ ...settings, seed: event.target.value })}
+                    aria-placeholder="空欄なら新しいSeedを自動生成"
+                    value={problemSetIdInput}
+                    onChange={(event) => onProblemSetIdInputChange(event.target.value)}
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  {settings.seed === '' ? <span className="ruby-input-placeholder" aria-hidden="true"><RubyMessage text="空欄なら毎回自動生成" /></span> : null}
+                  {problemSetIdInput === '' ? <span className="ruby-input-placeholder" aria-hidden="true">空欄なら新しいSeedを自動生成</span> : null}
                 </div>
               </div>
               <button
@@ -2070,11 +2125,11 @@ function SettingsScreen({
         ) : null}
 
         <div className="settings-actions">
-          <button type="button" className="primary-button" aria-label={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} disabled={busy || unavailable} onClick={() => onGenerate(advancedSettingsOpened)}>
+          <button type="button" className="primary-button" aria-label={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} disabled={busy || (unavailable && problemSetIdInput.trim() === '')} onClick={onGenerate}>
             <span className="button-icon" aria-hidden="true">▶</span>
             <RubyMessage text={busyAction === 'generate' ? '問題を生成中…' : '問題生成'} />
           </button>
-          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷 (pdfで出力)'} disabled={busy || unavailable} onClick={() => onPrint(advancedSettingsOpened)}>
+          <button type="button" className="secondary-button" aria-label={busyAction === 'print' ? 'PDFを準備中…' : '印刷 (pdfで出力)'} disabled={busy || (unavailable && problemSetIdInput.trim() === '')} onClick={onPrint}>
             <svg className="share-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 15V3" />
               <path d="m8 7 4-4 4 4" />

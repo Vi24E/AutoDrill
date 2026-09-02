@@ -58,6 +58,7 @@ browser presentation / interaction layer。
 - print preview / browser PDF
 - accessibility
 - browser-local persistence
+- canonical problem-set IDの共有/replay URL projection（identity parse/validation自体はRust）
 - Rust/WASM contract validation
 
 数学的normalizationやgradingをTypeScriptへ再実装しない。

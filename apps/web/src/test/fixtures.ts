@@ -24,6 +24,10 @@ const FIXTURE_SEED = 'fixtureSeed';
 const FIXTURE_THEME_ID = ONE_DIGIT_ADDITION_DEFINITION.numeric_theme_id;
 const FIXTURE_DIFFICULTY = 3 as const;
 
+function fixtureProblemSetId(numericThemeId: number, generatorRevision: number, difficulty: 2 | 3 = FIXTURE_DIFFICULTY): string {
+  return `${DRILL_SCHEMA_VERSION}-${numericThemeId}-${generatorRevision}-${FIXTURE_SEED}-${difficulty}`;
+}
+
 export function fixtureSettings(): DrillSettings {
   return {
     schema_version: DRILL_SCHEMA_VERSION,
@@ -60,6 +64,7 @@ export function fixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    problem_set_id: fixtureProblemSetId(FIXTURE_THEME_ID, ONE_DIGIT_ADDITION_DEFINITION.generator_revision),
     layout: ONE_DIGIT_ADDITION_DEFINITION.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -113,6 +118,7 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    problem_set_id: fixtureProblemSetId(themeId, definition.generator_revision),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -146,6 +152,7 @@ export function simultaneousFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    problem_set_id: fixtureProblemSetId(definition.numeric_theme_id, definition.generator_revision),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -206,6 +213,7 @@ export function columnDivisionFixtureWorksheet(themeId: 31 | 32 = 31): Worksheet
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    problem_set_id: fixtureProblemSetId(definition.numeric_theme_id, definition.generator_revision),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -244,6 +252,7 @@ export function columnDecimalMultiplicationFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    problem_set_id: fixtureProblemSetId(definition.numeric_theme_id, definition.generator_revision),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -273,6 +282,7 @@ export function liarFixtureWorksheet(): WorksheetDto {
   return {
     schema_version: DRILL_SCHEMA_VERSION,
     identity: { schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: definition.numeric_theme_id, generator_revision: definition.generator_revision, seed: FIXTURE_SEED, difficulty: 2 },
+    problem_set_id: fixtureProblemSetId(definition.numeric_theme_id, definition.generator_revision, 2),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -307,6 +317,7 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
       seed: FIXTURE_SEED,
       difficulty: FIXTURE_DIFFICULTY,
     },
+    problem_set_id: fixtureProblemSetId(definition.numeric_theme_id, definition.generator_revision),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,
@@ -316,6 +327,9 @@ export function miniSudokuFixtureWorksheet(): WorksheetDto {
 export function fixtureEngine(worksheet = fixtureWorksheet()): DrillEngine {
   return {
     async generateWorksheet() {
+      return worksheet;
+    },
+    async generateWorksheetById() {
       return worksheet;
     },
     async parseMathLiveAnswer(latex) {

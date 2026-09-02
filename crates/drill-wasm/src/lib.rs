@@ -9,14 +9,20 @@ use std::cell::Cell;
 #[cfg(any(target_arch = "wasm32", test))]
 use std::time::Duration;
 
-#[cfg(not(target_arch = "wasm32"))]
-use drill_core::generate_worksheet_request as core_generate_worksheet_request;
 #[cfg(test)]
 use drill_core::MAX_ANSWER_AST_SIZE;
 #[cfg(feature = "qa-diagnostics")]
 use drill_core::QA_OPERATION_VECTOR_BASIS;
+#[cfg(not(target_arch = "wasm32"))]
+use drill_core::{
+    generate_problem_set_from_id as core_generate_problem_set_from_id,
+    generate_worksheet_request as core_generate_worksheet_request,
+};
 #[cfg(target_arch = "wasm32")]
-use drill_core::{generate_worksheet_request_with_clock, GenerationConfig, MonotonicClock};
+use drill_core::{
+    generate_problem_set_from_id_with_clock, generate_worksheet_request_with_clock,
+    GenerationConfig, MonotonicClock,
+};
 use drill_core::{
     grade_answer_with_schema as core_grade_answer_with_schema,
     parse_mathlive_answer as core_parse_mathlive_answer, AnswerInputInterface, AnswerNode,
@@ -111,6 +117,11 @@ impl MonotonicClock for BrowserClock {
 }
 
 #[derive(Debug, Deserialize)]
+struct GenerateProblemSetRequest {
+    problem_set_id: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ParseMathLiveAnswerRequest {
     schema_version: u16,
     input_interface: AnswerInputInterface,
@@ -167,6 +178,13 @@ pub fn generate_worksheet(input_json: &str) -> String {
     })
 }
 
+#[wasm_bindgen]
+pub fn generate_problem_set(input_json: &str) -> String {
+    respond_with(input_json, |request: GenerateProblemSetRequest| {
+        generate_problem_set_for_platform(&request.problem_set_id).map_err(generation_error)
+    })
+}
+
 #[cfg(feature = "qa-diagnostics")]
 /// Local QA-only generation endpoint. The production Worksheet wire remains
 /// unchanged; effort diagnostics are exposed only to the explicit QA consumer.
@@ -209,6 +227,22 @@ fn generate_worksheet_for_platform(
     let config = GenerationConfig::from_request(request);
     let clock = BrowserClock::try_new().ok_or_else(|| GenerationError::timeout(config.timeout))?;
     generate_worksheet_request_with_clock(request, &clock)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_problem_set_for_platform(
+    problem_set_id: &str,
+) -> Result<drill_core::Worksheet, GenerationError> {
+    core_generate_problem_set_from_id(problem_set_id)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn generate_problem_set_for_platform(
+    problem_set_id: &str,
+) -> Result<drill_core::Worksheet, GenerationError> {
+    let config = GenerationConfig::default();
+    let clock = BrowserClock::try_new().ok_or_else(|| GenerationError::timeout(config.timeout))?;
+    generate_problem_set_from_id_with_clock(problem_set_id, &clock)
 }
 
 #[wasm_bindgen]
@@ -414,7 +448,10 @@ mod tests {
         assert_eq!(value["data"]["identity"]["numeric_theme_id"], 1);
         assert_eq!(value["data"]["identity"]["seed"], "Ab3Z");
         assert_eq!(value["data"]["identity"]["difficulty"], 3);
-        for removed_field in ["problem_set_id", "skill_id", "curriculum_path"] {
+        let identity: drill_core::ProblemSetIdentity =
+            serde_json::from_value(value["data"]["identity"].clone()).unwrap();
+        assert_eq!(value["data"]["problem_set_id"], identity.to_string());
+        for removed_field in ["skill_id", "curriculum_path"] {
             assert!(value["data"].get(removed_field).is_none());
         }
         assert_eq!(value["data"]["layout"]["problem_count"], 20);
@@ -436,6 +473,48 @@ mod tests {
         ] {
             assert!(problem.get(internal_effort_field).is_none());
         }
+    }
+
+    #[test]
+    fn problem_set_id_replay_round_trips_and_fails_closed() {
+        let generated = parse(&generate_worksheet(
+            &json!({
+                "schema_version": SCHEMA_VERSION,
+                "numeric_theme_id": 1,
+                "seed": "Ab3Z",
+                "difficulty": 3
+            })
+            .to_string(),
+        ));
+        let problem_set_id = generated["data"]["problem_set_id"].as_str().unwrap();
+        let replayed = parse(&generate_problem_set(
+            &json!({ "problem_set_id": problem_set_id }).to_string(),
+        ));
+        assert_eq!(replayed["ok"], true);
+        assert_eq!(replayed["data"], generated["data"]);
+
+        let malformed = parse(&generate_problem_set(
+            &json!({ "problem_set_id": "not-an-identity" }).to_string(),
+        ));
+        assert_eq!(malformed["error"]["code"], "invalid_problem_set_identity");
+
+        let unsupported_schema = parse(&generate_problem_set(
+            &json!({ "problem_set_id": "6-1-1-Ab3Z-3" }).to_string(),
+        ));
+        assert_eq!(
+            unsupported_schema["error"]["code"],
+            "unsupported_schema_version"
+        );
+
+        let mut parts = problem_set_id.split('-').collect::<Vec<_>>();
+        parts[2] = "4294967295";
+        let unknown_revision = parse(&generate_problem_set(
+            &json!({ "problem_set_id": parts.join("-") }).to_string(),
+        ));
+        assert_eq!(
+            unknown_revision["error"]["code"],
+            "unknown_generator_revision"
+        );
     }
 
     #[cfg(feature = "qa-diagnostics")]

@@ -29,7 +29,8 @@ pub use contract::web_contract;
 pub use effort::QA_OPERATION_VECTOR_BASIS;
 pub use error::{EditorError, GenerationError};
 pub use generator::{
-    generate_identity_with_clock, generate_worksheet_request,
+    generate_identity_with_clock, generate_problem_set_from_id,
+    generate_problem_set_from_id_with_clock, generate_worksheet_request,
     generate_worksheet_request_with_clock, GenerationConfig, MonotonicClock, DEFAULT_MAX_ATTEMPTS,
     DEFAULT_TIMEOUT,
 };
@@ -142,7 +143,7 @@ mod tests {
             };
             let encoded = serde_json::to_string(&request).unwrap();
             let decoded: GenerateWorksheetRequest = serde_json::from_str(&encoded).unwrap();
-            prop_assert_eq!(decoded, request);
+            prop_assert_eq!(&decoded, &request);
 
             let identity = ProblemSetIdentity::new(
                 THEME_ID_ONE_DIGIT_ADDITION,
@@ -152,6 +153,9 @@ mod tests {
             ).unwrap();
             let id = identity.to_string();
             prop_assert_eq!(id.parse::<ProblemSetIdentity>().unwrap(), identity);
+            let generated = generate_worksheet_request(&request).unwrap();
+            let replayed = generate_problem_set_from_id(&id).unwrap();
+            prop_assert_eq!(replayed, generated);
         }
 
         #[test]

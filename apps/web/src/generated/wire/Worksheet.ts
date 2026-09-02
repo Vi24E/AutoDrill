@@ -7,4 +7,4 @@ import type { ProblemSetIdentity } from "./ProblemSetIdentity";
  * Serialized worksheet representation. The domain worksheet may evolve its
  * internal ownership without forcing Web DTO concerns back into generation.
  */
-export type Worksheet = { schema_version: number, identity: ProblemSetIdentity, layout: LayoutMetadata, problems: Array<Problem>, };
+export type Worksheet = { schema_version: number, identity: ProblemSetIdentity, problem_set_id: string, layout: LayoutMetadata, problems: Array<Problem>, };

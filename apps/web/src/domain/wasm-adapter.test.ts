@@ -95,6 +95,20 @@ describe('versioned WASM adapter', () => {
     expect(new Set(result.problems.map((problem) => problem.id)).size).toBe(20);
   });
 
+  it('replays an opaque problem-set ID through the Rust-owned boundary', async () => {
+    const worksheet = fixtureWorksheet();
+    const replay = vi.fn().mockResolvedValue(envelope(worksheet));
+    const engine = createWasmDrillEngine({ generate_problem_set: replay });
+
+    await expect(engine.generateWorksheetById(worksheet.problem_set_id)).resolves.toMatchObject({
+      problem_set_id: worksheet.problem_set_id,
+      identity: worksheet.identity,
+    });
+    expect(JSON.parse(replay.mock.calls[0]?.[0] as string)).toEqual({
+      problem_set_id: worksheet.problem_set_id,
+    });
+  });
+
   it('does not add stricter rational-schema semantics than drill-core', async () => {
     const worksheet = linearFixtureWorksheet(3);
     worksheet.problems = [{

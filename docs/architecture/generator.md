@@ -14,7 +14,7 @@ identityは少なくとも次のversioned informationを持つ。
 - Seed
 - difficulty
 
-将来Seed自体へ詳細設定を包含する設計変更は [GitHub Issues](https://github.com/Vi24E/AutoDrill/issues) / `../roadmap.md` に従う。
+product UIで「Seed」として共有する値は、この5 fieldを可逆に含む`ProblemSetIdentity`の文字列表現とする。request内の`seed` fieldはdeterministic RNGのentropy componentであり、単独ではworksheet identityではない。full IDのparse/validation/replayはRust `ProblemSetIdentity::from_str`と`generate_problem_set_from_id`だけが所有し、Webは文字列のfield分解を再実装しない。pre-releaseでは現行generator revisionだけを保持し、未知revisionのIDはfail closedする。
 
 performance改善やmodule分割でdeterminismを壊さない。
 

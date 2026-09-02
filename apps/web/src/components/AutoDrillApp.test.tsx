@@ -10,6 +10,7 @@ import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from '@/domain/themes/colum
 import { COLUMN_DECIMAL_MULTIPLICATION_DEFINITION } from '@/domain/themes/column-decimal-multiplication';
 import { SIGNED_ARITHMETIC_1_DEFINITION } from '@/domain/themes/signed-arithmetic-1';
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
+import { problemSetIdFromSearch } from '@/domain/problem-set-url';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
 import { columnDecimalMultiplicationFixtureWorksheet, columnDivisionFixtureWorksheet, fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
@@ -166,15 +167,26 @@ function structuredFixtureEngine(): DrillEngine {
 
 function seedRecordingEngine() {
   const seeds: string[] = [];
+  const problemSetIds: string[] = [];
   const base = fixtureEngine();
   const engine: DrillEngine = {
     ...base,
     async generateWorksheet(settings) {
       seeds.push(settings.seed);
-      return { ...fixtureWorksheet(), seed: settings.seed };
+      const worksheet = fixtureWorksheet();
+      worksheet.identity.numeric_theme_id = settings.numeric_theme_id;
+      worksheet.identity.seed = settings.seed;
+      worksheet.identity.difficulty = settings.difficulty;
+      worksheet.seed = settings.seed;
+      worksheet.problem_set_id = `${worksheet.identity.schema_version}-${worksheet.identity.numeric_theme_id}-${worksheet.identity.generator_revision}-${settings.seed}-${worksheet.identity.difficulty}`;
+      return worksheet;
+    },
+    async generateWorksheetById(problemSetId) {
+      problemSetIds.push(problemSetId);
+      return fixtureWorksheet();
     },
   };
-  return { engine, seeds };
+  return { engine, seeds, problemSetIds };
 }
 
 function deferredGenerationEngine() {
@@ -193,6 +205,9 @@ function deferredGenerationEngine() {
 describe('AutoDrillApp', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.history.replaceState(null, '', '/');
+    delete window.__AUTODRILL_WASM__;
+    delete window.__AUTODRILL_SCHEMA_VERSION__;
   });
 
   it('enables furigana by default on q1', () => {
@@ -215,7 +230,7 @@ describe('AutoDrillApp', () => {
     expect(seedLabel).not.toBeNull();
     const seedLabelClone = seedLabel?.cloneNode(true) as HTMLElement;
     seedLabelClone.querySelectorAll('rt').forEach((reading) => reading.remove());
-    expect(seedLabelClone.textContent).toContain('Seed (同じSeedでは同じ問題が生成されます。)');
+    expect(seedLabelClone.textContent).toContain('Seed (単元・難易度を含む問題ID)');
     expect(screen.queryByText('同じSeedで同じ問題を再現できます。空欄なら毎回新しく生成します。')).not.toBeInTheDocument();
     expect(screen.queryByText('問題の生成・入力状態・採点は Rust/WASM が担当します。')).not.toBeInTheDocument();
 
@@ -1280,7 +1295,7 @@ describe('AutoDrillApp', () => {
     await waitFor(() => expect(screen.queryByLabelText('式が大きすぎます！')).not.toBeInTheDocument());
   });
 
-  it('generates distinct automatic seeds for blank q1 generation and print', async () => {
+  it('generates distinct raw seeds while exposing the canonical problem-set ID in the URL and footer', async () => {
     const { engine, seeds } = seedRecordingEngine();
     const generatedSeeds = ['A1b2', 'C3d4'];
     let seedIndex = 0;
@@ -1297,6 +1312,8 @@ describe('AutoDrillApp', () => {
     expect(screen.getByLabelText('Seed')).toHaveValue('');
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
+    expect(window.location.search).toContain(`seed=${encodeURIComponent(`7-1-${ONE_DIGIT_ADDITION_THEME.generator_revision}-A1b2-2`)}`);
+
     fireEvent.click(screen.getByRole('button', { name: 'TOPに戻る' }));
     expect(screen.getByLabelText('Seed')).toHaveValue('');
     fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
@@ -1304,77 +1321,91 @@ describe('AutoDrillApp', () => {
 
     expect(seeds).toEqual(generatedSeeds);
     expect(new Set(seeds).size).toBe(2);
-    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', seed: 'C3d4' });
+    expect(openSpy.mock.calls[0]?.[1]).toEqual({
+      generated_date: '2026-07-30',
+      problem_set_id: `7-1-${ONE_DIGIT_ADDITION_THEME.generator_revision}-C3d4-2`,
+    });
   });
 
-  it('uses an explicit Seed after detailed settings has been opened on the current TOP visit', async () => {
-    const { engine, seeds } = seedRecordingEngine();
-    render(
-      <AutoDrillApp
-        engine={engine}
-        initialSettings={{ ...fixtureSettings(), seed: '' }}
-        seedGenerator={() => 'automaticAfterTop'}
-        dateGenerator={() => new Date(2026, 6, 30)}
-      />,
-    );
+  it('replays a full Seed through the Rust-owned problem-set identity boundary', async () => {
+    const { engine, seeds, problemSetIds } = seedRecordingEngine();
+    const problemSetId = fixtureWorksheet().problem_set_id;
+    render(<AutoDrillApp engine={engine} seedGenerator={() => 'unused'} dateGenerator={() => new Date(2026, 6, 30)} />);
 
     fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.change(screen.getByLabelText('Seed'), { target: { value: 'repeatMe' } });
-    expect(screen.getByLabelText('Seed')).toHaveValue('repeatMe');
-    fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
-    await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
-    const pdfPages = buildPdfPageModel(fixtureWorksheet(), { generated_date: '2026-07-30', seed: 'repeatMe' });
-    expect(screen.getByTestId('worksheet-footer').textContent).toBe(pdfPages[0]?.footer?.text);
-
-    fireEvent.click(screen.getByRole('button', { name: 'TOPに戻る' }));
-    expect(screen.getByLabelText('Seed')).toHaveValue('repeatMe');
+    fireEvent.change(screen.getByLabelText('Seed'), { target: { value: problemSetId } });
     fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
 
-    expect(seeds).toEqual(['repeatMe', 'automaticAfterTop']);
-    expect(screen.getByTestId('worksheet-footer')).toHaveTextContent('automaticAfterTop');
+    expect(problemSetIds).toEqual([problemSetId]);
+    expect(seeds).toEqual([]);
+    expect(screen.getByTestId('worksheet-footer')).toHaveTextContent(problemSetId);
+    expect(problemSetIdFromSearch(window.location.search)).toBe(problemSetId);
   });
 
-  it('uses an explicit Seed for q1 print after detailed settings has been opened and closed', async () => {
-    const { engine, seeds } = seedRecordingEngine();
+  it('uses a full Seed for print replay without generating a new raw seed', async () => {
+    const { engine, seeds, problemSetIds } = seedRecordingEngine();
+    const problemSetId = fixtureWorksheet().problem_set_id;
     const pdfModule = await import('@/pdf/worksheet-pdf');
     const openSpy = vi.mocked(pdfModule.openWorksheetPdf);
-    render(
-      <AutoDrillApp
-        engine={engine}
-        initialSettings={{ ...fixtureSettings(), seed: '' }}
-        seedGenerator={() => 'automaticInstead'}
-        dateGenerator={() => new Date(2026, 6, 30)}
-      />,
-    );
+    render(<AutoDrillApp engine={engine} seedGenerator={() => 'unused'} dateGenerator={() => new Date(2026, 6, 30)} />);
+
     fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.change(screen.getByLabelText('Seed'), { target: { value: 'printSeed' } });
-    fireEvent.click(screen.getByText('詳細設定'));
+    fireEvent.change(screen.getByLabelText('Seed'), { target: { value: problemSetId } });
     fireEvent.click(screen.getByRole('button', { name: '印刷 (pdfで出力)' }));
     await waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
-    expect(seeds).toEqual(['printSeed']);
-    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', seed: 'printSeed' });
+
+    expect(problemSetIds).toEqual([problemSetId]);
+    expect(seeds).toEqual([]);
+    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', problem_set_id: problemSetId });
   });
 
-  it('passes valid manual Seeds unchanged after detailed settings has been opened', async () => {
-    const { engine, seeds } = seedRecordingEngine();
-    render(<AutoDrillApp engine={engine} initialSettings={{ ...fixtureSettings(), seed: '' }} />);
+  it('replays the Seed query parameter on load and restores its theme and difficulty', async () => {
+    const worksheet = linearFixtureWorksheet(2);
+    window.history.replaceState(null, '', `/?seed=${encodeURIComponent(worksheet.problem_set_id)}`);
+    render(<AutoDrillApp engine={fixtureEngine(worksheet)} />);
 
-    fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.change(screen.getByLabelText('Seed'), { target: { value: '1' } });
-    fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    await screen.findByRole('heading', { name: '一次方程式(1)：基本形' });
+    fireEvent.click(screen.getByRole('button', { name: 'TOPに戻る' }));
+    expect(screen.getByLabelText('Seed')).toHaveValue(worksheet.problem_set_id);
+    expect(screen.getByRole('combobox', { name: '難易度' })).toHaveAttribute('data-selected-label', 'むずかしい');
+    expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '一次方程式(1)：基本形');
+  });
+
+
+  it('clears a replay Seed and permalink when difficulty changes', async () => {
+    const worksheet = fixtureWorksheet();
+    window.history.replaceState(null, '', `/?seed=${encodeURIComponent(worksheet.problem_set_id)}`);
+    render(<AutoDrillApp engine={fixtureEngine(worksheet)} />);
+
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
     fireEvent.click(screen.getByRole('button', { name: 'TOPに戻る' }));
+    expect(screen.getByLabelText('Seed')).toHaveValue(worksheet.problem_set_id);
 
-    fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.change(screen.getByLabelText('Seed'), { target: { value: '123456789abcdeFG' } });
-    fireEvent.click(screen.getByText('詳細設定'));
-    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    fireEvent.click(screen.getByRole('combobox', { name: '難易度' }));
+    fireEvent.click(screen.getByRole('option', { name: 'ふつう' }));
+
+    expect(screen.getByLabelText('Seed')).toHaveValue('');
+    expect(problemSetIdFromSearch(window.location.search)).toBeNull();
+  });
+
+
+  it('keeps the production WASM engine stable while permalink replay updates local state', async () => {
+    const worksheet = fixtureWorksheet();
+    const generateProblemSet = vi.fn(async (_input: string) => JSON.stringify({
+      schema_version: DRILL_SCHEMA_VERSION,
+      ok: true,
+      data: worksheet,
+      error: null,
+    }));
+    window.__AUTODRILL_WASM__ = { generate_problem_set: generateProblemSet };
+    window.history.replaceState(null, '', `/?seed=${encodeURIComponent(worksheet.problem_set_id)}`);
+
+    render(<AutoDrillApp />);
+
     await screen.findByRole('heading', { name: '1けたのたしざん(1)' });
-
-    expect(seeds).toEqual(['1', '123456789abcdeFG']);
+    expect(generateProblemSet).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(generateProblemSet.mock.calls[0]?.[0] as string)).toEqual({ problem_set_id: worksheet.problem_set_id });
   });
 
   it('grades the latest answer when grading immediately after queued input', async () => {
@@ -1656,7 +1687,7 @@ describe('AutoDrillApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '印刷' }));
     await waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
     expect(openSpy.mock.calls[0]?.[0].seed).toBe('generatedSeed');
-    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', seed: 'generatedSeed' });
+    expect(openSpy.mock.calls[0]?.[1]).toEqual({ generated_date: '2026-07-30', problem_set_id: `7-1-${ONE_DIGIT_ADDITION_THEME.generator_revision}-generatedSeed-2` });
     expect(seeds).toEqual(['generatedSeed']);
   });
 

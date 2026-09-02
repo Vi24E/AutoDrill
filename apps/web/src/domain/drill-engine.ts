@@ -186,6 +186,7 @@ export class DrillEngineError extends Error {
 
 export interface DrillEngine {
   generateWorksheet(settings: DrillSettings): Promise<WorksheetDto>;
+  generateWorksheetById(problemSetId: string): Promise<WorksheetDto>;
   parseMathLiveAnswer(latex: string, inputInterface: AnswerInputInterface): Promise<AnswerNode>;
   gradeAnswer(request: GradeRequest): Promise<GradeResult>;
 }

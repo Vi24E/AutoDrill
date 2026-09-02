@@ -477,6 +477,19 @@ pub fn generate_worksheet_request(
     generate_worksheet_request_with_clock(request, &clock)
 }
 
+pub fn generate_problem_set_from_id(problem_set_id: &str) -> Result<Worksheet, GenerationError> {
+    let clock = SystemClock::new();
+    generate_problem_set_from_id_with_clock(problem_set_id, &clock)
+}
+
+pub fn generate_problem_set_from_id_with_clock<C: MonotonicClock + ?Sized>(
+    problem_set_id: &str,
+    clock: &C,
+) -> Result<Worksheet, GenerationError> {
+    let identity = problem_set_id.parse::<ProblemSetIdentity>()?;
+    generate_identity_with_clock(&identity, &GenerationConfig::default(), clock)
+}
+
 pub fn generate_worksheet_request_with_clock<C: MonotonicClock + ?Sized>(
     request: &GenerateWorksheetRequest,
     clock: &C,
