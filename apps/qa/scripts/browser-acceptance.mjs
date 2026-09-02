@@ -121,18 +121,25 @@ try {
   ({ chrome, cdp } = await launchChrome(qaUrl, directory, 'first'));
   let { evaluate } = cdp;
   await waitFor(evaluate, `document.querySelector('#unit-choice') !== null`, 'unit chooser');
+  const currentUnits = await fetch(`${qaUrl}/api/quick/units`).then((response) => response.json());
   const unitChooser = await evaluate(`({
     labels: [...document.querySelector('#unit-choice').options].map(option=>option.textContent),
+    values: [...document.querySelector('#unit-choice').options].map(option=>option.value),
     horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
     customToggle: Boolean(document.querySelector('[data-custom-sampling]')),
     customChecked: document.querySelector('[data-custom-sampling]')?.checked,
   })`);
-  const hasUnit = (name) => unitChooser.labels.some((label) => label.startsWith(`${name}（`) && label.endsWith('件）'));
-  if (unitChooser.labels.length !== 35 || !unitChooser.customToggle || unitChooser.customChecked || !hasUnit('分数の足し算') || !hasUnit('一次方程式(1)') || !hasUnit('二次方程式(3)') || !hasUnit('すうじはひとりぼっち') || hasUnit('一桁の足し算') || hasUnit('一桁の引き算') || hasUnit('九九') || unitChooser.horizontalOverflow) {
-    throw new Error(`Unit chooser contract is broken: ${JSON.stringify(unitChooser)}`);
+  const expectedUnitValues = currentUnits.map((unit) => unit.skill_id);
+  const chooserContainsEveryCurrentUnit = JSON.stringify(unitChooser.values.slice(1)) === JSON.stringify(expectedUnitValues);
+  const chooserShowsObservationCounts = unitChooser.labels.slice(1).every((label) => /（\d+件）$/.test(label));
+  if (unitChooser.labels.length !== currentUnits.length + 1 || !chooserContainsEveryCurrentUnit || !chooserShowsObservationCounts || !unitChooser.customToggle || unitChooser.customChecked || unitChooser.horizontalOverflow) {
+    throw new Error(`Unit chooser contract is broken: ${JSON.stringify({ unitChooser, expectedUnitValues })}`);
   }
   await capture(cdp, '00-unit-choice');
-  await evaluate(setAndInput('#unit-choice', 'jp.grade7.equation.linear.1'));
+  const selectedSkillId = 'jp.grade7.equation.linear.1';
+  const selectedUnit = currentUnits.find((unit) => unit.skill_id === selectedSkillId);
+  if (!selectedUnit) throw new Error(`Expected browser fixture unit is unavailable: ${selectedSkillId}`);
+  await evaluate(setAndInput('#unit-choice', selectedSkillId));
   await evaluate(`document.querySelector('#start-unit').click()`);
   await waitFor(evaluate, `document.querySelectorAll('[data-prefix="rate"]').length === 49`, 'automatic rating-only problem');
   try {
@@ -150,7 +157,7 @@ try {
   const firstAttempt = qa.repository.activeAttempt();
   const firstDetail = qa.repository.attemptDetail(firstAttempt.id);
   if (firstDetail.source !== 'autodrill') throw new Error('Quick flow did not create an AutoDrill item.');
-  if (firstDetail.unit_name !== '一次方程式(1)' || !firstDetail.problem_representation.includes('x') || firstDetail.original_source_payload.theme.skill_id !== 'jp.grade7.equation.linear.1') throw new Error('Selected linear-equation unit was not generated.');
+  if (firstDetail.unit_name !== selectedUnit.name || !firstDetail.problem_representation.includes('x') || firstDetail.original_source_payload.theme.skill_id !== selectedSkillId) throw new Error('Selected linear-equation unit was not generated.');
   const initialUi = await evaluate(`({
     answerVisible: Boolean(document.querySelector('.print-render-frame')?.contentDocument?.querySelector('[data-print-page="answers"] [data-print-problem-index]')),
     hasAnswerInput: Boolean(document.querySelector('#answer, #submit-answer')),
@@ -168,7 +175,7 @@ try {
     printRenderer: (()=>{const frame=document.querySelector('.print-render-overlay iframe, .print-render-shell .print-render-frame');const cell=frame.contentDocument.querySelector('[data-print-page="answers"][data-qa-selected-page="true"] [data-qa-mathlive-ready="true"]');const math=[...(cell?.querySelectorAll('math-span')??[])];return {ready:document.querySelector('.print-render-shell').classList.contains('ready'),selectedCell:Boolean(cell),math:math.length,renderedMath:math.length>0&&Number(frame.contentDocument.body.dataset.mathliveReadyCount)===math.length}})(),
     viewportHeight: innerHeight,
   })`);
-  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight - 24 || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5 || !initialUi.axisText.includes('横軸：難しさ') || !initialUi.axisText.includes('縦軸：特異性') || initialUi.selectedUnit !== 'jp.grade7.equation.linear.1' || initialUi.customChecked || !initialUi.homeButton?.includes('単元選択') || !initialUi.printRenderer.ready || !initialUi.printRenderer.selectedCell || !initialUi.printRenderer.renderedMath) {
+  if (!initialUi.answerVisible || initialUi.hasAnswerInput || initialUi.cells !== 49 || initialUi.horizontalOverflow || initialUi.confirmBottom > initialUi.viewportHeight - 24 || initialUi.horizontalGap !== 0 || initialUi.verticalGap !== 0 || Math.abs(initialUi.originOffset.x) > 0.5 || Math.abs(initialUi.originOffset.y) > 0.5 || !initialUi.axisText.includes('横軸：難しさ') || !initialUi.axisText.includes('縦軸：特異性') || initialUi.selectedUnit !== selectedSkillId || initialUi.customChecked || !initialUi.homeButton?.includes('単元選択') || !initialUi.printRenderer.ready || !initialUi.printRenderer.selectedCell || !initialUi.printRenderer.renderedMath) {
     throw new Error(`Initial rating UI is broken: ${JSON.stringify(initialUi)}`);
   }
   if (firstDetail.observation_mode !== 'rating_only_answer_shown' || firstDetail.raw_user_answer !== null || firstDetail.correctness !== 'ungraded') {
@@ -204,7 +211,7 @@ try {
   const prefetchedSwap = await evaluate(`(()=>{const frame=document.querySelector('.print-render-overlay iframe');const cell=frame?.contentDocument?.querySelector('[data-print-page="answers"][data-qa-selected-page="true"] [data-qa-mathlive-ready="true"]');const math=[...(cell?.querySelectorAll('math-span')??[])];return {ready:document.querySelector('.print-render-shell')?.classList.contains('ready'),prefetchSource:frame?.src.includes('prefetch='),fallbackHidden:getComputedStyle(document.querySelector('.print-render-fallback')).visibility==='hidden',renderedMath:math.length>0&&Number(frame.contentDocument.body.dataset.mathliveReadyCount)===math.length}})()`);
   if (!prefetchedSwap.ready || !prefetchedSwap.prefetchSource || !prefetchedSwap.fallbackHidden || !prefetchedSwap.renderedMath) throw new Error(`Prefetched render was not swapped immediately: ${JSON.stringify(prefetchedSwap)}`);
   if (await evaluate(`Boolean(document.querySelector('#next-problem, .saved-panel'))`)) throw new Error('A blocking saved screen remains in the flow.');
-  if (qa.repository.activeAttempt().source_skill_id !== 'jp.grade7.equation.linear.1') throw new Error('Auto-next changed the selected unit.');
+  if (qa.repository.activeAttempt().source_skill_id !== selectedSkillId) throw new Error('Auto-next changed the selected unit.');
   if (qa.repository.attemptDetail(qa.repository.activeAttempt().id).original_source_payload.worksheet.identity.seed !== firstDetail.original_source_payload.worksheet.identity.seed) throw new Error('Auto-next did not consume the prefetched worksheet batch.');
   await waitFor(evaluate, `document.querySelector('.print-render-shell.ready') !== null`, 'next exact print render');
   await capture(cdp, '02-next-problem');
@@ -237,7 +244,7 @@ try {
   const abandonedDetail = qa.repository.attemptDetail(customAttempt.id);
   if (abandonedDetail.state !== 'abandoned' || abandonedDetail.invalidation_reason !== 'return_to_unit_chooser_before_rating') throw new Error('Returning to the unit chooser did not preserve the shown problem as abandoned.');
   const returnedChooser = await evaluate(`({selected:document.querySelector('#unit-choice').value,custom:document.querySelector('[data-custom-sampling]').checked})`);
-  if (returnedChooser.selected !== 'jp.grade7.equation.linear.1' || !returnedChooser.custom) throw new Error(`Unit chooser did not preserve current development context: ${JSON.stringify(returnedChooser)}`);
+  if (returnedChooser.selected !== selectedSkillId || !returnedChooser.custom) throw new Error(`Unit chooser did not preserve current development context: ${JSON.stringify(returnedChooser)}`);
   await capture(cdp, '03-unit-return');
   await evaluate(`document.querySelector('[data-view="history"]').click()`);
   try {
@@ -258,7 +265,7 @@ try {
   await evaluate(`document.querySelector('#save-revision').click()`);
   await waitFor(evaluate, `document.querySelectorAll('#history-detail tbody tr').length >= 2`, 'rating revision history');
 
-  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')&&item.original_source_payload_json.includes('jp.grade7.equation.linear.1')&&item.original_source_payload_json.includes('generation_git_state')),unitSelection:full.data.selection_events.every(selection=>JSON.parse(selection.filters_json).selected_skill_id==='jp.grade7.equation.linear.1'&&Number.isInteger(JSON.parse(selection.filters_json).worksheet_problem_index)),randomSelections:full.data.selection_events.filter(selection=>selection.selection_policy==='autodrill_unit_random_v1').length,customSelections:full.data.selection_events.filter(selection=>selection.selection_policy==='autodrill_unit_custom_v1'&&selection.model_name==='operation_vector_information'&&selection.model_version==='1'&&selection.selection_probability===null&&Boolean(selection.candidate_scores_json)).length,gitState:full.data.attempts.every(attempt=>JSON.parse(attempt.autodrill_git_state_json).head_sha==='browser-acceptance-sha'),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')&&csv.includes('git_worktree_state')}; })()`);
+  const exportCheck = await evaluate(`(async()=>{ const full=await fetch('/api/export/full').then(r=>r.json()); const csv=await fetch('/api/export/analysis.csv').then(r=>r.text()); return {attempts:full.data.attempts.length,completed:full.data.attempts.filter(attempt=>attempt.state==='complete').length,abandoned:full.data.attempts.filter(attempt=>attempt.state==='abandoned').length,events:full.data.input_events.length,autodrill:full.data.items.every(item=>item.source==='autodrill'),ratingOnly:full.data.attempts.every(attempt=>attempt.observation_mode==='rating_only_answer_shown'&&attempt.raw_user_answer===null&&attempt.correctness==='ungraded'),continuous:full.data.evaluations.every(evaluation=>Number.isFinite(evaluation.difficulty_position)&&Number.isFinite(evaluation.singularity_position)),preReveal:full.data.evaluations.every(evaluation=>evaluation.pre_answer_reveal===0),sourcePayload:full.data.item_revisions.every(item=>item.original_source_payload_json.includes('autodrill_qa_wasm_v1')&&item.original_source_payload_json.includes('jp.grade7.equation.linear.1')&&item.original_source_payload_json.includes('generation_git_state')),unitSelection:full.data.selection_events.every(selection=>JSON.parse(selection.filters_json).selected_skill_id===${JSON.stringify(selectedSkillId)}&&Number.isInteger(JSON.parse(selection.filters_json).worksheet_problem_index)),randomSelections:full.data.selection_events.filter(selection=>selection.selection_policy==='autodrill_unit_random_v1').length,customSelections:full.data.selection_events.filter(selection=>selection.selection_policy==='autodrill_unit_custom_v1'&&selection.model_name==='operation_vector_information'&&selection.model_version==='1'&&selection.selection_probability===null&&Boolean(selection.candidate_scores_json)).length,gitState:full.data.attempts.every(attempt=>JSON.parse(attempt.autodrill_git_state_json).head_sha==='browser-acceptance-sha'),csv:csv.includes('difficulty_position')&&csv.includes('singularity_position')&&csv.includes('browser-acceptance-sha')&&csv.includes('git_worktree_state')}; })()`);
   if (exportCheck.attempts !== 3 || exportCheck.completed !== 2 || exportCheck.abandoned !== 1 || exportCheck.events < 9 || !exportCheck.autodrill || !exportCheck.ratingOnly || !exportCheck.continuous || !exportCheck.preReveal || !exportCheck.sourcePayload || !exportCheck.unitSelection || exportCheck.randomSelections !== 2 || exportCheck.customSelections !== 1 || !exportCheck.gitState || !exportCheck.csv) throw new Error(`Export verification failed: ${JSON.stringify(exportCheck)}`);
   if (cdp.errors.length) throw new Error(`Browser console errors: ${cdp.errors.join(' | ')}`);
   const result = { status: 'passed', operations: ['unit observation counts', 'all current unit chooser', 'equation unit availability', 'fraction unit availability', 'basic repetition unit exclusion', 'original Rust/WASM selected-unit generation', 'custom sampling toggle', 'operation-vector information custom sampling', 'custom sampling provenance', 'prefetched worksheet same-unit auto-next', 'prefetched print render immediate swap', 'exact production print renderer', 'automatic session start', 'answer shown before rating', 'no answer input', 'continuous 2D pointer drag', 'continuous position persistence', 'clear horizontal difficulty axis', 'clear vertical singularity axis', 'fine-grained arrow-key movement', 'keyboard save', 'immediate next problem without saved screen', 'return to unit chooser with explicit abandon', 'history', 'continuous rating correction', 'reload/resume', 'browser restart/resume', 'viewport overflow check', 'commit state export', 'full JSON export', 'analysis CSV export'], completedAttempts: 2, abandonedAttempts: 1, localServerRestartCoveredBy: 'server.test.mjs' };
