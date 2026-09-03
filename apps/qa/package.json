@@ -6,12 +6,13 @@
   "scripts": {
     "build:renderer": "vite build --config vite.renderer.config.mjs",
     "build:wasm": "../../scripts/build-wasm.sh qa",
+    "check:renderer": "node scripts/verify-renderer-sync.mjs",
     "dev": "node src/server.mjs",
     "open": "node src/desktop.mjs",
     "build:macos": "pnpm build:wasm && pnpm build:renderer && node scripts/build-macos-app.mjs",
     "start": "node src/server.mjs",
     "test": "pnpm build:wasm && node --test tests/*.test.mjs",
-    "test:browser": "pnpm build:wasm && pnpm build:renderer && node scripts/browser-acceptance.mjs"
+    "test:browser": "pnpm build:wasm && pnpm check:renderer && node scripts/browser-acceptance.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.0",

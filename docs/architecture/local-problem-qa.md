@@ -73,7 +73,7 @@ custom samplingは通常Worksheet wireへ`effort`や`operation_vector`を追加�
 
 表示中attemptのrating時間を使って次problemをserver memoryへ予約し、別のsame-origin iframeで印刷DOMと数式fontの描画まで完了させる。rating確定後に予約を正式なitem/selection/attemptとしてtransaction保存し、iframeをDOM移動・再読込せず表示位置だけvisible shellへ切り替える。予約だけでUserへ表示されなかったproblemはobservationやselection eventとして保存せず、選択bias上の「提示」と混同しない。予約IDは単元一致・単回consumeを検証し、使用後も既に描画済みframeが参照できる間だけbounded memoryに保持する。
 
-問題表示は別実装のplain-text UIを使わず、`apps/web/src/pdf/worksheet-pdf.tsx`の`WorksheetPrintDocument`をViteでQA専用bundleにする。生成された解答ページ上の対象problem cellをiframe内で正確に切り抜き、canonical answerを含む実際の印刷/PDF DOMをrating前から表示する。これによりQA中に数式・筆算・方程式・数独等の印刷layout regressionも発見できる。QA rendererはproduction componentをsource参照するinternal consumerであり、production deploymentやwire contractを変更しない。
+問題表示は別実装のplain-text UIを使わず、`apps/web/src/pdf/worksheet-pdf.tsx`の`WorksheetPrintDocument`をViteでQA専用bundleにする。生成された解答ページ上の対象problem cellをiframe内で正確に切り抜き、canonical answerを含む実際の印刷/PDF DOMをrating前から表示する。これによりQA中に数式・筆算・方程式・数独等の印刷layout regressionも発見できる。QA rendererはproduction componentをsource参照するinternal consumerであり、production deploymentやwire contractを変更しない。tracked `apps/qa/public/renderer` はそのcurrent production sourceから生成したderived artifactとしてcommitし、`pnpm --filter @autodrill/qa check:renderer` はtemporary outputへ再buildしてbyte-for-byte一致を検証する。browser acceptanceはこのsync checkを先に通し、実行時にtracked artifactを再生成してstalenessを隠さない。
 
 各item snapshotはtheme / skill / curriculum metadata、generation request、worksheet identity、generator revision、seed、Problem DTO、prompt、answer schema、worked solution、layout、worksheet全体をlossless JSONとして保持する。通常flowは回答を収集・採点せず、canonical answerだけをrating前から表示する。過去分布はrating前に表示しない。
 
