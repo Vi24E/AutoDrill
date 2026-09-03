@@ -55,6 +55,13 @@ pub(crate) fn input_interface(profile: ThemeInputProfile) -> AnswerInputInterfac
         ThemeInputProfile::SimultaneousEquation => AnswerInputInterface::StructuredMath {
             allowed_structures: vec![EditorStructure::Negative, EditorStructure::Tuple],
         },
+        ThemeInputProfile::LinearExpression => AnswerInputInterface::StructuredMath {
+            allowed_structures: vec![
+                EditorStructure::Negative,
+                EditorStructure::Arithmetic,
+                EditorStructure::Variable,
+            ],
+        },
         ThemeInputProfile::JuniorHighFull => AnswerInputInterface::StructuredMath {
             allowed_structures: vec![
                 EditorStructure::Fraction,
@@ -174,7 +181,9 @@ pub(crate) fn ensure_capability(
             }
             Ok(())
         }
-        AnswerNode::Variable(_) => Err(EditorError::InputInterfaceViolation),
+        AnswerNode::Variable(_) => {
+            ensure_structure_allowed(input_interface, EditorStructure::Variable)
+        }
     }
 }
 

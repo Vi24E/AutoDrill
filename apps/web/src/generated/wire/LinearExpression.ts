@@ -2,4 +2,4 @@
 import type { LinearScalar } from "./LinearScalar";
 import type { LinearVariable } from "./LinearVariable";
 
-export type LinearExpression = { "kind": "variable", variable: LinearVariable, } | { "kind": "constant", value: LinearScalar, } | { "kind": "add", left: LinearExpression, right: LinearExpression, } | { "kind": "subtract", left: LinearExpression, right: LinearExpression, } | { "kind": "scale", factor: LinearScalar, expression: LinearExpression, };
+export type LinearExpression = { "kind": "variable", variable: LinearVariable, } | { "kind": "constant", value: LinearScalar, } | { "kind": "add", left: LinearExpression, right: LinearExpression, } | { "kind": "subtract", left: LinearExpression, right: LinearExpression, } | { "kind": "scale", factor: LinearScalar, expression: LinearExpression, } | { "kind": "group", expression: LinearExpression, };

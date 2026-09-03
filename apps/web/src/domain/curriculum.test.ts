@@ -13,12 +13,12 @@ import {
   findImplementedThemeByRoute,
   type ImplementedCurriculumTheme,
 } from '@/domain/curriculum';
-import { ALL_MATH_STRUCTURES, taxonomyTags } from '@/domain/theme-registry';
+import { taxonomyTags } from '@/domain/theme-registry';
 import { DRILL_SCHEMA_VERSION } from '@/domain/drill-engine';
 
 describe('Web curriculum registry', () => {
   it('registers all implemented arithmetic and equation themes from one data model', () => {
-    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 74 }, (_, index) => index + 1));
+    expect(IMPLEMENTED_THEMES.map((theme) => theme.numeric_theme_id).sort((a, b) => a - b)).toEqual(Array.from({ length: 75 }, (_, index) => index + 1));
     expect(ONE_DIGIT_ADDITION_THEME).toMatchObject({
       numeric_theme_id: 1,
       generator_revision: 5,
@@ -27,6 +27,23 @@ describe('Web curriculum registry', () => {
       problemCount: 20,
       layout: { problem_count: 20, columns: 2, rows: 10 },
     });
+    const symbolic = IMPLEMENTED_THEMES.find((theme) => theme.numeric_theme_id === 75)!;
+    expect(symbolic).toMatchObject({
+      grade: { slug: 'grade-7', label: '中学1年生' },
+      curriculumUnit: { unitKey: 'grade7-expressions', label: '文字を用いた式' },
+      recommendedGenre: { genreKey: 'expressions', label: '文字式' },
+      promptKind: 'linear_expression',
+      answerSchemaKind: 'linear_expression',
+      problemCount: 16,
+      layout: { problem_count: 16, columns: 2, rows: 8 },
+      worksheet: { title: '一次式の整理・加減', instruction: '次の式を簡単にしなさい。', answerPrefix: null },
+    });
+    expect(symbolic.inputInterface).toEqual({
+      type: 'structured_math',
+      allowed_structures: ['negative', 'arithmetic', 'variable'],
+    });
+    expect(symbolic.editorInputInterface).toEqual(symbolic.inputInterface);
+
     for (const theme of [LINEAR_EQUATION_SIMPLE_THEME, LINEAR_EQUATION_1_THEME, LINEAR_EQUATION_2_THEME, LINEAR_EQUATION_3_THEME]) {
       expect(theme).toMatchObject({
         grade: { slug: 'grade-7', label: '中学1年生' },
@@ -43,7 +60,7 @@ describe('Web curriculum registry', () => {
       });
       expect(theme.editorInputInterface).toEqual({
         type: 'structured_math',
-        allowed_structures: ALL_MATH_STRUCTURES,
+        allowed_structures: ['fraction', 'mixed_fraction', 'decimal', 'root', 'negative', 'plus_minus', 'tuple', 'arithmetic'],
       });
     }
   });
@@ -62,6 +79,7 @@ describe('Web curriculum registry', () => {
       { genreKey: 'decimals', label: '小数' },
       { genreKey: 'fractions', label: '分数' },
       { genreKey: 'negative-numbers', label: '負の数' },
+      { genreKey: 'expressions', label: '文字式' },
       { genreKey: 'equation', label: '方程式' },
       { genreKey: 'bonus', label: 'おまけ' },
     ]);

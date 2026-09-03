@@ -58,6 +58,7 @@ export function formatProblem(problem) {
   if (prompt.kind === 'linear_equation') {
     return `${linearExpression(prompt.left)} = ${linearExpression(prompt.right)}`;
   }
+  if (prompt.kind === 'linear_expression') return `${linearExpression(prompt.expression)} =`;
   if (prompt.kind === 'quadratic_equation') return quadraticEquation(prompt);
   if (prompt.kind === 'simultaneous_equation') {
     return prompt.equations.map((equation) => `${linearExpression(equation.left)} = ${linearExpression(equation.right)}`).join('\n');
@@ -128,6 +129,7 @@ function linearExpression(node) {
     const grouped = node.expression.kind === 'add' || node.expression.kind === 'subtract' ? `(${body})` : body;
     return `${linearScalar(node.factor, true)}${grouped}`;
   }
+  if (node.kind === 'group') return `(${linearExpression(node.expression)})`;
   throw new Error(`Unsupported linear expression: ${node.kind}`);
 }
 

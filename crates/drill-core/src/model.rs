@@ -194,6 +194,9 @@ pub enum LinearExpression {
         factor: LinearScalar,
         expression: Box<LinearExpression>,
     },
+    Group {
+        expression: Box<LinearExpression>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -465,6 +468,9 @@ pub enum ProblemPrompt {
         equations: [LinearEquationSurface; 2],
         solve_method: SimultaneousSolveMethod,
     },
+    LinearExpression {
+        expression: LinearExpression,
+    },
     LiarPuzzle {
         #[cfg_attr(feature = "wire-types", ts(type = "number"))]
         people_count: PeopleCount,
@@ -578,6 +584,10 @@ pub enum AnswerSchema {
         length: u8,
     },
     Algebraic,
+    LinearExpression {
+        variable: LinearVariable,
+        require_collected_form: bool,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -777,6 +787,7 @@ impl LinearExpression {
             Self::Scale { factor, expression } => {
                 factor.has_js_safe_wire_values() && expression.has_js_safe_wire_values()
             }
+            Self::Group { expression } => expression.has_js_safe_wire_values(),
         }
     }
 
@@ -790,6 +801,7 @@ impl LinearExpression {
             Self::Scale { factor, expression } => {
                 factor.is_structurally_valid() && expression.is_structurally_valid()
             }
+            Self::Group { expression } => expression.is_structurally_valid(),
         }
     }
 }
@@ -841,6 +853,7 @@ impl ProblemPrompt {
             Self::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
                 equation.left.has_js_safe_wire_values() && equation.right.has_js_safe_wire_values()
             }),
+            Self::LinearExpression { expression } => expression.has_js_safe_wire_values(),
         }
     }
 
@@ -865,6 +878,7 @@ impl ProblemPrompt {
             Self::SimultaneousEquation { equations, .. } => equations.iter().all(|equation| {
                 equation.left.is_structurally_valid() && equation.right.is_structurally_valid()
             }),
+            Self::LinearExpression { expression } => expression.is_structurally_valid(),
             Self::MiniSudoku { .. } | Self::Arithmetic { .. } | Self::ColumnArithmetic { .. } => {
                 true
             }
@@ -879,6 +893,7 @@ impl ProblemPrompt {
             Self::LinearEquation { .. } => ThemePromptKind::LinearEquation,
             Self::QuadraticEquation { .. } => ThemePromptKind::QuadraticEquation,
             Self::SimultaneousEquation { .. } => ThemePromptKind::SimultaneousEquation,
+            Self::LinearExpression { .. } => ThemePromptKind::LinearExpression,
             Self::LiarPuzzle { .. } => ThemePromptKind::LiarPuzzle,
             Self::MiniSudoku { .. } => ThemePromptKind::MiniSudoku,
         }
@@ -896,6 +911,7 @@ impl AnswerSchema {
             }
             Self::OrderedTuple { .. } => ThemeAnswerSchemaKind::OrderedTuple,
             Self::Algebraic => ThemeAnswerSchemaKind::Algebraic,
+            Self::LinearExpression { .. } => ThemeAnswerSchemaKind::LinearExpression,
         }
     }
 
@@ -910,12 +926,20 @@ impl AnswerSchema {
             | Self::DecimalDivisionRemainder { .. }
             | Self::RoundedDecimal { .. }
             | Self::OrderedPair
-            | Self::Algebraic => true,
+            | Self::Algebraic
+            | Self::LinearExpression { .. } => true,
         }
     }
 
     pub fn accepts_canonical_answer(&self, answer: &AnswerNode) -> bool {
-        if !answer.is_within_structural_node_limit() || !answer.is_generated_answer() {
+        if !answer.is_within_structural_node_limit() {
+            return false;
+        }
+        let generated_shape_is_valid = match self {
+            Self::LinearExpression { .. } => answer.is_generated_symbolic_answer(),
+            _ => answer.is_generated_answer(),
+        };
+        if !generated_shape_is_valid {
             return false;
         }
         match self {
@@ -973,6 +997,13 @@ impl AnswerSchema {
                 matches!(answer, AnswerNode::Tuple(values) if values.len() == usize::from(*length))
             }
             Self::Algebraic => true,
+            Self::LinearExpression {
+                variable,
+                require_collected_form,
+            } => crate::semantics::linear_answer_form(answer, *variable).is_some_and(|_| {
+                !*require_collected_form
+                    || crate::semantics::answer_is_collected_linear_form(answer, *variable)
+            }),
         }
     }
 }
@@ -1249,6 +1280,7 @@ impl WorkedSolution {
             | ProblemPrompt::LinearEquation { .. }
             | ProblemPrompt::QuadraticEquation { .. }
             | ProblemPrompt::SimultaneousEquation { .. }
+            | ProblemPrompt::LinearExpression { .. }
             | ProblemPrompt::LiarPuzzle { .. }
             | ProblemPrompt::MiniSudoku { .. } => Ok(None),
         }
@@ -1588,6 +1620,7 @@ define_editor_structures!(
     PlusMinus,
     Tuple,
     Arithmetic,
+    Variable,
 );
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1627,6 +1660,7 @@ define_grade_warnings!(
     FractionFormRequired,
     MixedFractionFormRequired,
     IntegerFormRequired,
+    ExpressionNotSimplified,
 );
 
 #[derive(Clone, Debug, Eq, PartialEq)]

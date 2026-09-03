@@ -16,6 +16,7 @@ pub enum ThemeTag {
     Decimals,
     NegativeNumbers,
     Equations,
+    Expressions,
     LinearEquation,
     SimultaneousEquation,
     QuadraticEquation,
@@ -299,6 +300,7 @@ pub enum ThemePromptKind {
     LinearEquation,
     QuadraticEquation,
     SimultaneousEquation,
+    LinearExpression,
     LiarPuzzle,
     MiniSudoku,
 }
@@ -311,6 +313,7 @@ pub enum ThemeAnswerSchemaKind {
     Decimal,
     OrderedPair,
     Algebraic,
+    LinearExpression,
     OrderedTuple,
 }
 
@@ -387,6 +390,7 @@ pub enum ThemeInputProfile {
     LinearEquation,
     QuadraticEquation,
     SimultaneousEquation,
+    LinearExpression,
     JuniorHighFull,
     TupleOnly,
     DecimalTuple,
@@ -410,6 +414,7 @@ pub enum ThemeAnswerContract {
     LinearRational,
     QuadraticAlgebraic,
     SimultaneousPair,
+    LinearExpression,
     ColumnInteger,
     ColumnIntegerDivision,
     ColumnDecimal,
@@ -432,6 +437,7 @@ impl ThemeAnswerContract {
             Self::LinearInteger | Self::LinearRational => ThemePromptKind::LinearEquation,
             Self::QuadraticAlgebraic => ThemePromptKind::QuadraticEquation,
             Self::SimultaneousPair => ThemePromptKind::SimultaneousEquation,
+            Self::LinearExpression => ThemePromptKind::LinearExpression,
             Self::ColumnInteger
             | Self::ColumnIntegerDivision
             | Self::ColumnDecimal
@@ -460,6 +466,7 @@ impl ThemeAnswerContract {
             | Self::ColumnIntegerDivision
             | Self::ColumnDecimalDivisionRemainder => ThemeAnswerSchemaKind::OrderedPair,
             Self::QuadraticAlgebraic | Self::LiarPuzzle => ThemeAnswerSchemaKind::Algebraic,
+            Self::LinearExpression => ThemeAnswerSchemaKind::LinearExpression,
             Self::DigitGrid(_) => ThemeAnswerSchemaKind::OrderedTuple,
         }
     }
@@ -478,6 +485,7 @@ impl ThemeAnswerContract {
             Self::LinearInteger | Self::LinearRational => ThemeInputProfile::LinearEquation,
             Self::QuadraticAlgebraic => ThemeInputProfile::QuadraticEquation,
             Self::SimultaneousPair => ThemeInputProfile::SimultaneousEquation,
+            Self::LinearExpression => ThemeInputProfile::LinearExpression,
             Self::ArithmeticIntegerDivision | Self::ColumnIntegerDivision | Self::LiarPuzzle => {
                 ThemeInputProfile::TupleOnly
             }

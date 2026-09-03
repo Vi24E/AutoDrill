@@ -29,6 +29,7 @@ Theme追加時に、分類・安全性・表示・generator policyを場当た�
 - `junior_high_1` ... `junior_high_3`
 - addition / subtraction / multiplication / division
 - fractions / decimals / negative_numbers
+- expressions
 - linear / simultaneous / quadratic equation
 - bonus
 
@@ -71,7 +72,7 @@ safety policyを表示labelから推測しない。
 
 ## Unified theme API
 
-Rustのtheme/family moduleは、可能な限り1つの構造化されたdefinitionとしてregistrationとgenerator policyを同じ場所で所有する。現行では `themes/basic_arithmetic.rs`, `fractions.rs`, `decimals.rs`, `equations.rs`, `column_arithmetic.rs`, `liar_puzzle.rs`, `mini_sudoku.rs` がこの境界である。
+Rustのtheme/family moduleは、可能な限り1つの構造化されたdefinitionとしてregistrationとgenerator policyを同じ場所で所有する。現行では `themes/basic_arithmetic.rs`, `fractions.rs`, `decimals.rs`, `equations.rs`, `symbolic_expressions.rs`, `column_arithmetic.rs`, `liar_puzzle.rs`, `mini_sudoku.rs` がこの境界である。
 
 各moduleが所有するもの:
 
@@ -132,6 +133,13 @@ Webにしか意味のないものはWeb theme definitionが所有する。
 - 同じgradeをRust/Webへ別々に手入力する
 
 route slugや`小3` / `中1`の表示文字列、`early-elementary / late-elementary / junior-high`のvisual typography bandは、この1つのtyped gradeから純粋にprojectionする。
+
+
+## Symbolic expression answers
+
+式そのものを答案にするthemeは、方程式の「解」を返す`Algebraic` contractへ偽装しない。現行の中1「一次式の整理・加減」は`ThemeAnswerContract::LinearExpression`を使い、`ProblemPrompt::LinearExpression`、`AnswerSchema::LinearExpression`、`ThemeInputProfile::LinearExpression`を一組のtyped contractとして持つ。変数入力可否も`EditorStructure::Variable`として明示し、grade・theme ID・labelからWebが推測しない。
+
+現行generatorは3つのfamily-owned layer（同類項整理、`(ax+b)+(cx+d)`、`(ax+b)-(cx+d)`）を持ち、各worksheetで各layerを最低2問含める。Rustは共有`LinearExpression` ASTをexact affine formへ正規化し、答案もAnswerNodeからexactな`ax+b`へ評価する。general polynomial/CAS、展開、因数分解はこのcontractへ先回りして入れず、#153の後続scopeとして追加consumerが生じた時点で拡張する。
 
 ## Column arithmetic
 

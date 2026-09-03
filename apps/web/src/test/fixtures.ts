@@ -14,6 +14,7 @@ import { MINI_SUDOKU_DEFINITION } from '@/domain/themes/mini-sudoku';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
 import { LINEAR_EQUATION_1_DEFINITION } from '@/domain/themes/linear-equation-1';
 import { LINEAR_EQUATION_2_DEFINITION } from '@/domain/themes/linear-equation-2';
+import { LINEAR_EXPRESSION_DEFINITION } from '@/domain/themes/linear-expression';
 import { SIMULTANEOUS_EQUATION_ELIMINATION_DEFINITION } from '@/domain/themes/simultaneous-equation-elimination';
 import { COLUMN_DIVIDE_2DIGIT_BY_1DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit-by-one-digit';
 import { COLUMN_DIVIDE_2DIGIT_DEFINITION } from '@/domain/themes/column-divide-two-digit';
@@ -119,6 +120,72 @@ export function linearFixtureWorksheet(themeId: 2 | 3 = 2): WorksheetDto {
       difficulty: FIXTURE_DIFFICULTY,
     },
     problem_set_id: fixtureProblemSetId(themeId, definition.generator_revision),
+    layout: definition.layout,
+    seed: FIXTURE_SEED,
+    problems,
+  };
+}
+
+export function linearExpressionFixtureWorksheet(): WorksheetDto {
+  const definition = LINEAR_EXPRESSION_DEFINITION;
+  const canonicalAnswer: AnswerNode = {
+    type: 'binary',
+    value: {
+      operator: 'add',
+      left: {
+        type: 'binary',
+        value: {
+          operator: 'multiply',
+          left: { type: 'integer', value: '5' },
+          right: { type: 'variable', value: 'x' },
+        },
+      },
+      right: { type: 'integer', value: '3' },
+    },
+  };
+  const problems: ProblemDto[] = Array.from({ length: definition.problemCount }, (_, index) => ({
+    schema_version: DRILL_SCHEMA_VERSION,
+    id: index + 1,
+    problem_id: String(index + 1),
+    numeric_theme_id: definition.numeric_theme_id,
+    prompt: {
+      kind: 'linear_expression',
+      expression: {
+        kind: 'add',
+        left: {
+          kind: 'group',
+          expression: {
+            kind: 'add',
+            left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable', variable: 'x' } },
+            right: { kind: 'constant', value: { kind: 'integer', value: 1 } },
+          },
+        },
+        right: {
+          kind: 'group',
+          expression: {
+            kind: 'add',
+            left: { kind: 'scale', factor: { kind: 'integer', value: 3 }, expression: { kind: 'variable', variable: 'x' } },
+            right: { kind: 'constant', value: { kind: 'integer', value: 2 } },
+          },
+        },
+      },
+    },
+    input_interface: definition.inputInterface,
+    column_input: null,
+    answer_schema: { kind: 'linear_expression', variable: 'x', require_collected_form: true },
+    canonical_answer: canonicalAnswer,
+    worked_solution: null,
+  }));
+  return {
+    schema_version: DRILL_SCHEMA_VERSION,
+    identity: {
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: definition.numeric_theme_id,
+      generator_revision: definition.generator_revision,
+      seed: FIXTURE_SEED,
+      difficulty: FIXTURE_DIFFICULTY,
+    },
+    problem_set_id: fixtureProblemSetId(definition.numeric_theme_id, definition.generator_revision),
     layout: definition.layout,
     seed: FIXTURE_SEED,
     problems,

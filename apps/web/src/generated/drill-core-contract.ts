@@ -4180,6 +4180,62 @@ export const DRILL_CORE_CONTRACT = {
         "columns": 2,
         "rows": 8
       }
+    },
+    "75": {
+      "numeric_theme_id": 75,
+      "generator_revision": 1,
+      "skill_id": "jp.grade7.expression.linear.collect",
+      "curriculum_path": [
+        "root",
+        "中学1年生",
+        "文字を用いた式",
+        "一次式の整理・加減"
+      ],
+      "curriculum_unit": {
+        "key": "grade7-expressions",
+        "label": "文字を用いた式"
+      },
+      "grade": 7,
+      "tags": [
+        "expressions"
+      ],
+      "safety": "unrestricted",
+      "presentation": {
+        "worksheet_grid": false,
+        "column_arithmetic": false,
+        "print_recommended": false,
+        "equation_layout": false,
+        "fraction": "none",
+        "column_input": null
+      },
+      "dedup": "preserve_operand_order",
+      "answer_contract": {
+        "prompt_kind": "linear_expression",
+        "answer_schema_kind": "linear_expression",
+        "input_profile": "linear_expression"
+      },
+      "answer_decimal_scale": null,
+      "input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "negative",
+          "arithmetic",
+          "variable"
+        ]
+      },
+      "editor_input_interface": {
+        "type": "structured_math",
+        "allowed_structures": [
+          "negative",
+          "arithmetic",
+          "variable"
+        ]
+      },
+      "layout": {
+        "problem_count": 16,
+        "columns": 2,
+        "rows": 8
+      }
     }
   },
   "grade_warning_codes": [
@@ -4191,7 +4247,8 @@ export const DRILL_CORE_CONTRACT = {
     "solution_list_required",
     "fraction_form_required",
     "mixed_fraction_form_required",
-    "integer_form_required"
+    "integer_form_required",
+    "expression_not_simplified"
   ],
   "editor_structures": [
     "fraction",
@@ -4201,7 +4258,8 @@ export const DRILL_CORE_CONTRACT = {
     "negative",
     "plus_minus",
     "tuple",
-    "arithmetic"
+    "arithmetic",
+    "variable"
   ]
 } as const;
 

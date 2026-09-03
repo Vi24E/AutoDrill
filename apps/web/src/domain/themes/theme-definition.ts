@@ -52,7 +52,7 @@ export type ThemeDefinition = {
   };
   dedup: 'canonicalize_commutative' | 'preserve_operand_order';
   promptKind: ThemePromptKind;
-  answerSchemaKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'ordered_tuple' | 'algebraic';
+  answerSchemaKind: 'integer' | 'rational' | 'decimal' | 'ordered_pair' | 'ordered_tuple' | 'algebraic' | 'linear_expression';
   inputInterface: AnswerInputInterface;
   editorInputInterface: AnswerInputInterface;
   worksheet: { title: string; instruction: string; answerPrefix: string | null; answerPlacement?: 'inline' | 'below' };
@@ -78,6 +78,7 @@ function hasAny(tags: readonly ThemeTag[], candidates: readonly ThemeTag[]): boo
 export function recommendedGenreFromTags(tags: readonly ThemeTag[]): ThemeGenreMetadata | null {
   if (tags.includes('bonus')) return { genreKey: 'bonus', label: 'おまけ' };
   if (tags.includes('equations')) return { genreKey: 'equation', label: '方程式' };
+  if (tags.includes('expressions')) return { genreKey: 'expressions', label: '文字式' };
   if (tags.includes('negative_numbers')) return { genreKey: 'negative-numbers', label: '負の数' };
   if (tags.includes('fractions')) return { genreKey: 'fractions', label: '分数' };
   if (tags.includes('decimals')) return { genreKey: 'decimals', label: '小数' };

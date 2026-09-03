@@ -40,7 +40,8 @@ Webの編集・caret・placeholder移動・fraction/root layoutはMathLiveが担
 正規化して返す`\frac72`や`\sqrt2`のような1-token TeX引数も受理する。また、`-1\frac{1}{2}`は
 `(-1)×(1/2)`ではなく`-(1+1/2)`という負の帯分数として解釈する。
 
-MathLive worksheetの回答stateはRustが受理した`AnswerNode`そのものとし、採点にも`AnswerNode`を直接渡す。
+MathLive worksheetの回答stateはRustが受理した`AnswerNode`そのものとし、採点にも`AnswerNode`を直接渡す。`variable` nodeはgenericな自由変数入力を意味せず、`EditorStructure::Variable`を明示したinput capabilityでだけ受理する。現行の一次式themeでは`x`を入力し、equation solution用の`Algebraic` schemaとは別の`AnswerSchema::LinearExpression { variable, require_collected_form }`が式答案の意味を所有する。RustはAnswerNodeをexactな`ax+b`へ評価して数学的同値性を判定し、一般CASやWeb側の式変形ロジックへ委譲しない。
+
 selection/caretはMathLiveだけが所有し、旧`EditorState` / `EditorAction` / `apply_editor_action` state machineは
 pre-releaseの不要な互換層として削除した。Rust側にはMathLive parse結果をeditor grammarで検証し、
 最終回答を`Problem.input_interface`で検証するcapability validatorだけを残す。空placeholderでのBackspaceはMathLiveの公開
@@ -80,8 +81,9 @@ Rust coreは数学的同値性と安定したwarning identifierを返し、Web�
 | `solution_list_required` | 最後まで計算しましょう |
 | `fraction_form_required` | 分数でこたえましょう |
 | `mixed_fraction_form_required` | 帯分数でこたえましょう |
+| `expression_not_simplified` | 式を簡単にしましょう |
 
-同じ表示カテゴリに複数codeが該当しても画面には1回だけ表示する。既定では「約分しましょう」「整数でこたえましょう」「最後まで計算しましょう」を×、「分数でこたえましょう」を○とする。採点設定は詳細設定からモーダルを開いて変更し、約分は「2/4 と 1/2」、整数化は「√16 と 4」、分数形式は「0.5 と 1/2」を具体例として示す。「最後まで計算しましょう」は、それら3項目以外の数学的に同値だが未整理・冗長な表記差をまとめて扱う。`fraction_form_required`は、数値としては同じでも通常分数指定に対して小数・帯分数など別形式で答えた場合の独立した表記警告である。`mixed_fraction_form_required`は、小学校の通常分数単元でcanonical answerが帯分数である値に対し、数学的に同値な仮分数など別形式で答えた場合に返す。どちらも数学的同値性そのものとは分離される。
+同じ表示カテゴリに複数codeが該当しても画面には1回だけ表示する。既定では「約分しましょう」「整数でこたえましょう」「最後まで計算しましょう」を×、「分数でこたえましょう」を○とする。採点設定は詳細設定からモーダルを開いて変更し、約分は「2/4 と 1/2」、整数化は「√16 と 4」、分数形式は「0.5 と 1/2」を具体例として示す。「最後まで計算しましょう」は、それら3項目以外の数学的に同値だが未整理・冗長な表記差をまとめて扱う。`fraction_form_required`は、数値としては同じでも通常分数指定に対して小数・帯分数など別形式で答えた場合の独立した表記警告である。`mixed_fraction_form_required`は、小学校の通常分数単元でcanonical answerが帯分数である値に対し、数学的に同値な仮分数など別形式で答えた場合に返す。どちらも数学的同値性そのものとは分離される。`expression_not_simplified`は、`AnswerSchema::LinearExpression`で数学的には同じ`ax+b`へ評価できるが、同類項が残る等、指定されたcollected formになっていない場合に返す。これもcorrectnessとは分離し、Webの既存「最後まで計算しましょう」採点カテゴリへ投影する。
 
 
 `tuple` ASTは複数値の内部表現として共用するが、意味は`AnswerSchema`で分離する。二次方程式の複数解では順序を無視する一方、連立方程式の`ordered_pair` schemaではchild順を `(x,y)` として保持し、座標交換を同値とみなさない。連立方程式のWeb UIはtupleを直接入力させず、`x`欄と`y`欄を別々に編集してから順序付きtupleへ合成する。

@@ -1486,6 +1486,7 @@ fn expression_surface_transform(
             }
             LinearScalar::Integer { .. } => expression_surface_transform(expression),
         },
+        LinearExpression::Group { expression } => expression_surface_transform(expression),
     }
 }
 
@@ -2293,6 +2294,7 @@ mod curriculum_tests {
                 }
                 collect_linear_surface(expression, facts);
             }
+            LinearExpression::Group { expression } => collect_linear_surface(expression, facts),
         }
     }
 

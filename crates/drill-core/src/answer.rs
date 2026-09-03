@@ -832,33 +832,53 @@ impl AnswerNode {
     }
 
     /// Generated canonical answers may contain exact mathematical structure, but
-    /// never editor-only placeholders, parse errors, or free-form variables.
+    /// never editor-only placeholders or parse errors. Variable leaves are only
+    /// admitted by the dedicated symbolic-expression schema path.
     pub(crate) fn is_generated_answer(&self) -> bool {
+        self.is_generated_answer_with_variables(false)
+    }
+
+    pub(crate) fn is_generated_symbolic_answer(&self) -> bool {
+        self.is_generated_answer_with_variables(true)
+    }
+
+    fn is_generated_answer_with_variables(&self, allow_variables: bool) -> bool {
         match self {
-            Self::Empty | Self::NanError(_) | Self::Variable(_) => false,
+            Self::Empty | Self::NanError(_) => false,
+            Self::Variable(name) => allow_variables && matches!(name.as_str(), "x" | "y"),
             Self::Integer(_) | Self::ExactDecimal { .. } => true,
             Self::Fraction {
                 numerator,
                 denominator,
-            } => numerator.is_generated_answer() && denominator.is_generated_answer(),
+            } => {
+                numerator.is_generated_answer_with_variables(allow_variables)
+                    && denominator.is_generated_answer_with_variables(allow_variables)
+            }
             Self::MixedFraction {
                 whole,
                 numerator,
                 denominator,
             } => {
-                whole.is_generated_answer()
-                    && numerator.is_generated_answer()
-                    && denominator.is_generated_answer()
+                whole.is_generated_answer_with_variables(allow_variables)
+                    && numerator.is_generated_answer_with_variables(allow_variables)
+                    && denominator.is_generated_answer_with_variables(allow_variables)
             }
             Self::Root { radicand, index } => {
-                radicand.is_generated_answer()
-                    && index.as_deref().is_none_or(Self::is_generated_answer)
+                radicand.is_generated_answer_with_variables(allow_variables)
+                    && index.as_deref().is_none_or(|value| {
+                        value.is_generated_answer_with_variables(allow_variables)
+                    })
             }
-            Self::Negative(value) | Self::PlusMinus(value) => value.is_generated_answer(),
+            Self::Negative(value) | Self::PlusMinus(value) => {
+                value.is_generated_answer_with_variables(allow_variables)
+            }
             Self::Binary { left, right, .. } => {
-                left.is_generated_answer() && right.is_generated_answer()
+                left.is_generated_answer_with_variables(allow_variables)
+                    && right.is_generated_answer_with_variables(allow_variables)
             }
-            Self::Tuple(values) => values.iter().all(Self::is_generated_answer),
+            Self::Tuple(values) => values
+                .iter()
+                .all(|value| value.is_generated_answer_with_variables(allow_variables)),
         }
     }
 

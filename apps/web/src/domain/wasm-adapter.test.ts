@@ -4,7 +4,7 @@ import { createWasmDrillEngine } from '@/domain/wasm-adapter';
 import { DRILL_SCHEMA_VERSION, answerNodeText } from '@/domain/drill-engine';
 import { ONE_DIGIT_ADDITION_DEFINITION } from '@/domain/themes/one-digit-addition';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
-import { fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet } from '@/test/fixtures';
+import { fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearExpressionFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet } from '@/test/fixtures';
 
 const envelope = (data: unknown) => ({ schema_version: DRILL_SCHEMA_VERSION, ok: true, data, error: null });
 const simpleInputInterface = { type: 'simple_numeric', allow_decimal: false, allow_negative: false } as const;
@@ -149,6 +149,47 @@ describe('versioned WASM adapter', () => {
     }
   });
 
+
+  it('accepts the dedicated linear-expression DTO and rejects invalid symbolic wire variants', async () => {
+    const worksheet = linearExpressionFixtureWorksheet();
+    const engine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(worksheet)) });
+    const result = await engine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION,
+      numeric_theme_id: 75,
+      seed: 'fixtureSeed',
+      difficulty: 3,
+    });
+    expect(result.problems).toHaveLength(16);
+    expect(result.problems[0]).toMatchObject({
+      prompt: expect.objectContaining({ kind: 'linear_expression' }),
+      answer_schema: { kind: 'linear_expression', variable: 'x', require_collected_form: true },
+    });
+
+    const invalidSchema = linearExpressionFixtureWorksheet();
+    invalidSchema.problems = [{
+      ...invalidSchema.problems[0]!,
+      answer_schema: { kind: 'linear_expression', variable: 'z', require_collected_form: true } as never,
+    }, ...invalidSchema.problems.slice(1)];
+    const invalidSchemaEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(invalidSchema)) });
+    await expect(invalidSchemaEngine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: 75, seed: 'fixtureSeed', difficulty: 3,
+    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+
+    const invalidPrompt = linearExpressionFixtureWorksheet();
+    const firstPrompt = invalidPrompt.problems[0]!.prompt;
+    if (firstPrompt.kind !== 'linear_expression') throw new Error('linear-expression prompt expected');
+    invalidPrompt.problems = [{
+      ...invalidPrompt.problems[0]!,
+      prompt: {
+        kind: 'linear_expression',
+        expression: { kind: 'variable', variable: 'z' } as never,
+      },
+    }, ...invalidPrompt.problems.slice(1)];
+    const invalidPromptEngine = createWasmDrillEngine({ generate_worksheet: vi.fn().mockResolvedValue(envelope(invalidPrompt)) });
+    await expect(invalidPromptEngine.generateWorksheet({
+      schema_version: DRILL_SCHEMA_VERSION, numeric_theme_id: 75, seed: 'fixtureSeed', difficulty: 3,
+    })).rejects.toMatchObject({ kind: 'invalid_dto' });
+  });
 
   it('accepts liar-puzzle DTOs with the current six statement variants', async () => {
     const worksheet = liarFixtureWorksheet();

@@ -57,6 +57,32 @@ test('QA problem formatting renders typed equation surfaces without legacy coeff
     },
   };
   assert.equal(formatProblem(simultaneous), 'x + y = 5\nx − y = 1');
+
+  const linearExpressionProblem = {
+    prompt: {
+      kind: 'linear_expression',
+      expression: {
+        kind: 'subtract',
+        left: {
+          kind: 'group',
+          expression: {
+            kind: 'add',
+            left: { kind: 'scale', factor: { kind: 'integer', value: 2 }, expression: { kind: 'variable', variable: 'x' } },
+            right: { kind: 'constant', value: { kind: 'integer', value: 1 } },
+          },
+        },
+        right: {
+          kind: 'group',
+          expression: {
+            kind: 'subtract',
+            left: { kind: 'scale', factor: { kind: 'integer', value: 3 }, expression: { kind: 'variable', variable: 'x' } },
+            right: { kind: 'constant', value: { kind: 'integer', value: 2 } },
+          },
+        },
+      },
+    },
+  };
+  assert.equal(formatProblem(linearExpressionProblem), '(2x + 1) − (3x − 2) =');
 });
 
 test('AutoDrill runtime exposes every non-excluded unit through the original WASM generator', async () => {

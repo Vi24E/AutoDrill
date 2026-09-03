@@ -81,6 +81,7 @@ fn normalize_linear_expression_exact(
                 factor.multiply(constant)?,
             ))
         }
+        LinearExpression::Group { expression } => normalize_linear_expression_exact(expression),
     }
 }
 
@@ -99,6 +100,132 @@ pub(crate) fn normalize_linear_expression(
         )
     };
     Some((convert(x)?, convert(y)?, convert(constant)?))
+}
+
+fn answer_variable_name(variable: LinearVariable) -> &'static str {
+    match variable {
+        LinearVariable::X => "x",
+        LinearVariable::Y => "y",
+    }
+}
+
+fn linear_answer_form_exact(
+    answer: &AnswerNode,
+    variable: LinearVariable,
+) -> Option<(ExactRational, ExactRational)> {
+    if let Some(constant) = rational_from_answer(answer) {
+        return Some((ExactRational::zero(), constant));
+    }
+    match answer {
+        AnswerNode::Variable(name) if name == answer_variable_name(variable) => {
+            Some((ExactRational::one(), ExactRational::zero()))
+        }
+        AnswerNode::Negative(value) => {
+            let (coefficient, constant) = linear_answer_form_exact(value, variable)?;
+            Some((coefficient.negate()?, constant.negate()?))
+        }
+        AnswerNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let (left_coefficient, left_constant) = linear_answer_form_exact(left, variable)?;
+            let (right_coefficient, right_constant) = linear_answer_form_exact(right, variable)?;
+            match operator {
+                AnswerBinaryOperator::Add => Some((
+                    left_coefficient.add(right_coefficient)?,
+                    left_constant.add(right_constant)?,
+                )),
+                AnswerBinaryOperator::Subtract => Some((
+                    left_coefficient.subtract(right_coefficient)?,
+                    left_constant.subtract(right_constant)?,
+                )),
+                AnswerBinaryOperator::Multiply => {
+                    if !left_coefficient.is_zero() && !right_coefficient.is_zero() {
+                        return None;
+                    }
+                    let coefficient = left_coefficient
+                        .multiply(right_constant)?
+                        .add(right_coefficient.multiply(left_constant)?)?;
+                    let constant = left_constant.multiply(right_constant)?;
+                    Some((coefficient, constant))
+                }
+            }
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn linear_answer_form(
+    answer: &AnswerNode,
+    variable: LinearVariable,
+) -> Option<(RationalCoefficient, RationalCoefficient)> {
+    let (coefficient, constant) = linear_answer_form_exact(answer, variable)?;
+    Some((
+        rational_to_coefficient(coefficient)?,
+        rational_to_coefficient(constant)?,
+    ))
+}
+
+fn is_numeric(answer: &AnswerNode) -> bool {
+    rational_from_answer(answer).is_some()
+}
+
+fn is_nonzero_numeric(answer: &AnswerNode) -> bool {
+    rational_from_answer(answer).is_some_and(|value| !value.is_zero())
+}
+
+fn is_collected_variable_term(answer: &AnswerNode, variable: LinearVariable) -> bool {
+    let variable_name = answer_variable_name(variable);
+    match answer {
+        AnswerNode::Variable(name) => name == variable_name,
+        AnswerNode::Negative(value) => is_collected_variable_term(value, variable),
+        AnswerNode::Binary {
+            operator: AnswerBinaryOperator::Multiply,
+            left,
+            right,
+        } => {
+            let scalar_and_variable = |scalar: &AnswerNode, variable_node: &AnswerNode| {
+                let scalar = rational_from_answer(scalar);
+                scalar.is_some_and(|value| {
+                    !value.is_zero()
+                        && value != ExactRational::one()
+                        && value != ExactRational::from_integer(-1)
+                }) && matches!(variable_node, AnswerNode::Variable(name) if name == variable_name)
+            };
+            scalar_and_variable(left, right) || scalar_and_variable(right, left)
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn answer_is_collected_linear_form(
+    answer: &AnswerNode,
+    variable: LinearVariable,
+) -> bool {
+    if is_collected_variable_term(answer, variable) || is_numeric(answer) {
+        return true;
+    }
+    let AnswerNode::Binary {
+        operator: AnswerBinaryOperator::Add | AnswerBinaryOperator::Subtract,
+        left,
+        right,
+    } = answer
+    else {
+        return false;
+    };
+    (is_collected_variable_term(left, variable) && is_nonzero_numeric(right))
+        || (is_nonzero_numeric(left) && is_collected_variable_term(right, variable))
+}
+
+pub(crate) fn linear_answers_equivalent(
+    expected: &AnswerNode,
+    actual: &AnswerNode,
+    variable: LinearVariable,
+) -> bool {
+    linear_answer_form_exact(expected, variable)
+        .zip(linear_answer_form_exact(actual, variable))
+        .is_some_and(|(expected, actual)| expected == actual)
 }
 
 fn normalize_linear_equation_exact(
@@ -426,6 +553,20 @@ pub(crate) fn prompt_accepts_canonical_answer(
         }
         ProblemPrompt::SimultaneousEquation { equations, .. } => {
             simultaneous_answer_is_correct(equations, answer)
+        }
+        ProblemPrompt::LinearExpression { expression } => {
+            let AnswerSchema::LinearExpression { variable, .. } = schema else {
+                return false;
+            };
+            let Some((x, y, constant)) = normalize_linear_expression(expression) else {
+                return false;
+            };
+            let expected_coefficient = match variable {
+                LinearVariable::X if y.is_zero() => x,
+                LinearVariable::Y if x.is_zero() => y,
+                _ => return false,
+            };
+            linear_answer_form(answer, *variable) == Some((expected_coefficient, constant))
         }
         ProblemPrompt::LiarPuzzle {
             people_count,

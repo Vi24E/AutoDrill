@@ -23,6 +23,7 @@ function representativeAnswer(definition: ThemeDefinition): AnswerNode {
     case 'ordered_pair': return { type: 'tuple', value: [{ type: 'integer', value: '2' }, { type: 'integer', value: '3' }] };
     case 'ordered_tuple': return { type: 'tuple', value: [1, 2, 3, 4, 3, 4, 1, 2, 2, 1, 4, 3, 4, 3, 2, 1].map((value) => ({ type: 'integer' as const, value: String(value) })) };
     case 'algebraic': return { type: 'plus_minus', value: { type: 'integer', value: '2' } };
+    case 'linear_expression': return { type: 'binary', value: { operator: 'add', left: { type: 'binary', value: { operator: 'multiply', left: { type: 'integer', value: '5' }, right: { type: 'variable', value: 'x' } } }, right: { type: 'integer', value: '3' } } };
   }
 }
 
@@ -87,6 +88,25 @@ function representativePrompt(definition: ThemeDefinition): { prompt: ProblemPro
           right: { kind: 'add', left: { kind: 'variable', variable: 'x' }, right: { kind: 'constant', value: { kind: 'integer', value: 8 } } },
         },
         answer,
+      };
+    case 'linear_expression':
+      return {
+        prompt: {
+          kind: 'linear_expression',
+          expression: {
+            kind: 'add',
+            left: { kind: 'scale', factor: { kind: 'integer', value: 5 }, expression: { kind: 'variable', variable: 'x' } },
+            right: { kind: 'constant', value: { kind: 'integer', value: 3 } },
+          },
+        },
+        answer: {
+          type: 'binary',
+          value: {
+            operator: 'add',
+            left: { type: 'binary', value: { operator: 'multiply', left: { type: 'integer', value: '5' }, right: { type: 'variable', value: 'x' } } },
+            right: { type: 'integer', value: '3' },
+          },
+        },
       };
     case 'quadratic_equation':
       return {

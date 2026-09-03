@@ -515,6 +515,9 @@ fn linear_expression_expansion_operations(expression: &LinearExpression) -> Opti
             }
             Some(operations)
         }
+        LinearExpression::Group { expression } => {
+            linear_expression_expansion_operations(expression)
+        }
     }
 }
 
@@ -2247,6 +2250,33 @@ pub(crate) fn signed_addition_plan(left: i64, right: i64) -> OperationPlan {
 #[cfg(test)]
 pub(crate) fn signed_subtraction_plan(left: i64, right: i64) -> OperationPlan {
     operation_plan(signed_subtraction_operations(left, right))
+}
+
+/// Standard effort for collecting the variable and constant parts of two linear terms.
+/// The second pair is already signed by the caller, so subtraction uses the same
+/// exact signed-addition primitive rather than a theme-specific scoring shortcut.
+pub(crate) fn linear_expression_simplification_plan(
+    left_coefficient: i64,
+    right_coefficient: i64,
+    left_constant: i64,
+    right_constant: i64,
+) -> OperationPlan {
+    let mut operations = signed_addition_operations(left_coefficient, right_coefficient);
+    operations.extend(signed_addition_operations(left_constant, right_constant));
+    operation_plan(operations)
+}
+
+/// Standard effort for subtracting one linear expression from another and then
+/// collecting the variable and constant parts.
+pub(crate) fn linear_expression_subtraction_plan(
+    left_coefficient: i64,
+    right_coefficient: i64,
+    left_constant: i64,
+    right_constant: i64,
+) -> OperationPlan {
+    let mut operations = signed_subtraction_operations(left_coefficient, right_coefficient);
+    operations.extend(signed_subtraction_operations(left_constant, right_constant));
+    operation_plan(operations)
 }
 
 #[cfg(test)]

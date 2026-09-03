@@ -34,7 +34,7 @@ Worksheetはcoreではdecoded `identity`、registry由来のskill/curriculum/lay
 Webの再現URLはstatic exportでも任意のproblem-set IDを受け取れるよう、現在のrouteに`?seed=<percent-encoded problem_set_id>`を付ける。ページload時はこのquery valueをそのままWASMの`generate_problem_set`へ渡し、Rustがparse・schema/theme/revision/seed/difficulty validationとregenerationを行う。成功後はWorksheetのcanonical `problem_set_id`をSeed欄・URL・print/footerへ投影し、Userが単元またはdifficultyを手動変更した時点で古いreplay queryを除去する。pre-releaseでは旧schema/旧generator revisionをproduction codeへ保持しないため、それらのIDは対応error codeでfail closedする。
 
 
-`Problem::generated`は単にprompt/schemaのkindだけを比較しない。`AnswerSchema`の構造条件（整数範囲の`min <= max`、有理数の正の最大分母、非空tuple length等）を検証し、canonical answerがその具体的schemaのrange/shapeを満たした後、`semantics.rs`のgenerator-independent domain semanticsで**そのpromptの実際の正解であること**まで検証してからprivate `ValidatedAnswerSchema` / `CanonicalAnswer`としてaggregateへ格納する。Addition / Arithmetic / ColumnArithmeticはexact arithmetic、Linear / Simultaneous / Quadraticは方程式のexact solution semantics、Liar Puzzleはstatement truthによる唯一解、Mini Sudokuはgivensを保存する唯一の合法盤面をauthorityとする。Mini Sudokuでは同一`DigitGridSpec`からtuple lengthとdigit domainも検証する。Liar Puzzleのcanonical answerはperson indexの昇順tupleで、各indexがpromptの`people_count`内かつ空/all-liarでないことまでcontract boundaryで検証する。筆算のworked solutionはprompt operand/operatorとcanonical answerから一意に再構成できる場合だけaggregateへ格納されるため、arbitrary divisor/product/offset等の内部値をsafe generator APIから注入できない。native Rust / WASM grading境界から受け取るschemaも同じstructural/canonical-answer validationを通し、不正schemaは`GradeError`として拒否する。`parse_mathlive_answer`も`AnswerInputInterface`の構造条件を最初に検証する。
+`Problem::generated`は単にprompt/schemaのkindだけを比較しない。`AnswerSchema`の構造条件（整数範囲の`min <= max`、有理数の正の最大分母、非空tuple length等）を検証し、canonical answerがその具体的schemaのrange/shapeを満たした後、`semantics.rs`のgenerator-independent domain semanticsで**そのpromptの実際の正解であること**まで検証してからprivate `ValidatedAnswerSchema` / `CanonicalAnswer`としてaggregateへ格納する。Addition / Arithmetic / ColumnArithmeticはexact arithmetic、Linear / Simultaneous / Quadraticは方程式のexact solution semantics、LinearExpressionはexact affine-expression semantics、Liar Puzzleはstatement truthによる唯一解、Mini Sudokuはgivensを保存する唯一の合法盤面をauthorityとする。Mini Sudokuでは同一`DigitGridSpec`からtuple lengthとdigit domainも検証する。Liar Puzzleのcanonical answerはperson indexの昇順tupleで、各indexがpromptの`people_count`内かつ空/all-liarでないことまでcontract boundaryで検証する。筆算のworked solutionはprompt operand/operatorとcanonical answerから一意に再構成できる場合だけaggregateへ格納されるため、arbitrary divisor/product/offset等の内部値をsafe generator APIから注入できない。native Rust / WASM grading境界から受け取るschemaも同じstructural/canonical-answer validationを通し、不正schemaは`GradeError`として拒否する。`parse_mathlive_answer`も`AnswerInputInterface`の構造条件を最初に検証する。
 
 JavaScriptへ`number`として投影するProblemPrompt / worked-solution内の整数は、`Problem::generated`のaggregate invariantとして`Number.MAX_SAFE_INTEGER`相当の範囲内であることも検証する。AnswerNodeのinteger/coefficientとAnswerSchemaの`i64` boundsなど、64-bit exactnessをwire上で保持すべき値はcanonical decimal stringを使う。`BigNum`はeffort内部primitiveであり現行Problem wireへ公開しない。これによりRust `i64`を無条件にJavaScript `number`へ落とす経路は作らない。
 
@@ -102,9 +102,22 @@ Presentation上は、各筆算problemが独立した方眼を持つのではな�
 
 `problem_set_id`はnumeric theme ID / 現行generator revision / Seed / difficulty contractで再生成される。筆算themeの現行revisionはRust registryが所有し、worked-solutionやgenerator semanticsが変わる場合はthemeごとにrevisionを更新する。pre-release policyでは旧revision generatorを互換経路として保持しない。
 
+
+## 一次式generator
+
+`ProblemPrompt::LinearExpression { expression: LinearExpression }` は、式そのものを簡単にして答える教材surfaceである。方程式のsolution semanticsを持つ`AnswerSchema::Algebraic`とは分離し、現行は`AnswerSchema::LinearExpression { variable: X, require_collected_form: true }`を使う。Web/WASMへは共有`LinearExpression` ASTをそのまま投影し、Web/printは同じformatterで描画する。
+
+中1「一次式の整理・加減」(ID 75, rev1) は16問、2列×8行で、次の3 layerを同一theme内に持つ。各layerはequal weightかつ最低2問を保証する。
+
+- 同類項をまとめる4項の一次式
+- `(ax+b)+(cx+d)` の加法
+- `(ax+b)-(cx+d)` の減法
+
+係数と定数は現行scopeでは整数とし、結果も見た目上一次式を必ず練習できるようvariable coefficientとconstantが0になるcandidateを除外する。Rustはpromptをexactな`ax+b`へ正規化し、MathLiveからparseしたAnswerNodeも`x`を含むexact affine formへ評価して同値性を判定する。`2x+3x+3`のように数学的には同値だがcollected formでない答案はcorrectnessを保ったまま`expression_not_simplified` warningを返す。一般多項式、展開、因数分解はこのrevisionのscope外であり、#153の後続拡張で扱う。
+
 ## 一次方程式generator
 
-`ProblemPrompt::LinearEquation` は表示surfaceを保持する `left/right: LinearExpression` を持つ。`LinearExpression` は `variable / constant / add / subtract / scale` の共有一次式ASTで、variableはtyped `LinearVariable::X | Y` を明示する。`LinearScalar` は整数・既約分数・有限小数を区別して保持するため、`1/2(x-3)` と `0.5(x-3)` は数学的には同じ係数でも同じwire表現へ潰さない。Rustの `semantics.rs` はASTをexactな affine form `ax+by+c` へ正規化する。通常の一元一次方程式では左右の`y`係数が0であることをsemantic invariantとして要求し、従来どおり`x`だけの方程式としてcanonical answerを検証する。Web/PDFはASTのsurfaceを再帰描画するだけで、変数・係数・括弧の意味を再推論しない。
+`ProblemPrompt::LinearEquation` は表示surfaceを保持する `left/right: LinearExpression` を持つ。`LinearExpression` は `variable / constant / add / subtract / scale / group` の共有一次式ASTで、variableはtyped `LinearVariable::X | Y` を明示する。`group` は数学演算を追加せず、`(ax+b)` のような明示的な括弧surfaceだけを保持し、semantic normalization / effortでは内側の式へ透過的に委譲する。`LinearScalar` は整数・既約分数・有限小数を区別して保持するため、`1/2(x-3)` と `0.5(x-3)` は数学的には同じ係数でも同じwire表現へ潰さない。Rustの `semantics.rs` はASTをexactな affine form `ax+by+c` へ正規化する。通常の一元一次方程式では左右の`y`係数が0であることをsemantic invariantとして要求し、従来どおり`x`だけの方程式としてcanonical answerを検証する。Web/PDFはASTのsurfaceを再帰描画するだけで、変数・係数・括弧の意味を再推論しない。
 
 同一family generatorは **solution domain** と **教材surface** を別のtyped axisとして持つ。answer-conditioned samplingではcanonical answerをdomainから先に選び、その解を満たす式surfaceを生成する。
 
@@ -165,7 +178,7 @@ WASM adapterはcore DTOをそのまま`ApiResponse`の`data`へserializeする�
 
 二次方程式などの解集合比較では、canonical Answer AST内部の`PlusMinus`を最大4 branchまでexactに展開する。分数・根号・負号・加減乗除の内部に`±`が埋め込まれていても、浮動小数へ落とさず正規化したAnswer AST集合としてTuple入力と比較する。重複解の意味は保持し、`(2,2)`を単一解`2`へ勝手にdedupしない。
 
-`grade_answer`はnormalizedな`expected`/`actual`、`is_correct`、statusに加え、表記上の注意を`warnings`配列で返す。識別子は`fraction_not_reduced`、`integer_form_required`、`redundant_negative`、`redundant_plus_minus`、`redundant_decimal`、`duplicate_solution`、`solution_list_required`、`fraction_form_required`、`mixed_fraction_form_required`で、表示文言とは分離する。Webでは「約分しましょう」「整数でこたえましょう」「分数でこたえましょう／帯分数でこたえましょう」「最後まで計算しましょう」の採点カテゴリへまとめ、詳細設定→採点設定でカテゴリごとに○/×を選ぶ。
+`grade_answer`はnormalizedな`expected`/`actual`、`is_correct`、statusに加え、表記上の注意を`warnings`配列で返す。識別子は`fraction_not_reduced`、`integer_form_required`、`redundant_negative`、`redundant_plus_minus`、`redundant_decimal`、`duplicate_solution`、`solution_list_required`、`fraction_form_required`、`mixed_fraction_form_required`、`expression_not_simplified`で、表示文言とは分離する。Webでは「約分しましょう」「整数でこたえましょう」「分数でこたえましょう／帯分数でこたえましょう」「最後まで計算しましょう」の採点カテゴリへまとめ、詳細設定→採点設定でカテゴリごとに○/×を選ぶ。
 Web grade DTOのstatusは`correct`、`incorrect`、`unanswered`だけを許可する。actualが`empty`なら
 `is_correct=false`かつ`unanswered`、actualがnon-emptyなら`is_correct`に応じて`correct`または`incorrect`
 でなければfail closedする。

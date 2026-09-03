@@ -217,6 +217,9 @@ export function answerNodeText(answer: AnswerNode): string {
       if (answer.value.operator === 'add' && answer.value.right.type === 'plus_minus') {
         return `${answerNodeText(answer.value.left)} ${answerNodeText(answer.value.right)}`;
       }
+      if (answer.value.operator === 'multiply' && answer.value.right.type === 'variable') {
+        return `${answerNodeText(answer.value.left)}${answerNodeText(answer.value.right)}`;
+      }
       const operator = answer.value.operator === 'add' ? ' + ' : answer.value.operator === 'subtract' ? ' − ' : ' × ';
       return `${answerNodeText(answer.value.left)}${operator}${answerNodeText(answer.value.right)}`;
     }

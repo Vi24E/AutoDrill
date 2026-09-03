@@ -390,6 +390,10 @@ function assertLinearExpression(value: unknown): void {
     assertLinearExpression(value.expression);
     return;
   }
+  if (value.kind === 'group') {
+    assertLinearExpression(value.expression);
+    return;
+  }
   invalidDto('WASM returned an unsupported linear expression variant.', value);
 }
 
@@ -486,6 +490,10 @@ function assertPrompt(value: unknown): void {
     assertLinearExpression(value.right);
     return;
   }
+  if (value.kind === 'linear_expression') {
+    assertLinearExpression(value.expression);
+    return;
+  }
   invalidDto(`WASM returned an unsupported problem prompt: ${value.kind}.`, value);
 }
 
@@ -499,6 +507,11 @@ function assertAnswerSchema(value: unknown): void {
     return;
   }
   if (value.kind === 'algebraic' || value.kind === 'ordered_pair') return;
+  if (value.kind === 'linear_expression') {
+    if (value.variable !== 'x' && value.variable !== 'y') invalidDto('WASM returned an invalid symbolic-expression variable.', value);
+    if (typeof value.require_collected_form !== 'boolean') invalidDto('WASM returned an invalid symbolic-expression form policy.', value);
+    return;
+  }
   if (value.kind === 'decimal_division_remainder') {
     assertU32(value.quotient_scale, 'decimal-division quotient scale');
     assertU32(value.remainder_max_scale, 'decimal-division remainder maximum scale');

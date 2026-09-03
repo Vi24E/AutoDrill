@@ -12,7 +12,7 @@ import { SIGNED_ARITHMETIC_1_DEFINITION } from '@/domain/themes/signed-arithmeti
 import { A4_PAGE, buildSharedWorksheetLayout, getCellTopPosition } from '@/domain/layout';
 import { problemSetIdFromSearch } from '@/domain/problem-set-url';
 import { buildPdfPageModel } from '@/pdf/worksheet-pdf';
-import { columnDecimalMultiplicationFixtureWorksheet, columnDivisionFixtureWorksheet, fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
+import { columnDecimalMultiplicationFixtureWorksheet, columnDivisionFixtureWorksheet, fixtureEngine, fixtureSettings, fixtureWorksheet, liarFixtureWorksheet, linearExpressionFixtureWorksheet, linearFixtureWorksheet, miniSudokuFixtureWorksheet, simultaneousFixtureWorksheet } from '@/test/fixtures';
 import { DRILL_SCHEMA_VERSION, type DrillEngine, type WorksheetDto } from '@/domain/drill-engine';
 import { DRILL_CORE_CONTRACT } from '@/generated/drill-core-contract';
 
@@ -329,7 +329,7 @@ describe('AutoDrillApp', () => {
 
     fireEvent.click(screen.getByRole('combobox', { name: 'ジャンル' }));
     const recommendedOptions = within(screen.getByRole('listbox', { name: 'ジャンルの選択肢' })).getAllByRole('option');
-    expect(recommendedOptions.map((option) => option.getAttribute('aria-label'))).toEqual(['足し算と引き算', '掛け算と割り算', '小数', '分数', '負の数', '方程式', 'おまけ']);
+    expect(recommendedOptions.map((option) => option.getAttribute('aria-label'))).toEqual(['足し算と引き算', '掛け算と割り算', '小数', '分数', '負の数', '文字式', '方程式', 'おまけ']);
     fireEvent.click(screen.getByRole('option', { name: '方程式' }));
     expect(screen.getByRole('combobox', { name: 'ジャンル' })).toHaveAttribute('data-selected-label', '方程式');
     expect(screen.getByRole('combobox', { name: 'テーマ' })).toHaveAttribute('data-selected-label', '簡単な一次方程式');
@@ -861,6 +861,43 @@ describe('AutoDrillApp', () => {
     expect(within(operators).getAllByRole('button').map((button) => button.textContent)).toEqual(['+', '−', '±']);
     expect(within(operators).getAllByRole('button').every((button) => !button.hasAttribute('disabled'))).toBe(true);
     expect(within(screen.getByLabelText('編集キー')).getAllByRole('button').slice(0, 2).map((button) => button.textContent)).toEqual(['←', '→']);
+  });
+
+  it('uses the dedicated symbolic-expression keypad and forwards variable input to Rust parsing', async () => {
+    const worksheet = linearExpressionFixtureWorksheet();
+    const base = fixtureEngine(worksheet);
+    const parseMathLiveAnswer = vi.fn(async (latex: string) => ({ type: 'nan_error' as const, value: latex }));
+    const symbolicTheme = findImplementedThemeByNumericId(75)!;
+    render(
+      <AutoDrillApp
+        engine={{ ...base, parseMathLiveAnswer }}
+        initialWebSettings={createWebDrillSettings(symbolicTheme)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '問題生成' }));
+    expect(await screen.findByRole('heading', { name: '一次式の整理・加減' })).toBeInTheDocument();
+    expect(screen.getByLabelText('次の式を簡単にしなさい。')).toBeInTheDocument();
+
+    const firstCell = screen.getByTestId('problem-cell-0');
+    expect(firstCell).toHaveClass('problem-cell-answer-below');
+    expect(firstCell.querySelector('.problem-math-expression')).toHaveAttribute('aria-label', '(2x + 1) + (3x + 2)');
+    fireEvent.click(within(firstCell).getByRole('textbox', { name: /^1番の答え/ }));
+
+    const formulaPad = screen.getByLabelText('数式キー');
+    expect(within(formulaPad).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['文字 x']);
+    expect(within(screen.getByLabelText('数字キー')).queryByRole('button', { name: '小数点' })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('演算子キー')).getAllByRole('button').map((button) => button.textContent)).toEqual(['+', '−']);
+
+    fireEvent.click(within(screen.getByLabelText('数字キー')).getByRole('button', { name: '5' }));
+    fireEvent.click(within(formulaPad).getByRole('button', { name: '文字 x' }));
+    fireEvent.click(within(screen.getByLabelText('演算子キー')).getByRole('button', { name: 'プラスを挿入' }));
+    fireEvent.click(within(screen.getByLabelText('数字キー')).getByRole('button', { name: '3' }));
+
+    await waitFor(() => expect(parseMathLiveAnswer).toHaveBeenLastCalledWith(
+      '5x+3',
+      { type: 'structured_math', allowed_structures: ['negative', 'arithmetic', 'variable'] },
+    ));
   });
 
   it('derives q2 cell positions and order from the shared A4 layout', async () => {

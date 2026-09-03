@@ -726,15 +726,13 @@ function exerciseInputPanelActionsProbe() {
 
     const resetReusedTarget = async (targetIndex) => {
       const { target, panel } = await open(targetIndex);
+      const clearButton = panel.querySelector('.keypad-clear');
+      if (!clearButton) throw new Error('Input-panel clear button is missing during harness reset');
+      clearButton.click();
       if (target.matches('math-field.answer-mathfield')) {
-        target.setValue('', { silenceNotifications: false });
-        target.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'deleteContentBackward' }));
         await waitFor(() => String(target.value ?? '') === '', 'MathLive harness reset');
-        await sleep(120);
-      } else {
-        panel.querySelector('.keypad-clear')?.click();
-        await sleep(120);
       }
+      await sleep(120);
       await waitFor(() => document.querySelector('.worksheet-toast')?.getAttribute('aria-label') !== '式が大きすぎます！', 'notice harness reset');
       return open(targetIndex);
     };
@@ -754,7 +752,19 @@ function exerciseInputPanelActionsProbe() {
           seedButton.click();
           await sleep(120);
           if (target.matches('math-field.answer-mathfield')) {
-            await waitFor(() => String(target.value ?? '').includes(seedButton.textContent?.trim() ?? ''), 'MathLive seeded baseline');
+            try {
+              await waitFor(() => String(target.value ?? '').includes(seedButton.textContent?.trim() ?? ''), 'MathLive seeded baseline for ' + descriptor);
+            } catch {
+              failures.push({
+                descriptor,
+                reason: 'MathLive seed did not reach the selected target',
+                targetIndex,
+                targetValue: String(target.value ?? ''),
+                selectedTargetIndex: targets().findIndex(isTargetSelected),
+                values: targets().map((candidate) => candidate.matches('math-field.answer-mathfield') ? String(candidate.value ?? '') : candidate.textContent?.trim() ?? ''),
+              });
+              continue;
+            }
           }
           current = await open(targetIndex);
           target = current.target;
@@ -780,7 +790,7 @@ function exerciseInputPanelActionsProbe() {
       if (descriptor === '入力パネルを閉じる' && document.querySelector('.input-panel')) failures.push({ descriptor, reason: 'panel stayed open' });
       if (/^[0-9]$/.test(descriptor) && after === before) failures.push({ descriptor, reason: 'digit action did not change selected input', before, after });
       if (descriptor === '小数点' && target.matches('math-field.answer-mathfield') && !after.includes('.')) failures.push({ descriptor, reason: 'decimal point was not inserted', before, after });
-      if (['分数', '帯分数', '平方根', '複数解', 'x, y', 'プラスを挿入', 'マイナスを挿入', 'プラスマイナスを挿入'].includes(descriptor)
+      if (['分数', '帯分数', '平方根', '複数解', 'x, y', '文字 x', 'プラスを挿入', 'マイナスを挿入', 'プラスマイナスを挿入'].includes(descriptor)
         && target.matches('math-field.answer-mathfield') && after === before) {
         failures.push({ descriptor, reason: 'structure/operator action did not change MathLive value', before, after });
       }

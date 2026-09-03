@@ -73,10 +73,14 @@ fn grade_answer_impl(
         matches!(&normalized_expected, AnswerNode::Tuple(values) if values.len() == length)
             && matches!(&normalized_actual, AnswerNode::Tuple(values) if values.len() == length)
     });
-    let mathematically_equal = if ordered_length.is_some() {
-        ordered_shape_valid && normalized_expected == normalized_actual
-    } else {
-        solutions_mathematically_equal(&normalized_expected, &normalized_actual)
+    let mathematically_equal = match answer_schema {
+        Some(AnswerSchema::LinearExpression { variable, .. }) => {
+            crate::semantics::linear_answers_equivalent(expected, actual, *variable)
+        }
+        _ if ordered_length.is_some() => {
+            ordered_shape_valid && normalized_expected == normalized_actual
+        }
+        _ => solutions_mathematically_equal(&normalized_expected, &normalized_actual),
     };
     let status = match (&normalized_expected, &normalized_actual) {
         _ if contains_nan_error(&normalized_expected) || contains_nan_error(&normalized_actual) => {
@@ -113,6 +117,18 @@ fn grade_answer_impl(
         && !uses_integer_display_form(actual)
     {
         push_warning(&mut warnings, GradeWarning::IntegerFormRequired);
+    }
+
+    if mathematically_equal
+        && matches!(
+            answer_schema,
+            Some(AnswerSchema::LinearExpression {
+                variable,
+                require_collected_form: true,
+            }) if !crate::semantics::answer_is_collected_linear_form(actual, *variable)
+        )
+    {
+        push_warning(&mut warnings, GradeWarning::ExpressionNotSimplified);
     }
 
     if mathematically_equal

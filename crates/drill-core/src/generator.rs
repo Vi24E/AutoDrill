@@ -20,7 +20,7 @@ use crate::theme::{CurriculumSafetyPolicy, DedupPolicy, SamplingLayerSpec, Theme
 use crate::themes::{
     basic_arithmetic as basic_theme, column_arithmetic as column_theme, decimals as decimal_theme,
     equations as equation_theme, fractions as fraction_theme, liar_puzzle as liar_puzzle_theme,
-    mini_sudoku as mini_sudoku_theme,
+    mini_sudoku as mini_sudoku_theme, symbolic_expressions as symbolic_expression_theme,
 };
 
 // Deterministic max_attempts is the primary work budget. Wall-clock time is only
@@ -440,6 +440,7 @@ pub(crate) fn registered_generator_entries() -> impl Iterator<Item = GeneratorEn
         .chain(equation_theme::GENERATORS.iter().copied())
         .chain(liar_puzzle_theme::GENERATORS.iter().copied())
         .chain(mini_sudoku_theme::GENERATORS.iter().copied())
+        .chain(symbolic_expression_theme::GENERATORS.iter().copied())
 }
 
 pub(crate) fn registered_generator(
@@ -1074,6 +1075,9 @@ fn prompt_has_no_negative_values(prompt: &ProblemPrompt) -> bool {
             linear_expression_has_no_negative_values(&equation.left)
                 && linear_expression_has_no_negative_values(&equation.right)
         }),
+        ProblemPrompt::LinearExpression { expression } => {
+            linear_expression_has_no_negative_values(expression)
+        }
         ProblemPrompt::LiarPuzzle { .. } | ProblemPrompt::MiniSudoku { .. } => true,
     }
 }
@@ -1097,6 +1101,9 @@ fn linear_expression_has_no_negative_values(expression: &LinearExpression) -> bo
         LinearExpression::Scale { factor, expression } => {
             linear_scalar_is_nonnegative(*factor)
                 && linear_expression_has_no_negative_values(expression)
+        }
+        LinearExpression::Group { expression } => {
+            linear_expression_has_no_negative_values(expression)
         }
     }
 }
@@ -1224,6 +1231,7 @@ enum ProblemKey {
         equations: [crate::model::LinearEquationSurface; 2],
         solve_method: crate::model::SimultaneousSolveMethod,
     },
+    LinearExpression(LinearExpression),
     LiarPuzzle {
         people_count: crate::model::PeopleCount,
         statements: Vec<crate::model::LiarStatement>,
@@ -1273,6 +1281,9 @@ impl ProblemKey {
                 equations: equations.clone(),
                 solve_method: *solve_method,
             },
+            ProblemPrompt::LinearExpression { expression } => {
+                Self::LinearExpression(expression.clone())
+            }
             ProblemPrompt::LiarPuzzle {
                 people_count,
                 statements,

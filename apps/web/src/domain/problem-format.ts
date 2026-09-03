@@ -152,6 +152,12 @@ function appendLinearExpression(tokens: MathToken[], expression: LinearExpressio
     appendLinearExpression(tokens, expression.right);
     return;
   }
+  if (expression.kind === 'group') {
+    appendText(tokens, '(');
+    appendLinearExpression(tokens, expression.expression);
+    appendText(tokens, ')');
+    return;
+  }
   appendLinearScalar(tokens, expression.factor, true);
   const parens = linearExpressionNeedsParentheses(expression.expression);
   if (parens) appendText(tokens, '(');
@@ -227,6 +233,12 @@ export function problemExpressionTokens(problem: ProblemDto, includeAnswerEquals
       : problem.prompt.operator === 'subtract' ? '−'
         : problem.prompt.operator === 'multiply' ? '×' : '÷';
     return [{ kind: 'text', text: `${arithmeticLeafText(problem.prompt.left)} ${operator} ${arithmeticLeafText(problem.prompt.right)}${includeAnswerEquals ? ' =' : ''}` }];
+  }
+  if (problem.prompt.kind === 'linear_expression') {
+    const tokens: MathToken[] = [];
+    appendLinearExpression(tokens, problem.prompt.expression);
+    if (includeAnswerEquals) appendText(tokens, ' =');
+    return tokens;
   }
   if (problem.prompt.kind === 'quadratic_equation') return quadraticExpressionTokens(problem);
   if (problem.prompt.kind === 'simultaneous_equation') {

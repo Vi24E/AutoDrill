@@ -34,7 +34,7 @@ export function answerNodeLatex(answer: AnswerNode): string {
       if (answer.value.operator === 'add' && answer.value.right.type === 'plus_minus') return `${left}${right}`;
       if (answer.value.operator === 'add') return `${left}+${right}`;
       if (answer.value.operator === 'subtract') return `${left}-${right}`;
-      const implicit = answer.value.right.type === 'root';
+      const implicit = answer.value.right.type === 'root' || answer.value.right.type === 'variable';
       return `${left}${implicit ? '' : '\\times'}${right}`;
     }
     case 'tuple': return answer.value.map(answerNodeLatex).join(',');
@@ -111,6 +111,7 @@ export function mathTemplateLatex(structure: Exclude<AnswerInputStructure, 'deci
     case 'negative': return '-\\square';
     case 'plus_minus': return '\\pm\\square';
     case 'tuple': return '\\square,\\square';
+    case 'variable': return 'x';
   }
 }
 
@@ -122,5 +123,6 @@ export function mathTemplateInsertLatex(structure: Exclude<AnswerInputStructure,
     case 'negative': return '-\\placeholder{}';
     case 'plus_minus': return '\\pm\\placeholder{}';
     case 'tuple': return '\\placeholder{},\\placeholder{}';
+    case 'variable': return 'x';
   }
 }

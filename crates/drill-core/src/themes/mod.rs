@@ -7,3 +7,4 @@ pub(crate) mod fractions;
 pub(crate) mod liar_puzzle;
 pub(crate) mod mini_sudoku;
 pub(crate) mod multiplication_table;
+pub(crate) mod symbolic_expressions;

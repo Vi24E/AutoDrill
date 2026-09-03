@@ -240,6 +240,7 @@ const RUBY_TEXT: Readonly<Record<string, readonly RubyPart[]>> = {
   '整数でこたえましょう': [["整数", "せいすう"], 'でこたえましょう'],
   '分数でこたえましょう': [["分数", "ぶんすう"], 'でこたえましょう'],
   '最後まで計算しましょう': [["最後", "さいご"], 'まで', ["計算", "けいさん"], 'しましょう'],
+  '式を簡単にしましょう': [["式", "しき"], 'を', ["簡単", "かんたん"], 'にしましょう'],
   '採点設定': [["採点設定", "さいてんせってい"]],
   '冗長なマイナス': [["冗長", "じょうちょう"], 'なマイナス'],
   '±が重複しています': ['±が', ["重複", "ちょうふく"], 'しています'],
@@ -270,6 +271,7 @@ const GRADE_WARNING_LABELS: Readonly<Record<GradeWarningCode, string>> = {
   fraction_form_required: '分数でこたえましょう',
   mixed_fraction_form_required: '帯分数でこたえましょう',
   integer_form_required: '整数でこたえましょう',
+  expression_not_simplified: '式を簡単にしましょう',
 };
 
 type GradingWarningCategory = 'fraction_reduction' | 'integer_form' | 'finish_calculation' | 'fraction_form';
@@ -360,6 +362,7 @@ const STRUCTURE_LABELS: Readonly<Record<Exclude<AnswerInputStructure, 'decimal' 
   negative: 'マイナス',
   plus_minus: 'プラスマイナス',
   tuple: '複数解',
+  variable: '文字 x',
 };
 
 const JUNIOR_HIGH_STRUCTURE_KEYS = ['fraction', 'mixed_fraction', 'root', 'tuple'] as const satisfies readonly AnswerInputStructure[];
@@ -2269,7 +2272,10 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
   const columnDecimalInputActive = selectedColumnSpec?.decimalPoint.type === 'editable';
   const digitGridInputActive = selectedProblem?.input_interface.type === 'digit_grid' && selectedDigitGridCell !== null;
   const selectedCapabilities = selectedProblem ? inputCapabilities(worksheetTheme.editorInputInterface) : null;
-  const juniorHighFullKeypad = Boolean(selectedProblem && worksheetTheme.grade && worksheetTheme.grade.number >= 7);
+  const symbolicVariableKeypad = selectedCapabilities?.allowed_structures.includes('variable') ?? false;
+  const juniorHighFullKeypad = Boolean(
+    selectedProblem && worksheetTheme.grade && worksheetTheme.grade.number >= 7 && !symbolicVariableKeypad,
+  );
   const arithmeticOperatorsEnabled = selectedCapabilities?.allowed_structures.includes('arithmetic') ?? false;
   const visibleStructures = juniorHighFullKeypad
     ? [...JUNIOR_HIGH_STRUCTURE_KEYS]
@@ -2470,11 +2476,13 @@ function WorksheetScreen({ worksheetUi, worksheet, worksheetMetadata, answers, s
                 </button>
               ) : null}
             </div>
-            {juniorHighFullKeypad ? (
+            {juniorHighFullKeypad || arithmeticOperatorsEnabled ? (
               <div className="keypad-operators" aria-label="演算子キー">
                 <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '+' })} disabled={busy} aria-label="プラスを挿入">+</button>
                 <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '-' })} disabled={busy} aria-label="マイナスを挿入">−</button>
-                <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '\\pm' })} disabled={busy} aria-label="プラスマイナスを挿入">±</button>
+                {juniorHighFullKeypad || selectedCapabilities?.allowed_structures.includes('plus_minus') ? (
+                  <button type="button" onClick={() => onCommand({ kind: 'insert_latex', latex: '\\pm' })} disabled={busy} aria-label="プラスマイナスを挿入">±</button>
+                ) : null}
               </div>
             ) : null}
             <div className="keypad-controls" aria-label="編集キー">

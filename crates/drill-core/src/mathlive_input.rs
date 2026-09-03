@@ -263,7 +263,9 @@ impl<'a> Parser<'a> {
             || self.starts_with("\\sqrt")
             || self.starts_with("\\placeholder")
             || matches!(self.peek_char(), Some('{') | Some('('))
-            || self.peek_char().is_some_and(|ch| ch.is_ascii_digit())
+            || self
+                .peek_char()
+                .is_some_and(|ch| ch.is_ascii_digit() || ch.is_ascii_alphabetic())
     }
 
     fn parse_atom(&mut self, stop: Option<char>) -> Result<AnswerNode, ()> {
@@ -288,6 +290,9 @@ impl<'a> Parser<'a> {
         }
         if self.at_stop(stop) {
             return Ok(AnswerNode::Empty);
+        }
+        if self.peek_char().is_some_and(|ch| ch.is_ascii_alphabetic()) {
+            return self.parse_variable();
         }
         self.parse_number()
     }
@@ -343,6 +348,9 @@ impl<'a> Parser<'a> {
             self.bump_char();
             return Ok(AnswerNode::Integer(ch.to_digit(10).ok_or(())?.into()));
         }
+        if ch.is_ascii_alphabetic() {
+            return self.parse_variable();
+        }
         Err(())
     }
 
@@ -373,6 +381,15 @@ impl<'a> Parser<'a> {
             return Err(());
         }
         Ok(value)
+    }
+
+    fn parse_variable(&mut self) -> Result<AnswerNode, ()> {
+        let ch = self
+            .peek_char()
+            .filter(|ch| ch.is_ascii_alphabetic())
+            .ok_or(())?;
+        self.bump_char();
+        Ok(AnswerNode::Variable(ch.to_ascii_lowercase().to_string()))
     }
 
     fn parse_number(&mut self) -> Result<AnswerNode, ()> {
@@ -808,6 +825,45 @@ mod tests {
             parse_mathlive_answer(malformed, &interface).unwrap(),
             AnswerNode::NanError(malformed.to_owned())
         );
+    }
+
+    #[test]
+    fn parses_variables_only_when_variable_capability_is_enabled() {
+        let interface = AnswerInputInterface::StructuredMath {
+            allowed_structures: vec![
+                EditorStructure::Negative,
+                EditorStructure::Arithmetic,
+                EditorStructure::Variable,
+            ],
+        };
+        let parsed = parse_mathlive_answer("2x+3", &interface).unwrap();
+        assert_eq!(
+            parsed,
+            AnswerNode::Binary {
+                operator: AnswerBinaryOperator::Add,
+                left: Box::new(AnswerNode::Binary {
+                    operator: AnswerBinaryOperator::Multiply,
+                    left: Box::new(AnswerNode::Integer(2)),
+                    right: Box::new(AnswerNode::Variable("x".to_owned())),
+                }),
+                right: Box::new(AnswerNode::Integer(3)),
+            }
+        );
+
+        assert_eq!(
+            parse_mathlive_answer("8", &interface).unwrap(),
+            AnswerNode::Integer(8)
+        );
+
+        let without_variable = AnswerInputInterface::StructuredMath {
+            allowed_structures: vec![EditorStructure::Arithmetic],
+        };
+        assert!(matches!(
+            parse_mathlive_answer("x", &without_variable),
+            Err(EditorError::StructureNotAllowed {
+                structure: EditorStructure::Variable
+            })
+        ));
     }
 
     #[test]

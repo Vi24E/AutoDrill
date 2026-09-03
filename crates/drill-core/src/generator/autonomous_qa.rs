@@ -262,6 +262,15 @@ fn observe_problem(problem: &Problem, counters: &mut LargeSampleCounters) {
                 }
             }
         }
+        ProblemPrompt::LinearExpression { expression } => {
+            if let Some((x, y, constant)) =
+                crate::semantics::normalize_linear_expression(expression)
+            {
+                for coefficient in [x, y, constant] {
+                    observe_coefficient(&coefficient, counters);
+                }
+            }
+        }
         ProblemPrompt::LiarPuzzle {
             people_count,
             statements,
