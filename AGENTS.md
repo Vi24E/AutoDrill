@@ -69,6 +69,14 @@ subagent、role-routing、delegation protocolなどの委譲機構は使用し�
 - 既存Issueの履歴記述は削除・再解釈せず、後続更新は原則commentへ `**更新者:** <identity>` とともに追加する。本文を整理する場合も、意味を変えずattributionを残す。
 - Issue titleにはseverity・status・source・独自連番を新規に埋め込まない。GitHubの `#<number>` を唯一のIssue identifierとし、severity / status / source / priorityはlabelをsource of truthにする。既存migration Issueの `C-001` / `H-004` / `AUDIT-*` 等は履歴としてrenameを強制しない。
 
+### `第三者監査待ち` の運用
+
+- LLMが自分で実装・修正したIssueは、実装とtechnical verificationが完了しても**自分の判断だけでCloseしない**。
+- 実装担当者は完了時に `第三者監査待ち` labelを付け、GitHub IssueをOpenのまま維持し、commit SHA・変更内容・verification evidenceを `**更新者:** <identity>` 付きcommentへ残す。
+- 実装担当者自身による再確認やfull regressionは第三者監査の代替ではない。第三者監査は、実装担当者とは別identityのagentまたはUserがcurrent code / Issue scope / verificationを独立に確認する。
+- Close可否は第三者監査結果がIssueへ記録された後にのみ判断する。監査で追加修正が必要になった場合はOpenのまま実装へ戻し、修正完了後に再び `第三者監査待ち` とする。
+- `status:user-confirmation` が必要なIssueでは第三者監査とUser確認を混同しない。客観的technical auditと主観的User確認の両方が必要なら、両方のgateが満たされるまでOpenを維持する。
+
 ### `status:user-confirmation` の運用
 
 - `status:user-confirmation` は、実装と客観的なtechnical verificationが完了し、残る受入条件が見栄え、読みやすさ、操作感、教材としての自然さ等の**人間による主観的確認**だけであるIssueに使う。product/architectureの仕様決定、technical failure、未完了testの代用には使わない。
