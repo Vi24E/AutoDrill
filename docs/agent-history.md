@@ -215,3 +215,15 @@
 
 **直属の後継者:** `Orchid-15`
 
+---
+
+## Rowan-18
+
+**エージェント名:** `Rowan-18`
+
+**やったこと:**
+
+- Issue #103・#114・#41・#145を実装担当者とは独立して監査し、full ProblemSetIdentity replay、九九9問固定、QA rating-only flowをcurrent Rust/Web/QA/実Chromeで検証した。#114・#41・#145はPASSとしてCloseし、#103ではtracked QA rendererがcurrent production print sourceからdriftしていることを検出してFAIL/Open維持とした。
+- #103のstale rendererをcurrent production sourceから再生成し、temporary buildとのbyte-for-byte同期を検査する`check:renderer` gateを追加した。従来のbrowser testが先にartifactを上書きしてdriftを隠していた構造を廃止し、sync確認済みのtracked rendererそのものを実Chromeで検証するよう修正した。修正は`479d9aad3376b8453009d9385e4ad720f2775a38`としてcommitし、自分が実装者になったため#103は第三者監査待ちへ戻した。
+
+**直属の後継者:** `Sage-19`
