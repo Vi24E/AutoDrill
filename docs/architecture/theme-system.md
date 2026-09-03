@@ -64,8 +64,9 @@ safety policyを表示labelから推測しない。
 - commutative dedup semantics
 - balanced population policy
 - finite-domain sampling strategy
+- exhaustive finite domainでのcanonical ordering / random-only shuffle policy
 
-これらはtaxonomy tagである必要はないが、theme moduleが明示的に所有するpolicyとして表現する。
+これらはtaxonomy tagである必要はないが、theme moduleが明示的に所有するpolicyとして表現する。九九の各段はこの最後のpolicyを使い、family-owned finite domain `N×1 ... N×9` の9件すべてをworksheetへ出す。d1〜d3はそのsource順を保持し、d4だけをdeterministicにshuffleするため、通常のdifficulty effort rankingは適用しない。
 
 
 ## Unified theme API

@@ -97,6 +97,8 @@ difficulty samplerはscalar effortだけで教材構成を破壊しない。
 
 Theme固有のquota値はtheme側が所有し、sampler自体へtheme ID特例を追加しない。
 
+有限domain全体を1 worksheetで必ず扱う教材は、通常のdifficulty rankingとは別に`finite exhaustive` policyを宣言できる。このpolicyではworksheet problem countとfinite domain sizeの一致を共通samplerが検証し、不一致なら`SamplingError`でfail closedする。candidate sourceのindex順を教材上のcanonical orderとしてd1〜d3では保持し、d4だけをSeed依存でdeterministic shuffleする。したがってdifficultyは問題内容・subsetを変えず、random時の提示順だけに作用する。どのthemeがこのpolicyを使うかはfamily moduleがsemantic modeとして所有し、中央samplerへtheme ID特例を置かない。
+
 local QAの`custom sampling`はこの4段階difficultyへ第5の値を追加しない。production generatorは従来どおり`1..=4`だけを受理し、QA custom modeは通常の`difficulty=4` worksheetを複数candidate sourceとして利用する外側のdevelopment sampling layerである。したがって同一`ProblemSetIdentity`から生成されるWorksheetの意味・determinismはcustom modeによって変化しない。
 
 ## 6. Deduplication

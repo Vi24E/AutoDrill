@@ -22,7 +22,7 @@ use crate::theme::{
     CurriculumSafetyPolicy as Safety, CurriculumUnit, DedupPolicy as Dedup, SchoolGrade,
     ThemeAnswerContract as AnswerContract, ThemeInputProfile as Input,
     ThemePresentationPolicy as Presentation, ThemeRegistration, ThemeRegistrationSpec, ThemeTag,
-    MULTIPLICATION_ROW_5_LAYOUT, STANDARD_20_LAYOUT,
+    MULTIPLICATION_ROW_9_LAYOUT, STANDARD_20_LAYOUT,
 };
 use crate::themes::{division_table, multiplication_table};
 
@@ -353,7 +353,7 @@ macro_rules! multiplication_row_registration {
             presentation: Presentation::STANDARD,
             dedup: Dedup::PreserveOperandOrder,
             answer_contract: AnswerContract::ArithmeticPositiveInteger,
-            layout: MULTIPLICATION_ROW_5_LAYOUT,
+            layout: MULTIPLICATION_ROW_9_LAYOUT,
         })
         .with_curriculum_unit(CURRICULUM_UNIT_MULTIPLICATION_TABLE);
     };
@@ -546,16 +546,18 @@ impl ProblemGenerator for Generator {
     }
 
     fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, crate::error::SamplingError> {
-        if FiniteBasicDomain::for_mode(self.mode).is_some() {
-            Ok(SamplingStrategy::finite(
+        match FiniteBasicDomain::for_mode(self.mode) {
+            Some(FiniteBasicDomain::MultiplicationTable(_)) => {
+                Ok(SamplingStrategy::finite_exhaustive(self))
+            }
+            Some(_) => Ok(SamplingStrategy::finite(
                 self,
                 SelectionDedup::AllowDuplicates,
-            ))
-        } else {
-            Ok(SamplingStrategy::random(
+            )),
+            None => Ok(SamplingStrategy::random(
                 self,
                 SelectionDedup::AllowDuplicates,
-            ))
+            )),
         }
     }
 }
@@ -1576,6 +1578,83 @@ mod tests {
             assert_eq!(
                 registration.curriculum_unit(),
                 CURRICULUM_UNIT_MULTIPLICATION_TABLE
+            );
+        }
+    }
+
+    #[test]
+    fn multiplication_table_rows_emit_all_nine_facts_and_only_shuffle_random() {
+        use crate::generator::generate_worksheet_request;
+        use crate::model::GenerateWorksheetRequest;
+        use crate::schema::SCHEMA_VERSION;
+
+        let rows = [
+            (THEME_ID_MULTIPLICATION_TABLE_1, 1_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_2, 2_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_3, 3_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_4, 4_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_5, 5_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_6, 6_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_7, 7_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_8, 8_i64),
+            (THEME_ID_MULTIPLICATION_TABLE_9, 9_i64),
+        ];
+        let expected_rights = (1_i64..=9).collect::<Vec<_>>();
+
+        for (theme_id, row) in rows {
+            let registration = crate::registry::active_registration(theme_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(registration.layout().problem_count(), 9);
+            let mut random_orders = std::collections::BTreeSet::new();
+
+            for difficulty in 1..=4 {
+                for seed in ["MtA1", "MtB2", "MtC3"] {
+                    let request = GenerateWorksheetRequest {
+                        schema_version: SCHEMA_VERSION,
+                        numeric_theme_id: theme_id,
+                        seed: seed.to_owned(),
+                        difficulty: crate::identity::Difficulty::try_from(difficulty).unwrap(),
+                        timeout_ms: Some(1_000),
+                        max_attempts: Some(10_000),
+                    };
+                    let worksheet = generate_worksheet_request(&request).unwrap_or_else(|error| {
+                        panic!("multiplication row {row} d{difficulty} failed for {seed}: {error}")
+                    });
+                    assert_eq!(worksheet.problems().len(), 9);
+
+                    let rights = worksheet
+                        .problems()
+                        .iter()
+                        .map(|problem| {
+                            let (operator, left, right) = binary_integer_operands(problem);
+                            assert_eq!(operator, ArithmeticOperator::Multiply);
+                            assert_eq!(left, row);
+                            right
+                        })
+                        .collect::<Vec<_>>();
+                    let mut sorted_rights = rights.clone();
+                    sorted_rights.sort_unstable();
+                    assert_eq!(sorted_rights, expected_rights);
+
+                    if difficulty <= 3 {
+                        assert_eq!(rights, expected_rights);
+                    } else {
+                        let replay = generate_worksheet_request(&request).unwrap();
+                        let replay_rights = replay
+                            .problems()
+                            .iter()
+                            .map(|problem| binary_integer_operands(problem).2)
+                            .collect::<Vec<_>>();
+                        assert_eq!(replay_rights, rights);
+                        random_orders.insert(rights);
+                    }
+                }
+            }
+
+            assert!(
+                random_orders.len() > 1,
+                "d4 should vary presentation order across seeds for row {row}"
             );
         }
     }

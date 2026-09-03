@@ -21,6 +21,11 @@ pub enum SamplingError {
     LayerOutOfRange { index: usize, layer_count: usize },
     #[error("candidate pool has only {available} distinct problems but {required} are required")]
     InsufficientDistinctCandidates { required: usize, available: usize },
+    #[error("exhaustive finite sampling requires worksheet size {worksheet_size} to equal domain size {domain_size}")]
+    ExhaustiveFiniteDomainSizeMismatch {
+        worksheet_size: usize,
+        domain_size: usize,
+    },
     #[error("constructive layered bootstrap multiplier must be nonzero")]
     ZeroBootstrapMultiplier,
     #[error("answer-conditioned generator returned a problem for a different canonical answer")]

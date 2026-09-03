@@ -561,8 +561,8 @@ impl WorksheetLayoutProfile {
 }
 
 pub const STANDARD_20_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(20, 2, 10);
-pub const MULTIPLICATION_ROW_5_LAYOUT: WorksheetLayoutProfile =
-    WorksheetLayoutProfile::new(5, 1, 5);
+pub const MULTIPLICATION_ROW_9_LAYOUT: WorksheetLayoutProfile =
+    WorksheetLayoutProfile::new(9, 1, 9);
 pub const COMPACT_16_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(16, 2, 8);
 pub const EQUATION_PAIR_12_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(12, 2, 6);
 pub const LIAR_6_LAYOUT: WorksheetLayoutProfile = WorksheetLayoutProfile::new(6, 1, 6);

@@ -161,6 +161,12 @@ impl SamplingLayers {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FiniteSelectionPolicy {
+    RankedSubset,
+    ExhaustiveSourceOrder,
+}
+
 enum SamplingStrategyKind<'a> {
     Random {
         source: &'a dyn RandomCandidateSource,
@@ -169,6 +175,7 @@ enum SamplingStrategyKind<'a> {
     Finite {
         source: &'a dyn FiniteCandidateSource,
         selection_dedup: SelectionDedup,
+        selection_policy: FiniteSelectionPolicy,
     },
     AnswerConditioned {
         source: &'a dyn AnswerConditionedCandidateSource,
@@ -212,8 +219,29 @@ impl<'a> SamplingStrategy<'a> {
             kind: SamplingStrategyKind::Finite {
                 source,
                 selection_dedup,
+                selection_policy: FiniteSelectionPolicy::RankedSubset,
             },
         }
+    }
+
+    pub(crate) fn finite_exhaustive(source: &'a dyn FiniteCandidateSource) -> Self {
+        Self {
+            kind: SamplingStrategyKind::Finite {
+                source,
+                selection_dedup: SelectionDedup::AllowDuplicates,
+                selection_policy: FiniteSelectionPolicy::ExhaustiveSourceOrder,
+            },
+        }
+    }
+
+    fn is_exhaustive_finite(&self) -> bool {
+        matches!(
+            self.kind,
+            SamplingStrategyKind::Finite {
+                selection_policy: FiniteSelectionPolicy::ExhaustiveSourceOrder,
+                ..
+            }
+        )
     }
 
     pub(crate) fn answer_conditioned(
@@ -765,6 +793,13 @@ fn sample_unique_indices(
     indices
 }
 
+fn shuffle_candidates(rng: &mut DeterministicRng, candidates: &mut [Candidate]) {
+    for upper in (1..candidates.len()).rev() {
+        let swap_with = rng.next_bounded((upper + 1) as u64) as usize;
+        candidates.swap(upper, swap_with);
+    }
+}
+
 fn generate_with_generator<C: MonotonicClock + ?Sized>(
     identity: &ProblemSetIdentity,
     registration: &'static ThemeRegistration,
@@ -782,11 +817,29 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
     let required_diversity = DIVERSITY_MULTIPLIER * n;
 
     let pool = match &strategy.kind {
-        SamplingStrategyKind::Finite { source, .. } => {
+        SamplingStrategyKind::Finite {
+            source,
+            selection_policy,
+            ..
+        } => {
             let candidate_count = source.candidate_count();
-            let sample_count = pool_size.min(candidate_count);
-            let indices = sample_unique_indices(&mut rng, candidate_count, sample_count);
-            let mut candidate_pool = Vec::with_capacity(sample_count);
+            let indices = match selection_policy {
+                FiniteSelectionPolicy::RankedSubset => {
+                    let sample_count = pool_size.min(candidate_count);
+                    sample_unique_indices(&mut rng, candidate_count, sample_count)
+                }
+                FiniteSelectionPolicy::ExhaustiveSourceOrder => {
+                    if candidate_count != n {
+                        return Err(SamplingError::ExhaustiveFiniteDomainSizeMismatch {
+                            worksheet_size: n,
+                            domain_size: candidate_count,
+                        }
+                        .into());
+                    }
+                    (0..candidate_count).collect()
+                }
+            };
+            let mut candidate_pool = Vec::with_capacity(indices.len());
             for index in indices {
                 consume_attempt(started, clock, config, &mut attempts)?;
                 let problem = source.candidate_at(index, &weights)?;
@@ -889,7 +942,9 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
         }
     };
 
-    let mut selected = if strategy.is_layered() {
+    let mut selected = if strategy.is_exhaustive_finite() {
+        pool
+    } else if strategy.is_layered() {
         select_layered_candidates(
             pool,
             &strategy,
@@ -915,7 +970,13 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
         )?
     };
 
-    if identity.difficulty().value() <= 2 {
+    if strategy.is_exhaustive_finite() {
+        // Exhaustive finite themes use source index as their canonical pedagogical
+        // order. Difficulty does not select easier/harder facts; only d4 shuffles.
+        if identity.difficulty().value() == 4 {
+            shuffle_candidates(&mut rng, &mut selected);
+        }
+    } else if identity.difficulty().value() <= 2 {
         // Easy and normal worksheets should progress from lower to higher effort
         // so the sheet itself has a pedagogical difficulty ramp. Keep the same
         // deterministic tie-breakers used during candidate selection.
@@ -928,10 +989,7 @@ fn generate_with_generator<C: MonotonicClock + ?Sized>(
         });
     } else {
         // Hard and random worksheets retain the existing shuffled presentation.
-        for upper in (1..selected.len()).rev() {
-            let swap_with = rng.next_bounded((upper + 1) as u64) as usize;
-            selected.swap(upper, swap_with);
-        }
+        shuffle_candidates(&mut rng, &mut selected);
     }
     for (index, candidate) in selected.iter_mut().enumerate() {
         candidate
@@ -1260,6 +1318,33 @@ mod tests {
         assert_eq!(indices.len(), 20);
         assert!(indices.iter().all(|index| *index < 100_000));
         assert_eq!(indices.iter().copied().collect::<HashSet<_>>().len(), 20);
+    }
+
+    struct ExhaustiveMismatchGenerator;
+
+    impl ProblemGenerator for ExhaustiveMismatchGenerator {
+        fn registration(&self) -> &'static ThemeRegistration {
+            &basic_theme::ONE_DIGIT_ADDITION_REGISTRATION
+        }
+
+        fn sampling_strategy(&self) -> Result<SamplingStrategy<'_>, SamplingError> {
+            Ok(SamplingStrategy::finite_exhaustive(self))
+        }
+    }
+
+    impl FiniteCandidateSource for ExhaustiveMismatchGenerator {
+        fn candidate_count(&self) -> usize {
+            1
+        }
+
+        fn candidate_at(
+            &self,
+            index: usize,
+            weights: &OperationWeights,
+        ) -> Result<Problem, GenerationError> {
+            assert_eq!(index, 0);
+            basic_theme::one_digit_addition_problem(1, 1, 1, weights)
+        }
     }
 
     struct ConstantGenerator;
@@ -1653,6 +1738,36 @@ mod tests {
             assert_eq!(distinct_attempts, 20);
             assert_eq!(duplicate_attempts, 20);
         }
+    }
+
+    #[test]
+    fn exhaustive_finite_sampling_requires_layout_to_cover_the_whole_domain() {
+        let identity = ProblemSetIdentity::new(
+            basic_theme::THEME_ID_ONE_DIGIT_ADDITION,
+            basic_theme::GENERATOR_REVISION_ONE_DIGIT_ADDITION,
+            "Exh9",
+            crate::identity::DEFAULT_DIFFICULTY,
+        )
+        .unwrap();
+        let clock = StepClock::new(Duration::ZERO, Duration::ZERO);
+        let error = generate_with_generator(
+            &identity,
+            &basic_theme::ONE_DIGIT_ADDITION_REGISTRATION,
+            &ExhaustiveMismatchGenerator,
+            &GenerationConfig::default(),
+            &clock,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            GenerationError::InvalidSampling(SamplingError::ExhaustiveFiniteDomainSizeMismatch {
+                worksheet_size: basic_theme::ONE_DIGIT_ADDITION_REGISTRATION
+                    .layout()
+                    .problem_count(),
+                domain_size: 1,
+            })
+        );
     }
 
     #[test]

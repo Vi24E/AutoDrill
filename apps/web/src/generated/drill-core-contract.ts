@@ -2418,9 +2418,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "44": {
@@ -2468,9 +2468,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "45": {
@@ -2518,9 +2518,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "46": {
@@ -2568,9 +2568,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "47": {
@@ -2618,9 +2618,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "48": {
@@ -2668,9 +2668,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "49": {
@@ -2718,9 +2718,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "50": {
@@ -2768,9 +2768,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "51": {
@@ -2818,9 +2818,9 @@ export const DRILL_CORE_CONTRACT = {
         "allow_negative": false
       },
       "layout": {
-        "problem_count": 5,
+        "problem_count": 9,
         "columns": 1,
-        "rows": 5
+        "rows": 9
       }
     },
     "52": {
