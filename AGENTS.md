@@ -69,13 +69,16 @@ subagent、role-routing、delegation protocolなどの委譲機構は使用し�
 - 既存Issueの履歴記述は削除・再解釈せず、後続更新は原則commentへ `**更新者:** <identity>` とともに追加する。本文を整理する場合も、意味を変えずattributionを残す。
 - Issue titleにはseverity・status・source・独自連番を新規に埋め込まない。GitHubの `#<number>` を唯一のIssue identifierとし、severity / status / source / priorityはlabelをsource of truthにする。既存migration Issueの `C-001` / `H-004` / `AUDIT-*` 等は履歴としてrenameを強制しない。
 
-### `第三者監査待ち` の運用
+### audit待ちstatusの運用
 
 - LLMが自分で実装・修正したIssueは、実装とtechnical verificationが完了しても**自分の判断だけでCloseしない**。
-- 実装担当者は完了時に `第三者監査待ち` labelを付け、GitHub IssueをOpenのまま維持し、commit SHA・変更内容・verification evidenceを `**更新者:** <identity>` 付きcommentへ残す。
-- 実装担当者自身による再確認やfull regressionは第三者監査の代替ではない。第三者監査は、実装担当者とは別identityのagentまたはUserがcurrent code / Issue scope / verificationを独立に確認する。
-- Close可否は第三者監査結果がIssueへ記録された後にのみ判断する。監査で追加修正が必要になった場合はOpenのまま実装へ戻し、修正完了後に再び `第三者監査待ち` とする。
-- `status:user-confirmation` が必要なIssueでは第三者監査とUser確認を混同しない。客観的technical auditと主観的User確認の両方が必要なら、両方のgateが満たされるまでOpenを維持する。
+- 実装担当者は完了時に、予定されている監査主体に応じて次のいずれか1つを付け、GitHub IssueをOpenのまま維持する。
+  - `status:third-party-audit`: 実装担当者とは別identityのagent等による独立監査を待つ。
+  - `status:user-audit`: User自身がcurrent code / Issue scope / verificationを監査すると明示している場合に、そのUser監査を待つ。
+- User監査が明示されているIssueを `status:third-party-audit` として扱わない。監査主体はlabelで区別し、実装担当者の推測で置き換えない。
+- audit待ちへ移す前に、commit SHA・変更内容・verification evidenceを `**更新者:** <identity>` 付きcommentへ残す。実装担当者自身による再確認やfull regressionは独立監査の代替ではない。
+- Close可否は指定された監査結果がIssueへ記録された後にのみ判断する。監査で追加修正が必要になった場合はaudit labelを外してOpenのまま実装へ戻し、修正完了後に適切なaudit statusへ戻す。
+- `status:user-confirmation` は見栄え・操作感等の主観的受入確認用であり、`status:user-audit` とは別物とする。客観的auditと主観的User confirmationの両方が必要なら、両方のgateが満たされるまでOpenを維持する。
 
 ### `status:user-confirmation` の運用
 
